@@ -3,8 +3,15 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
 
-# 下載的模型與翻譯引擎（由 setup.bat 自動下載，不放進 repo）
+# 打包出來的東西
+build/
+dist/
+*.zip
+packaging/ChineseTraditional.isl
+
+# 下載的模型與翻譯引擎（程式第一次開啟時自動下載，不放進 repo）
 models/
 engine/
 *.gguf
@@ -15,6 +22,3 @@ engine/
 config.json
 *.log
 .env
-
-# 打包檔
-*.zip

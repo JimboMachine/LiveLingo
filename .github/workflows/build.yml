@@ -1,0 +1,102 @@
+name: Build
+
+# 每次推送都會：跑檢查、在 Windows 上打包成安裝檔、把安裝檔真的裝一次／更新一次／卸載一次。
+# 推到 main 而且版本號（livelingo/__init__.py）是新的，就自動發佈成 Release；
+# 使用者電腦上的 LiveLingo 下次開啟時會看到新版本並自動更新。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy opencv-python-headless opencc-python-reimplemented==0.1.7 pytest
+      - run: python -m pytest tests -q
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller pytest
+
+      - name: Checks
+        run: python -m pytest tests -q
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(python -c 'import livelingo; print(livelingo.__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Self-test from source
+        shell: bash
+        run: |
+          python -m livelingo --selftest selftest-source.json --online || true
+          cat selftest-source.json
+          python -c "import json,sys; sys.exit(0 if json.load(open('selftest-source.json', encoding='utf-8'))['ok'] else 1)"
+
+      - name: Build the app folder
+        run: pyinstaller packaging/livelingo.spec --noconfirm
+
+      - name: Self-test the packaged app
+        shell: bash
+        run: |
+          ./dist/LiveLingo/LiveLingo.exe --selftest "$(pwd)/selftest-packaged.json" || true
+          cat selftest-packaged.json
+          python -c "import json,sys; sys.exit(0 if json.load(open('selftest-packaged.json', encoding='utf-8'))['ok'] else 1)"
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          try {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseTraditional.isl" -OutFile packaging\ChineseTraditional.isl -TimeoutSec 60
+          } catch { Write-Host "Traditional Chinese installer texts are unavailable; the installer will use English." }
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item dist\LiveLingo-Setup.exe | Format-List Name, Length
+
+      - name: Install, update and uninstall for real
+        run: python packaging/ci_install_test.py dist\LiveLingo-Setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiveLingo-Setup-${{ steps.version.outputs.version }}
+          path: dist/LiveLingo-Setup.exe
+          retention-days: 14
+
+      - name: Publish the release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; nothing to publish."
+          else
+            gh release create "$tag" dist/LiveLingo-Setup.exe --target "$GITHUB_SHA" --title "LiveLingo $tag" \
+              --notes "下載 LiveLingo-Setup.exe，點兩下安裝。已經安裝過的話，開啟 LiveLingo 時會自動更新到這個版本。"
+          fi

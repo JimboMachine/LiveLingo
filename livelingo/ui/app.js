@@ -1,0 +1,784 @@
+// LiveLingo 的介面。所有工作都在背景的程式做，這裡只負責顯示和把按鈕的動作送過去。
+(function () {
+  "use strict";
+
+  const TOKEN = new URLSearchParams(location.search).get("t") || "";
+  const $ = (id) => document.getElementById(id);
+  const app = $("app");
+
+  const S = {
+    cfg: null, phase: "starting", detail: {}, gpu: {}, mode: {}, fallback: false, version: "",
+    sources: {}, messages: [], glossary: [], canWindow: false, view: "main",
+    ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
+  };
+
+  // ---------------------------------------------------------------- 小工具
+
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function t(key, params) {
+    const lang = (S.cfg && S.cfg.ui_lang) || "zh-TW";
+    let text = (window.I18N[lang] && window.I18N[lang][key]) || window.I18N["en"][key] || key;
+    if (params) for (const k in params) text = text.split("{" + k + "}").join(params[k]);
+    return text;
+  }
+  const lk = (code) => (code === "zh-TW" ? "zh" : code);
+  const langName = (code) => t("lang_" + lk(code));
+  const langShort = (code) => t("short_" + lk(code));
+
+  async function post(path, body) {
+    try {
+      const r = await fetch(path, {
+        method: "POST", headers: { "Content-Type": "application/json", "X-LiveLingo-Token": TOKEN },
+        body: JSON.stringify(body || {})
+      });
+      return await r.json();
+    } catch (e) { return { ok: false, error: String(e) }; }
+  }
+  async function get(path) {
+    try {
+      const r = await fetch(path, { headers: { "X-LiveLingo-Token": TOKEN } });
+      return await r.json();
+    } catch (e) { return null; }
+  }
+
+  let toastTimer = null;
+  function toast(text, ms) {
+    const el = $("toast");
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, ms || 4200);
+  }
+
+  const ICON = {
+    screen: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
+    listen: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg>',
+    mic: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+    quality: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 6h9M8 4v2M6 6c0 4 3 7 6 8M12 6c0 3-3 7-7 8"/><path d="M13 20l4-9 4 9M14.5 17h5"/></svg>',
+    globe: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    check: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" style="stroke-width:3"><path d="M5 12l5 5 9-10"/></svg>',
+    info: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+    back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
+    x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    frame: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>',
+    swap: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>'
+  };
+
+  // ---------------------------------------------------------------- 固定文字
+
+  function applyI18n() {
+    const htmlLang = { "zh-TW": "zh-Hant", en: "en", ko: "ko", ja: "ja" }[S.cfg.ui_lang] || "en";
+    document.documentElement.lang = htmlLang;
+    document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-label]").forEach((el) => {
+      el.setAttribute("aria-label", t(el.dataset.i18nLabel));
+      el.title = t(el.dataset.i18nLabel);
+    });
+  }
+
+  // ---------------------------------------------------------------- 主畫面
+
+  function percent() {
+    const d = S.detail || {};
+    return d.total_mb ? Math.min(100, Math.round((d.done_mb || 0) * 100 / d.total_mb)) : 0;
+  }
+
+  function renderStatus() {
+    const el = $("status");
+    el.dataset.phase = S.phase;
+    $("status-text").textContent = t("st_" + S.phase, { percent: percent() });
+  }
+
+  function sourceHint(key) {
+    const s = S.sources[key] || {};
+    const names = { mine: langShort(S.cfg.my_lang), theirs: langShort(S.cfg.their_lang) };
+    if (s.busy) return t("src_busy");
+    if (s.error && !s.on) return t("src_error");
+    if (key === "screen") return s.on ? t("screen_on") : t("screen_off");
+    const device = s.device || (key === "listen" ? S.cfg.speaker_name : S.cfg.mic_name) || t("default_device");
+    if (key === "listen") return s.on ? (s.speaking ? t("listen_speaking") : t("listen_on", { device })) : t("listen_off");
+    return s.on ? (s.speaking ? t("mic_speaking") : t("mic_on", { device })) : t("mic_off", names);
+  }
+
+  function renderSources() {
+    const html = ["screen", "listen", "mic"].map((key) => {
+      const s = S.sources[key] || {};
+      const state = s.busy ? t("busy") : (s.on ? t("on") : t("off"));
+      return `<button class="card" data-act="source" data-key="${key}" aria-pressed="${s.on ? "true" : "false"}"
+        data-busy="${s.busy ? "true" : "false"}" data-error="${s.error && !s.on ? "true" : "false"}"
+        data-speaking="${s.on && s.speaking ? "true" : "false"}">
+        <div class="top">${ICON[key]}<span class="state">${esc(state)}</span></div>
+        <div class="name">${esc(t("src_" + key))}</div>
+        <div class="hint">${esc(sourceHint(key))}</div>
+      </button>`;
+    }).join("");
+    $("source-cards").innerHTML = html;
+    const row = $("region-row");
+    const r = S.cfg.region;
+    const showRegion = !!(r && (S.sources.screen || {}).on);
+    row.hidden = !(showRegion || S.messages.length);
+    row.innerHTML = (showRegion
+      ? `<span>${esc(t("region_now", { w: r.width, h: r.height }))} · <button data-act="region">${esc(t("region_change"))}</button></span>`
+      : "<span></span>")
+      + (S.messages.length ? `<button data-act="clear">${esc(t("clear"))}</button>` : "");
+    const mic = $("sub-mic");
+    mic.classList.toggle("on", !!(S.sources.mic || {}).on);
+  }
+
+  function renderLangs() {
+    $("pair-label").textContent = langName(S.cfg.their_lang) + " ⇄ " + langName(S.cfg.my_lang);
+    $("lang-chip").setAttribute("aria-expanded", S.ui.langOpen ? "true" : "false");
+    const picker = $("lang-picker");
+    picker.hidden = !S.ui.langOpen;
+    if (S.ui.langOpen) {
+      const opts = (side, current) => ["zh-TW", "ko", "en", "ja"].map((code) =>
+        `<button class="pill" data-act="set-lang" data-side="${side}" data-code="${code}" aria-pressed="${current === code}">${esc(langName(code))}</button>`).join("");
+      picker.innerHTML = `
+        <div class="group"><div class="dim small">${esc(t("their_lang"))}</div><div class="opts">${opts("their_lang", S.cfg.their_lang)}</div></div>
+        <div class="group"><div class="dim small">${esc(t("my_lang"))}</div><div class="opts">${opts("my_lang", S.cfg.my_lang)}</div></div>
+        <div class="foot"><button class="primary" data-act="toggle-langs">${esc(t("done"))}</button></div>`;
+    }
+    const names = { mine: langShort(S.cfg.my_lang), theirs: langShort(S.cfg.their_lang) };
+    $("say-label").textContent = t("say_label", names);
+    $("say").placeholder = t("say_placeholder");
+  }
+
+  function bubbleHTML(m) {
+    let body = `<div class="orig">${esc(m.original)}</div>`;
+    if (m.error) {
+      body += `<div class="text failed">${esc(t("failed", { error: m.error }))}</div>`;
+    } else if (m.pending) {
+      body += `<div class="text pending">${esc(t("translating"))}</div>`;
+    } else {
+      body += `<div class="text">${esc(m.translated)}</div>`;
+      if (m.pron) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
+      if (m.copied) body += `<div class="copied">${ICON.check}<span>${esc(t("copied_hint"))}</span></div>`;
+      body += `<div class="actions"><button data-act="fix" data-id="${m.id}">${esc(t("wrong"))}</button>` +
+        `<button data-act="copy" data-id="${m.id}">${esc(t("copy"))}</button></div>`;
+    }
+    return body;
+  }
+
+  function metaHTML(m) {
+    const icon = m.via === "screen" ? ICON.screen : (m.via === "heard" ? ICON.listen : (m.via === "spoken" ? ICON.mic : ""));
+    return `${icon}<span>${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}</span>`;
+  }
+
+  function fixHTML(m) {
+    const words = [];
+    m.original.split(/[\s,.!?~…·、，。！？「」『』()（）\[\]<>"']+/).forEach((w) => {
+      if (w && words.indexOf(w) < 0 && words.length < 16) words.push(w);
+    });
+    return `<div class="fix" data-id="${m.id}">
+      <label class="dim small" for="fix-src-${m.id}">${esc(t("fix_label"))}</label>
+      <div class="words">${words.map((w) => `<button type="button" data-act="fix-word" data-word="${esc(w)}">${esc(w)}</button>`).join("")}</div>
+      <div class="pair">
+        <input id="fix-src-${m.id}" class="fix-src" aria-label="${esc(t("fix_word"))}" placeholder="${esc(t("fix_word"))}" maxlength="80">
+        <span class="dim small">${esc(t("fix_to"))}</span>
+        <input class="fix-dst" aria-label="${esc(t("fix_right"))}" placeholder="${esc(t("fix_right"))}" maxlength="80">
+      </div>
+      <button class="primary" data-act="fix-save" data-id="${m.id}">${esc(t("fix_save"))}</button>
+    </div>`;
+  }
+
+  function nearBottom(box) { return box.scrollHeight - box.scrollTop - box.clientHeight < 90; }
+
+  function upsertMessage(m) {
+    const box = $("messages");
+    const stick = nearBottom(box);
+    const empty = box.querySelector(".empty");
+    if (empty) empty.remove();
+    let el = $("m-" + m.id);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "m-" + m.id;
+      el.innerHTML = '<div class="meta"></div><div class="bubble"><div class="bm"></div><div class="fixslot"></div></div>';
+      box.appendChild(el);
+    }
+    el.className = "msg " + (m.who === "me" ? "me" : "them");
+    el.querySelector(".meta").innerHTML = metaHTML(m);
+    el.querySelector(".bm").innerHTML = bubbleHTML(m);
+    if (stick) box.scrollTop = box.scrollHeight;
+  }
+
+  function renderMessages() {
+    const box = $("messages");
+    box.innerHTML = "";
+    if (!S.messages.length) {
+      box.innerHTML = `<div class="empty"><b>${esc(t("empty_title"))}</b><span>${esc(t("empty_body"))}</span></div>`;
+      return;
+    }
+    S.messages.forEach(upsertMessage);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function renderSubtitle() {
+    const last = S.messages[S.messages.length - 1];
+    const badge = $("sub-badge"), main = $("sub-main"), orig = $("sub-orig");
+    if (!last) {
+      badge.textContent = ""; orig.textContent = "";
+      main.textContent = t("subtitle_idle"); main.className = "sub-main idle";
+      return;
+    }
+    badge.textContent = t("who_" + last.who);
+    badge.className = "badge" + (last.who === "me" ? " me" : "");
+    main.className = "sub-main";
+    main.textContent = last.pending || last.error ? last.original : last.translated;
+    orig.textContent = last.pending || last.error ? "" : last.original;
+  }
+
+  // ---------------------------------------------------------------- 聲音裝置（設定頁和第一次設定共用）
+
+  function deviceNote(group, d) {
+    const levels = (S.ui.levels || {})[group] || {};
+    const level = levels[d.id];
+    let note = level === null ? t("cannot_open") : (level > 0.12 ? t("has_sound") : t("no_sound"));
+    if (d.default) note = t("win_default") + " · " + note;
+    return note;
+  }
+
+  function devicesHTML() {
+    const dv = S.ui.devices;
+    if (!dv) return `<div class="note">${ICON.info}<span>${esc(t("dev_loading"))}</span></div>`;
+    if (!dv.ok) return `<div class="note warn">${ICON.info}<span>${esc(t("dev_error", { error: dv.error }))}</span></div>`;
+    const list = (group, items, chosen, cfgKey) => {
+      if (!items.length) return `<div class="note warn">${ICON.info}<span>${esc(t("dev_none"))}</span></div>`;
+      const hasChosen = chosen && items.some((d) => d.id === chosen);
+      return items.map((d) => {
+        const on = hasChosen ? d.id === chosen : d.default;
+        return `<button class="device" data-act="device" data-key="${cfgKey}" data-id="${esc(d.id)}" data-name="${esc(d.name)}" aria-pressed="${on}">
+          <span class="radio"><span></span></span>
+          <span class="info"><span class="name">${esc(d.name)}</span><span class="dnote" data-note="${group}|${esc(d.id)}">${esc(deviceNote(group, d))}</span></span>
+          <span class="bar" aria-hidden="true"><span data-level="${group}|${esc(d.id)}" style="width:0%"></span></span>
+        </button>`;
+      }).join("");
+    };
+    return `
+      <section><div><h2>${esc(t("out_title"))}</h2><div class="sub">${esc(t("out_hint"))}</div></div>
+        ${list("speakers", dv.speakers, S.cfg.speaker_device, "speaker")}</section>
+      <section><div><h2>${esc(t("in_title"))}</h2><div class="sub">${esc(t("in_hint"))}</div></div>
+        ${list("microphones", dv.microphones, S.cfg.mic_device, "mic")}</section>
+      <div class="note">${ICON.info}<span>${esc(t("dev_note"))}</span></div>`;
+  }
+
+  function paintLevels() {
+    const levels = S.ui.levels;
+    if (!levels || !S.ui.devices || !S.ui.devices.ok) return;
+    document.querySelectorAll("[data-level]").forEach((el) => {
+      const [group, id] = el.dataset.level.split("|");
+      const v = (levels[group] || {})[id];
+      el.style.width = (v ? Math.round(v * 100) : 0) + "%";
+    });
+    document.querySelectorAll("[data-note]").forEach((el) => {
+      const [group, id] = el.dataset.note.split("|");
+      const d = (S.ui.devices[group] || []).find((x) => x.id === id);
+      if (d) el.textContent = deviceNote(group, d);
+    });
+  }
+
+  async function openDevices() {
+    S.ui.devices = null;
+    S.ui.levels = null;
+    refreshDevicePanels();
+    S.ui.devices = await get("/api/devices") || { ok: false, error: "no response", speakers: [], microphones: [] };
+    refreshDevicePanels();
+    post("/api/meters", { on: true });
+  }
+
+  function refreshDevicePanels() {
+    if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
+    if (S.view === "wizard" && S.ui.wz === 1) renderWizard();
+  }
+
+  // ---------------------------------------------------------------- 設定
+
+  const TABS = [["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"]];
+
+  function renderSettingsNav() {
+    $("settings-nav").innerHTML = `
+      <button class="back" data-act="view" data-view="main">${ICON.back}<span>${esc(t("back"))}</span></button>
+      <div class="title">${esc(t("settings"))}</div>` +
+      TABS.map(([id, key, icon]) => `<button class="tab" data-act="tab" data-tab="${id}" ${S.ui.tab === id ? 'aria-current="page"' : ""}>${ICON[icon]}<span>${esc(t(key))}</span></button>`).join("");
+  }
+
+  function switchRow(key, label, desc) {
+    return `<div class="setting-row"><div><div>${esc(label)}</div>${desc ? `<div class="desc">${esc(desc)}</div>` : ""}</div>
+      <button class="switch" role="switch" data-act="toggle" data-key="${key}" aria-checked="${S.cfg[key] ? "true" : "false"}" aria-label="${esc(label)}"><span></span></button></div>`;
+  }
+
+  function gb(mb) { return (Math.round((mb || 0) / 102.4) / 10).toFixed(1).replace(/\.0$/, ""); }
+
+  function qualityPage() {
+    const tier = S.gpu.tier || "cpu";
+    const high = S.mode.quality === "high";
+    const gpuLine = S.gpu.name
+      ? (tier === "high" ? t("gpu_found", { name: S.gpu.name, gb: gb(S.gpu.vram_mb) }) : t("gpu_small", { name: S.gpu.name, gb: gb(S.gpu.vram_mb) }))
+      : t("gpu_none");
+    const ko = S.cfg.their_lang === "ko" || S.cfg.my_lang === "ko";
+    const rows = S.glossary.length
+      ? S.glossary.map((g) => `<div class="grow-row"><span>${esc(g.src)}</span><span>${esc(g.dst)}</span>
+          <button data-act="gloss-remove" data-src="${esc(g.src)}" aria-label="${esc(t("remove", { word: g.src }))}">${ICON.x}</button></div>`).join("")
+      : `<div class="none">${esc(t("gloss_empty"))}</div>`;
+    return `
+      <section>
+        <div><h2>${esc(t("engine_title"))}</h2><div class="sub">${esc(t("engine_hint"))}</div></div>
+        <div class="quality">
+          <button class="qcard" data-act="quality" data-q="standard" aria-pressed="${!high}">
+            <span class="head"><span class="name">${esc(t("q_standard"))}</span>${!high ? `<span class="tag plain">${esc(t("in_use"))}</span>` : ""}</span>
+            <span class="desc">${esc(t("q_standard_desc"))}</span>
+          </button>
+          <button class="qcard" data-act="quality" data-q="auto" aria-pressed="${high}" ${tier === "high" ? "" : "disabled"}>
+            <span class="head"><span class="name">${esc(t("q_high"))}</span><span class="tag">${esc(high ? t("in_use") : t("uses_gpu"))}</span></span>
+            <span class="desc">${esc(t("q_high_desc"))}</span>
+          </button>
+        </div>
+        <div class="note ${S.fallback ? "warn" : ""}">${ICON.info}<span>${esc(S.fallback ? t("gpu_fallback") : gpuLine)}</span></div>
+      </section>
+      <section>
+        <h2>${esc(ko ? t("tone_title_ko") : t("tone_title"))}</h2>
+        <div class="pills">
+          <button class="pill tall" data-act="tone" data-tone="casual" aria-pressed="${S.cfg.tone === "casual"}">${esc(ko ? t("tone_casual_ko") : t("tone_casual"))}</button>
+          <button class="pill tall" data-act="tone" data-tone="polite" aria-pressed="${S.cfg.tone === "polite"}">${esc(ko ? t("tone_polite_ko") : t("tone_polite"))}</button>
+        </div>
+      </section>
+      <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}</section>
+      <section>
+        <div><h2>${esc(t("gloss_title"))}</h2><div class="sub">${esc(t("gloss_hint"))}</div></div>
+        <form class="gloss-form" id="gloss-form">
+          <input name="src" aria-label="${esc(t("gloss_src"))}" placeholder="${esc(t("gloss_src"))}" maxlength="80">
+          <input name="dst" aria-label="${esc(t("gloss_dst"))}" placeholder="${esc(t("gloss_dst"))}" maxlength="80">
+          <button class="primary" type="submit">${esc(t("gloss_add"))}</button>
+        </form>
+        <div class="gloss"><div class="grow-head"><span>${esc(t("gloss_src"))}</span><span>${esc(t("gloss_dst"))}</span><span></span></div>${rows}</div>
+      </section>`;
+  }
+
+  function screenPage() {
+    const r = S.cfg.region;
+    const o = S.ui.ocr;
+    let result = "";
+    if (o === "reading") result = `<div class="note">${ICON.info}<span>${esc(t("ocr_reading"))}</span></div>`;
+    else if (o && !o.ok) result = `<div class="note warn">${ICON.info}<span>${esc(t("ocr_failed", { error: o.error }))}</span></div>`;
+    else if (o && !o.lines.length) result = `<div class="note">${ICON.info}<span>${esc(t("ocr_nothing"))}</span></div>`;
+    else if (o) result = `<div class="ocr-lines">${o.lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>`;
+    return `
+      <section>
+        <div><h2>${esc(t("screen_title"))}</h2><div class="sub">${esc(t("screen_hint"))}</div></div>
+        <div class="note">${ICON.info}<span>${esc(r ? t("region_size", { w: r.width, h: r.height, x: r.left, y: r.top }) : t("region_none"))}</span></div>
+        <div class="btn-row">
+          <button class="primary big" data-act="region">${ICON.frame}${esc(r ? t("region_change") : t("region_pick"))}</button>
+          <button class="ghost" data-act="ocr-test" ${r ? "" : "disabled"}>${esc(t("ocr_test"))}</button>
+        </div>
+        <div class="sub">${esc(t("ocr_test_hint"))}</div>
+        ${result}
+      </section>
+      <section>${switchRow("also_english", t("also_english"))}</section>`;
+  }
+
+  function pairSelectHTML() {
+    const options = (current) => ["zh-TW", "ko", "en", "ja"].map((c) =>
+      `<option value="${c}" ${c === current ? "selected" : ""}>${esc(langName(c))}</option>`).join("");
+    return `<div class="pair-select">
+      <div class="field"><label for="sel-their">${esc(t("their_lang"))}</label><select id="sel-their" data-change="their_lang">${options(S.cfg.their_lang)}</select></div>
+      <button class="swap" data-act="swap" aria-label="${esc(t("swap"))}" title="${esc(t("swap"))}">${ICON.swap}</button>
+      <div class="field"><label for="sel-my">${esc(t("my_lang"))}</label><select id="sel-my" data-change="my_lang">${options(S.cfg.my_lang)}</select></div>
+    </div>`;
+  }
+
+  function uiLangsHTML() {
+    const natives = [["zh-TW", "繁體中文"], ["en", "English"], ["ko", "한국어"], ["ja", "日本語"]];
+    return `<div class="ui-langs">${natives.map(([id, native]) => {
+      const on = S.cfg.ui_lang === id;
+      return `<button class="ui-lang" data-act="ui-lang" data-code="${id}" aria-pressed="${on}"><b>${native}</b><span>${esc(on ? t("using") : t("click_switch"))}</span></button>`;
+    }).join("")}</div>`;
+  }
+
+  function generalPage() {
+    return `
+      <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
+      <section><div><h2>${esc(t("trans_title"))}</h2><div class="sub">${esc(t("trans_hint"))}</div></div>${pairSelectHTML()}</section>
+      <section><h2>${esc(t("window_title"))}</h2>
+        ${S.canWindow ? switchRow("on_top", t("on_top")) : ""}
+        ${switchRow("show_pronunciation", t("show_pron"))}
+        ${switchRow("copy_spoken", t("copy_spoken"))}
+      </section>
+      <section><h2>${esc(t("about_title"))}</h2>
+        <div class="note">${ICON.info}<span>${esc(t("about_version", { version: S.version }))}<br>${esc(t("about_update"))}</span></div>
+        <div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div>
+      </section>`;
+  }
+
+  function renderSettingsPage() {
+    const page = $("settings-page");
+    const scroll = page.scrollTop;
+    if (S.ui.tab === "audio") page.innerHTML = devicesHTML();
+    else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
+    else if (S.ui.tab === "screen") page.innerHTML = screenPage();
+    else page.innerHTML = generalPage();
+    page.scrollTop = scroll;
+    paintLevels();
+  }
+
+  function renderSettings() { renderSettingsNav(); renderSettingsPage(); }
+
+  function openTab(tab) {
+    const wasAudio = S.ui.tab === "audio";
+    S.ui.tab = tab;
+    renderSettings();
+    $("settings-page").scrollTop = 0;
+    if (tab === "audio") openDevices();
+    else if (wasAudio) post("/api/meters", { on: false });
+  }
+
+  // ---------------------------------------------------------------- 第一次設定
+
+  function downloadLine() {
+    const d = S.detail || {};
+    return t("dl_progress", { name: t("dl_" + (d.key || "model")), done: d.done_mb || 0, total: d.total_mb || 0 });
+  }
+
+  function renderWizardStrip() {
+    const el = $("wizard-dl");
+    if (S.view !== "wizard" || S.ui.wz === 0) { el.hidden = true; return; }
+    if (S.phase === "downloading") {
+      el.hidden = false;
+      el.innerHTML = `<div class="line"><b>${esc(t("dl_title"))}</b><span>${esc(downloadLine())}</span></div>
+        <div class="bar"><span style="width:${percent()}%"></span></div>`;
+    } else if (S.phase === "need_download") {
+      el.hidden = false;
+      el.innerHTML = `<div class="line"><b>${esc(S.detail.error ? t("dl_error", { error: S.detail.error }) : t("dl_need", { gb: gb(S.detail.total_mb) }))}</b>
+        <button class="link" data-act="download">${esc(S.detail.error ? t("retry") : t("dl_start"))}</button></div>`;
+    } else if (S.phase === "loading" || S.phase === "starting") {
+      el.hidden = false;
+      el.innerHTML = `<div class="line"><b>${esc(t("st_" + S.phase))}</b></div>`;
+    } else {
+      el.hidden = true;
+    }
+  }
+
+  function stepsHTML() {
+    const items = [["wz_s1", ""], ["wz_s2", ""], ["wz_s3", "wz_s3_sub"]];
+    return `<ol class="steps">${items.map(([key, sub], i) => {
+      const n = i + 1;
+      const cls = n < S.ui.wz ? "done" : (n === S.ui.wz ? "now" : "");
+      const subText = n < S.ui.wz ? t("wz_done") : (n === S.ui.wz ? t("wz_now") : (sub ? t(sub) : ""));
+      return `<li class="${cls}"><span class="num">${n < S.ui.wz ? ICON.check : n}</span><span class="lbl"><b>${esc(t(key))}</b><span>${esc(subText)}</span></span></li>`;
+    }).join("")}</ol>`;
+  }
+
+  function wizardBody() {
+    const names = { mine: langShort(S.cfg.my_lang), theirs: langShort(S.cfg.their_lang) };
+    if (S.ui.wz === 1) return `<div class="wz-body">${devicesHTML()}</div>`;
+    if (S.ui.wz === 2) {
+      const r = S.cfg.region;
+      return `<div class="wz-body"><div class="wz-split">
+        <div class="wz-art" aria-hidden="true"><div class="t"></div>
+          <div class="box"><span class="tag">${esc(t("wz_region_here"))}</span>
+            <div class="ln"><i></i><b style="width:150px"></b></div><div class="ln"><i></i><b style="width:200px"></b></div><div class="ln"><i></i><b style="width:120px"></b></div></div>
+          <div class="inp">${esc(t("wz_region_not"))}</div></div>
+        <div class="wz-side">
+          <h2>${esc(t("wz_region_title"))}</h2>
+          <div class="lead">${esc(t("wz_region_body"))}</div>
+          ${r ? `<div class="note">${ICON.info}<span>${esc(t("wz_region_ok", { w: r.width, h: r.height }))}</span></div>` : ""}
+          <button class="primary big" data-act="wz-region">${ICON.frame}${esc(r ? t("wz_region_again") : t("wz_region_go"))}</button>
+          ${r ? "" : `<button class="link" data-act="wz-next">${esc(t("wz_region_skip"))}</button>`}
+        </div></div></div>`;
+    }
+    const ready = S.phase === "ready";
+    const tried = S.messages.find((m) => m.id === S.ui.tryId);
+    return `<div class="wz-body">
+      <h2>${esc(t("wz_try_title"))}</h2>
+      <div class="lead">${esc(ready ? t("wz_try_body", names) : t("wz_try_wait"))}</div>
+      <form class="wz-try" id="wz-try"><input id="wz-say" maxlength="200" value="${esc(t("say_placeholder").replace(/^[^：:]*[：:]\s*/, ""))}" ${ready ? "" : "disabled"}>
+        <button class="primary" type="submit" ${ready ? "" : "disabled"}>${esc(t("translate"))}</button></form>
+      <div class="wz-result">${tried ? `<div class="msg me" style="max-width:100%;align-items:flex-start"><div class="bubble">${bubbleHTML(tried).replace(/<div class="actions">.*?<\/div>/, "")}</div></div>` : ""}</div>
+    </div>`;
+  }
+
+  function renderWizard() {
+    const el = $("wizard");
+    if (S.ui.wz === 0) {
+      const need = S.phase === "need_download";
+      const tier = S.gpu.tier || "cpu";
+      const modeLine = S.mode.quality === "high" ? t("wz_mode_high", { name: S.gpu.name })
+        : (tier !== "cpu" && S.gpu.name ? t("wz_mode_fast", { name: S.gpu.name }) : t("wz_mode_cpu"));
+      const settled = S.phase !== "starting" && S.phase !== "updating";
+      el.innerHTML = `
+        <div><h1>${esc(t("wz_welcome"))}</h1><div class="lead" style="margin-top:8px">${esc(t("wz_welcome_body"))}</div></div>
+        <section class="wz-facts"><h2>${esc(t("ui_title"))}</h2>${uiLangsHTML()}</section>
+        <section class="wz-facts"><h2>${esc(t("trans_title"))}</h2>${pairSelectHTML()}</section>
+        <section class="wz-facts">
+          ${settled ? `<div class="note">${ICON.info}<span>${esc(modeLine)}<br>${esc(need ? t("wz_need", { gb: gb(S.detail.total_mb) }) : (S.phase === "error" ? t("err_title") : t("wz_ready")))}</span></div>`
+            : `<div class="note">${ICON.info}<span>${esc(t("st_starting"))}</span></div>`}
+        </section>
+        <div class="wz-foot"><span></span><button class="primary big" data-act="wz-begin" ${settled ? "" : "disabled"}>${esc(need ? t("wz_start_download") : t("wz_start"))}</button></div>`;
+    } else {
+      el.innerHTML = `
+        <div><h1>${esc(t("wz_title"))}</h1><div class="lead" style="margin-top:6px;font-size:13px">${esc(t("wz_sub"))}</div></div>
+        ${stepsHTML()}
+        ${wizardBody()}
+        <div class="wz-foot">
+          <button class="ghost" data-act="wz-prev">${esc(t("wz_prev"))}</button>
+          <div class="dim small">${esc(t("wz_step", { n: S.ui.wz }))}</div>
+          ${S.ui.wz < 3 ? `<button class="primary" data-act="wz-next">${esc(t("wz_next"))}</button>`
+            : `<button class="primary" data-act="wz-finish">${esc(t("wz_finish"))}</button>`}
+        </div>`;
+    }
+    renderWizardStrip();
+    paintLevels();
+  }
+
+  function wizardGo(step) {
+    const was = S.ui.wz;
+    S.ui.wz = Math.max(0, Math.min(3, step));
+    renderWizard();
+    $("wizard").scrollTop = 0;
+    if (S.ui.wz === 1) openDevices();
+    else if (was === 1) post("/api/meters", { on: false });
+  }
+
+  // ---------------------------------------------------------------- 蓋板
+
+  function renderOverlay() {
+    const el = $("overlay");
+    const d = S.detail || {};
+    let html = "";
+    if (S.phase === "updating") {
+      const text = d.step === "downloading" ? t("up_downloading", { version: d.version, percent: d.percent || 0 })
+        : (d.step === "installing" ? t("up_installing", { version: d.version }) : t("up_checking"));
+      html = `<div class="spinner"></div><h2>${esc(t("st_updating"))}</h2><p>${esc(text)}</p>` +
+        (d.step === "downloading" ? `<div class="bar"><span style="width:${d.percent || 0}%"></span></div>` : "");
+    } else if (S.phase === "error") {
+      html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.message || "")}</p>` +
+        (d.log ? `<p>${esc(t("err_log", { path: d.log }))}</p>` : "") +
+        `<button class="primary" data-act="retry">${esc(t("retry"))}</button>`;
+    } else if (S.view !== "wizard" && S.phase === "need_download") {
+      html = `<h2>${esc(t("st_need_download"))}</h2><p>${esc(d.error ? t("dl_error", { error: d.error }) : t("dl_need", { gb: gb(d.total_mb) }))}</p>
+        <button class="primary" data-act="download">${esc(d.error ? t("retry") : t("dl_start"))}</button>` +
+        (S.cfg.quality !== "standard" && S.mode.quality === "high" ? `<button class="link" data-act="quality" data-q="standard">${esc(t("q_standard"))}</button>` : "");
+    } else if (S.view !== "wizard" && S.phase === "downloading") {
+      html = `<h2>${esc(t("dl_title"))}</h2><p>${esc(downloadLine())}</p><div class="bar"><span style="width:${percent()}%"></span></div>`;
+    }
+    el.hidden = !html;
+    el.innerHTML = html ? `<div class="panel">${html}</div>` : "";
+  }
+
+  // ---------------------------------------------------------------- 畫面切換
+
+  function showView(view) {
+    S.view = view;
+    app.dataset.view = view;
+    if (view === "settings") { renderSettings(); if (S.ui.tab === "audio") openDevices(); }
+    if (view === "wizard") renderWizard();
+    if (view === "subtitle") renderSubtitle();
+    renderOverlay();
+  }
+
+  function setView(view) {
+    showView(view);
+    post("/api/view", { view });
+  }
+
+  function renderAll() {
+    applyI18n();
+    renderStatus();
+    renderLangs();
+    renderSources();
+    renderMessages();
+    renderSubtitle();
+    if (S.view === "settings") renderSettings();
+    if (S.view === "wizard") renderWizard();
+    renderOverlay();
+  }
+
+  // ---------------------------------------------------------------- 按鈕
+
+  const actions = {
+    view: (el) => setView(el.dataset.view),
+    "toggle-langs": () => { S.ui.langOpen = !S.ui.langOpen; renderLangs(); },
+    "set-lang": (el) => post("/api/config", { [el.dataset.side]: el.dataset.code }),
+    source: (el) => {
+      const key = el.dataset.key;
+      post("/api/source", { key, on: !(S.sources[key] || {}).on });
+    },
+    region: () => post("/api/region", { enable: true }),
+    clear: () => post("/api/clear"),
+    fix: (el) => {
+      const id = Number(el.dataset.id);
+      const m = S.messages.find((x) => x.id === id);
+      const slot = $("m-" + id) && $("m-" + id).querySelector(".fixslot");
+      if (!m || !slot) return;
+      if (slot.innerHTML) { slot.innerHTML = ""; return; }
+      document.querySelectorAll(".fixslot").forEach((s) => { s.innerHTML = ""; });
+      slot.innerHTML = fixHTML(m);
+      slot.scrollIntoView({ block: "nearest" });
+    },
+    "fix-word": (el) => {
+      const input = el.closest(".fix").querySelector(".fix-src");
+      input.value = el.dataset.word;
+      el.closest(".fix").querySelector(".fix-dst").focus();
+    },
+    "fix-save": async (el) => {
+      const box = el.closest(".fix");
+      const src = box.querySelector(".fix-src").value.trim();
+      const dst = box.querySelector(".fix-dst").value.trim();
+      if (!src || !dst) { (src ? box.querySelector(".fix-dst") : box.querySelector(".fix-src")).focus(); return; }
+      const r = await post("/api/fix", { id: Number(el.dataset.id), src, dst });
+      if (r.ok) { box.parentElement.innerHTML = ""; toast(t("n_saved")); }
+    },
+    copy: async (el) => { const r = await post("/api/copy", { id: Number(el.dataset.id) }); if (r.ok) toast(t("copied"), 1600); },
+    tab: (el) => openTab(el.dataset.tab),
+    device: (el) => {
+      const key = el.dataset.key;
+      post("/api/config", key === "speaker"
+        ? { speaker_device: el.dataset.id, speaker_name: el.dataset.name }
+        : { mic_device: el.dataset.id, mic_name: el.dataset.name });
+    },
+    quality: (el) => post("/api/config", { quality: el.dataset.q }),
+    tone: (el) => post("/api/config", { tone: el.dataset.tone }),
+    toggle: (el) => post("/api/config", { [el.dataset.key]: !S.cfg[el.dataset.key] }),
+    "gloss-remove": (el) => post("/api/glossary/remove", { src: el.dataset.src }),
+    "ocr-test": async () => {
+      S.ui.ocr = "reading"; renderSettingsPage();
+      S.ui.ocr = await post("/api/ocr_test"); renderSettingsPage();
+    },
+    "ui-lang": (el) => post("/api/config", { ui_lang: el.dataset.code }),
+    swap: () => post("/api/config", { my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang }),
+    "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
+    "wz-begin": () => { if (S.phase === "need_download") post("/api/download"); wizardGo(1); },
+    "wz-next": () => wizardGo(S.ui.wz + 1),
+    "wz-prev": () => wizardGo(S.ui.wz - 1),
+    "wz-region": () => post("/api/region", { enable: false }),
+    "wz-finish": async () => {
+      await post("/api/config", { setup_done: true });
+      setView("main");
+      if (S.cfg.region) post("/api/source", { key: "screen", on: true });
+    },
+    download: () => post("/api/download"),
+    retry: () => post("/api/retry")
+  };
+
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-act]");
+    if (!el || el.disabled) return;
+    const fn = actions[el.dataset.act];
+    if (fn) { e.preventDefault(); fn(el); }
+  });
+
+  document.addEventListener("change", (e) => {
+    const key = e.target.dataset && e.target.dataset.change;
+    if (key) post("/api/config", { [key]: e.target.value });
+  });
+
+  document.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    if (form.id === "say-form") {
+      const input = $("say");
+      const text = input.value.trim();
+      if (!text) return;
+      if (S.phase !== "ready") { toast(t("n_not_ready")); return; }
+      input.value = "";
+      post("/api/send", { text });
+    } else if (form.id === "gloss-form") {
+      const src = form.elements.src.value.trim(), dst = form.elements.dst.value.trim();
+      if (!src || !dst) { (src ? form.elements.dst : form.elements.src).focus(); return; }
+      const r = await post("/api/glossary/add", { src, dst });
+      if (r.ok) { form.reset(); form.elements.src.focus(); }
+    } else if (form.id === "wz-try") {
+      const text = $("wz-say").value.trim();
+      if (!text || S.phase !== "ready") return;
+      S.ui.tryId = "next";
+      post("/api/send", { text });
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (S.ui.langOpen) { S.ui.langOpen = false; renderLangs(); }
+    document.querySelectorAll(".fixslot").forEach((s) => { s.innerHTML = ""; });
+  });
+
+  // ---------------------------------------------------------------- 背景送來的事件
+
+  const handlers = {
+    phase: (d) => {
+      const before = S.phase;
+      S.phase = d.phase; S.detail = d.detail || {};
+      if (d.mode) S.mode = d.mode;
+      if (d.gpu) S.gpu = d.gpu;
+      if (typeof d.fallback === "boolean") S.fallback = d.fallback;
+      renderStatus(); renderOverlay();
+      if (S.view === "wizard") { if (before !== S.phase) renderWizard(); else renderWizardStrip(); }
+      if (S.view === "settings" && S.ui.tab === "quality" && before !== S.phase) renderSettingsPage();
+    },
+    source: (d) => {
+      const before = S.sources[d.key] || {};
+      S.sources[d.key] = d;
+      renderSources();
+      if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000);
+    },
+    message: (m) => {
+      const i = S.messages.findIndex((x) => x.id === m.id);
+      if (i >= 0) S.messages[i] = m; else S.messages.push(m);
+      if (S.ui.tryId === "next" && m.via === "typed") S.ui.tryId = m.id;
+      upsertMessage(m);
+      if (S.messages.length === 1) renderSources();
+      renderSubtitle();
+      if (S.view === "wizard" && S.ui.wz === 3 && m.id === S.ui.tryId) {
+        const slot = document.querySelector(".wz-result");
+        if (slot) slot.innerHTML = `<div class="msg me" style="max-width:100%;align-items:flex-start"><div class="bubble">${bubbleHTML(m).replace(/<div class="actions">.*?<\/div>/, "")}</div></div>`;
+      }
+    },
+    message_removed: (d) => {
+      S.messages = S.messages.filter((x) => x.id !== d.id);
+      const el = $("m-" + d.id); if (el) el.remove();
+      if (!S.messages.length) renderMessages();
+      renderSubtitle();
+    },
+    cleared: () => { S.messages = []; renderMessages(); renderSources(); renderSubtitle(); },
+    config: (cfg) => {
+      const before = S.cfg;
+      S.cfg = cfg;
+      if (before.ui_lang !== cfg.ui_lang) { renderAll(); return; }
+      renderLangs(); renderSources();
+      if (S.view === "settings") renderSettingsPage();
+      if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
+    },
+    glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
+    levels: (levels) => { S.ui.levels = levels; paintLevels(); },
+    notice: (d) => toast(t("n_" + d.code, d), 7000),
+    view: (d) => { if (d.view !== S.view) showView(d.view); },
+    region_done: () => {
+      if (S.view === "wizard") renderWizard();
+      if (S.view === "settings") renderSettingsPage();
+    }
+  };
+
+  function connect() {
+    const es = new EventSource("/api/events?t=" + encodeURIComponent(TOKEN));
+    let opened = false;
+    es.onopen = () => { if (opened) load(); opened = true; };
+    Object.keys(handlers).forEach((name) => {
+      es.addEventListener(name, (e) => { try { handlers[name](JSON.parse(e.data)); } catch (err) { console.error(name, err); } });
+    });
+  }
+
+  async function load() {
+    const st = await get("/api/state");
+    if (!st || st.error) { setTimeout(load, 1000); return false; }
+    S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary;
+    S.version = st.version; S.canWindow = st.can_window;
+    const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
+    app.dataset.view = S.view = view;
+    renderAll();
+    if (view !== st.view) post("/api/view", { view });
+    if (view === "settings") { renderSettings(); if (S.ui.tab === "audio") openDevices(); }
+    return true;
+  }
+
+  load().then(connect);
+})();

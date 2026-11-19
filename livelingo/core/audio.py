@@ -55,9 +55,9 @@ def _soundcard():
             _sc_state["started"] = True
             threading.Thread(target=_sc_loader, daemon=True, name="soundcard-loader").start()
     if not _sc_done.wait(60):
-        raise RuntimeError("音訊元件載入逾時")
+        raise RuntimeError("the audio component took too long to load")
     if _sc_state["error"] is not None:
-        raise RuntimeError(f"音訊元件載入失敗：{_sc_state['error']!r}")
+        raise RuntimeError(f"the audio component failed to load: {_sc_state['error']!r}")
     _com_init()
     import soundcard
 
@@ -102,7 +102,7 @@ class Capture(threading.Thread):
             wanted = self.device or sc.default_microphone().id
         dev = _pick(devices, wanted)
         if dev is None:
-            raise RuntimeError(f"找不到裝置「{wanted}」，請按「裝置」重新選一次")
+            raise RuntimeError(f"audio device not found: {wanted}")
         return dev
 
     def run(self):
@@ -155,7 +155,7 @@ class ArrayCapture(threading.Thread):
 
 
 def list_devices() -> dict:
-    """列出可用的播放裝置和麥克風（給「裝置」選單和除錯用）。"""
+    """列出可用的播放裝置和麥克風（除錯用）。"""
     sc = _soundcard()
     return {"speakers": [s.name for s in sc.all_speakers()], "default_speaker": sc.default_speaker().name,
             "microphones": [m.name for m in sc.all_microphones()], "default_microphone": sc.default_microphone().name}
