@@ -1,4 +1,4 @@
-# 即時翻譯（本地端）
+# LiveLingo 即時翻譯（本地端）
 
 在你自己的電腦上執行的翻譯小視窗。文字辨識、語音辨識和翻譯都在本機完成，不用帳號、不用 Token、沒有次數限制，聊天內容和聲音都不會傳到外面。
 
@@ -21,7 +21,7 @@
 
 ## 安裝（只要做一次）
 
-1. 把 `live-translator.zip` 解壓縮到一個好找的地方，例如 `D:\live-translator`。
+1. 在 GitHub 頁面按綠色的 **Code** → **Download ZIP** 下載（或用 `git clone https://github.com/JimboMachine/LiveLingo.git`），解壓縮到一個好找的地方，例如 `D:\LiveLingo`。
 2. 點兩下 `setup.bat`。
    - 如果跳出「Windows 已保護您的電腦」，按「其他資訊」再按「仍要執行」。
    - 電腦沒有 Python 的話，它會先問你要不要自動安裝 Python 3.12。
