@@ -1,0 +1,7 @@
+rapidocr==3.10.0
+onnxruntime>=1.20
+mss>=9.0
+numpy
+opencc-python-reimplemented==0.1.7
+faster-whisper==1.2.1
+soundcard>=0.4.4

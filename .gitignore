@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 下載的模型與翻譯引擎（由 setup.bat 自動下載，不放進 repo）
+models/
+engine/
+*.gguf
+*.onnx
+*.bin
+
+# 個人設定與紀錄
+config.json
+*.log
+.env
+
+# 打包檔
+*.zip
