@@ -121,7 +121,8 @@ class Service:
         self._lock = threading.RLock()
         self._download_cancel = threading.Event()
         self._selecting = False
-        self.on_quit = lambda: None    # 需要整個程式結束時呼叫（更新、介面按離開）
+        self.on_quit = lambda: None    # 請視窗關閉、讓程式正常結束（介面按離開）
+        self.exit_now = lambda: self.on_quit()   # 立刻結束整個程式（更新時用；__main__ 會換成真的）
 
     # ------------------------------------------------------------------ 給介面的狀態
 
@@ -217,8 +218,10 @@ class Service:
             self.log(f"update failed: {ex!r}")
             self.notice("update_failed", version=info["version"])
             return False
-        time.sleep(1.0)
-        self.on_quit()
+        # 安裝程式在等這個程式關掉才能換檔案，所以不等視窗慢慢收，直接結束
+        self.log(f"installing update {info['version']}; closing")
+        time.sleep(0.5)
+        self.exit_now()
         return True
 
     def _prepare(self) -> None:

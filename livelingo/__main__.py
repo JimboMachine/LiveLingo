@@ -58,6 +58,14 @@ def main() -> int:
         return 0
 
     service = Service(data)
+
+    def exit_now():
+        service.shutdown()
+        (data / "run.json").unlink(missing_ok=True)
+        oswin.release_single_instance()
+        os._exit(0)
+
+    service.exit_now = exit_now
     try:
         server = Server(service)
         server.start()

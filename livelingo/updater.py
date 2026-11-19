@@ -106,7 +106,8 @@ def download(info: dict, folder: Path, progress=None) -> Path:
 
 def launch_installer(path: Path) -> None:
     """安靜地執行安裝檔。安裝程式會等這個程式關掉、裝好之後自己把 LiveLingo 再打開。"""
-    args = [str(path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/UPDATE=1"]
+    args = [str(path), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/UPDATE=1",
+            f"/LOG={path.with_name('install.log')}"]
     flags = 0
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

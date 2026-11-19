@@ -75,29 +75,42 @@ begin
   Result := ExpandConstant('{param:UPDATE|0}') = '1';
 end;
 
-procedure StopLiveLingo;
+function LiveLingoRunning: Boolean;
+begin
+  Result := CheckForMutexes('LiveLingoRunning');
+end;
+
+procedure StopLiveLingo(WithChildren: Boolean);
 var
   i, code: Integer;
+  args: String;
 begin
-  // LiveLingo 開著的時候檔案換不掉：先等它自己關（自動更新時它會馬上關），等不到就強制關閉
-  for i := 1 to 40 do
+  // LiveLingo 開著的時候檔案換不掉：先等它自己關（自動更新時它會馬上關），等不到才強制關閉。
+  for i := 1 to 60 do
   begin
-    if not CheckForMutexes('LiveLingoRunning') then
+    if not LiveLingoRunning then
       Break;
     Sleep(500);
   end;
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM LiveLingo.exe', '', SW_HIDE, ewWaitUntilTerminated, code);
-  Sleep(500);
+  if LiveLingoRunning then
+  begin
+    // 自動更新時這個安裝程式是 LiveLingo 開出來的，所以不能連「它開出來的程式」一起關（會把自己也關掉）
+    args := '/F /IM LiveLingo.exe';
+    if WithChildren then
+      args := '/F /T /IM LiveLingo.exe';
+    Exec(ExpandConstant('{sys}\taskkill.exe'), args, '', SW_HIDE, ewWaitUntilTerminated, code);
+  end;
+  Sleep(1000);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  StopLiveLingo;
+  StopLiveLingo(False);
   Result := '';
 end;
 
 function InitializeUninstall: Boolean;
 begin
-  StopLiveLingo;
+  StopLiveLingo(True);
   Result := True;
 end;

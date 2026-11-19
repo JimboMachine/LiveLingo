@@ -50,7 +50,14 @@ def step(text: str) -> None:
     print(f"\n=== {text}", flush=True)
 
 
+LOGS: list[Path] = []
+
+
 def fail(text: str) -> None:
+    for path in LOGS:
+        print(f"\n----- {path}")
+        print(path.read_text(encoding="utf-8", errors="replace")[-6000:] if path.exists() else "(not written)")
+    print("LiveLingo processes:", running())
     print(f"FAILED: {text}", flush=True)
     sys.exit(1)
 
@@ -151,10 +158,13 @@ threading.Thread(target=httpd.serve_forever, daemon=True).start()
 data = Path(tempfile.mkdtemp(prefix="livelingo-update-"))
 env = dict(os.environ, LIVELINGO_UPDATE_API=f"http://127.0.0.1:{httpd.server_address[1]}/latest", LIVELINGO_DATA=str(data))
 (APP_DIR / "ci-marker.txt").write_text("old install")       # 更新會把程式檔換掉，但不該動到這種不認識的檔案以外的東西
+LOGS.extend([data / "app.log", data / "update" / "install.log"])
 first = subprocess.Popen([str(APP)], env=env)
 print("started pid", first.pid)
 wait_for("the app to exit so the installer can run", lambda: first.poll() is not None, 300)
 print("app exited with", first.returncode, "after requests:", Release.hits)
+if first.returncode != 0:
+    fail("the app did not close by itself for the update (it was killed)")
 if not any(h.endswith(".exe") for h in Release.hits):
     fail("the app exited without downloading the update")
 attempt = json.loads((data / "update.json").read_text(encoding="utf-8"))
