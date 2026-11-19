@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install numpy opencv-python-headless opencc-python-reimplemented==0.1.7 pytest
+      - run: pip install numpy pillow opencv-python-headless opencc-python-reimplemented==0.1.7 pytest
       - run: python -m pytest tests -q
 
   windows:

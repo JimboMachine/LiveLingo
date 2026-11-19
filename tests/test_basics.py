@@ -189,7 +189,7 @@ def test_floating_chat_painting():
     from livelingo import chatpaint
 
     short = chatpaint.paint_message("heard", "對方", "好", 400, 24)
-    long = chatpaint.paint_message("heard", "對方", "打野來一下下路，對面沒有閃現，我大絕好了等我先開" * 2, 400, 24)
+    long = chatpaint.paint_message("heard", "對方", "打野來一下下路，對面沒有閃現，我大絕好了等我先開" * 6, 400, 24)
     mixed = chatpaint.paint_message("me", "我", "좋아, 지금 갈게 let's go!", 400, 24, original="好，我現在過去", backdrop=40)
     assert short.size[0] == long.size[0] == mixed.size[0] == 400
     assert long.size[1] > short.size[1] * 2          # 太長會換行
