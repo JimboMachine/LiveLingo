@@ -4,7 +4,6 @@ import json
 import re
 import threading
 import urllib.request
-from pathlib import Path
 
 from opencc import OpenCC
 
@@ -24,6 +23,8 @@ SOURCES = {
 
 # 保險用：模型偶爾會冒出簡體字，中文輸出一律再轉成台灣繁體用語
 _to_traditional = OpenCC("s2twp")
+
+HINT_INTRO = "They are talking about the game League of Legends. Use these translations for the game terms: "
 
 
 def detect_language(text: str) -> str | None:
@@ -50,22 +51,6 @@ def detect_language(text: str) -> str | None:
     return None
 
 
-def load_glossary(path: Path) -> dict[str, str]:
-    """專有名詞表：每行「原文 = 譯文」，# 開頭是註解。"""
-    out: dict[str, str] = {}
-    try:
-        for line in path.read_text(encoding="utf-8-sig").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            if k.strip() and v.strip():
-                out[k.strip()] = v.strip()
-    except FileNotFoundError:
-        pass
-    return out
-
-
 def apply_glossary(text: str, glossary: dict[str, str], target: str | None = None) -> tuple[str, list[str]]:
     """
     把原文裡的專有名詞直接換成指定的譯文（一次掃完，不會重複替換）。
@@ -89,8 +74,9 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
     return pattern.sub(repl, text), list(dict.fromkeys(used))
 
 
-def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual") -> str:
-    """TranslateGemma 官方的提示格式，加上聊天語氣提示和專有名詞表（實測過效果最好的組合）。"""
+def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual",
+                 hints: list[tuple[str, str]] | None = None) -> str:
+    """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。"""
     s_name, s_code = SOURCES[source]
     t_name = LANGS[target]["en"]
     text, kept = apply_glossary(text, glossary, target)
@@ -104,6 +90,9 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
                  + ", and keep names, game terms and Latin-alphabet words unchanged.\n")
     if kept:
         extra += "Keep these terms exactly as written, do not translate or change them: " + "; ".join(kept) + "\n"
+    hints = [(a, b) for a, b in (hints or []) if a in text]
+    if hints:
+        extra += HINT_INTRO + "; ".join(f"{a} = {b}" for a, b in hints) + "\n"
     body = (
         f"You are a professional {s_name} ({s_code}) to {t_name} ({target}) translator. "
         f"Your goal is to accurately convey the meaning and nuances of the original {s_name} text "
@@ -115,14 +104,29 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
     return f"<start_of_turn>user\n{body}<end_of_turn>\n<start_of_turn>model\n"
 
 
+def _leftover(out: str, source: str, target: str) -> int:
+    """譯文裡還留著幾個原文的字（韓文翻成別的語言卻還有韓文字，之類的）。"""
+    family = LANGS[target]["family"]
+    if source == "ko" and family != "ko":
+        return sum(1 for ch in out if 0xAC00 <= ord(ch) <= 0xD7A3)
+    if source in ("zh", "ja") and family in ("ko", "en"):
+        return sum(1 for ch in out if 0x4E00 <= ord(ch) <= 0x9FFF or 0x3040 <= ord(ch) <= 0x30FF)
+    return 0
+
+
 class Translator:
-    def __init__(self, url: str, glossary_path: Path | None = None, tone: str = "casual", max_chars: int = 500):
+    def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None):
+        """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]。"""
         self.url = url.rstrip("/")
-        self.glossary_path = glossary_path
+        self.glossary = glossary or (lambda: {})
+        self.hints = hints or (lambda text, source, target: [])
         self.tone = tone
         self.max_chars = max_chars
         self._lock = threading.Lock()  # 一次只翻一則，其他排隊
         self._cache: dict[tuple[str, str], str] = {}
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
 
     def ready(self) -> bool:
         try:
@@ -130,6 +134,20 @@ class Translator:
                 return r.status == 200
         except Exception:  # noqa: BLE001
             return False
+
+    def _ask(self, text: str, source: str, target: str, hints: list) -> str:
+        payload = {
+            "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints),
+            "max_tokens": min(1024, 64 + 4 * len(text)),
+            "temperature": 0,
+            "repeat_penalty": 1.0,
+            "stop": ["<end_of_turn>"],
+        }
+        req = urllib.request.Request(
+            f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=180) as r:
+            return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
 
     def translate(self, text: str, target: str, source: str | None = None) -> str:
         """target：zh-TW / ko / en / ja。同語言時原樣回傳。"""
@@ -140,20 +158,14 @@ class Translator:
         key = (text, target)
         if key in self._cache:
             return self._cache[key]
-        glossary = load_glossary(self.glossary_path) if self.glossary_path else {}
-        payload = {
-            "prompt": build_prompt(text, source, target, glossary, self.tone),
-            "max_tokens": min(1024, 64 + 4 * len(text)),
-            "temperature": 0,
-            "repeat_penalty": 1.0,
-            "stop": ["<end_of_turn>"],
-        }
-        req = urllib.request.Request(
-            f"{self.url}/v1/completions", data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"})
+        hints = self.hints(text, source, target)
         with self._lock:
-            with urllib.request.urlopen(req, timeout=180) as r:
-                out = json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
+            out = self._ask(text, source, target, hints)
+            if hints and _leftover(out, source, target):
+                # 加了用語提示之後偶爾會有一段沒翻到（原文的字直接留在譯文裡），這時不用提示重翻一次，挑比較乾淨的
+                plain = self._ask(text, source, target, [])
+                if _leftover(plain, source, target) < _leftover(out, source, target):
+                    out = plain
         if target == "zh-TW":
             out = _to_traditional.convert(out)
         if len(self._cache) > 500:

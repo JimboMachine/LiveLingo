@@ -188,7 +188,7 @@ class SpeechPipeline(threading.Thread):
                 try:
                     res = self.recognizer.transcribe(utter, self.langs)
                 except Exception as ex:  # noqa: BLE001
-                    self.on_text(self.capture.kind, f"（語音辨識出錯：{ex}）", "error", 0.0)
+                    self.on_text(self.capture.kind, str(ex), "error", 0.0)
                     continue
                 if res:
                     self.on_text(self.capture.kind, res[0], res[1], time.time() - t)

@@ -24,17 +24,22 @@ def has_hangul(s: str) -> bool:
 
 
 class OcrEngine:
-    def __init__(self, model_dir: Path, scale: float = 1.5):
+    def __init__(self, model_dir: Path | None, scale: float = 1.5, family: str = "ko"):
+        """family：要讀的語言。韓文用另外下載的韓文模型；中文、日文、英文用內建的多語言模型。"""
         from rapidocr import RapidOCR  # 延後載入，啟動比較快
 
         self.scale = scale
-        self.engine = RapidOCR(params={
-            "Global.use_cls": False,
-            "Global.log_level": "error",
-            "Det.model_path": str(model_dir / "det.onnx"),
-            "Rec.model_path": str(model_dir / "korean_rec.onnx"),
-            "Rec.rec_keys_path": str(model_dir / "korean_dict.txt"),
-        })
+        self.family = family
+        params = {"Global.use_cls": False, "Global.log_level": "error"}
+        if family == "ko":
+            if model_dir is None:
+                raise RuntimeError("Korean OCR model folder is missing")
+            params.update({
+                "Det.model_path": str(model_dir / "det.onnx"),
+                "Rec.model_path": str(model_dir / "korean_rec.onnx"),
+                "Rec.rec_keys_path": str(model_dir / "korean_dict.txt"),
+            })
+        self.engine = RapidOCR(params=params)
 
     def read(self, bgr: np.ndarray) -> list[Line]:
         """回傳畫面上所有文字列（座標已換回原圖大小），由上到下排序。"""
