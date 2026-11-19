@@ -183,3 +183,67 @@ def test_update_check_and_download(tmp_path, monkeypatch):
     finally:
         httpd.shutdown()
         os.environ.pop("LIVELINGO_UPDATE_API", None)
+
+
+def test_floating_chat_painting():
+    from livelingo import chatpaint
+
+    short = chatpaint.paint_message("heard", "對方", "好", 400, 24)
+    long = chatpaint.paint_message("heard", "對方", "打野來一下下路，對面沒有閃現，我大絕好了等我先開" * 2, 400, 24)
+    mixed = chatpaint.paint_message("me", "我", "좋아, 지금 갈게 let's go!", 400, 24, original="好，我現在過去", backdrop=40)
+    assert short.size[0] == long.size[0] == mixed.size[0] == 400
+    assert long.size[1] > short.size[1] * 2          # 太長會換行
+    assert mixed.size[1] > short.size[1]             # 多一行小字的原文
+    assert short.getchannel("A").getextrema()[1] == 255 and short.getpixel((399, 0))[3] == 0   # 有字，其餘透明
+
+    # 最新的在最下面；放不下的舊留言不會畫出來
+    frame = chatpaint.compose([(short, 1.0)] * 30, (400, 200))
+    assert frame.size == (400, 200) and frame.getchannel("A").getextrema()[1] == 255
+    faded = chatpaint.compose([(short, 0.3)], (400, 200))
+    assert 0 < faded.getchannel("A").getextrema()[1] < 120
+    raw = chatpaint.to_bgra_premultiplied(frame)
+    assert len(raw) == 400 * 200 * 4
+    edit = chatpaint.edit_frame(frame, "zh-TW", 24)
+    assert edit.getpixel((200, 100))[3] > 0          # 調整位置時整塊看得到
+
+
+def test_floating_chat_lifecycle(tmp_path):
+    from livelingo.overlay import MemoryWindow, Overlay
+    from livelingo.service import Service
+
+    service = Service(tmp_path)
+    overlay = Overlay(service, window_class=MemoryWindow)
+    service.overlay = overlay
+    service.update_config({"overlay": False})
+    assert not overlay.running
+    service.update_config({"overlay": True, "overlay_seconds": 10, "overlay_font": 999})
+    assert overlay.running and service.cfg["overlay_font"] == 60
+    overlay._stop.set()                              # 停掉背景的重畫，下面自己一格一格畫才不會互相干擾
+    overlay._wake.set()
+    overlay._thread.join(2)
+    try:
+        overlay.on_message({"id": 1, "who": "them", "via": "heard", "original": "안녕", "translated": "你好"})
+        overlay.on_message({"id": 2, "who": "me", "via": "typed", "original": "好", "translated": "좋아", "pending": True})
+        assert [i["key"] for i in overlay.items] == [1]      # 還沒翻好的不顯示
+        start = overlay.items[0]["at"]
+        image, _ = overlay.frame(start + 1)
+        assert image is not None and image.getchannel("A").getextrema()[1] == 255
+        assert overlay.frame(start + 1.5)[0] is None         # 沒有變化就不重畫
+        fading, wait = overlay.frame(start + 9.6)
+        assert fading is not None and wait < 0.1 and 0 < fading.getchannel("A").getextrema()[1] < 255
+        gone, _ = overlay.frame(start + 11)
+        assert gone.getchannel("A").getextrema()[1] == 0 and not overlay.items
+
+        overlay.set_edit(True)                               # 調整位置：看得到範圍和範例
+        assert overlay.window.editing and overlay.frame()[0].getpixel((5, 5))[3] > 0
+        overlay._moved([50, 60, 500, 300], True)
+        overlay.set_edit(False)
+        assert service.cfg["overlay_rect"] == [50, 60, 500, 300]
+
+        service.update_config({"overlay_mine": False})
+        overlay.on_message({"id": 3, "who": "me", "via": "typed", "original": "好", "translated": "좋아"})
+        assert not overlay.items
+    finally:
+        service.update_config({"overlay": False})
+    assert not overlay.running
+    service.shutdown()

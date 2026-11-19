@@ -19,6 +19,7 @@ from .config import EDITABLE, UI_LANGS, Config, Glossary
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language
+from .overlay import Overlay
 from .paths import self_command
 from .terms import TermPack
 
@@ -123,6 +124,7 @@ class Service:
         self._selecting = False
         self.on_quit = lambda: None    # 請視窗關閉、讓程式正常結束（介面按離開）
         self.exit_now = lambda: self.on_quit()   # 立刻結束整個程式（更新時用；__main__ 會換成真的）
+        self.overlay = Overlay(self)   # 浮動留言
 
     # ------------------------------------------------------------------ 給介面的狀態
 
@@ -152,6 +154,7 @@ class Service:
             "ui_langs": list(UI_LANGS),
             "can_window": bool(self.window or self.can_window),
             "view": self.view,
+            "overlay": self.overlay.state(),
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -177,6 +180,7 @@ class Service:
         try:
             if self._update_if_needed():
                 return
+            self.overlay.apply()
             self.gpu = gpu.detect()
             self._prepare()
         except Exception as ex:  # noqa: BLE001
@@ -318,6 +322,7 @@ class Service:
             else:
                 self.messages.append(msg)
         self.hub.publish("message", msg)
+        self.overlay.on_message(msg)
         return msg
 
     def _drop(self, msg_id: int) -> None:
@@ -326,6 +331,7 @@ class Service:
                 if old["id"] == msg_id:
                     self.messages.remove(old)
         self.hub.publish("message_removed", {"id": msg_id})
+        self.overlay.on_removed(msg_id)
 
     def submit(self, via: str, text: str, lang: str | None = None) -> None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。"""
@@ -404,6 +410,7 @@ class Service:
         with self._lock:
             self.messages.clear()
         self.hub.publish("cleared", {})
+        self.overlay.clear()
 
     # ------------------------------------------------------------------ 設定
 
@@ -418,6 +425,15 @@ class Service:
             changes.pop("tone")
         if changes.get("quality") not in (None, "auto", "standard", "high"):
             changes.pop("quality")
+        for key, low, high in (("overlay_font", 14, 60), ("overlay_seconds", 0, 120), ("overlay_backdrop", 0, 80)):
+            if key in changes:
+                try:
+                    changes[key] = max(low, min(high, int(changes[key])))
+                except (TypeError, ValueError):
+                    changes.pop(key)
+        for key in ("overlay", "overlay_original", "overlay_mine"):
+            if key in changes:
+                changes[key] = bool(changes[key])
         before = self.cfg.snapshot()
         # 兩邊選到同一個語言時，自動對調
         my, their = changes.get("my_lang", before["my_lang"]), changes.get("their_lang", before["their_lang"])
@@ -440,6 +456,10 @@ class Service:
             self.translator.clear_cache()
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
+        if changed("overlay", "overlay_font", "overlay_backdrop", "overlay_original", "ui_lang", "my_lang"):
+            self.overlay.apply()
+            if changed("overlay"):
+                self.hub.publish("overlay", self.overlay.state())
         if changed("my_lang", "their_lang", "also_english"):
             threading.Thread(target=self._languages_changed, daemon=True).start()
         if changed("speaker_device") and self.sources["listen"]["on"]:
@@ -722,6 +742,7 @@ class Service:
         self._download_cancel.set()
         if self.meters:
             self.meters.stop()
+        self.overlay.stop()
         self._stop_watcher()
         for key in list(self.pipelines):
             self._stop_voice(key)

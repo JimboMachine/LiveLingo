@@ -120,6 +120,65 @@ def run(out: Path, window: bool = True) -> int:
             shot = np.asarray(sct.grab({"left": 0, "top": 0, "width": 200, "height": 100}))
         return list(shot.shape)
 
+    def floating_chat():
+        """浮動留言：畫得出來，而且（在 Windows 上）真的能開出透明、滑鼠會穿過去的視窗。"""
+        from PIL import Image
+
+        from . import chatpaint, overlay
+
+        tile = chatpaint.paint_message("heard", "對方", "打野來一下下路 정글 와줘 OK!", 520, 26)
+        frame = chatpaint.compose([(tile, 1.0)], (520, 160))
+        assert tile.getchannel("A").getextrema()[1] == 255
+        info = {"tile": list(tile.size), "fonts": {k: bool(chatpaint._font_path(k)) for k in ("cjk", "ko", "latin")}}
+        if overlay.LayeredWindow is None:
+            return info
+        import ctypes
+
+        rect = [120, 140, 520, 160]
+        moved = []
+        win = overlay.LayeredWindow(on_rect=lambda r, final: moved.append((r, final)))
+        assert win.start(rect), win.error
+        try:
+            user32 = ctypes.windll.user32
+            user32.SetWindowDisplayAffinity(ctypes.c_void_p(win.hwnd), 0)      # 檢查時要拍得到自己
+            solid = Image.new("RGBA", (rect[2], rect[3]), (255, 0, 255, 255))
+            solid.alpha_composite(frame)
+            win.paint(solid, rect)
+            deadline = time.time() + 3
+            while win.frames < 1 and time.time() < deadline:
+                time.sleep(0.05)
+            assert win.frames >= 1, win.error or "nothing was painted"
+            info["rect"] = win.window_rect()
+            assert info["rect"] == rect, info["rect"]
+            style = overlay._u32.GetWindowLongPtrW(win.hwnd, -20)
+            assert style & 0x20 and style & 0x80000 and style & 0x8, hex(style)      # 穿透、分層、最上層
+            info["scale"] = win.scale
+            try:      # 螢幕上真的看得到嗎（跟環境有關，只記錄）
+                import mss
+                import numpy as np
+
+                time.sleep(0.4)
+                with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                    shot = np.asarray(sct.grab({"left": rect[0], "top": rect[1], "width": rect[2], "height": rect[3]}))
+                    info["seen_on_screen"] = [int(v) for v in shot[4, rect[2] - 6][:3]] == [255, 0, 255]
+                    win.paint(frame, rect)
+                    time.sleep(0.5)
+                    shot = sct.grab({"left": rect[0] - 40, "top": rect[1] - 40, "width": rect[2] + 80, "height": rect[3] + 80})
+                    Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX").save(out.with_name("floating-chat.png"))
+            except Exception as ex:  # noqa: BLE001
+                info["seen_on_screen"] = repr(ex)
+            win.set_edit(True)
+            time.sleep(0.4)
+            assert win.editing and not overlay._u32.GetWindowLongPtrW(win.hwnd, -20) & 0x20      # 調整位置時抓得到
+            win.set_edit(False)
+            time.sleep(0.4)
+            assert overlay._u32.GetWindowLongPtrW(win.hwnd, -20) & 0x20
+            assert not win.error, win.error
+        finally:
+            win.close()
+        assert not win.hwnd
+        return info
+
     def gpu_detect():
         from . import gpu
 
@@ -180,6 +239,7 @@ def run(out: Path, window: bool = True) -> int:
     check("speech_parts", speech_parts)
     check("audio_devices", audio_devices)
     check("screen_grab", screen_grab)
+    check("floating_chat", floating_chat)
     check("gpu", gpu_detect)
     if "--online" in sys.argv:
         check("engine_online", engine_online)

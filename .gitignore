@@ -22,3 +22,6 @@ engine/
 config.json
 *.log
 .env
+
+# 自我檢查時拍的浮動留言截圖
+floating-chat*.png
