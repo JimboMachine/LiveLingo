@@ -149,6 +149,9 @@ input::placeholder { color: var(--faint); }
 .fix .pair { display: flex; gap: 6px; align-items: center; }
 .fix .pair input { width: 0; flex: 1; height: 36px; padding: 0 10px; border-radius: 8px; background: var(--ground); font-size: 13px; }
 .fix .primary { height: 36px; border-radius: 8px; font-size: 13px; }
+.fix .teach-label { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.fix textarea { width: 100%; min-height: 56px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--ground); color: var(--text); font: inherit; font-size: 14px; resize: vertical; }
+.fix textarea:focus { outline: none; border-color: var(--accent); }
 
 .saybar { flex: none; padding: 12px 16px 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; margin: 0; }
 .saybar input { width: 0; flex: 1; height: 46px; padding: 0 14px; border-radius: 12px; font-size: 15px; }

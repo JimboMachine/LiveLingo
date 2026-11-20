@@ -165,3 +165,50 @@ class Glossary:
             _write_json(self.path, self.items)
         except OSError:
             pass
+
+
+class Lessons:
+    """教過的句子：[{"src": 原文, "dst": 使用者要的翻法, "lang": 原文的語言, "target": 翻成哪個語言}]。
+    一模一樣的句子之後直接用這個翻法，類似的句子會把它當範例給模型參考。"""
+
+    LIMIT = 400
+
+    def __init__(self, folder: Path):
+        self.path = folder / "lessons.json"
+        self._lock = threading.RLock()
+        self.items: list[dict] = []
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            self.items = [{"src": str(i["src"]).strip(), "dst": str(i["dst"]).strip(), "lang": str(i["lang"]),
+                           "target": str(i["target"])} for i in raw
+                          if str(i.get("src", "")).strip() and str(i.get("dst", "")).strip()][: self.LIMIT]
+        except FileNotFoundError:
+            pass
+        except Exception:  # noqa: BLE001
+            self.items = []
+
+    def list(self) -> list[dict]:
+        with self._lock:
+            return [dict(i) for i in self.items]
+
+    def add(self, src: str, dst: str, lang: str, target: str) -> bool:
+        src, dst = src.strip()[:500], dst.strip()[:500]
+        if not src or not dst or src == dst:
+            return False
+        with self._lock:
+            self.items = [i for i in self.items if not (i["src"] == src and i["target"] == target)]
+            self.items.insert(0, {"src": src, "dst": dst, "lang": lang, "target": target})
+            del self.items[self.LIMIT:]
+            self._save()
+        return True
+
+    def remove(self, src: str, target: str) -> None:
+        with self._lock:
+            self.items = [i for i in self.items if not (i["src"] == src and i["target"] == target)]
+            self._save()
+
+    def _save(self) -> None:
+        try:
+            _write_json(self.path, self.items)
+        except OSError:
+            pass

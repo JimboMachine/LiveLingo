@@ -8,7 +8,7 @@
 
   const S = {
     cfg: null, phase: "starting", detail: {}, gpu: {}, mode: {}, fallback: false, version: "",
-    sources: {}, messages: [], glossary: [], canWindow: false, view: "main", overlay: { editing: false, running: false },
+    sources: {}, messages: [], glossary: [], lessons: [], canWindow: false, view: "main", overlay: { editing: false, running: false },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -181,6 +181,9 @@
         <input class="fix-dst" aria-label="${esc(t("fix_right"))}" placeholder="${esc(t("fix_right"))}" maxlength="80">
       </div>
       <button class="primary" data-act="fix-save" data-id="${m.id}">${esc(t("fix_save"))}</button>
+      <label class="dim small teach-label" for="teach-${m.id}">${esc(t("teach_label"))}</label>
+      <textarea id="teach-${m.id}" class="teach-dst" rows="2" maxlength="500">${esc(m.translated || "")}</textarea>
+      <button class="primary" data-act="teach-save" data-id="${m.id}">${esc(t("teach_save"))}</button>
     </div>`;
   }
 
@@ -322,6 +325,10 @@
       ? S.glossary.map((g) => `<div class="grow-row"><span>${esc(g.src)}</span><span>${esc(g.dst)}</span>
           <button data-act="gloss-remove" data-src="${esc(g.src)}" aria-label="${esc(t("remove", { word: g.src }))}">${ICON.x}</button></div>`).join("")
       : `<div class="none">${esc(t("gloss_empty"))}</div>`;
+    const taught = S.lessons.length
+      ? S.lessons.slice().reverse().map((l) => `<div class="grow-row"><span>${esc(l.src)}</span><span>${esc(l.dst)}</span>
+          <button data-act="lesson-remove" data-src="${esc(l.src)}" data-target="${esc(l.target)}" aria-label="${esc(t("remove", { word: l.src }))}">${ICON.x}</button></div>`).join("")
+      : `<div class="none">${esc(t("lessons_empty"))}</div>`;
     return `
       <section>
         <div><h2>${esc(t("engine_title"))}</h2><div class="sub">${esc(t("engine_hint"))}</div></div>
@@ -353,6 +360,10 @@
           <button class="primary" type="submit">${esc(t("gloss_add"))}</button>
         </form>
         <div class="gloss"><div class="grow-head"><span>${esc(t("gloss_src"))}</span><span>${esc(t("gloss_dst"))}</span><span></span></div>${rows}</div>
+      </section>
+      <section>
+        <div><h2>${esc(t("lessons_title"))}</h2><div class="sub">${esc(t("lessons_hint"))}</div></div>
+        <div class="gloss"><div class="grow-head"><span>${esc(t("lessons_src"))}</span><span>${esc(t("lessons_dst"))}</span><span></span></div>${taught}</div>
       </section>`;
   }
 
@@ -676,6 +687,14 @@
       const r = await post("/api/fix", { id: Number(el.dataset.id), src, dst });
       if (r.ok) { box.parentElement.innerHTML = ""; toast(t("n_saved")); }
     },
+    "teach-save": async (el) => {
+      const box = el.closest(".fix");
+      const input = box.querySelector(".teach-dst");
+      const text = input.value.trim();
+      if (!text) { input.focus(); return; }
+      const r = await post("/api/teach", { id: Number(el.dataset.id), text });
+      if (r.ok) { box.parentElement.innerHTML = ""; toast(t("n_taught")); }
+    },
     copy: async (el) => { const r = await post("/api/copy", { id: Number(el.dataset.id) }); if (r.ok) toast(t("copied"), 1600); },
     tab: (el) => openTab(el.dataset.tab),
     device: (el) => {
@@ -688,6 +707,7 @@
     tone: (el) => post("/api/config", { tone: el.dataset.tone }),
     toggle: (el) => post("/api/config", { [el.dataset.key]: !S.cfg[el.dataset.key] }),
     "gloss-remove": (el) => post("/api/glossary/remove", { src: el.dataset.src }),
+    "lesson-remove": (el) => post("/api/lessons/remove", { src: el.dataset.src, target: el.dataset.target }),
     "ocr-test": async () => {
       S.ui.ocr = "reading"; renderSettingsPage();
       S.ui.ocr = await post("/api/ocr_test"); renderSettingsPage();
@@ -810,6 +830,7 @@
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
+    lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
     notice: (d) => toast(t("n_" + d.code, d), 7000),
     overlay: (d) => {
@@ -837,7 +858,7 @@
     const st = await get("/api/state");
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
-    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary;
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;

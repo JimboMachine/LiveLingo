@@ -6,9 +6,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from livelingo import assets, gpu, updater
-from livelingo.config import Config, Glossary
+from livelingo.config import Config, Glossary, Lessons
 from livelingo.core.romanize import romanize
-from livelingo.core.translate import _leftover, apply_glossary, build_prompt, detect_language
+from livelingo.core.translate import (Translator, _leftover, apply_glossary, build_prompt, detect_language, salvage,
+                                      sentence_kind, similarity, tidy, with_end_mark)
 from livelingo.core.watcher import wanted
 from livelingo.terms import TermPack
 
@@ -82,6 +83,106 @@ def test_leftover_and_detection():
     assert detect_language("我先去吃飯") == "zh"
     assert detect_language("gg wp") == "en"
     assert detect_language("123 !!") is None
+
+
+def test_statement_stays_a_statement():
+    assert sentence_kind("我先去洗澡", "zh") == "statement"
+    assert sentence_kind("我們打龍吧", "zh") == "statement"
+    assert sentence_kind("你吃飯了嗎", "zh") == "question"
+    assert sentence_kind("你在哪？", "zh") == "question"
+    assert sentence_kind("你在幹什麼", "zh") is None                         # 有疑問詞但沒有問號：不猜
+    assert sentence_kind("밥 먹었어", "ko") == "statement" and sentence_kind("밥 먹었어?", "ko") == "question"
+    assert sentence_kind("뭐해", "ko") is None and sentence_kind("같이 할까", "ko") is None      # 疑問詞、疑問語尾：不猜
+    assert sentence_kind("I am home", "en") is None and sentence_kind("I am home.", "en") == "statement"
+    assert with_end_mark("밥 먹었어", "ko", "statement") == "밥 먹었어."
+    assert with_end_mark("트롤이네 ㅋㅋ", "ko", "statement") == "트롤이네 ㅋㅋ"
+    assert with_end_mark("我先去洗澡", "zh", "statement") == "我先去洗澡。"
+    assert with_end_mark("你吃飯了嗎", "zh", "question") == "你吃飯了嗎？"
+    assert with_end_mark("我先去洗澡！", "zh", "statement") == "我先去洗澡！"    # 已經有標點就不動
+    assert with_end_mark("뭐해", "ko", None) == "뭐해"
+    full = build_prompt("我先去洗澡。", "zh", "ko", {}, "casual", [])
+    assert "A statement stays a statement" in full
+    assert "Translate faithfully" not in build_prompt("我先去洗澡。", "zh", "ko", {}, "casual", [], style="plain")
+    assert "방금" in build_prompt("剛剛那波我的錯。", "zh", "ko", {}, "casual", [])      # 常被翻錯的時間詞給提示
+    assert "방금" not in build_prompt("我先去洗澡。", "zh", "ko", {}, "casual", [])
+    taught = build_prompt("我們打巴龍吧。", "zh", "ko", {}, "casual", [], examples=[("我們打龍吧", "우리 용 잡자.")])
+    assert "我們打龍吧 => 우리 용 잡자." in taught
+
+
+def test_cleaning_the_model_output():
+    assert salvage("我觉得 그들이 바텀에 갱을 올 것 같아.", "zh", "ko") == "그들이 바텀에 갱을 올 것 같아."
+    assert salvage("我觉得他们会来抓下路\n그들이 바텀에 올 것 같아.", "zh", "ko") == "그들이 바텀에 올 것 같아."
+    assert not salvage("我觉得他们会来抓下路", "zh", "ko")
+    assert salvage("我們的打野（정글러）太爛了 哈哈", "ko", "zh-TW") == "我們的打野太爛了 哈哈"      # 括號裡的原文註解拿掉
+    assert not salvage("我們的 정글러 太爛了", "ko", "zh-TW")
+    assert tidy("我們打野在送頭ㅋㅋㅋ", "zh-TW") == "我們打野在送頭 哈哈"
+    assert tidy("抱歉ㅠㅠ", "zh-TW") == "抱歉 嗚嗚"
+    assert tidy("ㅋㅋㅋ 좋아", "ko") == "ㅋㅋㅋ 좋아"                            # 翻成韓文時不動
+
+
+class _FakeModel(Translator):
+    """不連模型：照著準備好的答案回話，並記下每次是怎麼問的。"""
+
+    def __init__(self, answers, **kw):
+        super().__init__("http://127.0.0.1:9", **kw)
+        self.answers, self.asked = answers, []
+
+    def _ask(self, text, source, target, hints, examples=None, style="full"):
+        self.asked.append((text, style, list(examples or [])))
+        return self.answers[style] if isinstance(self.answers, dict) else self.answers
+
+
+def test_question_mark_gets_a_second_try():
+    tr = _FakeModel({"full": "먼저 씻으러 갈까?", "short": "먼저 씻으러 갈게."})
+    assert tr.translate("我先去洗澡", "ko", "zh") == "먼저 씻으러 갈게."
+    assert [a[1] for a in tr.asked] == ["full", "short"] and tr.asked[0][0] == "我先去洗澡。"
+    tr = _FakeModel({"full": "밥 먹었어?", "short": "밥 먹었어?"})          # 兩次都是問句：留著第一次的，不亂改
+    assert tr.translate("你吃飯了", "ko", "zh") == "밥 먹었어?"
+    tr = _FakeModel("밥 먹었어?")
+    assert tr.translate("你吃飯了嗎", "ko", "zh") == "밥 먹었어?" and len(tr.asked) == 1      # 本來就是問句：不重翻
+    tr = _FakeModel({"full": "你吃過飯了嗎？", "short": "我吃過飯了。"})      # 朋友的韓文直述句也一樣
+    assert tr.translate("밥 먹었어", "zh-TW", "ko") == "我吃過飯了。" and tr.asked[0][0] == "밥 먹었어."
+
+
+def test_built_in_examples():
+    tr = _FakeModel("우리 용 잡자.")
+    tr.translate("我們打龍吧", "ko", "zh")
+    assert tr.asked[-1][2] == [("我們走吧", "우리 가자.")]                       # 「…吧」的提議：示範用「…자」，不要變成問句
+    tr.translate("他剛剛回家了", "ko", "zh")
+    assert tr.asked[-1][2] == [("我剛剛吃飽了", "나 방금 밥 다 먹었어.")]
+    tr.translate("我今天很累", "ko", "zh")
+    assert tr.asked[-1][2] == []
+    polite = _FakeModel("우리 용 잡아요.", tone="polite")
+    polite.translate("我們打龍吧", "ko", "zh")
+    assert polite.asked[-1][2] == [("我們走吧", "우리 가요.")]                    # 禮貌語氣用禮貌的示範
+    back = _FakeModel("我們走吧")
+    back.translate("우리 가자", "zh-TW", "ko")
+    assert back.asked[-1][2] == []
+
+
+def test_lessons(tmp_path):
+    lessons = Lessons(tmp_path)
+    assert lessons.list() == []
+    assert lessons.add("我們打龍吧", "우리 용 잡자.", "zh", "ko")
+    assert lessons.add("나 먼저 잘게", "我先去睡了。", "ko", "zh-TW")
+    assert not lessons.add("", "x", "zh", "ko") and not lessons.add("一樣", "一樣", "zh", "ko")
+    assert lessons.add("我們打龍吧", "용 잡자.", "zh", "ko")                    # 同一句再教一次：換成新的
+    again = Lessons(tmp_path)
+    assert [(i["src"], i["dst"]) for i in again.list()] == [("我們打龍吧", "용 잡자."), ("나 먼저 잘게", "我先去睡了。")]
+
+    tr = _FakeModel("우리 바론 잡자.", lessons=again.list)
+    assert tr.translate("我們打龍吧", "ko", "zh") == "용 잡자." and tr.asked == []          # 一模一樣：直接用，不問模型
+    assert tr.translate("我們打龍吧！", "ko", "zh") == "용 잡자."
+    assert tr.translate("我們打巴龍吧", "ko", "zh") == "우리 바론 잡자."
+    assert tr.asked[-1][2] == [("我們打龍吧", "용 잡자."), ("我們走吧", "우리 가자.")]   # 很像的句子當範例，教過的排前面
+    tr.translate("今天天氣很好", "ko", "zh")
+    assert tr.asked[-1][2] == []                                             # 不像的句子：不給範例，免得帶歪
+    assert tr.taught("나 먼저 잘게", "ko", "ko") == (None, [])                  # 方向不同的不算
+    assert similarity("我們打龍吧", "我們打巴龍吧") >= 0.5 > similarity("我們打龍吧", "今天天氣很好")
+    again.remove("我們打龍吧", "ko")
+    assert tr.taught("我們打龍吧", "zh", "ko") == (None, [("我們走吧", "우리 가자.")])
+    (tmp_path / "lessons.json").write_text("{ broken", encoding="utf-8")
+    assert Lessons(tmp_path).list() == []
 
 
 def test_screen_line_filter():

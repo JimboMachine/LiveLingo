@@ -168,6 +168,11 @@ class Server:
                     if route == "/api/fix":
                         ok = service.fix(int(body.get("id") or 0), str(body.get("src") or ""), str(body.get("dst") or ""))
                         return self._json({"ok": ok})
+                    if route == "/api/teach":
+                        return self._json({"ok": service.teach(int(body.get("id") or 0), str(body.get("text") or "")[:500])})
+                    if route == "/api/lessons/remove":
+                        service.lesson_remove(str(body.get("src") or ""), str(body.get("target") or ""))
+                        return self._json({"ok": True})
                     if route == "/api/glossary/add":
                         return self._json({"ok": service.glossary_add(str(body.get("src") or ""), str(body.get("dst") or ""))})
                     if route == "/api/glossary/remove":

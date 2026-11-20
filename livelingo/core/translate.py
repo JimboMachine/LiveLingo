@@ -26,6 +26,87 @@ _to_traditional = OpenCC("s2twp")
 
 HINT_INTRO = "They are talking about the game League of Legends. Use these translations for the game terms: "
 
+# 實測：少了這段，模型常常自己加「嗯、啊、哇」或表情符號，還會把「我來」翻成「幫我」之類的
+FAITHFUL = ("Translate faithfully: keep the meaning, who is doing what, and the sentence type exactly as in the original. "
+            "A statement stays a statement and a question stays a question. "
+            "Do not add greetings, interjections or anything that is not in the original.\n")
+# 模型常把這幾個時間副詞翻錯（「剛剛」翻成「現在」、「等一下」翻成「現在」），遇到時把意思告訴它
+COMMON_WORDS = {
+    ("zh", "ko"): [("剛剛", "방금 (a moment ago)"), ("剛才", "방금 (a moment ago)"),
+                   ("等一下", "이따가 (a little later)"), ("待會", "이따가 (a little later)")],
+}
+# 模型固定會翻歪的句型，給它一句示範就會照著翻（實測比多寫幾句規定有用）。
+# 「我們…吧」是提議，韓文應該是「…자」，沒有示範時常被翻成問句「…갈까?」；「剛剛」沒有示範時偶爾變成「그냥」。
+# 每一項：(原文符合這個樣子才用, 語氣, 示範原文, 示範譯文)
+BUILTIN_EXAMPLES = {
+    ("zh", "ko"): [
+        (re.compile(r"吧[\s。．.!！~～…]*$"), "casual", "我們走吧", "우리 가자."),
+        (re.compile(r"吧[\s。．.!！~～…]*$"), "polite", "我們走吧", "우리 가요."),
+        (re.compile(r"剛剛|剛才"), "casual", "我剛剛吃飽了", "나 방금 밥 다 먹었어."),
+        (re.compile(r"剛剛|剛才"), "polite", "我剛剛吃飽了", "저 방금 밥 다 먹었어요."),
+    ],
+}
+EXAMPLES_INTRO = "The user wants messages like these translated this way (source => translation):\n"
+
+_END_MARKS = "。．.!！?？~～…"
+_ZH_QUESTION = re.compile(
+    r"嗎|呢\s*$|什麼|甚麼|啥|誰|哪|怎麼|怎樣|怎麽|為什麼|為何|幾|多少|多久|是不是|有沒有|要不要|能不能|會不會|可不可以|好不好|對不對|行不行|是否")
+_KO_QUESTION = re.compile(r"뭐|무슨|무엇|뭘|어디|언제|누구|누가|왜|어떻게|어때|어떤|어느|몇|얼마|"
+                          r"(니|냐|까|까요|래|래요|지|죠|나요|가요|인가|는가|던가|ㄹ까|을까|나|ㄴ가)$")
+
+
+def sentence_kind(text: str, source: str) -> str | None:
+    """這句是直述句（statement）還是問句（question）；看不出來回傳 None。
+    聊天打字和語音辨識出來的句子常常沒有標點，模型就容易把直述句猜成問句，所以先自己判斷一次。"""
+    t = text.strip()
+    if not t:
+        return None
+    if t[-1] in "?？":
+        return "question"
+    if source == "ko":
+        # 韓文的半語（「밥 먹었어」）直述和疑問長得一樣，聊天時問句通常會打問號；沒有問號、沒有疑問詞、
+        # 也不是疑問語尾的，就當成直述句
+        bare = t.rstrip("。．.!！~～… ㅋㅎㅠㅜ")
+        if "?" in t or "？" in t or _KO_QUESTION.search(bare):
+            return None
+        return "statement"
+    if source != "zh":
+        return "statement" if t[-1] in "。．.!！" else None
+    if re.search(r"嗎\s*[。．.!！~～…]*$", t):
+        return "question"
+    if _ZH_QUESTION.search(t) or "?" in t or "？" in t:
+        return None          # 有疑問詞但不一定是問句（「我不知道他在哪裡」），交給模型判斷
+    return "statement"
+
+
+def with_end_mark(text: str, source: str, kind: str | None) -> str:
+    """沒有句尾標點的句子（中文、日文、韓文的直述句），補上句號或問號再給模型，它才不會把語氣猜錯。"""
+    t = text.rstrip()
+    if source not in ("zh", "ja", "ko") or not t or t[-1] in _END_MARKS or not kind:
+        return text
+    if source == "ko":
+        return t + "." if kind == "statement" and t[-1] not in "ㅋㅎㅠㅜ" else text
+    return t + ("？" if kind == "question" else "。")
+
+
+def _bigrams(text: str) -> set[str]:
+    t = re.sub(r"[\s。．.,，、!！?？~～…]+", "", text.lower())
+    return {t[i:i + 2] for i in range(len(t) - 1)} or ({t} if t else set())
+
+
+def similarity(a: str, b: str) -> float:
+    """兩句話有多像（0 到 1），用相鄰兩個字的重疊程度算。"""
+    x, y = _bigrams(a), _bigrams(b)
+    if not x or not y:
+        return 0.0
+    return 2 * len(x & y) / (len(x) + len(y))
+
+
+def _same_sentence(a: str, b: str) -> bool:
+    def norm(t: str) -> str:
+        return re.sub(r"\s+", " ", t.strip().lower()).rstrip("。．.!！~～… ")
+    return norm(a) == norm(b)
+
 
 def detect_language(text: str) -> str | None:
     """用文字種類判斷語言：回傳 zh / ko / ja / en；None 表示沒有可翻譯的文字。"""
@@ -75,12 +156,22 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
 
 
 def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual",
-                 hints: list[tuple[str, str]] | None = None) -> str:
-    """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。"""
+                 hints: list[tuple[str, str]] | None = None, examples: list[tuple[str, str]] | None = None,
+                 style: str = "full") -> str:
+    """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。
+    style：full = 平常用的；short = 語氣提示換成比較短的寫法（直述句被翻成問句時重翻用）；
+    plain = 只有官方的提示（模型把原文原封不動吐回來時重翻用，意思最穩但語氣會比較正式）。"""
     s_name, s_code = SOURCES[source]
     t_name = LANGS[target]["en"]
     text, kept = apply_glossary(text, glossary, target)
-    if tone == "polite":
+    if style == "plain":
+        extra = ""
+    elif style == "short":
+        extra = ("This is a chat message between close friends"
+                 + (", so use informal Korean (반말)" if target == "ko" and tone != "polite" else "")
+                 + ". Translate faithfully: a statement stays a statement, a question stays a question, "
+                   "and nothing is added. Keep names, game terms and Latin-alphabet words unchanged.\n")
+    elif tone == "polite":
         extra = ("The text is a chat message. Use a polite, friendly tone"
                  + (" (in Korean use polite 해요체)" if target == "ko" else "")
                  + ", and keep names, game terms and Latin-alphabet words unchanged.\n")
@@ -88,11 +179,19 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
         extra = ("The text is a casual chat message between friends on Discord. Keep the same casual, friendly tone"
                  + (" (in Korean use informal 반말)" if target == "ko" else "")
                  + ", and keep names, game terms and Latin-alphabet words unchanged.\n")
+    if style == "full":
+        extra += FAITHFUL
     if kept:
         extra += "Keep these terms exactly as written, do not translate or change them: " + "; ".join(kept) + "\n"
     hints = [(a, b) for a, b in (hints or []) if a in text]
-    if hints:
+    if hints and style != "plain":
         extra += HINT_INTRO + "; ".join(f"{a} = {b}" for a, b in hints) + "\n"
+    words = [(a, b) for a, b in COMMON_WORDS.get((source, target), [])
+             if a in text and not text.rstrip("。．.!！~～… ").endswith(a)]      # 單獨一句「等一下」是「等等我」，不算
+    if words and style != "plain":
+        extra += "Word meanings: " + "; ".join(f"{a} = {b}" for a, b in words) + "\n"
+    if examples and style != "plain":
+        extra += EXAMPLES_INTRO + "".join(f"{a} => {b}\n" for a, b in examples)
     body = (
         f"You are a professional {s_name} ({s_code}) to {t_name} ({target}) translator. "
         f"Your goal is to accurately convey the meaning and nuances of the original {s_name} text "
@@ -114,12 +213,55 @@ def _leftover(out: str, source: str, target: str) -> int:
     return 0
 
 
+def _is_source_char(ch: str, source: str) -> bool:
+    o = ord(ch)
+    if source == "ko":
+        return 0xAC00 <= o <= 0xD7A3
+    return 0x4E00 <= o <= 0x9FFF or 0x3400 <= o <= 0x4DBF or 0x3040 <= o <= 0x30FF
+
+
+def salvage(out: str, source: str, target: str) -> str | None:
+    """模型有時會先把原文抄一遍，或在譯文開頭留下「我觉得」這種兩三個沒翻的字，後面才是完整的翻譯。
+    這種情況把抄的部分拿掉就是對的譯文；留下來的原文太多就不算（回傳 None），要重翻。"""
+    # 「打野（정글러）」：模型把原文的詞放在括號裡當註解，拿掉括號就好
+    noted = re.sub(r"\s*[（(]([^（()）]*)[)）]",
+                   lambda m: "" if any(_is_source_char(ch, source) for ch in m.group(1)) else m.group(0), out).strip()
+    if noted != out.strip() and len(noted) >= 2 and not _leftover(noted, source, target):
+        return noted
+    lines = [ln.strip() for ln in out.splitlines() if ln.strip()]
+    if not lines:
+        return None
+    last = lines[-1].strip("()（） ").removeprefix("->").strip()
+    head = 0
+    while head < len(last) and (_is_source_char(last[head], source) or last[head] in " 　，,"):
+        head += 1
+    kept_chars = sum(1 for ch in last[:head] if _is_source_char(ch, source))
+    rest = last[head:].strip()
+    if kept_chars > 4 or len(rest) < max(4, kept_chars * 2) or _leftover(rest, source, target):
+        return None
+    return rest
+
+
+_KO_LAUGH = [(re.compile(r"\s*[ㅋㅎ]{2,}"), {"zh-TW": " 哈哈", "en": " haha", "ja": " www"}),
+             (re.compile(r"\s*[ㅠㅜ]{2,}"), {"zh-TW": " 嗚嗚", "en": " T_T", "ja": " 泣"})]
+
+
+def tidy(out: str, target: str) -> str:
+    """模型有時把韓文的「ㅋㅋ」「ㅠㅠ」原樣留在譯文裡，換成看得懂的寫法。"""
+    if LANGS[target]["family"] != "ko":
+        for pattern, words in _KO_LAUGH:
+            out = pattern.sub(words.get(target, ""), out)
+    return out.strip()
+
+
 class Translator:
-    def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None):
-        """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]。"""
+    def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None):
+        """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
+        lessons：呼叫後回傳使用者教過的句子 [{"src", "dst", "lang", "target"}]。"""
         self.url = url.rstrip("/")
         self.glossary = glossary or (lambda: {})
         self.hints = hints or (lambda text, source, target: [])
+        self.lessons = lessons or (lambda: [])
         self.tone = tone
         self.max_chars = max_chars
         self._lock = threading.Lock()  # 一次只翻一則，其他排隊
@@ -135,9 +277,10 @@ class Translator:
         except Exception:  # noqa: BLE001
             return False
 
-    def _ask(self, text: str, source: str, target: str, hints: list) -> str:
+    def _ask(self, text: str, source: str, target: str, hints: list, examples: list | None = None,
+             style: str = "full") -> str:
         payload = {
-            "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints),
+            "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style),
             "max_tokens": min(1024, 64 + 4 * len(text)),
             "temperature": 0,
             "repeat_penalty": 1.0,
@@ -149,6 +292,42 @@ class Translator:
         with urllib.request.urlopen(req, timeout=180) as r:
             return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
 
+    def taught(self, text: str, source: str, target: str) -> tuple[str | None, list[tuple[str, str]]]:
+        """使用者教過的句子：一模一樣的直接回傳他要的翻法；很像的最多挑兩句當範例。"""
+        scored = []
+        for item in self.lessons():
+            if item.get("target") != target or item.get("lang") != source:
+                continue
+            if _same_sentence(item["src"], text):
+                return item["dst"], []
+            score = similarity(item["src"], text)
+            if score >= 0.5:
+                scored.append((score, item["src"], item["dst"]))
+        scored.sort(reverse=True)
+        found = [(src, dst) for _, src, dst in scored[:2]]
+        for pattern, tone, src, dst in BUILTIN_EXAMPLES.get((source, target), []):
+            if len(found) < 2 and tone == self.tone and pattern.search(text):
+                found.append((src, dst))
+        return None, found
+
+    def _clean(self, out: str, text: str, source: str, target: str, hints: list, examples: list) -> str:
+        """譯文裡還留著原文的字：先試著把模型抄的原文拿掉，不行就換寫法重翻，挑最乾淨的。"""
+        if not _leftover(out, source, target):
+            return out
+        fixed = salvage(out, source, target)
+        if fixed:
+            return fixed
+        best = out
+        attempts = [("short", hints, examples)] + ([("full", [], examples)] if hints else []) + [("plain", [], [])]
+        for style, h, ex in attempts:
+            other = self._ask(text, source, target, h, ex, style)
+            other = salvage(other, source, target) or other if _leftover(other, source, target) else other
+            if _leftover(other, source, target) < _leftover(best, source, target):
+                best = other
+            if not _leftover(best, source, target):
+                break
+        return best
+
     def translate(self, text: str, target: str, source: str | None = None) -> str:
         """target：zh-TW / ko / en / ja。同語言時原樣回傳。"""
         text = text.strip()[: self.max_chars]
@@ -158,16 +337,23 @@ class Translator:
         key = (text, target)
         if key in self._cache:
             return self._cache[key]
+        exact, examples = self.taught(text, source, target)
+        if exact:
+            return exact
         hints = self.hints(text, source, target)
+        kind = sentence_kind(text, source)
+        sent = with_end_mark(text, source, kind)
         with self._lock:
-            out = self._ask(text, source, target, hints)
-            if hints and _leftover(out, source, target):
-                # 加了用語提示之後偶爾會有一段沒翻到（原文的字直接留在譯文裡），這時不用提示重翻一次，挑比較乾淨的
-                plain = self._ask(text, source, target, [])
-                if _leftover(plain, source, target) < _leftover(out, source, target):
-                    out = plain
+            out = self._ask(sent, source, target, hints, examples)
+            out = self._clean(out, sent, source, target, hints, examples)
+            if kind == "statement" and ("?" in out or "？" in out):
+                # 直述句被翻成問句：換一種寫法再翻一次，那次不是問句就用那次的
+                again = self._ask(sent, source, target, hints, examples, "short")
+                if "?" not in again and "？" not in again and not _leftover(again, source, target):
+                    out = again
         if target == "zh-TW":
             out = _to_traditional.convert(out)
+        out = tidy(out, target)
         if len(self._cache) > 500:
             self._cache.clear()
         self._cache[key] = out

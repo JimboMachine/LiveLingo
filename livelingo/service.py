@@ -15,7 +15,7 @@ from collections import deque
 from pathlib import Path
 
 from . import __version__, assets, gpu, oswin, updater
-from .config import EDITABLE, UI_LANGS, Config, Glossary
+from .config import EDITABLE, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language
@@ -95,6 +95,7 @@ class Service:
         self.hub = hub or EventHub()
         self.cfg = Config(data)
         self.glossary = Glossary(data)
+        self.lessons = Lessons(data)      # 使用者教過的整句翻法
         self.terms = TermPack()
         self.audio = audio or RealAudio()
         self.gpu = {"name": None, "vram_mb": 0, "tier": "cpu"}
@@ -102,7 +103,7 @@ class Service:
         self.fallback = False          # 高品質開不起來，自動退回標準
         self.engine: Engine | None = None
         self.translator = Translator("http://127.0.0.1:8177", glossary=self.glossary.as_dict,
-                                     tone=self.cfg["tone"], hints=self._hints)
+                                     tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list)
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
         self.sources = {k: {"on": False, "busy": False, "error": "", "device": "", "speaking": False}
@@ -150,6 +151,7 @@ class Service:
             "sources": self.sources,
             "messages": list(self.messages),
             "glossary": self.glossary.list(),
+            "lessons": self.lessons.list(),
             "langs": {k: v["family"] for k, v in LANGS.items()},
             "ui_langs": list(UI_LANGS),
             "can_window": bool(self.window or self.can_window),
@@ -388,6 +390,30 @@ class Service:
             self._post(msg)
             self.jobs.put(msg)
         return True
+
+    def teach(self, msg_id: int, dst: str) -> bool:
+        """「翻錯了？」的另一種教法：直接告訴它整句應該怎麼翻。
+        之後一模一樣的句子直接用這個翻法，類似的句子會拿它當範例。"""
+        with self._lock:
+            msg = next((m for m in self.messages if m["id"] == msg_id), None)
+        dst = dst.strip()
+        if not msg or not dst or msg.get("pending") or not msg.get("target"):
+            return False
+        if not self.lessons.add(msg["original"], dst, msg["lang"], msg["target"]):
+            return False
+        self.translator.clear_cache()
+        self.hub.publish("lessons", self.lessons.list())
+        msg = dict(msg, translated=dst, error="", taught=True,
+                   pron=self._pronunciation(dst, msg["target"]) if msg["who"] == "me" else "")
+        if msg["who"] == "me" and msg["target"] != self.cfg["my_lang"]:
+            msg["copied"] = oswin.copy_text(dst)
+        self._post(msg)
+        return True
+
+    def lesson_remove(self, src: str, target: str) -> None:
+        self.lessons.remove(src, target)
+        self.translator.clear_cache()
+        self.hub.publish("lessons", self.lessons.list())
 
     def glossary_add(self, src: str, dst: str) -> bool:
         ok = self.glossary.add(src, dst)
