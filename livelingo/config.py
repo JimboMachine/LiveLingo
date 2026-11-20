@@ -27,6 +27,13 @@ DEFAULTS = {
     "copy_spoken": True,         # 我用說的翻出來的句子也自動複製
     "setup_done": False,
     "window": {"w": 460, "h": 780, "x": None, "y": None},
+    "overlay": True,             # 浮動留言：翻譯像實況聊天室一樣直接顯示在遊戲畫面上
+    "overlay_rect": None,        # 浮動留言的位置和大小 [x, y, 寬, 高]，None = 預設位置
+    "overlay_font": 24,          # 字體大小
+    "overlay_seconds": 15,       # 一則留言停留幾秒，0 = 不會自己消失
+    "overlay_backdrop": 0,       # 字後面的深色底有多不透明（0 到 80），0 = 只有描邊
+    "overlay_original": False,   # 翻譯下面用小字顯示原文
+    "overlay_mine": True,        # 我自己說的、打的也顯示
     # ---- 進階，介面上沒有 ----
     "interval": 0.7,             # 每隔幾秒看一次螢幕
     "ocr_scale": 1.5,            # 辨識前先把畫面放大，小字比較準
@@ -37,7 +44,8 @@ DEFAULTS = {
 
 # 介面可以改的設定（其他的只能直接改檔案）
 EDITABLE = {"ui_lang", "my_lang", "their_lang", "tone", "quality", "game_terms", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done"}
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
+            "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine"}
 
 
 def system_ui_lang() -> str:

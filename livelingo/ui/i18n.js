@@ -1,6 +1,16 @@
 // 介面文字：繁體中文、English、한국어、日本語。新增文字時四種語言都要補。
 window.I18N = {
   "zh-TW": {
+    overlay_toggle: "浮動留言：把翻譯顯示在遊戲畫面上", nav_overlay: "浮動留言",
+    ov_title: "浮動留言", ov_hint: "翻譯會像實況聊天室的留言一樣直接顯示在遊戲畫面上，過幾秒自動消失。滑鼠會直接穿過去，不會擋到遊戲。",
+    ov_enable: "在畫面上顯示浮動留言",
+    ov_game_note: "遊戲的顯示模式要選「無邊框」或「視窗」。選「全螢幕」時 Windows 不允許其他視窗蓋在遊戲上面，留言會看不到。",
+    ov_move: "調整位置和大小", ov_done: "完成", ov_test: "顯示測試留言", ov_reset: "回到預設位置",
+    ov_editing: "正在調整浮動留言：拖曳可以移動，拖邊緣可以改大小。",
+    ov_look: "外觀", ov_font: "字體大小", ov_seconds: "每則留言停留", ov_seconds_value: "{n} 秒", ov_forever: "不自動消失",
+    ov_backdrop: "文字後面的深色底", ov_backdrop_none: "沒有，只有描邊",
+    ov_original: "翻譯下面用小字顯示原文", ov_mine: "我自己說的和打的也顯示",
+    n_overlay_failed: "浮動留言開不起來。", n_overlay_on: "浮動留言已開啟，到設定可以調整位置和字體。",
     lang_zh: "繁體中文", lang_ko: "韓文", lang_en: "英文", lang_ja: "日文",
     short_zh: "中文", short_ko: "韓文", short_en: "英文", short_ja: "日文",
     st_starting: "正在啟動…", st_loading: "正在啟動翻譯引擎，大約半分鐘…", st_ready: "已就緒", st_error: "出了問題",
@@ -78,6 +88,16 @@ window.I18N = {
     n_source_error: "{name}開不起來：{error}", close: "關閉"
   },
   "en": {
+    overlay_toggle: "Floating chat: show translations over the game", nav_overlay: "Floating chat",
+    ov_title: "Floating chat", ov_hint: "Translations appear right over the game like stream chat messages and fade out after a few seconds. Mouse clicks pass straight through, so it never blocks the game.",
+    ov_enable: "Show floating chat on screen",
+    ov_game_note: "Set the game's display mode to Borderless or Windowed. In exclusive Fullscreen, Windows does not let other windows appear over the game, so the chat cannot be seen.",
+    ov_move: "Adjust position and size", ov_done: "Done", ov_test: "Show test messages", ov_reset: "Back to default position",
+    ov_editing: "Adjusting floating chat: drag to move, drag the edges to resize.",
+    ov_look: "Appearance", ov_font: "Text size", ov_seconds: "Each message stays for", ov_seconds_value: "{n} s", ov_forever: "Never fades",
+    ov_backdrop: "Dark backing behind text", ov_backdrop_none: "None, outline only",
+    ov_original: "Show the original in small text under the translation", ov_mine: "Also show what I say and type",
+    n_overlay_failed: "Floating chat could not be opened.", n_overlay_on: "Floating chat is on. Adjust position and text size in Settings.",
     lang_zh: "Traditional Chinese", lang_ko: "Korean", lang_en: "English", lang_ja: "Japanese",
     short_zh: "Chinese", short_ko: "Korean", short_en: "English", short_ja: "Japanese",
     st_starting: "Starting…", st_loading: "Starting the translation engine, about half a minute…", st_ready: "Ready", st_error: "Something went wrong",
@@ -155,6 +175,16 @@ window.I18N = {
     n_source_error: "{name} could not start: {error}", close: "Close"
   },
   "ko": {
+    overlay_toggle: "플로팅 채팅: 번역을 게임 화면 위에 표시", nav_overlay: "플로팅 채팅",
+    ov_title: "플로팅 채팅", ov_hint: "번역이 방송 채팅처럼 게임 화면 위에 바로 표시되고 몇 초 뒤에 사라집니다. 마우스 클릭은 그대로 통과하므로 게임을 가리지 않습니다.",
+    ov_enable: "화면에 플로팅 채팅 표시",
+    ov_game_note: "게임 화면 모드를 '테두리 없음' 또는 '창 모드'로 설정하세요. '전체 화면'에서는 Windows가 다른 창을 게임 위에 표시하지 못하게 해서 채팅이 보이지 않습니다.",
+    ov_move: "위치와 크기 조절", ov_done: "완료", ov_test: "테스트 메시지 표시", ov_reset: "기본 위치로",
+    ov_editing: "플로팅 채팅 조절 중: 드래그해서 옮기고 가장자리를 끌어 크기를 바꾸세요.",
+    ov_look: "모양", ov_font: "글자 크기", ov_seconds: "메시지 표시 시간", ov_seconds_value: "{n}초", ov_forever: "자동으로 사라지지 않음",
+    ov_backdrop: "글자 뒤 어두운 배경", ov_backdrop_none: "없음, 외곽선만",
+    ov_original: "번역 아래에 원문을 작게 표시", ov_mine: "내가 말하거나 입력한 것도 표시",
+    n_overlay_failed: "플로팅 채팅을 열 수 없습니다.", n_overlay_on: "플로팅 채팅이 켜졌습니다. 설정에서 위치와 글자 크기를 조절할 수 있습니다.",
     lang_zh: "중국어(번체)", lang_ko: "한국어", lang_en: "영어", lang_ja: "일본어",
     short_zh: "중국어", short_ko: "한국어", short_en: "영어", short_ja: "일본어",
     st_starting: "시작하는 중…", st_loading: "번역 엔진을 시작하는 중입니다. 30초 정도 걸려요…", st_ready: "준비 완료", st_error: "문제가 생겼습니다",
@@ -232,6 +262,16 @@ window.I18N = {
     n_source_error: "{name}을(를) 시작하지 못했습니다: {error}", close: "닫기"
   },
   "ja": {
+    overlay_toggle: "フローティングチャット：翻訳をゲーム画面に表示", nav_overlay: "フローティングチャット",
+    ov_title: "フローティングチャット", ov_hint: "翻訳が配信のチャットのようにゲーム画面の上に直接表示され、数秒で消えます。マウスのクリックはそのまま通り抜けるので、ゲームの邪魔になりません。",
+    ov_enable: "画面にフローティングチャットを表示",
+    ov_game_note: "ゲームの表示モードは「ボーダーレス」か「ウィンドウ」にしてください。「フルスクリーン」では Windows が他のウィンドウをゲームの上に表示できないため、チャットが見えません。",
+    ov_move: "位置とサイズを調整", ov_done: "完了", ov_test: "テストメッセージを表示", ov_reset: "初期位置に戻す",
+    ov_editing: "フローティングチャットを調整中：ドラッグで移動、端をドラッグでサイズ変更。",
+    ov_look: "見た目", ov_font: "文字サイズ", ov_seconds: "メッセージの表示時間", ov_seconds_value: "{n} 秒", ov_forever: "自動で消さない",
+    ov_backdrop: "文字の後ろの暗い背景", ov_backdrop_none: "なし、縁取りのみ",
+    ov_original: "翻訳の下に原文を小さく表示", ov_mine: "自分が話した・入力した内容も表示",
+    n_overlay_failed: "フローティングチャットを開けませんでした。", n_overlay_on: "フローティングチャットをオンにしました。位置と文字サイズは設定で調整できます。",
     lang_zh: "繁体字中国語", lang_ko: "韓国語", lang_en: "英語", lang_ja: "日本語",
     short_zh: "中国語", short_ko: "韓国語", short_en: "英語", short_ja: "日本語",
     st_starting: "起動しています…", st_loading: "翻訳エンジンを起動しています。30秒ほどかかります…", st_ready: "準備完了", st_error: "問題が起きました",

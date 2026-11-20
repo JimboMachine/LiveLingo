@@ -181,6 +181,14 @@ class Server:
                     if route == "/api/view":
                         service.set_view(str(body.get("view")))
                         return self._json({"ok": True})
+                    if route == "/api/overlay":
+                        if "edit" in body:
+                            service.overlay.set_edit(bool(body.get("edit")))
+                        if body.get("reset"):
+                            service.overlay.reset_position()
+                        if body.get("test"):
+                            threading.Thread(target=service.overlay.test, daemon=True).start()
+                        return self._json({"ok": True, **service.overlay.state()})
                     if route == "/api/focus":
                         service.focus()
                         return self._json({"ok": True})

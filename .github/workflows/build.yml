@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install numpy opencv-python-headless opencc-python-reimplemented==0.1.7 pytest
+      - run: pip install numpy pillow opencv-python-headless opencc-python-reimplemented==0.1.7 pytest
       - run: python -m pytest tests -q
 
   windows:
@@ -80,6 +80,14 @@ jobs:
 
       - name: Install, update and uninstall for real
         run: python packaging/ci_install_test.py dist\LiveLingo-Setup.exe
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: floating-chat-screenshot
+          path: floating-chat*.png
+          if-no-files-found: ignore
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:

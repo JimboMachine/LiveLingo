@@ -8,7 +8,7 @@
 
   const S = {
     cfg: null, phase: "starting", detail: {}, gpu: {}, mode: {}, fallback: false, version: "",
-    sources: {}, messages: [], glossary: [], canWindow: false, view: "main",
+    sources: {}, messages: [], glossary: [], canWindow: false, view: "main", overlay: { editing: false, running: false },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -63,6 +63,7 @@
     back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     frame: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>',
+    chat: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h3M10 7h10M4 12h3M10 12h7M4 17h3M10 17h9"/></svg>',
     swap: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>'
   };
 
@@ -294,7 +295,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"]];
+  const TABS = [["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["overlay", "nav_overlay", "chat"], ["general", "nav_general", "globe"]];
 
   function renderSettingsNav() {
     $("settings-nav").innerHTML = `
@@ -377,6 +378,51 @@
       <section>${switchRow("also_english", t("also_english"))}</section>`;
   }
 
+  function rangeRow(key, label, min, max, step, text) {
+    const v = Number(S.cfg[key]);
+    return `<div class="range-row"><label for="rng-${key}">${esc(label)}</label>
+      <input type="range" id="rng-${key}" data-change="${key}" data-range="${key}" min="${min}" max="${max}" step="${step}" value="${v}">
+      <output id="out-${key}">${esc(text(v))}</output></div>`;
+  }
+
+  const RANGE_TEXT = {
+    overlay_font: (v) => String(v),
+    overlay_seconds: (v) => (v > 0 ? t("ov_seconds_value", { n: v }) : t("ov_forever")),
+    overlay_backdrop: (v) => (v > 0 ? v + "%" : t("ov_backdrop_none"))
+  };
+
+  function overlayPage() {
+    const on = !!S.cfg.overlay;
+    const editing = !!S.overlay.editing;
+    return `
+      <section>
+        <div><h2>${esc(t("ov_title"))}</h2><div class="sub">${esc(t("ov_hint"))}</div></div>
+        ${switchRow("overlay", t("ov_enable"))}
+        <div class="btn-row">
+          <button class="primary big" data-act="overlay-edit" ${on ? "" : "disabled"}>${ICON.frame}${esc(editing ? t("ov_done") : t("ov_move"))}</button>
+          <button class="ghost" data-act="overlay-test" ${on ? "" : "disabled"}>${esc(t("ov_test"))}</button>
+          <button class="ghost" data-act="overlay-reset" ${on ? "" : "disabled"}>${esc(t("ov_reset"))}</button>
+        </div>
+        <div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>
+      </section>
+      <section><h2>${esc(t("ov_look"))}</h2>
+        ${rangeRow("overlay_font", t("ov_font"), 14, 60, 1, RANGE_TEXT.overlay_font)}
+        ${rangeRow("overlay_seconds", t("ov_seconds"), 0, 60, 1, RANGE_TEXT.overlay_seconds)}
+        ${rangeRow("overlay_backdrop", t("ov_backdrop"), 0, 80, 5, RANGE_TEXT.overlay_backdrop)}
+        ${switchRow("overlay_original", t("ov_original"))}
+        ${switchRow("overlay_mine", t("ov_mine"))}
+      </section>`;
+  }
+
+  function renderOverlayState() {
+    const btn = $("btn-overlay");
+    if (btn && S.cfg) btn.setAttribute("aria-pressed", S.cfg.overlay ? "true" : "false");
+    const banner = $("ov-banner");
+    if (!banner) return;
+    banner.hidden = !S.overlay.editing;
+    if (S.overlay.editing) banner.innerHTML = `<span>${esc(t("ov_editing"))}</span><button class="primary" data-act="overlay-edit">${esc(t("ov_done"))}</button>`;
+  }
+
   function pairSelectHTML() {
     const options = (current) => ["zh-TW", "ko", "en", "ja"].map((c) =>
       `<option value="${c}" ${c === current ? "selected" : ""}>${esc(langName(c))}</option>`).join("");
@@ -416,6 +462,7 @@
     if (S.ui.tab === "audio") page.innerHTML = devicesHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
+    else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
     else page.innerHTML = generalPage();
     page.scrollTop = scroll;
     paintLevels();
@@ -591,6 +638,7 @@
     if (S.view === "settings") renderSettings();
     if (S.view === "wizard") renderWizard();
     renderOverlay();
+    renderOverlayState();
   }
 
   // ---------------------------------------------------------------- 按鈕
@@ -656,6 +704,14 @@
       setView("main");
       if (S.cfg.region) post("/api/source", { key: "screen", on: true });
     },
+    "overlay-toggle": async () => {
+      const on = !S.cfg.overlay;
+      await post("/api/config", { overlay: on });
+      if (on) { toast(t("n_overlay_on"), 5000); post("/api/overlay", { test: true }); }
+    },
+    "overlay-edit": () => post("/api/overlay", { edit: !S.overlay.editing }),
+    "overlay-test": () => post("/api/overlay", { test: true }),
+    "overlay-reset": () => post("/api/overlay", { reset: true }),
     download: () => post("/api/download"),
     retry: () => post("/api/retry")
   };
@@ -665,6 +721,12 @@
     if (!el || el.disabled) return;
     const fn = actions[el.dataset.act];
     if (fn) { e.preventDefault(); fn(el); }
+  });
+
+  document.addEventListener("input", (e) => {
+    const key = e.target.dataset && e.target.dataset.range;
+    const out = key && $("out-" + key);
+    if (out) out.textContent = RANGE_TEXT[key](Number(e.target.value));
   });
 
   document.addEventListener("change", (e) => {
@@ -743,13 +805,18 @@
       const before = S.cfg;
       S.cfg = cfg;
       if (before.ui_lang !== cfg.ui_lang) { renderAll(); return; }
-      renderLangs(); renderSources();
+      renderLangs(); renderSources(); renderOverlayState();
       if (S.view === "settings") renderSettingsPage();
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
     notice: (d) => toast(t("n_" + d.code, d), 7000),
+    overlay: (d) => {
+      S.overlay = d;
+      renderOverlayState();
+      if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage();
+    },
     view: (d) => { if (d.view !== S.view) showView(d.view); },
     region_done: () => {
       if (S.view === "wizard") renderWizard();
@@ -771,7 +838,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary;
-    S.version = st.version; S.canWindow = st.can_window;
+    S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
     renderAll();

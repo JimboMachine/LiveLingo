@@ -290,3 +290,13 @@ input::placeholder { color: var(--faint); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* 浮動留言 */
+.icon-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.ov-banner { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 40; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--accent); box-shadow: 0 8px 24px rgba(0,0,0,.45); font-size: 13px; line-height: 1.45; }
+.ov-banner span { flex: 1; }
+.ov-banner .primary { height: 40px; padding: 0 18px; flex: none; }
+.range-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 240px) 96px; align-items: center; gap: 14px; min-height: 52px; padding: 8px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.range-row output { text-align: right; color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+.range-row input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
+@media (max-width: 620px) { .range-row { grid-template-columns: 1fr 96px; } .range-row input[type="range"] { grid-column: 1 / -1; grid-row: 2; } }
