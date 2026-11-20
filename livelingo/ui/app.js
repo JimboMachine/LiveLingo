@@ -144,7 +144,15 @@
     const find = S.ui.find;
     const findBtn = `<button class="primary" data-act="find-mic">${esc(t("find_btn"))}</button>`;
     const winBtn = `<button class="ghost" data-act="mic-settings">${esc(t("win_mic_settings"))}</button>`;
-    if (find && find.state === "listening") return { text: t("find_listening"), buttons: "", busy: true };
+    if (find && find.state === "listening") {
+      return { text: t("find_listening"), busy: true,
+               buttons: `<button class="ghost" data-act="find-cancel">${esc(t("cancel"))}</button>` };
+    }
+    if (find && find.state === "found") {
+      return { text: t("find_found", { name: find.name }), busy: true,
+               buttons: `<button class="primary" data-act="find-dismiss">${esc(t("dismiss"))}</button>
+                 <button class="ghost" data-act="find-undo">${esc(t("find_undo", { name: find.previous.name || t("default_device") }))}</button>` };
+    }
     if (find && find.state === "none") {
       return { text: find.blocked ? t("find_none_blocked") : t("find_none"),
                buttons: `<button class="primary" data-act="find-mic">${esc(t("find_again"))}</button>${winBtn}
@@ -764,6 +772,13 @@
     toggle: (el) => post("/api/config", { [el.dataset.key]: !S.cfg[el.dataset.key] }),
     "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
     "find-dismiss": () => { S.ui.find = null; renderMicViews(); },
+    "find-cancel": () => post("/api/find_mic", { cancel: true }),
+    "find-undo": () => {
+      const prev = S.ui.find && S.ui.find.previous;
+      S.ui.find = null;
+      renderMicViews();
+      if (prev) post("/api/config", { mic_device: prev.id, mic_name: prev.name });
+    },
     "mic-settings": () => post("/api/mic_settings"),
     "gloss-remove": (el) => post("/api/glossary/remove", { src: el.dataset.src }),
     "lesson-remove": (el) => post("/api/lessons/remove", { src: el.dataset.src, target: el.dataset.target }),
@@ -894,10 +909,11 @@
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
     vu: (d) => { S.vu = d; paintVu(); },
     find_mic: (d) => {
-      if (d.state === "found") {
+      if (d.state === "cancelled") S.ui.find = null;
+      else if (d.state === "found" && !d.previous) {
         S.ui.find = null;
         toast(t(d.changed ? "find_found" : "find_same", { name: d.name }), 6000);
-      } else S.ui.find = d;
+      } else S.ui.find = d;      // 換了麥克風：留在畫面上，可以按「換回去」
       renderMicViews();
     },
     notice: (d) => toast(t("n_" + d.code, d), 7000),

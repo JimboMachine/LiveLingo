@@ -115,6 +115,7 @@ class Service:
         self._vu = {"listen": 0.0, "mic": 0.0}
         self._vu_sent = 0.0
         self._finding_mic = False
+        self._find_cancel = threading.Event()
         self.messages: deque[dict] = deque(maxlen=200)
         self.jobs: queue.Queue = queue.Queue()
         self.window = None             # 視窗控制（window.py 會放進來）
@@ -752,8 +753,12 @@ class Service:
         if self._finding_mic:
             return False
         self._finding_mic = True
+        self._find_cancel.clear()
         threading.Thread(target=self._find_mic, daemon=True, name="find-mic").start()
         return True
+
+    def cancel_find_mic(self) -> None:
+        self._find_cancel.set()
 
     def _find_mic(self, seconds: float = 5.0) -> None:
         import numpy as np
@@ -778,7 +783,7 @@ class Service:
                     self.log(traceback.format_exc())
             loud: dict[str, list[float]] = {mic["id"]: [] for mic, _ in captures}
             end = time.time() + seconds
-            while time.time() < end and not self.closing.is_set():
+            while time.time() < end and not self.closing.is_set() and not self._find_cancel.is_set():
                 time.sleep(0.1)
                 for mic, cap in captures:
                     try:
@@ -790,6 +795,9 @@ class Service:
                         pass
             for _, cap in captures:
                 cap.stop()
+            if self._find_cancel.is_set():      # 使用者按了取消：什麼都不換
+                self.hub.publish("find_mic", {"state": "cancelled"})
+                return
 
             def score(values: list[float]) -> float:
                 """說話時的音量：最大聲的那五分之一的平均（整段平均會被沒說話的時間拉低）。"""
@@ -805,12 +813,14 @@ class Service:
                 return
             mic = best[0]
             changed = self.sources["mic"]["device"] != mic["name"] or not self.sources["mic"]["on"]
+            before = {"id": self.cfg["mic_device"], "name": self.cfg["mic_name"]}      # 讓使用者可以換回去
             self.update_config({"mic_device": mic["id"], "mic_name": mic["name"]})
             if not self.sources["mic"]["on"]:
                 self.set_source("mic", True)
             elif self.sources["mic"]["device"] != mic["name"] and self.cfg["mic_device"] == mic["id"]:
                 self._restart_voice("mic")
-            self.hub.publish("find_mic", {"state": "found", "name": mic["name"], "changed": changed})
+            self.hub.publish("find_mic", {"state": "found", "name": mic["name"], "changed": changed,
+                                          "previous": before if before["id"] != mic["id"] else None})
         finally:
             self._finding_mic = False
 

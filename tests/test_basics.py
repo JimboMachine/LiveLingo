@@ -469,13 +469,20 @@ def test_find_my_microphone(tmp_path):
     service.set_source = lambda key, on: events.append(("set_source", (key, on)))
     service._find_mic(seconds=0.4)
     found = [d for name, d in events if name == "find_mic"]
-    assert found[0]["state"] == "listening" and found[-1] == {"state": "found", "name": "Headset", "changed": True}
+    assert found[0]["state"] == "listening"
+    assert found[-1] == {"state": "found", "name": "Headset", "changed": True, "previous": {"id": None, "name": ""}}
     assert service.cfg["mic_device"] == "mic-headset" and ("set_source", ("mic", True)) in events
     events.clear()
     Audio.loud = "nothing"
     service._find_mic(seconds=0.4)
     last = [d for name, d in events if name == "find_mic"][-1]
     assert last["state"] == "none" and last["count"] == 2 and last["blocked"] is False
+    events.clear()
+    Audio.loud = "mic-webcam"
+    service._find_cancel.set()                                   # 按了取消：不換麥克風
+    service._find_mic(seconds=0.4)
+    assert [d for name, d in events if name == "find_mic"][-1] == {"state": "cancelled"}
+    assert service.cfg["mic_device"] == "mic-headset"
     service.shutdown()
 
 

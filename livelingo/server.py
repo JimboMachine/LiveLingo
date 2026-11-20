@@ -163,6 +163,9 @@ class Server:
                         service.set_meters(bool(body.get("on")))
                         return self._json({"ok": True})
                     if route == "/api/find_mic":
+                        if body.get("cancel"):
+                            service.cancel_find_mic()
+                            return self._json({"ok": True})
                         return self._json({"ok": service.find_mic()})
                     if route == "/api/mic_settings":
                         return self._json({"ok": service.open_mic_settings()})
