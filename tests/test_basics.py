@@ -520,3 +520,55 @@ def test_same_language_and_simplified_chinese(tmp_path):
     service.update_config({"their_lang": "klingon"})
     assert service.cfg["their_lang"] == "ko"
     service.shutdown()
+
+
+def test_update_asks_first(tmp_path, monkeypatch):
+    """有新版本時先問：選「這次先不要」不下載、照常使用；選「現在更新」才裝；下載到一半可以取消。"""
+    from livelingo import updater as up
+    from livelingo.service import Service
+
+    info = {"version": "9.9.9", "url": "http://example.invalid/x.exe", "size": 0, "sha256": ""}
+    calls = []
+    monkeypatch.setattr(up, "enabled", lambda: True)
+    monkeypatch.setattr(up, "check", lambda timeout=8: info)
+    monkeypatch.setattr(up, "launch_installer", lambda path: calls.append(("install", path.name)))
+
+    def download(info, folder, progress=None, cancel=None):
+        calls.append(("download", bool(cancel and cancel())))
+        return folder / "LiveLingo-Setup-9.9.9.exe"
+
+    monkeypatch.setattr(up, "download", download)
+
+    def boot(choice):
+        service = Service(tmp_path)
+        phases = []
+        service.set_phase = lambda phase, **detail: phases.append((phase, detail.get("step")))
+        service.exit_now = lambda: calls.append(("exit",))
+        service.update_choice(choice)
+        result = service._update_if_needed()
+        service.shutdown()
+        return result, phases
+
+    done, phases = boot("later")
+    assert done is False and calls == [] and phases[-1] == ("updating", "ask")
+    assert not (tmp_path / "update.json").exists()                     # 沒有記成「試過了」，下次開啟還會再問
+
+    def cancelled_download(info, folder, progress=None, cancel=None):
+        service_stop.set()
+        raise up.DownloadError("cancelled")
+
+    done, phases = boot("now")
+    assert done is True and [c[0] for c in calls] == ["download", "install", "exit"]
+    assert ("updating", "installing") in phases
+    calls.clear()
+    (tmp_path / "update.json").unlink()
+
+    service = Service(tmp_path)                                         # 下載到一半按取消：不安裝、不算失敗
+    service_stop = service._update_stop
+    notices = []
+    service.notice = lambda code, **kw: notices.append(code)
+    service.set_phase = lambda phase, **detail: None
+    monkeypatch.setattr(up, "download", cancelled_download)
+    service.update_choice("now")
+    assert service._update_if_needed() is False and calls == [] and notices == []
+    service.shutdown()

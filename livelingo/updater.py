@@ -1,5 +1,6 @@
 """
-強制更新：每次開啟時到 GitHub 看有沒有新版本，有的話下載新的安裝檔、安靜地裝好，再自動重開。
+更新：每次開啟時到 GitHub 看有沒有新版本。有的話先問使用者，同意才下載新的安裝檔、安靜地裝好，再自動重開；
+選「這次先不要」就照常使用，下次開啟時再問。
 沒有網路或下載失敗時不會把人卡住，這次先照常使用，下次開啟再試。
 """
 
@@ -80,7 +81,7 @@ class Attempts:
             pass
 
 
-def download(info: dict, folder: Path, progress=None) -> Path:
+def download(info: dict, folder: Path, progress=None, cancel=None) -> Path:
     """下載安裝檔並核對大小和雜湊，回傳檔案位置。"""
     folder.mkdir(parents=True, exist_ok=True)
     dest = folder / f"LiveLingo-Setup-{info['version']}.exe"
@@ -90,7 +91,7 @@ def download(info: dict, folder: Path, progress=None) -> Path:
                 old.unlink()
             except OSError:
                 pass
-    fetch(info["url"], dest, progress, attempts=3)
+    fetch(info["url"], dest, progress, cancel=cancel, attempts=3)      # cancel() 回傳 True 時中止（使用者按了取消）
     ok = not info.get("size") or dest.stat().st_size == info["size"]
     if ok and info.get("sha256"):
         h = hashlib.sha256()

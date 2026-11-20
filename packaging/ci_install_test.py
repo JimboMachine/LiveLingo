@@ -2,7 +2,7 @@
 在 GitHub 的 Windows 機器上，把剛做好的安裝檔真的裝一次、更新一次、卸載一次，確認：
   1. 安靜安裝後程式在、桌面和開始功能表捷徑在、「新增或移除程式」裡有登記
   2. 裝好的程式自我檢查通過（視窗開得起來）
-  3. 強制更新：假裝 GitHub 上有 99.0.0，程式會自己下載、安裝、重新開啟，而且不會無限重裝
+  3. 更新：假裝 GitHub 上有 99.0.0，程式會先問；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
   4. 卸載後程式、捷徑、資料都清乾淨
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
 """
@@ -117,8 +117,8 @@ if running():
 step("installed app selftest")
 selftest("installed app")
 
-# ---------------------------------------------------------------- 3. 強制更新
-step("forced update")
+# ---------------------------------------------------------------- 3. 更新
+step("update: ask, skip, then install")
 digest = hashlib.sha256(SETUP.read_bytes()).hexdigest()
 
 
@@ -159,8 +159,53 @@ data = Path(tempfile.mkdtemp(prefix="livelingo-update-"))
 env = dict(os.environ, LIVELINGO_UPDATE_API=f"http://127.0.0.1:{httpd.server_address[1]}/latest", LIVELINGO_DATA=str(data))
 (APP_DIR / "ci-marker.txt").write_text("old install")       # 更新會把程式檔換掉，但不該動到這種不認識的檔案以外的東西
 LOGS.extend([data / "app.log", data / "update" / "install.log"])
+
+
+def api(run: dict, route: str, body: dict | None = None) -> dict:
+    url = f"http://127.0.0.1:{run['port']}{route}?t={run['token']}"
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def run_info_of(folder: Path):
+    try:
+        return json.loads((folder / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def asking():
+    """程式停在「有新版本，要不要更新？」那個畫面時，回傳連到它的資訊；還沒到就回傳 None。"""
+    run = run_info_of(data)
+    if not run:
+        return None
+    try:
+        state = api(run, "/api/state")
+    except (OSError, ValueError):
+        return None
+    return run if state["phase"] == "updating" and (state.get("detail") or {}).get("step") == "ask" else None
+
+
+# 3a. 有新版本時先問；按「這次先不要」要能照常使用，而且不會下載
+skipper = subprocess.Popen([str(APP)], env=env)
+print("started pid", skipper.pid)
+run = wait_for("the app to ask about the update", asking, 180)
+api(run, "/api/update", {"choice": "later"})
+wait_for("the app to carry on after 'not this time'", lambda: api(run, "/api/state")["phase"] != "updating", 60)
+if any(h.endswith(".exe") for h in Release.hits):
+    fail("the update was downloaded although the user said not this time")
+print("skipped: phase is", api(run, "/api/state")["phase"], "requests:", Release.hits)
+api(run, "/api/quit", {})
+wait_for("the app to quit after skipping the update", lambda: skipper.poll() is not None, 60)
+wait_for("no LiveLingo left running", lambda: not running(), 60)
+
+# 3b. 按「現在更新」：下載、安裝、自己重新開啟
 first = subprocess.Popen([str(APP)], env=env)
 print("started pid", first.pid)
+run = wait_for("the app to ask about the update again", asking, 180)
+api(run, "/api/update", {"choice": "now"})
 wait_for("the app to exit so the installer can run", lambda: first.poll() is not None, 300)
 print("app exited with", first.returncode, "after requests:", Release.hits)
 if first.returncode != 0:

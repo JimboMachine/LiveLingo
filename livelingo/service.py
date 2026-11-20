@@ -116,6 +116,8 @@ class Service:
         self._vu_sent = 0.0
         self._finding_mic = False
         self._find_cancel = threading.Event()
+        self._update_choices: queue.Queue = queue.Queue()      # 使用者對「有新版本」的回答
+        self._update_stop = threading.Event()
         self.messages: deque[dict] = deque(maxlen=200)
         self.jobs: queue.Queue = queue.Queue()
         self.window = None             # 視窗控制（window.py 會放進來）
@@ -197,8 +199,16 @@ class Service:
             self.log(traceback.format_exc())
             self.set_phase("error", message=str(ex))
 
+    def update_choice(self, choice: str) -> None:
+        """介面上按了「現在更新」（now）、「這次先不要」（later）或下載中的「取消」（cancel）。"""
+        if choice in ("now", "later", "cancel"):
+            self._update_choices.put(choice)
+            if choice != "now":
+                self._update_stop.set()
+
     def _update_if_needed(self) -> bool:
-        """有新版本就下載安裝並結束程式，回傳 True。"""
+        """有新版本就先問使用者。選「現在更新」才下載安裝並結束程式（回傳 True）；
+        選「這次先不要」或下載到一半按取消，就照常用現在的版本，下次開啟時會再問。"""
         if not updater.enabled():
             return False
         self.set_phase("updating", step="checking")
@@ -214,6 +224,17 @@ class Service:
             self.log(f"update to {info['version']} was just tried; not retrying yet")
             self.notice("update_failed", version=info["version"])
             return False
+        self._update_stop.clear()
+        self.set_phase("updating", step="ask", version=info["version"])
+        choice = None
+        while choice is None and not self.closing.is_set():
+            try:
+                choice = self._update_choices.get(timeout=0.5)
+            except queue.Empty:
+                continue
+        if choice != "now":
+            self.log(f"update to {info['version']} skipped by the user")
+            return False
         try:
             self.set_phase("updating", step="downloading", version=info["version"], percent=0)
             last = [0.0]
@@ -224,11 +245,16 @@ class Service:
                     self.set_phase("updating", step="downloading", version=info["version"],
                                    percent=int(done * 100 / total))
 
-            path = updater.download(info, self.data / "update", progress)
+            path = updater.download(info, self.data / "update", progress, cancel=self._update_stop.is_set)
+            if self._update_stop.is_set():
+                raise assets.DownloadError("cancelled")
             self.set_phase("updating", step="installing", version=info["version"])
             attempts.record(info["version"])
             updater.launch_installer(path)
         except Exception as ex:  # noqa: BLE001
+            if self._update_stop.is_set():
+                self.log(f"update to {info['version']} cancelled by the user during download")
+                return False
             self.log(f"update failed: {ex!r}")
             self.notice("update_failed", version=info["version"])
             return False

@@ -24,7 +24,7 @@
 
 ## 更新
 
-每次開啟 LiveLingo 都會檢查有沒有新版本。有的話會自動下載、安裝，然後重新開啟，不需要自己做任何事。沒有網路時會照常使用，下次開啟再檢查。
+每次開啟 LiveLingo 都會檢查有沒有新版本。有的話會先問你：按「現在更新」會自動下載、安裝，然後重新開啟；按「這次先不要」就繼續用現在的版本，下次開啟時會再問。下載到一半也可以取消。沒有網路時會照常使用，下次開啟再檢查。
 
 ## 卸載
 
@@ -71,10 +71,10 @@ python -m livelingo --selftest out.json --no-window
 | `livelingo/service.py` | 程式主體：管理翻譯引擎、三種來源、設定、詞彙表 |
 | `livelingo/server.py` | 只開在本機的 API 和事件串流，介面透過它和主體溝通 |
 | `livelingo/ui/` | 介面（HTML、CSS、JavaScript，四種語言的文字在 `i18n.js`） |
-| `livelingo/updater.py` | 強制更新 |
+| `livelingo/updater.py` | 更新（開啟時發現新版本會先問，可以略過） |
 | `packaging/` | PyInstaller 設定、Inno Setup 安裝程式、圖示、安裝測試 |
 | `tests/devserver.py` | 不需要 Windows 和音效卡就能把介面跑起來（假的音訊裝置） |
 
-發佈新版本：改 `livelingo/__init__.py` 裡的版本號，合併到 `main`。GitHub Actions 會在 Windows 上打包、把安裝檔真的安裝／更新／卸載測一次，通過後自動發佈成 Release，使用者下次開啟就會更新。
+發佈新版本：改 `livelingo/__init__.py` 裡的版本號，合併到 `main`。GitHub Actions 會在 Windows 上打包、把安裝檔真的安裝／更新／卸載測一次，通過後自動發佈成 Release，使用者下次開啟時會被問要不要更新。
 
 設定、詞彙表、模型和紀錄檔都放在 `%LOCALAPPDATA%\LiveLingo`。

@@ -665,8 +665,15 @@
     if (S.phase === "updating") {
       const text = d.step === "downloading" ? t("up_downloading", { version: d.version, percent: d.percent || 0 })
         : (d.step === "installing" ? t("up_installing", { version: d.version }) : t("up_checking"));
-      html = `<div class="spinner"></div><h2>${esc(t("st_updating"))}</h2><p>${esc(text)}</p>` +
-        (d.step === "downloading" ? `<div class="bar"><span style="width:${d.percent || 0}%"></span></div>` : "");
+      if (d.step === "ask") {
+        html = `<h2>${esc(t("up_ask_title", { version: d.version }))}</h2><p>${esc(t("up_ask_text"))}</p>
+          <div class="btn-row center"><button class="primary" data-act="update-now">${esc(t("up_now"))}</button>
+          <button class="ghost" data-act="update-later">${esc(t("up_later"))}</button></div>`;
+      } else {
+        html = `<div class="spinner"></div><h2>${esc(t("st_updating"))}</h2><p>${esc(text)}</p>` +
+          (d.step === "downloading" ? `<div class="bar"><span style="width:${d.percent || 0}%"></span></div>
+            <div class="btn-row center"><button class="ghost" data-act="update-cancel">${esc(t("cancel"))}</button></div>` : "");
+      }
     } else if (S.phase === "error") {
       html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.message || "")}</p>` +
         (d.log ? `<p>${esc(t("err_log", { path: d.log }))}</p>` : "") +
@@ -772,6 +779,9 @@
     toggle: (el) => post("/api/config", { [el.dataset.key]: !S.cfg[el.dataset.key] }),
     "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
     "find-dismiss": () => { S.ui.find = null; renderMicViews(); },
+    "update-now": () => post("/api/update", { choice: "now" }),
+    "update-later": () => post("/api/update", { choice: "later" }),
+    "update-cancel": () => post("/api/update", { choice: "cancel" }),
     "find-cancel": () => post("/api/find_mic", { cancel: true }),
     "find-undo": () => {
       const prev = S.ui.find && S.ui.find.previous;

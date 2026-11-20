@@ -204,6 +204,9 @@ class Server:
                     if route == "/api/focus":
                         service.focus()
                         return self._json({"ok": True})
+                    if route == "/api/update":
+                        service.update_choice(str(body.get("choice") or ""))
+                        return self._json({"ok": True})
                     if route == "/api/retry":
                         threading.Thread(target=service._prepare, daemon=True).start()
                         return self._json({"ok": True})
