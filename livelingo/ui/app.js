@@ -8,7 +8,7 @@
 
   const S = {
     cfg: null, phase: "starting", detail: {}, gpu: {}, mode: {}, fallback: false, version: "",
-    sources: {}, messages: [], glossary: [], lessons: [], canWindow: false, view: "main", overlay: { editing: false, running: false },
+    sources: {}, messages: [], glossary: [], lessons: [], canWindow: false, view: "main", overlay: { editing: false, running: false }, vu: {},
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -23,7 +23,8 @@
     if (params) for (const k in params) text = text.split("{" + k + "}").join(params[k]);
     return text;
   }
-  const lk = (code) => (code === "zh-TW" ? "zh" : code);
+  const lk = (code) => (code === "zh-TW" ? "zh" : (code === "zh-CN" ? "zhcn" : code));
+  const PAIR_LANGS = ["zh-TW", "zh-CN", "ko", "en", "ja"];      // 可以選的翻譯語言
   const langName = (code) => t("lang_" + lk(code));
   const langShort = (code) => t("short_" + lk(code));
 
@@ -113,9 +114,12 @@
         <div class="top">${ICON[key]}<span class="state">${esc(state)}</span></div>
         <div class="name">${esc(t("src_" + key))}</div>
         <div class="hint">${esc(sourceHint(key))}</div>
+        ${key !== "screen" && s.on ? `<div class="vu" aria-hidden="true"><i data-vu="${key}"></i></div>` : ""}
       </button>`;
     }).join("");
     $("source-cards").innerHTML = html;
+    paintVu();
+    renderMicRow();
     const row = $("region-row");
     const r = S.cfg.region;
     const showRegion = !!(r && (S.sources.screen || {}).on);
@@ -128,13 +132,57 @@
     mic.classList.toggle("on", !!(S.sources.mic || {}).on);
   }
 
+  function paintVu() {
+    document.querySelectorAll("[data-vu]").forEach((el) => {
+      el.style.width = Math.round((S.vu[el.dataset.vu] || 0) * 100) + "%";
+    });
+  }
+
+  // 麥克風有狀況時（完全沒聲音、被 Windows 擋住、打不開、正在自動找）在卡片下面說清楚，並給按鈕
+  function micNotice() {
+    const mic = S.sources.mic || {};
+    const find = S.ui.find;
+    const findBtn = `<button class="primary" data-act="find-mic">${esc(t("find_btn"))}</button>`;
+    const winBtn = `<button class="ghost" data-act="mic-settings">${esc(t("win_mic_settings"))}</button>`;
+    if (find && find.state === "listening") return { text: t("find_listening"), buttons: "", busy: true };
+    if (find && find.state === "none") {
+      return { text: find.blocked ? t("find_none_blocked") : t("find_none"),
+               buttons: `<button class="primary" data-act="find-mic">${esc(t("find_again"))}</button>${winBtn}
+                 <button class="ghost" data-act="find-dismiss">${esc(t("dismiss"))}</button>` };
+    }
+    if (mic.on && mic.quiet === "blocked") return { text: t("mic_blocked"), buttons: winBtn + findBtn };
+    if (mic.on && mic.quiet) return { text: t("mic_silent"), buttons: findBtn };
+    if (mic.error && !mic.on && !mic.busy) return { text: t("mic_failed"), detail: mic.error, buttons: findBtn };
+    return null;
+  }
+
+  function noticeHTML(n, icon) {
+    return `<div class="mic-note ${n.busy ? "busy" : ""}">${icon}<div><div class="text">${esc(n.text)}</div>
+      ${n.detail ? `<div class="detail">${esc(n.detail)}</div>` : ""}
+      ${n.buttons ? `<div class="btns">${n.buttons}</div>` : ""}</div></div>`;
+  }
+
+  function micNoticeHTML() {
+    const n = micNotice();
+    return n ? noticeHTML(n, ICON.mic) : "";
+  }
+
+  function renderMicRow() {
+    const row = $("mic-row");
+    const listen = S.sources.listen || {};
+    const html = micNoticeHTML()
+      + (listen.error && !listen.on && !listen.busy ? noticeHTML({ text: t("listen_failed"), detail: listen.error }, ICON.listen) : "");
+    row.hidden = !html;
+    row.innerHTML = html;
+  }
+
   function renderLangs() {
     $("pair-label").textContent = langName(S.cfg.their_lang) + " ⇄ " + langName(S.cfg.my_lang);
     $("lang-chip").setAttribute("aria-expanded", S.ui.langOpen ? "true" : "false");
     const picker = $("lang-picker");
     picker.hidden = !S.ui.langOpen;
     if (S.ui.langOpen) {
-      const opts = (side, current) => ["zh-TW", "ko", "en", "ja"].map((code) =>
+      const opts = (side, current) => PAIR_LANGS.map((code) =>
         `<button class="pill" data-act="set-lang" data-side="${side}" data-code="${code}" aria-pressed="${current === code}">${esc(langName(code))}</button>`).join("");
       picker.innerHTML = `
         <div class="group"><div class="dim small">${esc(t("their_lang"))}</div><div class="opts">${opts("their_lang", S.cfg.their_lang)}</div></div>
@@ -153,6 +201,7 @@
     } else if (m.pending) {
       body += `<div class="text pending">${esc(t("translating"))}</div>`;
     } else {
+      if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
       body += `<div class="text">${esc(m.translated)}</div>`;
       if (m.pron) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
       if (m.copied) body += `<div class="copied">${ICON.check}<span>${esc(t("copied_hint"))}</span></div>`;
@@ -263,7 +312,9 @@
       <section><div><h2>${esc(t("out_title"))}</h2><div class="sub">${esc(t("out_hint"))}</div></div>
         ${list("speakers", dv.speakers, S.cfg.speaker_device, "speaker")}</section>
       <section><div><h2>${esc(t("in_title"))}</h2><div class="sub">${esc(t("in_hint"))}</div></div>
-        ${list("microphones", dv.microphones, S.cfg.mic_device, "mic")}</section>
+        ${list("microphones", dv.microphones, S.cfg.mic_device, "mic")}
+        ${micNoticeHTML() || `<div class="btn-row"><button class="ghost" data-act="find-mic">${esc(t("find_btn"))}</button>
+          <span class="dim small">${esc(t("find_hint"))}</span></div>`}</section>
       <div class="note">${ICON.info}<span>${esc(t("dev_note"))}</span></div>`;
   }
 
@@ -435,7 +486,7 @@
   }
 
   function pairSelectHTML() {
-    const options = (current) => ["zh-TW", "ko", "en", "ja"].map((c) =>
+    const options = (current) => PAIR_LANGS.map((c) =>
       `<option value="${c}" ${c === current ? "selected" : ""}>${esc(langName(c))}</option>`).join("");
     return `<div class="pair-select">
       <div class="field"><label for="sel-their">${esc(t("their_lang"))}</label><select id="sel-their" data-change="their_lang">${options(S.cfg.their_lang)}</select></div>
@@ -639,6 +690,11 @@
     post("/api/view", { view });
   }
 
+  function renderMicViews() {
+    renderMicRow();
+    if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
+  }
+
   function renderAll() {
     applyI18n();
     renderStatus();
@@ -706,6 +762,9 @@
     quality: (el) => post("/api/config", { quality: el.dataset.q }),
     tone: (el) => post("/api/config", { tone: el.dataset.tone }),
     toggle: (el) => post("/api/config", { [el.dataset.key]: !S.cfg[el.dataset.key] }),
+    "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
+    "find-dismiss": () => { S.ui.find = null; renderMicViews(); },
+    "mic-settings": () => post("/api/mic_settings"),
     "gloss-remove": (el) => post("/api/glossary/remove", { src: el.dataset.src }),
     "lesson-remove": (el) => post("/api/lessons/remove", { src: el.dataset.src, target: el.dataset.target }),
     "ocr-test": async () => {
@@ -800,6 +859,7 @@
       const before = S.sources[d.key] || {};
       S.sources[d.key] = d;
       renderSources();
+      if (d.key === "mic" && (d.quiet || "") !== (before.quiet || "") && S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
       if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000);
     },
     message: (m) => {
@@ -832,6 +892,14 @@
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
+    vu: (d) => { S.vu = d; paintVu(); },
+    find_mic: (d) => {
+      if (d.state === "found") {
+        S.ui.find = null;
+        toast(t(d.changed ? "find_found" : "find_same", { name: d.name }), 6000);
+      } else S.ui.find = d;
+      renderMicViews();
+    },
     notice: (d) => toast(t("n_" + d.code, d), 7000),
     overlay: (d) => {
       S.overlay = d;

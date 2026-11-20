@@ -90,6 +90,7 @@ def test_statement_stays_a_statement():
     assert sentence_kind("我們打龍吧", "zh") == "statement"
     assert sentence_kind("你吃飯了嗎", "zh") == "question"
     assert sentence_kind("你在哪？", "zh") == "question"
+    assert sentence_kind("你吃饭了吗", "zh") == "question" and sentence_kind("你在干什么", "zh") is None      # 簡體字
     assert sentence_kind("你在幹什麼", "zh") is None                         # 有疑問詞但沒有問號：不猜
     assert sentence_kind("밥 먹었어", "ko") == "statement" and sentence_kind("밥 먹었어?", "ko") == "question"
     assert sentence_kind("뭐해", "ko") is None and sentence_kind("같이 할까", "ko") is None      # 疑問詞、疑問語尾：不猜
@@ -347,4 +348,168 @@ def test_floating_chat_lifecycle(tmp_path):
     finally:
         service.update_config({"overlay": False})
     assert not overlay.running
+    service.shutdown()
+
+
+def test_microphone_second_way(monkeypatch):
+    """第一種收音方式打不開麥克風時，自動改用第二種；兩種都不行才回報錯誤，而且錯誤一定有內容。"""
+    import sys
+    import time
+    import types
+
+    import numpy as np
+
+    from livelingo.core import audio
+
+    def broken(self):
+        assert 1 == 2          # 沒有訊息的錯誤，就像收音元件遇到不認得的麥克風格式
+
+    monkeypatch.setattr(audio.Capture, "_run_soundcard", broken)
+
+    class Stream:
+        def __init__(self, callback=None, device=None, **kw):
+            self.callback, self.device = callback, device
+
+        def __enter__(self):
+            self.callback(np.full((audio.BLOCK, 1), 0.25, dtype=np.float32), audio.BLOCK, None, None)
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    devices = [{"name": "Speakers (Realtek(R) Audio)", "max_input_channels": 0},
+               {"name": "Microphone (HD Webcam C270)", "max_input_channels": 1},
+               {"name": "麥克風 (HyperX Cloud II)", "max_input_channels": 1}]
+    apis = [{"name": "Windows WASAPI", "devices": [0, 1, 2], "default_input_device": 1},
+            {"name": "MME", "devices": [0, 1, 2], "default_input_device": 1}]
+    fake = types.SimpleNamespace(InputStream=Stream, query_devices=lambda: devices, query_hostapis=lambda: apis)
+    monkeypatch.setitem(sys.modules, "sounddevice", fake)
+    assert audio.portaudio_input(fake, "麥克風 (HyperX Cloud II) 加上被截掉的名稱") == (2, "麥克風 (HyperX Cloud II)")
+    assert audio.portaudio_input(fake, None) == (1, "Microphone (HD Webcam C270)")
+
+    opened, errors, logged = [], [], []
+    monkeypatch.setattr(audio, "log", logged.append)
+    cap = audio.Capture("mic", on_error=lambda kind, ex: errors.append(str(ex)), on_open=lambda kind, name: opened.append(name))
+    cap.start()
+    block = cap.q.get(timeout=3)
+    cap.stop()
+    cap.join(3)
+    assert cap.backend == "portaudio" and opened == ["Microphone (HD Webcam C270)"] and not errors
+    assert float(block[0]) == 0.25 and "AssertionError" in logged[0] and "assert 1 == 2" in logged[0]
+
+    def also_broken(self):
+        raise OSError("device is busy")
+
+    monkeypatch.setattr(audio.Capture, "_run_portaudio", also_broken)
+    cap = audio.Capture("mic", on_error=lambda kind, ex: errors.append(str(ex)))
+    cap.start()
+    cap.join(3)
+    assert len(errors) == 1 and "AssertionError" in errors[0] and "device is busy" in errors[0]
+    errors.clear()
+    cap = audio.Capture("loopback", on_error=lambda kind, ex: errors.append(str(ex)))      # 電腦的聲音沒有第二種方式
+    cap.start()
+    cap.join(3)
+    assert len(errors) == 1 and errors[0].startswith("AssertionError")
+    assert audio.describe(ValueError("bad")) == "ValueError: bad"
+    time.sleep(0)
+
+
+def test_quiet_microphone_and_levels():
+    import numpy as np
+
+    from livelingo.core.audio import BLOCK, SR, ArrayCapture
+    from livelingo.core.speech import QUIET, SpeechPipeline, level_of
+
+    assert level_of(np.zeros(1600, dtype=np.float32)) == 0.0
+    assert level_of(np.full(1600, 0.5, dtype=np.float32)) == 1.0
+    assert 0.3 < level_of(np.full(1600, 0.01, dtype=np.float32)) < 0.5
+    assert QUIET < 0.003
+
+    seen = []
+    cap = ArrayCapture("mic", np.concatenate([np.full(BLOCK * 3, 0.2, dtype=np.float32), np.zeros(SR, dtype=np.float32)]))
+    pipe = SpeechPipeline.__new__(SpeechPipeline)      # 不載入語音模型，只看音量回報
+    import threading
+    threading.Thread.__init__(pipe, daemon=True)
+    pipe.capture, pipe.recognizer, pipe.langs = cap, None, ["zh"]
+    pipe.on_text = pipe.on_state = lambda *a: None
+    pipe.on_level = lambda kind, level, silent_for: seen.append((kind, level, silent_for))
+    pipe._halt = threading.Event()
+    pipe.segmenter = type("S", (), {"speaking": False, "feed": lambda self, audio: []})()
+    pipe.start()
+    import time
+    deadline = time.time() + 5
+    while time.time() < deadline and not (len(seen) >= 2 and seen[-1][1] == 0.0 and seen[-1][2] > 0.2):
+        time.sleep(0.05)
+    pipe.stop()
+    assert seen[0][0] == "mic" and max(level for _, level, _ in seen) > 0.8      # 有聲音的那一段
+    assert seen[-1][1] == 0.0 and seen[-1][2] > 0.2                             # 之後一直沒聲音，秒數會累加
+
+
+def test_find_my_microphone(tmp_path):
+    """「自動找麥克風」：說話時最大聲的那一支會被選起來；全部沒聲音就回報找不到。"""
+    import numpy as np
+
+    from livelingo.core.audio import SR, ArrayCapture
+    from livelingo.service import Service
+
+    class Audio:
+        loud = "mic-headset"
+
+        def devices(self):
+            return {"speakers": [], "microphones": [{"id": "mic-webcam", "name": "Webcam", "default": True},
+                                                     {"id": "mic-headset", "name": "Headset", "default": False}]}
+
+        def capture(self, kind, device, on_error=None, on_open=None):
+            level = 0.2 if device == self.loud else 0.0
+            return ArrayCapture(kind, np.full(SR * 3, level, dtype=np.float32), realtime=False)
+
+    service = Service(tmp_path, audio=Audio())
+    events = []
+    service.hub.publish = lambda name, data: events.append((name, data))
+    service.set_source = lambda key, on: events.append(("set_source", (key, on)))
+    service._find_mic(seconds=0.4)
+    found = [d for name, d in events if name == "find_mic"]
+    assert found[0]["state"] == "listening" and found[-1] == {"state": "found", "name": "Headset", "changed": True}
+    assert service.cfg["mic_device"] == "mic-headset" and ("set_source", ("mic", True)) in events
+    events.clear()
+    Audio.loud = "nothing"
+    service._find_mic(seconds=0.4)
+    last = [d for name, d in events if name == "find_mic"][-1]
+    assert last["state"] == "none" and last["count"] == 2 and last["blocked"] is False
+    service.shutdown()
+
+
+def test_same_language_and_simplified_chinese(tmp_path):
+    from livelingo.core.translate import LANGS, to_script
+    from livelingo.service import Service
+
+    assert LANGS["zh-CN"]["family"] == "zh"
+    assert to_script("这个软件很好用", "zh-TW") == "這個軟體很好用"
+    assert to_script("這個軟體很好用", "zh-CN") == "这个软件很好用"
+    assert to_script("안녕", "ko") == "안녕"
+
+    tr = _FakeModel("我去上路。")
+    assert tr.translate("这个软件很好用", "zh-TW", "zh") == "這個軟體很好用" and tr.asked == []      # 簡體變繁體不用問模型
+    assert tr.translate("我們打龍吧", "zh-CN", "zh") == "我们打龙吧"
+    assert tr.translate("탑 갈게", "zh-CN", "ko") == "我去上路。"
+    assert "Simplified Chinese (zh-CN)" in build_prompt("탑 갈게", "ko", "zh-CN", {}, "casual", [])
+    assert tidy("抱歉ㅠㅠ", "zh-CN") == "抱歉 呜呜"
+
+    pack = TermPack()
+    assert ("점멸", "闪现") in pack.find("점멸 없어", "ko", "zh-CN")                 # 建議的譯法跟著變簡體
+    assert ("闪现", "점멸") in pack.find("对面没有闪现", "zh", "ko")                 # 簡體的原文也認得遊戲用語
+    assert ("閃現", "점멸") in pack.find("對面沒有閃現", "zh", "ko")
+
+    service = Service(tmp_path)
+    service.update_config({"my_lang": "zh-TW", "their_lang": "zh-TW"})                 # 兩邊一樣：不再自動對調
+    assert (service.cfg["my_lang"], service.cfg["their_lang"]) == ("zh-TW", "zh-TW")
+    assert service._voice_langs("mic") == ["zh"]
+    service.update_config({"their_lang": "zh-CN"})
+    assert (service.cfg["my_lang"], service.cfg["their_lang"]) == ("zh-TW", "zh-CN")
+    assert service._target_for({"who": "me", "lang": "zh"}) == "zh-CN"                  # 我說的給對方看：變簡體
+    assert service._target_for({"who": "them", "lang": "zh"}) == "zh-TW"                # 對方說的給我看：變繁體
+    service.update_config({"their_lang": "ko"})
+    assert service._target_for({"who": "me", "lang": "zh"}) == "ko" and service._target_for({"who": "me", "lang": "ko"}) == "zh-TW"
+    service.update_config({"their_lang": "klingon"})
+    assert service.cfg["their_lang"] == "ko"
     service.shutdown()

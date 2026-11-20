@@ -10,6 +10,7 @@ from opencc import OpenCC
 # 語言代碼 → name: 顯示名稱, en: 給模型看的英文名稱, family: 用文字種類判斷出來的語言
 LANGS = {
     "zh-TW": {"name": "繁體中文", "en": "Traditional Chinese", "family": "zh"},
+    "zh-CN": {"name": "簡體中文", "en": "Simplified Chinese", "family": "zh"},
     "ko": {"name": "韓文", "en": "Korean", "family": "ko"},
     "en": {"name": "英文", "en": "English", "family": "en"},
     "ja": {"name": "日文", "en": "Japanese", "family": "ja"},
@@ -23,6 +24,16 @@ SOURCES = {
 
 # 保險用：模型偶爾會冒出簡體字，中文輸出一律再轉成台灣繁體用語
 _to_traditional = OpenCC("s2twp")
+_to_simplified = OpenCC("tw2sp")
+
+
+def to_script(text: str, code: str) -> str:
+    """中文統一成指定的字體：zh-TW 轉成繁體（台灣用語），zh-CN 轉成簡體；其他語言原樣回傳。"""
+    if code == "zh-TW":
+        return _to_traditional.convert(text)
+    if code == "zh-CN":
+        return _to_simplified.convert(text)
+    return text
 
 HINT_INTRO = "They are talking about the game League of Legends. Use these translations for the game terms: "
 
@@ -72,6 +83,7 @@ def sentence_kind(text: str, source: str) -> str | None:
         return "statement"
     if source != "zh":
         return "statement" if t[-1] in "。．.!！" else None
+    t = _to_traditional.convert(t)      # 簡體字的「吗」「什么」也要認得
     if re.search(r"嗎\s*[。．.!！~～…]*$", t):
         return "question"
     if _ZH_QUESTION.search(t) or "?" in t or "？" in t:
@@ -242,8 +254,8 @@ def salvage(out: str, source: str, target: str) -> str | None:
     return rest
 
 
-_KO_LAUGH = [(re.compile(r"\s*[ㅋㅎ]{2,}"), {"zh-TW": " 哈哈", "en": " haha", "ja": " www"}),
-             (re.compile(r"\s*[ㅠㅜ]{2,}"), {"zh-TW": " 嗚嗚", "en": " T_T", "ja": " 泣"})]
+_KO_LAUGH = [(re.compile(r"\s*[ㅋㅎ]{2,}"), {"zh-TW": " 哈哈", "zh-CN": " 哈哈", "en": " haha", "ja": " www"}),
+             (re.compile(r"\s*[ㅠㅜ]{2,}"), {"zh-TW": " 嗚嗚", "zh-CN": " 呜呜", "en": " T_T", "ja": " 泣"})]
 
 
 def tidy(out: str, target: str) -> str:
@@ -305,8 +317,9 @@ class Translator:
                 scored.append((score, item["src"], item["dst"]))
         scored.sort(reverse=True)
         found = [(src, dst) for _, src, dst in scored[:2]]
+        plain = _to_traditional.convert(text) if source == "zh" else text
         for pattern, tone, src, dst in BUILTIN_EXAMPLES.get((source, target), []):
-            if len(found) < 2 and tone == self.tone and pattern.search(text):
+            if len(found) < 2 and tone == self.tone and pattern.search(plain):
                 found.append((src, dst))
         return None, found
 
@@ -329,11 +342,11 @@ class Translator:
         return best
 
     def translate(self, text: str, target: str, source: str | None = None) -> str:
-        """target：zh-TW / ko / en / ja。同語言時原樣回傳。"""
+        """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。"""
         text = text.strip()[: self.max_chars]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
-            return text
+            return to_script(text, target)
         key = (text, target)
         if key in self._cache:
             return self._cache[key]
@@ -351,8 +364,7 @@ class Translator:
                 again = self._ask(sent, source, target, hints, examples, "short")
                 if "?" not in again and "？" not in again and not _leftover(again, source, target):
                     out = again
-        if target == "zh-TW":
-            out = _to_traditional.convert(out)
+        out = to_script(out, target)
         out = tidy(out, target)
         if len(self._cache) > 500:
             self._cache.clear()

@@ -25,9 +25,9 @@ class TermPack:
         self.zh_ko = sorted((tuple(p) for p in raw.get("zh_ko", [])), key=lambda p: len(p[0]), reverse=True)
 
     def find(self, text: str, source: str, target: str) -> list[tuple[str, str]]:
-        """回傳這句話裡出現的用語和建議譯法（最多 6 個）。只支援韓文和繁體中文之間。"""
+        """回傳這句話裡出現的用語和建議譯法（最多 6 個）。只支援韓文和中文（繁體、簡體）之間。"""
         found: list[tuple[str, str]] = []
-        if source == "ko" and target == "zh-TW":
+        if source == "ko" and target in ("zh-TW", "zh-CN"):
             for token in _KO_TOKEN.findall(text):
                 for term, dst in self.ko_zh:        # 長的先比，「정글러」不會被「정글」搶走
                     if not token.startswith(term):
@@ -36,11 +36,24 @@ class TermPack:
                     if len(term) >= 2 or rest in _PARTICLES:
                         found.append((term, dst))
                         break
+            if target == "zh-CN":      # 用語表是繁體寫的，翻成簡體時把建議的譯法也轉成簡體
+                from .core.translate import to_script
+
+                found = [(term, to_script(dst, "zh-CN")) for term, dst in found]
         elif source == "zh" and target == "ko":
+            from .core.translate import to_script
+
             low = text.lower()
+            traditional = to_script(low, "zh-TW")      # 用語表是繁體寫的；原文是簡體字時轉成繁體再比
             covered = ""
             for term, dst in self.zh_ko:
-                if term in low and term not in covered:
+                if term in covered:
+                    continue
+                if term in low:
                     found.append((term, dst))
+                    covered += " " + term
+                elif term in traditional:
+                    simplified = to_script(term, "zh-CN")      # 提示裡的原文要跟句子裡寫的一樣，模型才對得上
+                    found.append((simplified if simplified in low else term, dst))
                     covered += " " + term
         return list(dict.fromkeys(found))[:6]

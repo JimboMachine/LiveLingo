@@ -20,6 +20,17 @@ _HALLUCINATIONS = re.compile(
     r"thanks for watching|thank you for watching|subscribe", re.IGNORECASE)
 
 
+QUIET = 0.0008      # 整段聲音的最大值比這個還小，就當成完全沒聲音（關掉的麥克風送來的是一串 0）
+MAX_GAIN = 30.0     # 太小聲的聲音最多放大這麼多倍
+
+
+def level_of(block: np.ndarray) -> float:
+    """把一小段聲音的音量換成 0~1：-60 dB 以下當作沒聲音，-10 dB 以上當作滿格。"""
+    rms = float(np.sqrt(np.mean(np.square(block)))) if len(block) else 0.0
+    db = 20 * np.log10(max(rms, 1e-6))
+    return float(min(1.0, max(0.0, (db + 60) / 50)))
+
+
 class Segmenter:
     """把連續的聲音切成一句一句。用 Silero VAD 判斷哪裡有人說話，所以遊戲音效、音樂不太會被當成說話。"""
 
@@ -43,23 +54,26 @@ class Segmenter:
         if self._since < self.step:
             return []
         self._since = 0
-        if float(np.abs(self.buf).max()) < 0.003:      # 完全沒聲音，不用跑偵測
+        peak = float(np.abs(self.buf).max())
+        if peak < QUIET:      # 完全沒聲音，不用跑偵測
             self.buf = self.buf[-SR // 2:]
             self.speaking = False
             return []
-        ts = self._vad(self.buf, self._opts)
+        # 麥克風音量開得很小的時候，先放大再判斷，不然小聲說話會整句被當成沒聲音
+        loud = self.buf if peak >= 0.1 else np.clip(self.buf * min(MAX_GAIN, 0.1 / peak), -1.0, 1.0)
+        ts = self._vad(loud, self._opts)
         if not ts:
             self.buf = self.buf[-SR // 2:]
             self.speaking = False
             return []
-        out = [self.buf[t["start"]:t["end"]] for t in ts[:-1]]
+        out = [loud[t["start"]:t["end"]] for t in ts[:-1]]
         last = ts[-1]
         if len(self.buf) - last["end"] > SR // 10:     # 最後一句後面已經安靜下來 = 說完了
-            out.append(self.buf[last["start"]:last["end"]])
+            out.append(loud[last["start"]:last["end"]])
             self.buf = self.buf[-SR // 4:]
             self.speaking = False
         elif len(self.buf) - last["start"] >= self.max_len:   # 一直講不停，先切一段出來翻
-            out.append(self.buf[last["start"]:])
+            out.append(loud[last["start"]:])
             self.buf = np.zeros(0, dtype=np.float32)
             self.speaking = False
         else:
@@ -152,13 +166,15 @@ class SpeechPipeline(threading.Thread):
     """
 
     def __init__(self, capture, recognizer: Recognizer, langs: list[str], on_text, on_state=None,
-                 end_silence: float = 0.6):
+                 end_silence: float = 0.6, on_level=None):
         super().__init__(daemon=True)
         self.capture = capture
         self.recognizer = recognizer
         self.langs = langs
         self.on_text = on_text
         self.on_state = on_state or (lambda kind, speaking: None)
+        # on_level(來源, 現在的音量 0~1, 已經連續幾秒完全沒聲音)：給介面畫音量條、提醒「麥克風沒聲音」
+        self.on_level = on_level or (lambda kind, level, silent_for: None)
         self.segmenter = Segmenter(end_silence=end_silence)
         self._halt = threading.Event()
 
@@ -169,6 +185,7 @@ class SpeechPipeline(threading.Thread):
     def run(self):
         self.capture.start()
         was_speaking = False
+        last_sound = time.time()
         while not self._halt.is_set():
             try:
                 block = self.capture.q.get(timeout=0.5)
@@ -183,7 +200,12 @@ class SpeechPipeline(threading.Thread):
                     blocks.append(self.capture.q.get_nowait())
             except queue.Empty:
                 pass
-            for utter in self.segmenter.feed(np.concatenate(blocks)):
+            audio = np.concatenate(blocks)
+            now = time.time()
+            if len(audio) and float(np.abs(audio).max()) >= QUIET:
+                last_sound = now
+            self.on_level(self.capture.kind, level_of(audio[-SR // 5:]), now - last_sound)
+            for utter in self.segmenter.feed(audio):
                 t = time.time()
                 try:
                     res = self.recognizer.transcribe(utter, self.langs)

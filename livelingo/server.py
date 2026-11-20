@@ -162,6 +162,10 @@ class Server:
                     if route == "/api/meters":
                         service.set_meters(bool(body.get("on")))
                         return self._json({"ok": True})
+                    if route == "/api/find_mic":
+                        return self._json({"ok": service.find_mic()})
+                    if route == "/api/mic_settings":
+                        return self._json({"ok": service.open_mic_settings()})
                     if route == "/api/download":
                         service.start_download()
                         return self._json({"ok": True})

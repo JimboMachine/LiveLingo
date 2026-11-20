@@ -146,3 +146,40 @@ def has_webview2() -> bool:
         except OSError:
             continue
     return False
+
+
+_MIC_CONSENT = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone"
+
+
+def mic_privacy_blocked() -> bool | None:
+    """Windows 的「麥克風隱私權」是不是把桌面程式擋掉了。被擋的時候麥克風打得開，但收到的全是靜音。
+    True = 擋住了，False = 沒擋，None = 看不出來（不是 Windows，或讀不到設定）。只讀取設定，不會更改。"""
+    if not IS_WIN:
+        return None
+    import winreg
+
+    seen = False
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for sub in (_MIC_CONSENT, _MIC_CONSENT + r"\NonPackaged"):      # 整個麥克風的開關、桌面程式的開關
+            try:
+                with winreg.OpenKey(root, sub) as key:
+                    value = str(winreg.QueryValueEx(key, "Value")[0])
+            except OSError:
+                continue
+            seen = True
+            if value.lower() == "deny":
+                return True
+    return False if seen else None
+
+
+def open_mic_settings() -> bool:
+    """打開 Windows 設定裡的「麥克風隱私權」那一頁。"""
+    if not IS_WIN:
+        return False
+    import os
+
+    try:
+        os.startfile("ms-settings:privacy-microphone")      # noqa: S606
+        return True
+    except OSError:
+        return False

@@ -98,6 +98,9 @@ class Service:
         self.lessons = Lessons(data)      # 使用者教過的整句翻法
         self.terms = TermPack()
         self.audio = audio or RealAudio()
+        from .core import audio as audio_core
+
+        audio_core.log = self.log      # 收音出錯的細節寫進紀錄檔
         self.gpu = {"name": None, "vram_mb": 0, "tier": "cpu"}
         self.mode = {"model": "4b", "engine": "cpu", "quality": "standard"}
         self.fallback = False          # 高品質開不起來，自動退回標準
@@ -106,8 +109,12 @@ class Service:
                                      tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list)
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
-        self.sources = {k: {"on": False, "busy": False, "error": "", "device": "", "speaking": False}
+        # quiet：麥克風開著卻完全沒聲音時是 "silent"，Windows 的隱私權設定擋住時是 "blocked"
+        self.sources = {k: {"on": False, "busy": False, "error": "", "device": "", "speaking": False, "quiet": ""}
                         for k in ("screen", "listen", "mic")}
+        self._vu = {"listen": 0.0, "mic": 0.0}
+        self._vu_sent = 0.0
+        self._finding_mic = False
         self.messages: deque[dict] = deque(maxlen=200)
         self.jobs: queue.Queue = queue.Queue()
         self.window = None             # 視窗控制（window.py 會放進來）
@@ -353,6 +360,8 @@ class Service:
         my, their = self.cfg["my_lang"], self.cfg["their_lang"]
         if msg["who"] == "them":
             return my
+        if LANGS[my]["family"] == LANGS[their]["family"]:
+            return their      # 兩邊是同一種語言（例如繁體和簡體）：我說的一律給對方
         # 我打的字、我說的話：是我的語言就翻成對方的語言，否則翻回我的語言
         return their if msg["lang"] == LANGS[my]["family"] else my
 
@@ -461,13 +470,7 @@ class Service:
             if key in changes:
                 changes[key] = bool(changes[key])
         before = self.cfg.snapshot()
-        # 兩邊選到同一個語言時，自動對調
-        my, their = changes.get("my_lang", before["my_lang"]), changes.get("their_lang", before["their_lang"])
-        if my == their:
-            if "my_lang" in changes and "their_lang" not in changes:
-                changes["their_lang"] = before["my_lang"]
-            else:
-                changes["my_lang"] = before["their_lang"]
+        # 兩邊可以選同一種語言（只想要字幕，或是繁體和簡體互轉），不會自動對調
         self.cfg.set(**changes)
         after = self.cfg.snapshot()
         self.hub.publish("config", after)
@@ -631,7 +634,7 @@ class Service:
 
     def _voice_langs(self, key: str) -> list[str]:
         my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
-        return [their] if key == "listen" else [my, their]
+        return [their] if key == "listen" else list(dict.fromkeys([my, their]))
 
     def _start_voice(self, key: str) -> None:
         kind = VOICE_KIND[key]
@@ -645,26 +648,50 @@ class Service:
                     raise RuntimeError("the speech model is missing")
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]))
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
-            capture = self.audio.capture(
-                kind, device, on_error=self._voice_error,
-                on_open=lambda k, name: self._source(SOURCE_OF[k], device=name))
+            capture = self.audio.capture(kind, device, on_error=self._voice_error, on_open=self._voice_opened)
             pipe = SpeechPipeline(capture, self.recognizer, self._voice_langs(key),
                                   on_text=self._on_speech, on_state=self._on_speaking,
-                                  end_silence=float(self.cfg["end_silence"]))
+                                  end_silence=float(self.cfg["end_silence"]), on_level=self._on_level)
             old = self.pipelines.pop(key, None)
             if old:
                 old.stop()
             pipe.start()
             self.pipelines[key] = pipe
-            self._source(key, on=True, busy=False)
+            self._source(key, on=True, busy=False, quiet="")
         except Exception as ex:  # noqa: BLE001
+            from .core.audio import describe
+
             self.log(traceback.format_exc())
-            self._source(key, on=False, busy=False, error=str(ex))
+            self._source(key, on=False, busy=False, error=describe(ex))
 
     def _stop_voice(self, key: str) -> None:
         pipe = self.pipelines.pop(key, None)
         if pipe:
             pipe.stop()
+        self._vu[key] = 0.0
+        self.hub.publish("vu", dict(self._vu))
+
+    def _voice_opened(self, kind: str, name: str) -> None:
+        self.log(f"{kind} capture opened: {name}")
+        self._source(SOURCE_OF[kind], device=name)
+
+    def _on_level(self, kind: str, level: float, silent_for: float) -> None:
+        """收音管線每收到一批聲音就回報一次：畫音量條，並且注意麥克風是不是一直完全沒聲音。"""
+        key = SOURCE_OF[kind]
+        self._vu[key] = round(level, 2)
+        now = time.time()
+        if now - self._vu_sent >= 0.15:
+            self._vu_sent = now
+            self.hub.publish("vu", dict(self._vu))
+        if key != "mic":
+            return          # 電腦沒在播聲音是正常的，只有麥克風完全沒聲音才需要提醒
+        quiet = self.sources["mic"]["quiet"]
+        if silent_for >= 6 and not quiet:
+            blocked = oswin.mic_privacy_blocked()
+            self.log(f"mic is silent for {silent_for:.0f}s on {self.sources['mic']['device']!r}, privacy blocked: {blocked}")
+            self._source("mic", quiet="blocked" if blocked else "silent")
+        elif silent_for < 1 and quiet:
+            self._source("mic", quiet="")
 
     def _restart_voice(self, key: str) -> None:
         self._stop_voice(key)
@@ -674,10 +701,13 @@ class Service:
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
             return
-        if lang == "zh" and "zh-TW" in (self.cfg["my_lang"], self.cfg["their_lang"]):
-            from .core.translate import _to_traditional
+        if lang == "zh":
+            from .core.translate import to_script
 
-            text = _to_traditional.convert(text)      # 語音辨識有時會給簡體字
+            # 語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一
+            speaker, other = ((self.cfg["their_lang"], self.cfg["my_lang"]) if kind == "loopback"
+                              else (self.cfg["my_lang"], self.cfg["their_lang"]))
+            text = to_script(text, speaker if LANGS[speaker]["family"] == "zh" else other)
         self.submit("heard" if kind == "loopback" else "spoken", text, lang)
 
     def _on_speaking(self, kind: str, speaking: bool) -> None:
@@ -687,7 +717,7 @@ class Service:
         key = SOURCE_OF[kind]
         self.log(f"{kind} capture failed: {ex!r}")
         self._stop_voice(key)
-        self._source(key, on=False, busy=False, speaking=False, error=str(ex))
+        self._source(key, on=False, busy=False, speaking=False, quiet="", error=str(ex) or type(ex).__name__)
 
     # ------------------------------------------------------------------ 來源：開關
 
@@ -713,9 +743,79 @@ class Service:
             threading.Thread(target=self._start_voice, args=(key,), daemon=True).start()
         else:
             self._stop_voice(key)
-            self._source(key, on=False, speaking=False, error="")
+            self._source(key, on=False, speaking=False, error="", quiet="")
 
     # ------------------------------------------------------------------ 聲音裝置
+
+    def find_mic(self) -> bool:
+        """「自動找麥克風」：同時聽所有麥克風幾秒，使用者說話時最大聲的那一支就是他在用的，直接換過去。"""
+        if self._finding_mic:
+            return False
+        self._finding_mic = True
+        threading.Thread(target=self._find_mic, daemon=True, name="find-mic").start()
+        return True
+
+    def _find_mic(self, seconds: float = 5.0) -> None:
+        import numpy as np
+
+        from .core.speech import QUIET
+
+        try:
+            try:
+                mics = self.audio.devices()["microphones"][:8]
+            except Exception as ex:  # noqa: BLE001
+                self.log(traceback.format_exc())
+                self.hub.publish("find_mic", {"state": "none", "error": str(ex), "blocked": False, "count": 0})
+                return
+            self.hub.publish("find_mic", {"state": "listening", "seconds": seconds})
+            captures = []
+            for mic in mics:
+                try:
+                    cap = self.audio.capture("mic", mic["id"])
+                    cap.start()
+                    captures.append((mic, cap))
+                except Exception:  # noqa: BLE001
+                    self.log(traceback.format_exc())
+            loud: dict[str, list[float]] = {mic["id"]: [] for mic, _ in captures}
+            end = time.time() + seconds
+            while time.time() < end and not self.closing.is_set():
+                time.sleep(0.1)
+                for mic, cap in captures:
+                    try:
+                        while True:
+                            block = cap.q.get_nowait()
+                            if len(block):
+                                loud[mic["id"]].append(float(np.sqrt(np.mean(np.square(block)))))
+                    except queue.Empty:
+                        pass
+            for _, cap in captures:
+                cap.stop()
+
+            def score(values: list[float]) -> float:
+                """說話時的音量：最大聲的那五分之一的平均（整段平均會被沒說話的時間拉低）。"""
+                top = sorted(values, reverse=True)[: max(1, len(values) // 5)]
+                return sum(top) / len(top) if top else 0.0
+
+            scores = {mic["id"]: score(loud[mic["id"]]) for mic, _ in captures}
+            self.log("find mic: " + "; ".join(f"{mic['name']} = {scores[mic['id']]:.4f}" for mic, _ in captures))
+            best = max(captures, key=lambda mc: scores[mc[0]["id"]], default=None)
+            if best is None or scores[best[0]["id"]] < QUIET * 4:
+                self.hub.publish("find_mic", {"state": "none", "blocked": bool(oswin.mic_privacy_blocked()),
+                                              "count": len(mics)})
+                return
+            mic = best[0]
+            changed = self.sources["mic"]["device"] != mic["name"] or not self.sources["mic"]["on"]
+            self.update_config({"mic_device": mic["id"], "mic_name": mic["name"]})
+            if not self.sources["mic"]["on"]:
+                self.set_source("mic", True)
+            elif self.sources["mic"]["device"] != mic["name"] and self.cfg["mic_device"] == mic["id"]:
+                self._restart_voice("mic")
+            self.hub.publish("find_mic", {"state": "found", "name": mic["name"], "changed": changed})
+        finally:
+            self._finding_mic = False
+
+    def open_mic_settings(self) -> bool:
+        return oswin.open_mic_settings()
 
     def devices(self) -> dict:
         try:

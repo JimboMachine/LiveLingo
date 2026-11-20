@@ -17,7 +17,7 @@ from pathlib import Path
 
 def run(out: Path, window: bool = True) -> int:
     results: dict = {}
-    soft = {"audio_devices", "screen_grab", "engine_online"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
+    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
 
     def check(name, fn):
         started = time.time()
@@ -111,6 +111,27 @@ def run(out: Path, window: bool = True) -> int:
 
         found = RealAudio().devices()
         return {"speakers": len(found["speakers"]), "microphones": len(found["microphones"])}
+
+    def second_mic_way():
+        """第二種收音方式（麥克風的備援）在打包後也載得起來。"""
+        import sounddevice as sd
+
+        return {"version": sd.__version__, "interfaces": [a["name"] for a in sd.query_hostapis()]}
+
+    def mic_capture():
+        """有麥克風的電腦上真的收一秒聲音，記下用的是哪一種方式。"""
+        import time
+
+        from .core.audio import Capture
+
+        errors = []
+        cap = Capture("mic", on_error=lambda kind, ex: errors.append(str(ex)))
+        cap.start()
+        time.sleep(2.0)
+        cap.stop()
+        if errors:
+            raise RuntimeError(errors[0])
+        return {"device": cap.device_name, "way": cap.backend, "blocks": cap.q.qsize()}
 
     def screen_grab():
         import mss
@@ -238,6 +259,8 @@ def run(out: Path, window: bool = True) -> int:
     check("ocr_builtin", ocr_builtin)
     check("speech_parts", speech_parts)
     check("audio_devices", audio_devices)
+    check("second_mic_way", second_mic_way)
+    check("mic_capture", mic_capture)
     check("screen_grab", screen_grab)
     check("floating_chat", floating_chat)
     check("gpu", gpu_detect)
