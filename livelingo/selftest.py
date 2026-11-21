@@ -270,6 +270,7 @@ def run(out: Path, window: bool = True) -> int:
 
     if window and "service" in state:
         from . import window as window_mod
+        from .config import UI_LANGS
 
         service, srv = state["service"], state["server"]
         info: dict = {}
@@ -287,7 +288,7 @@ def run(out: Path, window: bool = True) -> int:
                         break
                     time.sleep(0.5)
                 info["wizard_text"] = text[:80]
-                info["cards"] = win.evaluate_js("document.querySelectorAll('.ui-lang').length")
+                info["cards"] = win.evaluate_js("document.querySelectorAll('.ui-langs button').length")      # 介面語言的按鈕
                 time.sleep(0.5)
                 info["has_window_ctl"] = service.window is not None
                 if service.window:
@@ -317,7 +318,7 @@ def run(out: Path, window: bool = True) -> int:
         started = time.time()
         opened = window_mod._run_webview(srv.url, service, on_loaded)
         ok = bool(opened and done.is_set() and "error" not in info and len(info.get("wizard_text", "")) > 20
-                  and info.get("cards") == 4 and info.get("has_window_ctl"))
+                  and info.get("cards") == len(UI_LANGS) and info.get("has_window_ctl"))
         results["window"] = {"ok": ok, "info": info, "opened": opened, "seconds": round(time.time() - started, 2)}
         if not ok and "error" in info:
             results["window"]["error"] = info["error"]
