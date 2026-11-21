@@ -6,4 +6,5 @@ pillow>=10.1
 opencc-python-reimplemented==0.1.7
 faster-whisper==1.2.1
 soundcard>=0.4.4
+sounddevice>=0.5
 pywebview==6.2.1

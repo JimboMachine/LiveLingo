@@ -162,12 +162,24 @@ class Server:
                     if route == "/api/meters":
                         service.set_meters(bool(body.get("on")))
                         return self._json({"ok": True})
+                    if route == "/api/find_mic":
+                        if body.get("cancel"):
+                            service.cancel_find_mic()
+                            return self._json({"ok": True})
+                        return self._json({"ok": service.find_mic()})
+                    if route == "/api/mic_settings":
+                        return self._json({"ok": service.open_mic_settings()})
                     if route == "/api/download":
                         service.start_download()
                         return self._json({"ok": True})
                     if route == "/api/fix":
                         ok = service.fix(int(body.get("id") or 0), str(body.get("src") or ""), str(body.get("dst") or ""))
                         return self._json({"ok": ok})
+                    if route == "/api/teach":
+                        return self._json({"ok": service.teach(int(body.get("id") or 0), str(body.get("text") or "")[:500])})
+                    if route == "/api/lessons/remove":
+                        service.lesson_remove(str(body.get("src") or ""), str(body.get("target") or ""))
+                        return self._json({"ok": True})
                     if route == "/api/glossary/add":
                         return self._json({"ok": service.glossary_add(str(body.get("src") or ""), str(body.get("dst") or ""))})
                     if route == "/api/glossary/remove":
@@ -191,6 +203,9 @@ class Server:
                         return self._json({"ok": True, **service.overlay.state()})
                     if route == "/api/focus":
                         service.focus()
+                        return self._json({"ok": True})
+                    if route == "/api/update":
+                        service.update_choice(str(body.get("choice") or ""))
                         return self._json({"ok": True})
                     if route == "/api/retry":
                         threading.Thread(target=service._prepare, daemon=True).start()

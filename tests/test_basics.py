@@ -6,9 +6,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from livelingo import assets, gpu, updater
-from livelingo.config import Config, Glossary
+from livelingo.config import Config, Glossary, Lessons
 from livelingo.core.romanize import romanize
-from livelingo.core.translate import _leftover, apply_glossary, build_prompt, detect_language
+from livelingo.core.translate import (Translator, _leftover, apply_glossary, build_prompt, detect_language, salvage,
+                                      sentence_kind, similarity, tidy, with_end_mark)
 from livelingo.core.watcher import wanted
 from livelingo.terms import TermPack
 
@@ -82,6 +83,107 @@ def test_leftover_and_detection():
     assert detect_language("我先去吃飯") == "zh"
     assert detect_language("gg wp") == "en"
     assert detect_language("123 !!") is None
+
+
+def test_statement_stays_a_statement():
+    assert sentence_kind("我先去洗澡", "zh") == "statement"
+    assert sentence_kind("我們打龍吧", "zh") == "statement"
+    assert sentence_kind("你吃飯了嗎", "zh") == "question"
+    assert sentence_kind("你在哪？", "zh") == "question"
+    assert sentence_kind("你吃饭了吗", "zh") == "question" and sentence_kind("你在干什么", "zh") is None      # 簡體字
+    assert sentence_kind("你在幹什麼", "zh") is None                         # 有疑問詞但沒有問號：不猜
+    assert sentence_kind("밥 먹었어", "ko") == "statement" and sentence_kind("밥 먹었어?", "ko") == "question"
+    assert sentence_kind("뭐해", "ko") is None and sentence_kind("같이 할까", "ko") is None      # 疑問詞、疑問語尾：不猜
+    assert sentence_kind("I am home", "en") is None and sentence_kind("I am home.", "en") == "statement"
+    assert with_end_mark("밥 먹었어", "ko", "statement") == "밥 먹었어."
+    assert with_end_mark("트롤이네 ㅋㅋ", "ko", "statement") == "트롤이네 ㅋㅋ"
+    assert with_end_mark("我先去洗澡", "zh", "statement") == "我先去洗澡。"
+    assert with_end_mark("你吃飯了嗎", "zh", "question") == "你吃飯了嗎？"
+    assert with_end_mark("我先去洗澡！", "zh", "statement") == "我先去洗澡！"    # 已經有標點就不動
+    assert with_end_mark("뭐해", "ko", None) == "뭐해"
+    full = build_prompt("我先去洗澡。", "zh", "ko", {}, "casual", [])
+    assert "A statement stays a statement" in full
+    assert "Translate faithfully" not in build_prompt("我先去洗澡。", "zh", "ko", {}, "casual", [], style="plain")
+    assert "방금" in build_prompt("剛剛那波我的錯。", "zh", "ko", {}, "casual", [])      # 常被翻錯的時間詞給提示
+    assert "방금" not in build_prompt("我先去洗澡。", "zh", "ko", {}, "casual", [])
+    taught = build_prompt("我們打巴龍吧。", "zh", "ko", {}, "casual", [], examples=[("我們打龍吧", "우리 용 잡자.")])
+    assert "我們打龍吧 => 우리 용 잡자." in taught
+
+
+def test_cleaning_the_model_output():
+    assert salvage("我觉得 그들이 바텀에 갱을 올 것 같아.", "zh", "ko") == "그들이 바텀에 갱을 올 것 같아."
+    assert salvage("我觉得他们会来抓下路\n그들이 바텀에 올 것 같아.", "zh", "ko") == "그들이 바텀에 올 것 같아."
+    assert not salvage("我觉得他们会来抓下路", "zh", "ko")
+    assert salvage("我們的打野（정글러）太爛了 哈哈", "ko", "zh-TW") == "我們的打野太爛了 哈哈"      # 括號裡的原文註解拿掉
+    assert not salvage("我們的 정글러 太爛了", "ko", "zh-TW")
+    assert tidy("我們打野在送頭ㅋㅋㅋ", "zh-TW") == "我們打野在送頭 哈哈"
+    assert tidy("抱歉ㅠㅠ", "zh-TW") == "抱歉 嗚嗚"
+    assert tidy("ㅋㅋㅋ 좋아", "ko") == "ㅋㅋㅋ 좋아"                            # 翻成韓文時不動
+
+
+class _FakeModel(Translator):
+    """不連模型：照著準備好的答案回話，並記下每次是怎麼問的。"""
+
+    def __init__(self, answers, **kw):
+        super().__init__("http://127.0.0.1:9", **kw)
+        self.answers, self.asked = answers, []
+
+    def _ask(self, text, source, target, hints, examples=None, style="full"):
+        self.asked.append((text, style, list(examples or [])))
+        return self.answers[style] if isinstance(self.answers, dict) else self.answers
+
+
+def test_question_mark_gets_a_second_try():
+    tr = _FakeModel({"full": "먼저 씻으러 갈까?", "short": "먼저 씻으러 갈게."})
+    assert tr.translate("我先去洗澡", "ko", "zh") == "먼저 씻으러 갈게."
+    assert [a[1] for a in tr.asked] == ["full", "short"] and tr.asked[0][0] == "我先去洗澡。"
+    tr = _FakeModel({"full": "밥 먹었어?", "short": "밥 먹었어?"})          # 兩次都是問句：留著第一次的，不亂改
+    assert tr.translate("你吃飯了", "ko", "zh") == "밥 먹었어?"
+    tr = _FakeModel("밥 먹었어?")
+    assert tr.translate("你吃飯了嗎", "ko", "zh") == "밥 먹었어?" and len(tr.asked) == 1      # 本來就是問句：不重翻
+    tr = _FakeModel({"full": "你吃過飯了嗎？", "short": "我吃過飯了。"})      # 朋友的韓文直述句也一樣
+    assert tr.translate("밥 먹었어", "zh-TW", "ko") == "我吃過飯了。" and tr.asked[0][0] == "밥 먹었어."
+
+
+def test_built_in_examples():
+    tr = _FakeModel("우리 용 잡자.")
+    tr.translate("我們打龍吧", "ko", "zh")
+    assert tr.asked[-1][2] == [("我們走吧", "우리 가자.")]                       # 「…吧」的提議：示範用「…자」，不要變成問句
+    tr.translate("他剛剛回家了", "ko", "zh")
+    assert tr.asked[-1][2] == [("我剛剛吃飽了", "나 방금 밥 다 먹었어.")]
+    tr.translate("我今天很累", "ko", "zh")
+    assert tr.asked[-1][2] == []
+    polite = _FakeModel("우리 용 잡아요.", tone="polite")
+    polite.translate("我們打龍吧", "ko", "zh")
+    assert polite.asked[-1][2] == [("我們走吧", "우리 가요.")]                    # 禮貌語氣用禮貌的示範
+    back = _FakeModel("我們走吧")
+    back.translate("우리 가자", "zh-TW", "ko")
+    assert back.asked[-1][2] == []
+
+
+def test_lessons(tmp_path):
+    lessons = Lessons(tmp_path)
+    assert lessons.list() == []
+    assert lessons.add("我們打龍吧", "우리 용 잡자.", "zh", "ko")
+    assert lessons.add("나 먼저 잘게", "我先去睡了。", "ko", "zh-TW")
+    assert not lessons.add("", "x", "zh", "ko") and not lessons.add("一樣", "一樣", "zh", "ko")
+    assert lessons.add("我們打龍吧", "용 잡자.", "zh", "ko")                    # 同一句再教一次：換成新的
+    again = Lessons(tmp_path)
+    assert [(i["src"], i["dst"]) for i in again.list()] == [("我們打龍吧", "용 잡자."), ("나 먼저 잘게", "我先去睡了。")]
+
+    tr = _FakeModel("우리 바론 잡자.", lessons=again.list)
+    assert tr.translate("我們打龍吧", "ko", "zh") == "용 잡자." and tr.asked == []          # 一模一樣：直接用，不問模型
+    assert tr.translate("我們打龍吧！", "ko", "zh") == "용 잡자."
+    assert tr.translate("我們打巴龍吧", "ko", "zh") == "우리 바론 잡자."
+    assert tr.asked[-1][2] == [("我們打龍吧", "용 잡자."), ("我們走吧", "우리 가자.")]   # 很像的句子當範例，教過的排前面
+    tr.translate("今天天氣很好", "ko", "zh")
+    assert tr.asked[-1][2] == []                                             # 不像的句子：不給範例，免得帶歪
+    assert tr.taught("나 먼저 잘게", "ko", "ko") == (None, [])                  # 方向不同的不算
+    assert similarity("我們打龍吧", "我們打巴龍吧") >= 0.5 > similarity("我們打龍吧", "今天天氣很好")
+    again.remove("我們打龍吧", "ko")
+    assert tr.taught("我們打龍吧", "zh", "ko") == (None, [("我們走吧", "우리 가자.")])
+    (tmp_path / "lessons.json").write_text("{ broken", encoding="utf-8")
+    assert Lessons(tmp_path).list() == []
 
 
 def test_screen_line_filter():
@@ -246,4 +348,227 @@ def test_floating_chat_lifecycle(tmp_path):
     finally:
         service.update_config({"overlay": False})
     assert not overlay.running
+    service.shutdown()
+
+
+def test_microphone_second_way(monkeypatch):
+    """第一種收音方式打不開麥克風時，自動改用第二種；兩種都不行才回報錯誤，而且錯誤一定有內容。"""
+    import sys
+    import time
+    import types
+
+    import numpy as np
+
+    from livelingo.core import audio
+
+    def broken(self):
+        assert 1 == 2          # 沒有訊息的錯誤，就像收音元件遇到不認得的麥克風格式
+
+    monkeypatch.setattr(audio.Capture, "_run_soundcard", broken)
+
+    class Stream:
+        def __init__(self, callback=None, device=None, **kw):
+            self.callback, self.device = callback, device
+
+        def __enter__(self):
+            self.callback(np.full((audio.BLOCK, 1), 0.25, dtype=np.float32), audio.BLOCK, None, None)
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    devices = [{"name": "Speakers (Realtek(R) Audio)", "max_input_channels": 0},
+               {"name": "Microphone (HD Webcam C270)", "max_input_channels": 1},
+               {"name": "麥克風 (HyperX Cloud II)", "max_input_channels": 1}]
+    apis = [{"name": "Windows WASAPI", "devices": [0, 1, 2], "default_input_device": 1},
+            {"name": "MME", "devices": [0, 1, 2], "default_input_device": 1}]
+    fake = types.SimpleNamespace(InputStream=Stream, query_devices=lambda: devices, query_hostapis=lambda: apis)
+    monkeypatch.setitem(sys.modules, "sounddevice", fake)
+    assert audio.portaudio_input(fake, "麥克風 (HyperX Cloud II) 加上被截掉的名稱") == (2, "麥克風 (HyperX Cloud II)")
+    assert audio.portaudio_input(fake, None) == (1, "Microphone (HD Webcam C270)")
+
+    opened, errors, logged = [], [], []
+    monkeypatch.setattr(audio, "log", logged.append)
+    cap = audio.Capture("mic", on_error=lambda kind, ex: errors.append(str(ex)), on_open=lambda kind, name: opened.append(name))
+    cap.start()
+    block = cap.q.get(timeout=3)
+    cap.stop()
+    cap.join(3)
+    assert cap.backend == "portaudio" and opened == ["Microphone (HD Webcam C270)"] and not errors
+    assert float(block[0]) == 0.25 and "AssertionError" in logged[0] and "assert 1 == 2" in logged[0]
+
+    def also_broken(self):
+        raise OSError("device is busy")
+
+    monkeypatch.setattr(audio.Capture, "_run_portaudio", also_broken)
+    cap = audio.Capture("mic", on_error=lambda kind, ex: errors.append(str(ex)))
+    cap.start()
+    cap.join(3)
+    assert len(errors) == 1 and "AssertionError" in errors[0] and "device is busy" in errors[0]
+    errors.clear()
+    cap = audio.Capture("loopback", on_error=lambda kind, ex: errors.append(str(ex)))      # 電腦的聲音沒有第二種方式
+    cap.start()
+    cap.join(3)
+    assert len(errors) == 1 and errors[0].startswith("AssertionError")
+    assert audio.describe(ValueError("bad")) == "ValueError: bad"
+    time.sleep(0)
+
+
+def test_quiet_microphone_and_levels():
+    import numpy as np
+
+    from livelingo.core.audio import BLOCK, SR, ArrayCapture
+    from livelingo.core.speech import QUIET, SpeechPipeline, level_of
+
+    assert level_of(np.zeros(1600, dtype=np.float32)) == 0.0
+    assert level_of(np.full(1600, 0.5, dtype=np.float32)) == 1.0
+    assert 0.3 < level_of(np.full(1600, 0.01, dtype=np.float32)) < 0.5
+    assert QUIET < 0.003
+
+    seen = []
+    cap = ArrayCapture("mic", np.concatenate([np.full(BLOCK * 3, 0.2, dtype=np.float32), np.zeros(SR, dtype=np.float32)]))
+    pipe = SpeechPipeline.__new__(SpeechPipeline)      # 不載入語音模型，只看音量回報
+    import threading
+    threading.Thread.__init__(pipe, daemon=True)
+    pipe.capture, pipe.recognizer, pipe.langs = cap, None, ["zh"]
+    pipe.on_text = pipe.on_state = lambda *a: None
+    pipe.on_level = lambda kind, level, silent_for: seen.append((kind, level, silent_for))
+    pipe._halt = threading.Event()
+    pipe.segmenter = type("S", (), {"speaking": False, "feed": lambda self, audio: []})()
+    pipe.start()
+    import time
+    deadline = time.time() + 5
+    while time.time() < deadline and not (len(seen) >= 2 and seen[-1][1] == 0.0 and seen[-1][2] > 0.2):
+        time.sleep(0.05)
+    pipe.stop()
+    assert seen[0][0] == "mic" and max(level for _, level, _ in seen) > 0.8      # 有聲音的那一段
+    assert seen[-1][1] == 0.0 and seen[-1][2] > 0.2                             # 之後一直沒聲音，秒數會累加
+
+
+def test_find_my_microphone(tmp_path):
+    """「自動找麥克風」：說話時最大聲的那一支會被選起來；全部沒聲音就回報找不到。"""
+    import numpy as np
+
+    from livelingo.core.audio import SR, ArrayCapture
+    from livelingo.service import Service
+
+    class Audio:
+        loud = "mic-headset"
+
+        def devices(self):
+            return {"speakers": [], "microphones": [{"id": "mic-webcam", "name": "Webcam", "default": True},
+                                                     {"id": "mic-headset", "name": "Headset", "default": False}]}
+
+        def capture(self, kind, device, on_error=None, on_open=None):
+            level = 0.2 if device == self.loud else 0.0
+            return ArrayCapture(kind, np.full(SR * 3, level, dtype=np.float32), realtime=False)
+
+    service = Service(tmp_path, audio=Audio())
+    events = []
+    service.hub.publish = lambda name, data: events.append((name, data))
+    service.set_source = lambda key, on: events.append(("set_source", (key, on)))
+    service._find_mic(seconds=0.4)
+    found = [d for name, d in events if name == "find_mic"]
+    assert found[0]["state"] == "listening"
+    assert found[-1] == {"state": "found", "name": "Headset", "changed": True, "previous": {"id": None, "name": ""}}
+    assert service.cfg["mic_device"] == "mic-headset" and ("set_source", ("mic", True)) in events
+    events.clear()
+    Audio.loud = "nothing"
+    service._find_mic(seconds=0.4)
+    last = [d for name, d in events if name == "find_mic"][-1]
+    assert last["state"] == "none" and last["count"] == 2 and last["blocked"] is False
+    events.clear()
+    Audio.loud = "mic-webcam"
+    service._find_cancel.set()                                   # 按了取消：不換麥克風
+    service._find_mic(seconds=0.4)
+    assert [d for name, d in events if name == "find_mic"][-1] == {"state": "cancelled"}
+    assert service.cfg["mic_device"] == "mic-headset"
+    service.shutdown()
+
+
+def test_same_language_and_simplified_chinese(tmp_path):
+    from livelingo.core.translate import LANGS, to_script
+    from livelingo.service import Service
+
+    assert LANGS["zh-CN"]["family"] == "zh"
+    assert to_script("这个软件很好用", "zh-TW") == "這個軟體很好用"
+    assert to_script("這個軟體很好用", "zh-CN") == "这个软件很好用"
+    assert to_script("안녕", "ko") == "안녕"
+
+    tr = _FakeModel("我去上路。")
+    assert tr.translate("这个软件很好用", "zh-TW", "zh") == "這個軟體很好用" and tr.asked == []      # 簡體變繁體不用問模型
+    assert tr.translate("我們打龍吧", "zh-CN", "zh") == "我们打龙吧"
+    assert tr.translate("탑 갈게", "zh-CN", "ko") == "我去上路。"
+    assert "Simplified Chinese (zh-CN)" in build_prompt("탑 갈게", "ko", "zh-CN", {}, "casual", [])
+    assert tidy("抱歉ㅠㅠ", "zh-CN") == "抱歉 呜呜"
+
+    pack = TermPack()
+    assert ("점멸", "闪现") in pack.find("점멸 없어", "ko", "zh-CN")                 # 建議的譯法跟著變簡體
+    assert ("闪现", "점멸") in pack.find("对面没有闪现", "zh", "ko")                 # 簡體的原文也認得遊戲用語
+    assert ("閃現", "점멸") in pack.find("對面沒有閃現", "zh", "ko")
+
+    service = Service(tmp_path)
+    service.update_config({"my_lang": "zh-TW", "their_lang": "zh-TW"})                 # 兩邊一樣：不再自動對調
+    assert (service.cfg["my_lang"], service.cfg["their_lang"]) == ("zh-TW", "zh-TW")
+    assert service._voice_langs("mic") == ["zh"]
+    service.update_config({"their_lang": "zh-CN"})
+    assert (service.cfg["my_lang"], service.cfg["their_lang"]) == ("zh-TW", "zh-CN")
+    assert service._target_for({"who": "me", "lang": "zh"}) == "zh-CN"                  # 我說的給對方看：變簡體
+    assert service._target_for({"who": "them", "lang": "zh"}) == "zh-TW"                # 對方說的給我看：變繁體
+    service.update_config({"their_lang": "ko"})
+    assert service._target_for({"who": "me", "lang": "zh"}) == "ko" and service._target_for({"who": "me", "lang": "ko"}) == "zh-TW"
+    service.update_config({"their_lang": "klingon"})
+    assert service.cfg["their_lang"] == "ko"
+    service.shutdown()
+
+
+def test_update_asks_first(tmp_path, monkeypatch):
+    """有新版本時先問：選「這次先不要」不下載、照常使用；選「現在更新」才裝；下載到一半可以取消。"""
+    from livelingo import updater as up
+    from livelingo.service import Service
+
+    info = {"version": "9.9.9", "url": "http://example.invalid/x.exe", "size": 0, "sha256": ""}
+    calls = []
+    monkeypatch.setattr(up, "enabled", lambda: True)
+    monkeypatch.setattr(up, "check", lambda timeout=8: info)
+    monkeypatch.setattr(up, "launch_installer", lambda path: calls.append(("install", path.name)))
+
+    def download(info, folder, progress=None, cancel=None):
+        calls.append(("download", bool(cancel and cancel())))
+        return folder / "LiveLingo-Setup-9.9.9.exe"
+
+    monkeypatch.setattr(up, "download", download)
+
+    def boot(choice):
+        service = Service(tmp_path)
+        phases = []
+        service.set_phase = lambda phase, **detail: phases.append((phase, detail.get("step")))
+        service.exit_now = lambda: calls.append(("exit",))
+        service.update_choice(choice)
+        result = service._update_if_needed()
+        service.shutdown()
+        return result, phases
+
+    done, phases = boot("later")
+    assert done is False and calls == [] and phases[-1] == ("updating", "ask")
+    assert not (tmp_path / "update.json").exists()                     # 沒有記成「試過了」，下次開啟還會再問
+
+    def cancelled_download(info, folder, progress=None, cancel=None):
+        service_stop.set()
+        raise up.DownloadError("cancelled")
+
+    done, phases = boot("now")
+    assert done is True and [c[0] for c in calls] == ["download", "install", "exit"]
+    assert ("updating", "installing") in phases
+    calls.clear()
+    (tmp_path / "update.json").unlink()
+
+    service = Service(tmp_path)                                         # 下載到一半按取消：不安裝、不算失敗
+    service_stop = service._update_stop
+    notices = []
+    service.notice = lambda code, **kw: notices.append(code)
+    service.set_phase = lambda phase, **detail: None
+    monkeypatch.setattr(up, "download", cancelled_download)
+    service.update_choice("now")
+    assert service._update_if_needed() is False and calls == [] and notices == []
     service.shutdown()

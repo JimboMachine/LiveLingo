@@ -76,6 +76,47 @@ def _pick(devices: list, wanted: str):
     return None
 
 
+log = lambda text: None      # noqa: E731  程式主體會換成真的紀錄函式
+
+
+def describe(ex: BaseException) -> str:
+    """把錯誤變成看得懂的一行字。有些錯誤（例如 AssertionError）本身沒有訊息，就補上是哪一行出的錯，
+    不然介面上只會看到開關自己跳回去，完全不知道為什麼。"""
+    text = f"{type(ex).__name__}: {ex}" if str(ex) else type(ex).__name__
+    if not str(ex) and ex.__traceback__ is not None:
+        import traceback
+
+        frame = traceback.extract_tb(ex.__traceback__)[-1]
+        text += f" ({frame.filename.replace(chr(92), '/').rsplit('/', 1)[-1]}:{frame.lineno} {frame.line or ''})".rstrip()
+    return text
+
+
+def portaudio_input(sd, wanted: str | None):
+    """在第二種收音方式（PortAudio）裡找麥克風：回傳 (裝置編號, 名稱)。
+    用 Windows 最舊、相容性最好的 MME 介面，它的裝置名稱最多 31 個字，所以用「開頭一樣」來比對。
+    找不到指定的那支就用預設的麥克風。"""
+    devices = sd.query_devices()
+    apis = sd.query_hostapis()
+    order = sorted(range(len(apis)), key=lambda i: {"MME": 0, "Windows DirectSound": 1}.get(apis[i]["name"], 2))
+    for i in order:
+        api = apis[i]
+        if api["name"] == "Windows WDM-KS":      # 這個介面常常要獨占裝置，不用
+            continue
+        inputs = [d for d in api["devices"] if devices[d]["max_input_channels"] > 0]
+        if wanted:
+            low = wanted.lower()
+            for d in inputs:
+                name = devices[d]["name"].lower()
+                if name and (name == low or low.startswith(name) or name.startswith(low)):
+                    return d, devices[d]["name"]
+        default = api.get("default_input_device", -1)
+        if default in inputs:
+            return default, devices[default]["name"]
+        if inputs:
+            return inputs[0], devices[inputs[0]]["name"]
+    raise RuntimeError("no microphone found")
+
+
 class Capture(threading.Thread):
     def __init__(self, kind: str, on_error=None, device: str | None = None, on_open=None):
         super().__init__(daemon=True)
@@ -85,6 +126,8 @@ class Capture(threading.Thread):
         self.on_open = on_open or (lambda kind, name: None)   # 成功開始收音時通知（帶裝置名稱）
         self.q: queue.Queue = queue.Queue(maxsize=600)   # 最多積 60 秒
         self.device_name = ""
+        self.backend = ""                   # 實際用哪一種方式收到聲音：soundcard 或 portaudio
+        self.delivered = False              # 有沒有收到過聲音資料
         self._halt = threading.Event()
 
     def stop(self):
@@ -101,30 +144,71 @@ class Capture(threading.Thread):
             devices = sc.all_microphones()
             wanted = self.device or sc.default_microphone().id
         dev = _pick(devices, wanted)
+        if dev is None and self.device:
+            # 之前選的裝置現在不見了（拔掉、換了插孔）：改用 Windows 預設的，不要整個開不起來
+            fallback = sc.default_speaker().id if self.kind == "loopback" else sc.default_microphone().id
+            dev = _pick(devices, fallback)
         if dev is None:
             raise RuntimeError(f"audio device not found: {wanted}")
         return dev
 
+    def _push(self, block: np.ndarray) -> None:
+        self.delivered = True
+        try:
+            self.q.put_nowait(block)
+        except queue.Full:      # 辨識跟不上就丟掉最舊的
+            try:
+                self.q.get_nowait()
+            except queue.Empty:
+                pass
+
+    def _run_soundcard(self) -> None:
+        warnings.filterwarnings("ignore", message=".*data discontinuity.*")
+        dev = self._open()
+        self.device_name = getattr(dev, "name", "")
+        with dev.recorder(samplerate=SR, channels=1, blocksize=BLOCK) as rec:
+            self.backend = "soundcard"
+            self.on_open(self.kind, self.device_name)
+            while not self._halt.is_set():
+                data = rec.record(numframes=BLOCK)
+                self._push(np.ascontiguousarray(data[:, 0], dtype=np.float32))
+
+    def _run_portaudio(self) -> None:
+        """第二種收音方式。只收得到麥克風（收不到電腦播放的聲音），當第一種打不開麥克風時的備援。"""
+        import sounddevice as sd
+
+        index, name = portaudio_input(sd, self.device_name or None)
+
+        def callback(indata, frames, when, status):  # noqa: ARG001
+            self._push(np.ascontiguousarray(indata[:, 0], dtype=np.float32))
+
+        with sd.InputStream(samplerate=SR, channels=1, dtype="float32", blocksize=BLOCK, device=index,
+                            callback=callback):
+            self.device_name = name
+            self.backend = "portaudio"
+            self.on_open(self.kind, name)
+            while not self._halt.wait(0.2):
+                pass
+
     def run(self):
         try:
-            warnings.filterwarnings("ignore", message=".*data discontinuity.*")
-            dev = self._open()
-            self.device_name = getattr(dev, "name", "")
-            with dev.recorder(samplerate=SR, channels=1, blocksize=BLOCK) as rec:
-                self.on_open(self.kind, self.device_name)
-                while not self._halt.is_set():
-                    data = rec.record(numframes=BLOCK)
-                    block = np.ascontiguousarray(data[:, 0], dtype=np.float32)
-                    try:
-                        self.q.put_nowait(block)
-                    except queue.Full:      # 辨識跟不上就丟掉最舊的
-                        try:
-                            self.q.get_nowait()
-                        except queue.Empty:
-                            pass
+            self._run_soundcard()
+            return
+        except Exception as ex:  # noqa: BLE001
+            if self._halt.is_set():
+                return
+            first = describe(ex)
+            log(f"{self.kind} capture ({self.device or 'default'}) failed: {first}")
+            if self.kind != "mic" or self.delivered:      # 收到一半才斷掉（裝置被拔掉）就不換方式重來
+                self.on_error(self.kind, RuntimeError(first))
+                return
+        try:
+            self._run_portaudio()
         except Exception as ex:  # noqa: BLE001
             if not self._halt.is_set():
-                self.on_error(self.kind, ex)
+                second = describe(ex)
+                log(f"mic capture, second way, failed too: {second}")
+                self.on_error(self.kind, RuntimeError(f"{first} / {second}"))
 
 
 class ArrayCapture(threading.Thread):

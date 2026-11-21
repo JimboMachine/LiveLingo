@@ -33,7 +33,9 @@ def load_audio(path: str | None) -> np.ndarray:
         for frame in container.decode(audio=0):
             for f in resampler.resample(frame):
                 out.append(f.to_ndarray().reshape(-1))
-    return np.concatenate(out).astype(np.float32)
+    audio = np.concatenate(out).astype(np.float32)
+    loud = np.flatnonzero(np.abs(audio) > 0.05)      # 錄音開頭常有幾秒空白，直接從有人說話的地方開始
+    return audio[max(0, int(loud[0]) - SR // 4):] if len(loud) else audio
 
 
 class FakeAudio:

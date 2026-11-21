@@ -4,7 +4,7 @@ import queue
 import threading
 import time
 
-import numpy as np
+from .core.speech import level_of
 
 
 class LevelMeters:
@@ -52,10 +52,7 @@ class LevelMeters:
                     if self._levels[group][dev_id] is not None:
                         self._levels[group][dev_id] = peak
                 continue
-            rms = float(np.sqrt(np.mean(np.square(block)))) if len(block) else 0.0
-            # 換算成 0~1：-60 dB 以下當作沒聲音，-10 dB 以上當作滿格
-            db = 20 * np.log10(max(rms, 1e-6))
-            level = float(min(1.0, max(0.0, (db + 60) / 50)))
+            level = level_of(block)
             peak = max(level, peak * 0.7)
             with self._lock:
                 if self._levels[group][dev_id] is not None:
