@@ -6,7 +6,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from livelingo import assets, gpu, updater
-from livelingo.config import Config, Glossary, Lessons
+from livelingo.config import UI_LANGS, Config, Glossary, Lessons
 from livelingo.core.romanize import romanize
 from livelingo.core.translate import (Translator, _leftover, apply_glossary, build_prompt, detect_language, salvage,
                                       sentence_kind, similarity, tidy, with_end_mark)
@@ -203,7 +203,7 @@ def test_romanize():
 
 def test_config_and_glossary(tmp_path):
     cfg = Config(tmp_path)
-    assert cfg["their_lang"] == "ko" and cfg["ui_lang"] in ("zh-TW", "en", "ko", "ja")
+    assert cfg["their_lang"] == "ko" and cfg["ui_lang"] in ("zh-TW", "zh-CN", "en", "ko", "ja")
     cfg.set(their_lang="ja", sources={"screen": True, "listen": False, "mic": False})
     again = Config(tmp_path)
     assert again["their_lang"] == "ja" and again["sources"]["screen"] is True
@@ -222,14 +222,57 @@ def test_ui_languages_are_complete():
     from pathlib import Path
 
     text = (Path(__file__).resolve().parent.parent / "livelingo" / "ui" / "i18n.js").read_text(encoding="utf-8")
-    blocks = re.split(r'\n  "(zh-TW|en|ko|ja)": \{', text)[1:]
+    blocks = re.split(r'\n  "([A-Za-z-]+)": \{', text)[1:]
     keys = {blocks[i]: set(re.findall(r"(?:^|[\s,{])([a-z][a-z0-9_]*): \"", blocks[i + 1])) for i in range(0, len(blocks), 2)}
-    assert set(keys) == {"zh-TW", "en", "ko", "ja"}
+    assert set(keys) == set(UI_LANGS)
     for lang, found in keys.items():
         assert found == keys["zh-TW"], (lang, found ^ keys["zh-TW"])
     app = (Path(__file__).resolve().parent.parent / "livelingo" / "ui" / "app.js").read_text(encoding="utf-8")
     used = {k for k in re.findall(r"\bt\(\"([a-z0-9_]+)\"", app) if not k.endswith("_")}   # 結尾是 _ 的是拼出來的
     assert used <= keys["zh-TW"], used - keys["zh-TW"]
+
+
+def test_every_translation_language_has_an_interface():
+    """有什麼翻譯語言，就要有什麼介面：設定、介面文字、語言按鈕、浮動留言和框選畫面都要齊。"""
+    import re
+    from pathlib import Path
+
+    from livelingo import chatpaint, region
+    from livelingo.core.translate import LANGS
+
+    assert set(UI_LANGS) == set(LANGS)
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    app = (ui / "app.js").read_text(encoding="utf-8")
+    buttons = re.search(r"const natives = (\[.*?\]);", app).group(1)
+    pairs = re.search(r"const PAIR_LANGS = (\[.*?\]);", app).group(1)
+    html_langs = re.search(r"const htmlLang = (\{.*?\})", app).group(1)
+    names = (ui / "i18n.js").read_text(encoding="utf-8")
+    for code in LANGS:
+        assert f'"{code}"' in buttons and f'"{code}"' in pairs, code
+        assert f'"{code}":' in html_langs or f"{code}:" in html_langs, code
+        key = {"zh-TW": "zh", "zh-CN": "zhcn"}.get(code, code)
+        assert f"lang_{key}:" in names and (f"short_{key}:" in names or key == "zhcn"), code      # 短名字繁簡共用「中文」
+        for table in (chatpaint.NAMES, chatpaint.HINTS, chatpaint.SAMPLES, region.HINTS, region.FONTS):
+            assert code in table, code
+    # 簡體介面裡不能混進繁體字
+    from opencc import OpenCC
+
+    plain = OpenCC("t2s")
+    block = names.split('\n  "zh-CN": {')[1].split('\n  "en": {')[0]
+    for line in block.splitlines():
+        assert plain.convert(line) == line, line
+
+
+def test_first_run_follows_the_windows_language(monkeypatch):
+    import locale
+
+    from livelingo import config
+
+    monkeypatch.setattr(config.os, "name", "posix")
+    for name, expected in (("zh_CN", "zh-CN"), ("zh_SG", "zh-CN"), ("zh_TW", "zh-TW"), ("zh_HK", "zh-TW"),
+                           ("ko_KR", "ko"), ("ja_JP", "ja"), ("de_DE", "en")):
+        monkeypatch.setattr(locale, "getlocale", lambda name=name: (name, "UTF-8"))
+        assert config.system_ui_lang() == expected, name
 
 
 class _Release(BaseHTTPRequestHandler):

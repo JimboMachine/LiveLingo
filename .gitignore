@@ -10,6 +10,7 @@ build/
 dist/
 *.zip
 packaging/ChineseTraditional.isl
+packaging/ChineseSimplified.isl
 
 # 下載的模型與翻譯引擎（程式第一次開啟時自動下載，不放進 repo）
 models/

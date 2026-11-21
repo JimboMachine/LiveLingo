@@ -71,9 +71,14 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
-          try {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseTraditional.isl" -OutFile packaging\ChineseTraditional.isl -TimeoutSec 60
-          } catch { Write-Host "Traditional Chinese installer texts are unavailable; the installer will use English." }
+          $languages = Join-Path (Split-Path $iscc) "Languages"
+          foreach ($name in "ChineseTraditional", "ChineseSimplified") {
+            if (Test-Path "$languages\$name.isl") { Write-Host "$name installer texts: built into this Inno Setup."; continue }
+            try {
+              Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/$name.isl" -OutFile "packaging\$name.isl" -TimeoutSec 60
+              Write-Host "$name installer texts: downloaded."
+            } catch { Write-Host "$name installer texts are unavailable ($($_.Exception.Message)); the installer will use English for that language." }
+          }
           & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" packaging\installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Item dist\LiveLingo-Setup.exe | Format-List Name, Length

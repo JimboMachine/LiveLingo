@@ -6,7 +6,7 @@ import os
 import threading
 from pathlib import Path
 
-UI_LANGS = ("zh-TW", "en", "ko", "ja")
+UI_LANGS = ("zh-TW", "zh-CN", "en", "ko", "ja")      # 翻譯語言有幾種，介面就有幾種（有測試在看）
 
 DEFAULTS = {
     "ui_lang": None,             # 介面語言；None = 第一次開啟時照 Windows 的語言決定
@@ -63,7 +63,8 @@ def system_ui_lang() -> str:
         pass
     name = (name or "").lower()
     if name.startswith("zh"):
-        return "zh-TW"
+        simplified = any(mark in name for mark in ("cn", "sg", "hans", "simplified"))
+        return "zh-CN" if simplified else "zh-TW"
     if name.startswith("ko"):
         return "ko"
     if name.startswith("ja"):
