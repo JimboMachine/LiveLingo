@@ -35,10 +35,15 @@ ShowLanguageDialog=no
 VersionInfoVersion={#AppVersion}
 
 [Languages]
-#if FileExists(AddBackslash(SourcePath) + "ChineseTraditional.isl")
+; 中文的安裝文字從 Inno Setup 6.5 開始內建；比較舊的版本才用建置時另外下載的檔案
+#if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseTraditional.isl")
+Name: "zhtw"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
+#elif FileExists(AddBackslash(SourcePath) + "ChineseTraditional.isl")
 Name: "zhtw"; MessagesFile: "ChineseTraditional.isl"
 #endif
-#if FileExists(AddBackslash(SourcePath) + "ChineseSimplified.isl")
+#if FileExists(AddBackslash(CompilerPath) + "Languages\ChineseSimplified.isl")
+Name: "zhcn"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+#elif FileExists(AddBackslash(SourcePath) + "ChineseSimplified.isl")
 Name: "zhcn"; MessagesFile: "ChineseSimplified.isl"
 #endif
 Name: "en"; MessagesFile: "compiler:Default.isl"
