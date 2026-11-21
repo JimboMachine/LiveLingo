@@ -512,7 +512,7 @@ class Service:
             self.translator.clear_cache()
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
-        if changed("overlay", "overlay_font", "overlay_backdrop", "overlay_original", "ui_lang", "my_lang"):
+        if changed("overlay", "overlay_font", "overlay_backdrop", "overlay_original", "ui_lang", "my_lang", "their_lang"):
             self.overlay.apply()
             if changed("overlay"):
                 self.hub.publish("overlay", self.overlay.state())

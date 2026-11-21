@@ -25,6 +25,7 @@ body {
   font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased;
 }
 :lang(zh-Hant) body { font-family: "Microsoft JhengHei UI", "Segoe UI", "Malgun Gothic", "Noto Sans CJK TC", system-ui, sans-serif; }
+:lang(zh-Hans) body { font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", "Malgun Gothic", "Noto Sans CJK SC", system-ui, sans-serif; }
 :lang(ko) body { font-family: "Malgun Gothic", "Segoe UI", "Microsoft JhengHei UI", "Noto Sans CJK KR", system-ui, sans-serif; }
 :lang(ja) body { font-family: "Yu Gothic UI", "Meiryo", "Segoe UI", "Malgun Gothic", "Noto Sans CJK JP", system-ui, sans-serif; }
 button, input, select { font: inherit; color: inherit; }
@@ -97,7 +98,8 @@ input::placeholder { color: var(--faint); }
 @keyframes pulse { 50% { opacity: 0.35; } }
 
 .sources { flex: none; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
-.sources-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sources-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }      /* 說明太長時，語言按鈕自己換到下一行，不擠在一起 */
+.sources-head .chip { margin-left: auto; }
 .chip { height: 36px; padding: 0 10px 0 12px; border: 1.5px solid var(--line-2); border-radius: 18px; background: var(--surface); font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; flex: none; }
 .chip[aria-expanded="true"] { border-color: var(--accent); }
 .lang-picker { padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 10px; }
@@ -222,12 +224,6 @@ input::placeholder { color: var(--faint); }
 .gloss .grow-row button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--dim); display: flex; align-items: center; justify-content: center; }
 .gloss .grow-row button:hover { color: var(--danger); }
 .gloss .none { padding: 14px; font-size: 13px; color: var(--dim); border-top: 1px solid var(--line); }
-.ui-langs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.ui-lang { min-height: 64px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
-.ui-lang b { font-size: 15px; }
-.ui-lang span { font-size: 12px; color: var(--dim); }
-.ui-lang[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.ui-lang[aria-pressed="true"] span { color: var(--accent); }
 .pair-select { display: flex; align-items: flex-end; gap: 12px; }
 .pair-select .field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .pair-select label { font-size: 13px; color: var(--dim); }
@@ -296,7 +292,6 @@ input::placeholder { color: var(--faint); }
   .dlstrip { padding: 12px 16px; }
   .wz-split { flex-direction: column; }
   .wz-art { width: auto; }
-  .ui-langs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quality { grid-template-columns: 1fr; }
   .steps .lbl span { display: none; }
   .device .bar { width: 64px; }

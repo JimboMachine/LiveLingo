@@ -26,7 +26,13 @@
   const lk = (code) => (code === "zh-TW" ? "zh" : (code === "zh-CN" ? "zhcn" : code));
   const PAIR_LANGS = ["zh-TW", "zh-CN", "ko", "en", "ja"];      // 可以選的翻譯語言
   const langName = (code) => t("lang_" + lk(code));
-  const langShort = (code) => t("short_" + lk(code));
+  const isChinese = (code) => code.startsWith("zh");
+  // 卡片和輸入框上用的短名字：繁體和簡體都只寫「中文」，免得字太多擠成好幾行；兩邊都是中文時才寫清楚是哪一種
+  function shortNames() {
+    const mine = S.cfg.my_lang, theirs = S.cfg.their_lang, both = isChinese(mine) && isChinese(theirs);
+    const name = (code) => (isChinese(code) ? (both ? langName(code) : t("short_zh")) : t("short_" + code));
+    return { mine: name(mine), theirs: name(theirs) };
+  }
 
   async function post(path, body) {
     try {
@@ -71,7 +77,7 @@
   // ---------------------------------------------------------------- 固定文字
 
   function applyI18n() {
-    const htmlLang = { "zh-TW": "zh-Hant", en: "en", ko: "ko", ja: "ja" }[S.cfg.ui_lang] || "en";
+    const htmlLang = { "zh-TW": "zh-Hant", "zh-CN": "zh-Hans", en: "en", ko: "ko", ja: "ja" }[S.cfg.ui_lang] || "en";
     document.documentElement.lang = htmlLang;
     document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll("[data-i18n-label]").forEach((el) => {
@@ -95,7 +101,7 @@
 
   function sourceHint(key) {
     const s = S.sources[key] || {};
-    const names = { mine: langShort(S.cfg.my_lang), theirs: langShort(S.cfg.their_lang) };
+    const names = shortNames();
     if (s.busy) return t("src_busy");
     if (s.error && !s.on) return t("src_error");
     if (key === "screen") return s.on ? t("screen_on") : t("screen_off");
@@ -197,7 +203,7 @@
         <div class="group"><div class="dim small">${esc(t("my_lang"))}</div><div class="opts">${opts("my_lang", S.cfg.my_lang)}</div></div>
         <div class="foot"><button class="primary" data-act="toggle-langs">${esc(t("done"))}</button></div>`;
     }
-    const names = { mine: langShort(S.cfg.my_lang), theirs: langShort(S.cfg.their_lang) };
+    const names = shortNames();
     $("say-label").textContent = t("say_label", names);
     $("say").placeholder = t("say_placeholder");
   }
@@ -504,10 +510,10 @@
   }
 
   function uiLangsHTML() {
-    const natives = [["zh-TW", "繁體中文"], ["en", "English"], ["ko", "한국어"], ["ja", "日本語"]];
-    return `<div class="ui-langs">${natives.map(([id, native]) => {
+    const natives = [["zh-TW", "繁體中文"], ["zh-CN", "简体中文"], ["en", "English"], ["ko", "한국어"], ["ja", "日本語"]];
+    return `<div class="pills ui-langs">${natives.map(([id, native]) => {      // 一排小按鈕：語言再多也只是多一顆，不會把版面擠開
       const on = S.cfg.ui_lang === id;
-      return `<button class="ui-lang" data-act="ui-lang" data-code="${id}" aria-pressed="${on}"><b>${native}</b><span>${esc(on ? t("using") : t("click_switch"))}</span></button>`;
+      return `<button class="pill tall" data-act="ui-lang" data-code="${id}" aria-pressed="${on}" title="${esc(on ? t("using") : t("click_switch"))}">${native}</button>`;
     }).join("")}</div>`;
   }
 
@@ -586,7 +592,7 @@
   }
 
   function wizardBody() {
-    const names = { mine: langShort(S.cfg.my_lang), theirs: langShort(S.cfg.their_lang) };
+    const names = shortNames();
     if (S.ui.wz === 1) return `<div class="wz-body">${devicesHTML()}</div>`;
     if (S.ui.wz === 2) {
       const r = S.cfg.region;
