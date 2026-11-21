@@ -515,14 +515,14 @@ class Overlay:
 
     def _tile(self, item: dict, width: int, size: int, cfg: dict):
         key = (item["key"], item["version"], width, size, cfg["overlay_original"], cfg["overlay_backdrop"],
-               cfg["ui_lang"], cfg["my_lang"])
+               cfg["ui_lang"], cfg["my_lang"], cfg["their_lang"])
         tile = self._tiles.get(key)
         if tile is None:
             names = chatpaint.NAMES.get(cfg["ui_lang"] or "en", chatpaint.NAMES["en"])
             original = item["original"] if cfg["overlay_original"] and item["original"] != item["text"] else ""
             tile = chatpaint.paint_message(item["kind"], names[item["kind"]], item["text"], width, size,
                                            original=original, backdrop=int(cfg["overlay_backdrop"]),
-                                           japanese=cfg["my_lang"] == "ja")
+                                           han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]))
             if len(self._tiles) > 120:
                 self._tiles.clear()
             self._tiles[key] = tile

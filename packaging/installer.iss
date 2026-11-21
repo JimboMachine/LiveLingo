@@ -38,6 +38,9 @@ VersionInfoVersion={#AppVersion}
 #if FileExists(AddBackslash(SourcePath) + "ChineseTraditional.isl")
 Name: "zhtw"; MessagesFile: "ChineseTraditional.isl"
 #endif
+#if FileExists(AddBackslash(SourcePath) + "ChineseSimplified.isl")
+Name: "zhcn"; MessagesFile: "ChineseSimplified.isl"
+#endif
 Name: "en"; MessagesFile: "compiler:Default.isl"
 #if FileExists(AddBackslash(CompilerPath) + "Languages\Korean.isl")
 Name: "ko"; MessagesFile: "compiler:Languages\Korean.isl"

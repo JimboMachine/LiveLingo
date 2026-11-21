@@ -7,11 +7,12 @@ from pathlib import Path
 
 HINTS = {
     "zh-TW": "按住滑鼠左鍵，把聊天訊息出現的範圍框起來（按 Esc 取消）",
+    "zh-CN": "按住鼠标左键，把聊天消息出现的范围框起来（按 Esc 取消）",
     "en": "Hold the left mouse button and drag a box around the chat messages (Esc to cancel)",
     "ko": "마우스 왼쪽 버튼을 누른 채로 채팅 메시지가 보이는 영역을 드래그하세요 (Esc: 취소)",
     "ja": "マウスの左ボタンを押したまま、チャットのメッセージが出る範囲を囲んでください（Esc でキャンセル）",
 }
-FONTS = {"zh-TW": "Microsoft JhengHei UI", "ko": "Malgun Gothic", "ja": "Yu Gothic UI", "en": "Segoe UI"}
+FONTS = {"zh-TW": "Microsoft JhengHei UI", "zh-CN": "Microsoft YaHei UI", "ko": "Malgun Gothic", "ja": "Yu Gothic UI", "en": "Segoe UI"}
 
 
 def virtual_screen() -> tuple[int, int, int, int]:

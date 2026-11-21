@@ -18,18 +18,21 @@ DIM_COLOR = (214, 214, 224)
 
 NAMES = {
     "zh-TW": {"heard": "對方", "screen": "聊天", "me": "我"},
+    "zh-CN": {"heard": "对方", "screen": "聊天", "me": "我"},
     "en": {"heard": "Them", "screen": "Chat", "me": "Me"},
     "ko": {"heard": "상대", "screen": "채팅", "me": "나"},
     "ja": {"heard": "相手", "screen": "チャット", "me": "自分"},
 }
 HINTS = {
     "zh-TW": "拖曳移動，拖邊緣調整大小。在 LiveLingo 按「完成」或在這裡點兩下結束。",
+    "zh-CN": "拖动可以移动，拖动边缘可以调整大小。在 LiveLingo 按「完成」或在这里双击结束。",
     "en": "Drag to move, drag the edges to resize. Press Done in LiveLingo or double-click here to finish.",
     "ko": "드래그해서 옮기고, 가장자리를 끌어 크기를 조절하세요. LiveLingo에서 완료를 누르거나 여기를 더블클릭하면 끝납니다.",
     "ja": "ドラッグで移動、端をドラッグでサイズ変更。LiveLingo の「完了」を押すか、ここをダブルクリックで終了します。",
 }
 SAMPLES = {
     "zh-TW": [("heard", "打野來一下下路，對面沒有閃現"), ("screen", "這隻蟲的求生慾好強"), ("me", "좋아, 지금 갈게")],
+    "zh-CN": [("heard", "打野来一下下路，对面没有闪现"), ("screen", "这只虫的求生欲好强"), ("me", "좋아, 지금 갈게")],
     "en": [("heard", "Jungle, come bot. They have no Flash."), ("screen", "That bug really wants to live"),
            ("me", "좋아, 지금 갈게")],
     "ko": [("heard", "정글 봇 한 번만 와줘, 상대 점멸 없어"), ("screen", "저 벌레 생존력 진짜 좋네"), ("me", "好，我現在過去")],
@@ -40,6 +43,7 @@ _WINDOWS_FONTS = {
     # 每一類文字依序試這些字型檔（都是 Windows 內建的粗體）
     "cjk": ["msjhbd.ttc", "msjh.ttc", "msyhbd.ttc", "YuGothB.ttc", "meiryob.ttc"],
     "ja": ["YuGothB.ttc", "meiryob.ttc", "msjhbd.ttc", "msjh.ttc"],
+    "sc": ["msyhbd.ttc", "msyh.ttc", "msjhbd.ttc", "msjh.ttc"],      # 簡體字用微軟雅黑，繁體字它也都有
     "ko": ["malgunbd.ttf", "malgun.ttf", "msjhbd.ttc"],
     "latin": ["segoeuib.ttf", "arialbd.ttf", "msjhbd.ttc"],
 }
@@ -77,12 +81,19 @@ def _font(kind: str, size: int):
         return ImageFont.load_default()
 
 
-def _kind(ch: str, japanese: bool) -> str:
+def han_kind(*langs: str | None) -> str:
+    """漢字要用哪一套字型：有日文用日文的，有簡體中文用簡體的，其他用繁體的。"""
+    if "ja" in langs:
+        return "ja"
+    return "sc" if "zh-CN" in langs else "cjk"
+
+
+def _kind(ch: str, han: str) -> str:
     code = ord(ch)
     if 0xAC00 <= code <= 0xD7A3 or 0x1100 <= code <= 0x11FF or 0x3130 <= code <= 0x318F:
         return "ko"
     if code >= 0x2E80:
-        return "ja" if japanese else "cjk"
+        return han
     return "latin"
 
 
@@ -90,7 +101,7 @@ _NO_LINE_START = set("。，、！？；：,.!?;:)]）」』】…~％%")      #
 _TOKEN = re.compile(r"[A-Za-z0-9À-ɏ가-힣'’\-_.,!?:;%()]+|\s+|.", re.S)      # 英文和韓文以「詞」為單位換行
 
 
-def _wrap(parts: list[tuple[str, tuple]], size: int, width: int, japanese: bool) -> list[list[tuple]]:
+def _wrap(parts: list[tuple[str, tuple]], size: int, width: int, han: str = "cjk") -> list[list[tuple]]:
     """parts 是 [(文字, 顏色)]；回傳一行一行的 [(文字, 字型, 顏色, 寬度)]。中日韓文字可以在任何字之間換行。"""
     lines: list[list[tuple]] = [[]]
     x = 0.0
@@ -100,7 +111,7 @@ def _wrap(parts: list[tuple[str, tuple]], size: int, width: int, japanese: bool)
                 token = " "
                 if not lines[-1]:
                     continue
-            font = _font(_kind(token[0], japanese), size)
+            font = _font(_kind(token[0], han), size)
             w = font.getlength(token)
             if x + w > width and lines[-1] and token[0] not in _NO_LINE_START:
                 while lines[-1] and lines[-1][-1][0] == " ":
@@ -124,7 +135,7 @@ def _wrap(parts: list[tuple[str, tuple]], size: int, width: int, japanese: bool)
 
 
 def paint_message(kind: str, name: str, text: str, width: int, size: int, *, original: str = "",
-                  backdrop: int = 0, japanese: bool = False) -> Image.Image:
+                  backdrop: int = 0, han: str = "cjk") -> Image.Image:
     """畫一則留言：彩色的名字接著白色的內容，太長會換行。回傳寬度固定、高度剛好的透明圖。"""
     size = max(10, int(size))
     stroke = max(2, round(size / 9))
@@ -132,9 +143,9 @@ def paint_message(kind: str, name: str, text: str, width: int, size: int, *, ori
     inner = max(40, width - pad * 2)
     line_h = round(size * 1.38)
     lines = _wrap([(name, NAME_COLORS.get(kind, NAME_COLORS["heard"])), ("  ", TEXT_COLOR), (text, TEXT_COLOR)],
-                  size, inner, japanese)
+                  size, inner, han)
     small = max(10, round(size * 0.72))
-    small_lines = _wrap([(original, DIM_COLOR)], small, inner, japanese) if original else []
+    small_lines = _wrap([(original, DIM_COLOR)], small, inner, han) if original else []
     small_h = round(small * 1.34)
     height = pad * 2 + len(lines) * line_h + len(small_lines) * small_h
 
@@ -202,7 +213,7 @@ def edit_frame(canvas: Image.Image, ui_lang: str, size: int) -> Image.Image:
         draw.rectangle((cx - grip, cy - grip, cx + grip, cy + grip), fill=edge)
     hint_size = max(12, round(size * 0.62))
     rows = _wrap([(HINTS.get(ui_lang, HINTS["en"]), (235, 240, 255))], hint_size, max(40, width - grip * 2 - 16),
-                 ui_lang == "ja")
+                 han_kind(ui_lang))
     y = 8
     for row in rows:
         x = float(grip + 8)
