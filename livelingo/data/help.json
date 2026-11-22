@@ -75,7 +75,7 @@
     "items": [
      "翻譯、語音辨識、文字辨識都在你的電腦上完成，對話內容不會傳到網路上。",
      "會連網路的只有兩件事：檢查和下載新版本，以及第一次下載翻譯需要的檔案。",
-     "歷史、使用數字、設定都只存在這台電腦上，卸載時會問你要留著還是一起刪掉。你存到資料夾裡的字幕記錄和匯出的檔案會留著。"
+     "歷史、使用數字、設定都只存在這台電腦上，卸載時會問你要留著還是一起刪掉。你存到資料夾裡的字幕記錄和匯出的檔案會留著。打開「記住取過名字的人」的話，那些人的名字和聲音特徵也只存在這台電腦上，卸載時一定會刪掉。"
     ]
    },
    {
@@ -178,7 +178,7 @@
     "items": [
      "翻译、语音识别、文字识别都在你的电脑上完成，对话内容不会传到网络上。",
      "会联网的只有两件事：检查和下载新版本，以及第一次下载翻译需要的文件。",
-     "历史、使用数字、设置都只保存在这台电脑上，卸载时会问你要留着还是一起删除。你保存到文件夹里的字幕记录和导出的文件会留着。"
+     "历史、使用数字、设置都只保存在这台电脑上，卸载时会问你要留着还是一起删除。你保存到文件夹里的字幕记录和导出的文件会留着。打开“记住取过名字的人”的话，那些人的名字和声音特征也只保存在这台电脑上，卸载时一定会删除。"
     ]
    },
    {
@@ -281,7 +281,7 @@
     "items": [
      "Translation, speech recognition and screen reading all run on your computer. Your conversations are not sent over the internet.",
      "The app goes online for two things only: checking for and downloading new versions, and downloading the translation files the first time.",
-     "History, usage numbers and settings are kept on this computer only. When you uninstall, you are asked whether to keep or remove them. Subtitle records and files you exported to a folder stay."
+     "History, usage numbers and settings are kept on this computer only. When you uninstall, you are asked whether to keep or remove them. Subtitle records and files you exported to a folder stay. If you turn on “Remember people I have named”, their names and voice features are also kept on this computer only, and uninstalling always deletes them."
     ]
    },
    {
@@ -384,7 +384,7 @@
     "items": [
      "번역, 음성 인식, 화면 글자 인식은 모두 내 컴퓨터에서 이루어지며, 대화 내용은 인터넷으로 전송되지 않습니다.",
      "인터넷에 연결하는 경우는 두 가지뿐입니다: 새 버전 확인과 다운로드, 그리고 처음 한 번 번역에 필요한 파일 다운로드.",
-     "대화 기록, 사용 숫자, 설정은 이 컴퓨터에만 저장됩니다. 프로그램을 제거할 때 남겨 둘지 함께 삭제할지 묻습니다. 폴더에 저장한 자막 기록과 내보낸 파일은 남습니다."
+     "대화 기록, 사용 숫자, 설정은 이 컴퓨터에만 저장됩니다. 프로그램을 제거할 때 남겨 둘지 함께 삭제할지 묻습니다. 폴더에 저장한 자막 기록과 내보낸 파일은 남습니다. ‘이름 붙인 사람 기억하기’를 켜면 그 사람들의 이름과 목소리 특징도 이 컴퓨터에만 저장되며, 프로그램을 제거할 때 항상 삭제됩니다."
     ]
    },
    {
@@ -487,7 +487,7 @@
     "items": [
      "翻訳、音声認識、画面の文字認識はすべて自分のパソコンで行われ、会話の内容がインターネットに送られることはありません。",
      "インターネットに接続するのは 2 つの場合だけです：新しいバージョンの確認とダウンロード、そして最初の 1 回だけ行う翻訳用ファイルのダウンロード。",
-     "履歴、利用状況の数字、設定はこのパソコンの中にだけ保存されます。アンインストールのときに、残すか一緒に削除するかを選べます。フォルダーに保存した字幕の記録や書き出したファイルは残ります。"
+     "履歴、利用状況の数字、設定はこのパソコンの中にだけ保存されます。アンインストールのときに、残すか一緒に削除するかを選べます。フォルダーに保存した字幕の記録や書き出したファイルは残ります。「名前を付けた人を覚える」をオンにすると、その人たちの名前と声の特徴もこのパソコンの中にだけ保存され、アンインストールのときに必ず削除されます。"
     ]
    },
    {

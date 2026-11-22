@@ -16,7 +16,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, updater
+from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, updater, voicebook
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -44,6 +44,7 @@ VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也�
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
 VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
 PARTIAL_EVERY = 0.08      # 譯文邊翻邊顯示：最快多久更新一次畫面（秒）
+VOICES_SAVE_EVERY = 30.0      # 記住的聲音：聲紋跟著新的句子變了之後，最快多久存一次（秒）
 INSTALLER_RETRY = (20.0, 60.0, 300.0)      # 剛更新完刪不掉的安裝檔（安裝程式還沒結束）：隔這麼久再試（秒）
 RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔幾秒再試一次；全部試完（大約兩分鐘）還不行才放棄
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
@@ -216,7 +217,9 @@ class Service:
         self._voice_tries: dict[str, int] = {}      # 斷線之後已經重試了幾次
         self._live: dict[str, dict] = {}      # 收音來源（loopback / mic）→ 還在說、先顯示出來的那一則（即時字幕）
         self._live_stop: dict[str, Stop] = {}      # 收音來源 → 正在翻的那半句的「停」按鈕
-        # 分辨說話者：聲紋模型和分出來的人只在記憶體裡（core/voices.py）；名字是使用者在這一次開啟期間取的
+        # 分辨說話者：聲紋模型和分出來的人只在記憶體裡（core/voices.py）；名字是使用者取的。
+        # 有開「記住取過名字的人」的話，取過名字的人另外存在 voices.json（voicebook.py），下次開就認得
+        self._voices_saved = 0.0      # 上一次存「記住的聲音」是什麼時候
         self.voices = None
         self.speakers = {"state": "off", "percent": 0, "error": "", "mb": assets.VOICE_MB}
         self._speaker_names: dict[int, str] = {}
@@ -335,6 +338,7 @@ class Service:
             self._storage_cleanup()
             self.gpu = gpu.detect()
             self._speech_engine()      # 先把「語音辨識用顯示卡」現在的狀態算好，介面才知道要不要顯示下載
+            self.speakers_load()       # 有開「分辨說話者」：聲紋模型先準備好，設定頁一打開就看得到記住的人
             self._prepare()
         except Exception as ex:  # noqa: BLE001
             self.log(traceback.format_exc())
@@ -1452,6 +1456,7 @@ class Service:
             "auto_detect": self.cfg["their_auto"], "messages_this_session": len(self.messages),
             "history_count": self.history.count, "history_error": self.history.error or None,
             "word_list_count": len(self.glossary.list()), "taught_sentences_count": len(self.lessons.list()),
+            "remembered_voices_count": voicebook.count(self.data),      # 只有幾個，沒有名字也沒有聲紋
             "settings_file_error": self.cfg.error or None,
             "previous_version": (update["previous"] or {}).get("version"), "skipped_update": update["skipped"] or None,
             "last_update": {k: last[k] for k in ("version", "from", "rollback") if k in last} or None,
@@ -1966,6 +1971,8 @@ class Service:
         if changed("tell_speakers"):
             self.speakers_load()
             self._storage_changed()
+        if changed("remember_speakers"):
+            self._remember_changed()
         if changed("voice_sensitivity", "end_silence", "speech_mode"):      # 收音中直接換，不用重開
             with self._lock:
                 for pipe in self.pipelines.values():
@@ -2437,8 +2444,11 @@ class Service:
     def speakers_state(self) -> dict:
         """給介面：有沒有開、模型的狀態、目前分出來哪幾個人（編號、取的名字、說了幾句）。"""
         people = self.voices.speakers.people() if self.voices else []
-        return {**self.speakers, "on": bool(self.cfg["tell_speakers"]), "run": self._speaker_run,
-                "people": [dict(p, name=self._speaker_names.get(p["id"], "")) for p in people]}
+        remember = bool(self.cfg["remember_speakers"])
+        return {**self.speakers, "on": bool(self.cfg["tell_speakers"]), "run": self._speaker_run, "remember": remember,
+                # known：這個人會被記住（有開「記住」而且取了名字）
+                "people": [dict(p, name=self._speaker_names.get(p["id"], ""), known=remember and bool(self._speaker_names.get(p["id"])))
+                           for p in people]}
 
     def _speakers(self, **changes) -> None:
         self.speakers.update(changes)
@@ -2468,6 +2478,7 @@ class Service:
                 from .core.voices import Voices
 
                 self.voices = Voices(path)
+                self._voices_seed()
             except Exception as ex:  # noqa: BLE001
                 self.log(f"speaker model not ready: {ex!r}")
                 self._speakers(state="failed", error=str(ex)[:300])
@@ -2492,18 +2503,49 @@ class Service:
                 if old.get("speaker") == speaker and old.get("speaker_run") == self._speaker_run:
                     self.messages[i] = dict(old, voice=name)
         self.transcript.name_speaker(speaker, name)
+        self._voices_save()      # 有開「記住」：取了名字就記住，名字清空就忘掉
         self.hub.publish("speakers", self.speakers_state())
         return {"ok": True, "name": name}
 
     def speakers_forget(self) -> dict:
-        """全部重新分辨：忘掉目前分出來的人和名字（換了一群人，或分錯了）。之前的句子不再標是誰。"""
+        """全部重新分辨：忘掉目前分出來的人和名字（換了一群人，或分錯了）。之前的句子不再標是誰。
+        以前記住的人（存在 voices.json 的）不會被忘掉：照存檔的樣子放回來，要忘掉某個人是把他的名字清空。"""
         if self.voices:
             self.voices.speakers.forget()
         self._speaker_names.clear()
         self._speaker_run += 1
         self.transcript.forget_speakers()
+        self._voices_seed()
         self.hub.publish("speakers", self.speakers_state())
         return {"ok": True}
+
+    def _voices_seed(self) -> None:
+        """開始分人之前：有開「記住取過名字的人」就把記住的人先放進去，他們一開口就認得、直接顯示名字。"""
+        if not (self.voices and self.cfg["remember_speakers"]):
+            return
+        for person in voicebook.load(self.data):
+            self._speaker_names[self.voices.speakers.seed(person["voice"], person["weight"])] = person["name"]
+
+    def _voices_save(self) -> None:
+        """把現在取過名字的人存起來（整份換掉）。沒開「記住」、或聲紋模型還沒準備好（還不知道以前記了誰）就不動那個檔。"""
+        if not (self.voices and self.cfg["remember_speakers"]):
+            return
+        people = []
+        for n, name in sorted(self._speaker_names.items()):
+            got = self.voices.speakers.voice_of(n)
+            if got and name:
+                people.append({"name": name, "voice": got[0], "weight": got[1]})
+        self._voices_saved = time.time()
+        if not voicebook.save(self.data, people):
+            self.log("remembered voices could not be saved")
+
+    def _remember_changed(self) -> None:
+        """「記住取過名字的人」開或關：開就把現在取過名字的人存起來，關就把存的刪掉（這一次開啟期間的名字還在）。"""
+        if self.cfg["remember_speakers"]:
+            self._voices_save()
+        else:
+            voicebook.clear(self.data)
+        self.hub.publish("speakers", self.speakers_state())
 
     def speaker_tag(self, msg: dict) -> tuple | None:
         """這一則要標成誰：（第幾個說話者, 取的名字）。沒分出來、或是「重新分辨」之前標的，就沒有。"""
@@ -2579,6 +2621,8 @@ class Service:
                              live=self._take_live(kind), speaker=speaker if kind == "loopback" else None)
         if speaker:
             self.hub.publish("speakers", self.speakers_state())      # 多了一個人，或某個人又多說一句
+            if self._speaker_names.get(int(speaker)) and time.time() - self._voices_saved > VOICES_SAVE_EVERY:
+                self._voices_save()      # 記住的人：聲紋跟著今天的聲音調整過了，隔一陣子存一次
         self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
 
     def _voice_script(self, kind: str, text: str, lang: str | None) -> str:
@@ -2801,6 +2845,7 @@ class Service:
         self.closing.set()
         self._download_cancel.set()
         self.usage.flush()
+        self._voices_save()
         if self.meters:
             self.meters.stop()
         self.overlay.stop()

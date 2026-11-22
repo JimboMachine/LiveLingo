@@ -408,10 +408,11 @@
       else if (sp.state === "failed") more = `<div class="note warn">${ICON.info}<span>${esc(t("spk_failed", { error: sp.error || "" }))}</span>
         <button class="primary small" data-act="spk-retry">${esc(t("retry"))}</button></div>`;
       else if (sp.state === "ready" && !(sp.people || []).length) more = `<div class="note">${ICON.info}<span>${esc(t("spk_none"))}</span></div>`;
-      else if (sp.state === "ready") more = `<div class="sub">${esc(t("spk_list"))}</div>` + sp.people.map((p) => `
-        <div class="setting-row spk-row"><label for="spk-name-${p.id}"><span class="spk-dot spk-c${(p.id - 1) % 6}"></span><span>${esc(t("spk_n", { n: p.id }))}</span><span class="desc">${esc(t("spk_count", { n: p.count }))}</span></label>
+      else if (sp.state === "ready") more = `<div class="sub">${esc(t(sp.remember ? "spk_list_kept" : "spk_list"))}</div>` + sp.people.map((p) => `
+        <div class="setting-row spk-row"><label for="spk-name-${p.id}"><span class="spk-dot spk-c${(p.id - 1) % 6}"></span><span>${esc(t("spk_n", { n: p.id }))}</span><span class="desc">${esc(p.known && !p.count ? t("spk_known") : t("spk_count", { n: p.count }) + (p.known ? " · " + t("spk_kept") : ""))}</span></label>
           <input type="text" id="spk-name-${p.id}" data-speaker="${p.id}" value="${esc(p.name || "")}" maxlength="24" placeholder="${esc(t("spk_name"))}"></div>`).join("") +
         `<div class="btn-row"><button class="ghost small" data-act="spk-forget">${esc(t("spk_forget"))}</button></div>`;
+      more = switchRow("remember_speakers", t("remember_speakers"), t("remember_speakers_desc")) + more;      // 要不要把取過名字的人記到下次
     }
     return `<section><div><h2>${esc(t("spk_title"))}</h2><div class="sub">${esc(t("spk_hint"))}</div></div>
         ${switchRow("tell_speakers", t("tell_speakers"), t("tell_speakers_desc"))}${more}</section>`;
@@ -1651,7 +1652,7 @@
     "sgpu-download": () => post("/api/speech_gpu", { download: true }),
     "sgpu-cancel": () => post("/api/speech_gpu", { cancel: true }),
     "spk-retry": () => post("/api/speakers", { action: "retry" }),
-    "spk-forget": async () => { const r = await post("/api/speakers", { action: "forget" }); if (r && r.ok) toast(t("spk_forgot"), 4200); },
+    "spk-forget": async () => { const r = await post("/api/speakers", { action: "forget" }); if (r && r.ok) toast(t((S.speakers || {}).remember ? "spk_forgot_kept" : "spk_forgot"), 4200); },
     "spk-open": () => { S.ui.tab = "audio"; setView("settings"); setTimeout(() => { const el = document.querySelector('[data-key="tell_speakers"]'); if (el) el.scrollIntoView({ block: "center" }); }, 60); },
     "lib-export": async () => {
       const r = await post("/api/library", { export: true });
@@ -2193,7 +2194,7 @@
       if (percent && d.state === "downloading" && before.state === "downloading") { percent.textContent = t("spk_downloading", { mb: d.mb, percent: d.percent || 0 }); return; }
       const typing = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.speaker;      // 正在打名字：不要重畫把字洗掉
       if (S.view === "settings" && S.ui.tab === "audio" && !S.ui.live && !typing) renderSettingsPage();
-      const sign = (x) => JSON.stringify([x.on, x.run, (x.people || []).map((p) => p.name)]);
+      const sign = (x) => JSON.stringify([x.on, x.run, (x.people || []).map((p) => [p.id, p.name])]);
       if (sign(before) !== sign(d)) renderMessages();
     },
     speech_gpu: (d) => {

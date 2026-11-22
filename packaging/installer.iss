@@ -169,6 +169,8 @@ begin
     DelTree(data + '\engine', True, True, True);
     DelTree(data + '\update', True, True, True);
     DelTree(data + '\webview', True, True, True);
+    // 記住的朋友的聲音不是「設定」：留設定的時候也刪掉
+    DeleteFile(data + '\voices.json');
   end
   else
     DelTree(data, True, True, True);

@@ -49,7 +49,7 @@
 
 語音辨識使用 Whisper large-v3-turbo，在 CPU 上執行。
 
-分辨說話者（選用，預設關閉）使用 WeSpeaker 的 ResNet34 聲紋模型（wespeaker-voxceleb-resnet34-LM，CC BY 4.0 授權），打開那個功能時才下載，約 27 MB。聲紋只留在記憶體裡，不會存檔。
+分辨說話者（選用，預設關閉）使用 WeSpeaker 的 ResNet34 聲紋模型（wespeaker-voxceleb-resnet34-LM，CC BY 4.0 授權），打開那個功能時才下載，約 27 MB。聲紋平常只留在記憶體裡；打開「記住取過名字的人」才會把取過名字的人存在這台電腦上（下次開就認得），不會傳出去，卸載時會刪掉。
 
 ## 小提醒
 

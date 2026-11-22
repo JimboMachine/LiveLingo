@@ -320,11 +320,12 @@
 2. `assets.py`、`storage.py`：聲紋模型鎖版本、核對 sha256；打開功能才下載；儲存空間頁列得出來、沒開的時候可以刪
 3. `speech.py`：只有「聽對方說話」的管線有 voices；分不出來不能讓字幕也沒有
 4. `service.py`：訊息多三個欄位 speaker、speaker_run、voice；取名字、全部重來（_speaker_run 加一）之後畫面和浮動字幕要跟著變
-5. `service.py`、`report.py`、`history.py`：聲紋和取的名字只在記憶體：不寫進設定檔、歷史、問題報告
-6. `overlay.py`、`chatpaint.py`、`transcript.py`：名字和顏色：浮動字幕、字幕檔都要用同一套（speaker_name、speaker_color）；改名字、全部重來的時候字幕檔裡已經記下的句子也要跟著（name_speaker、forget_speakers）
-7. `app.js`、`style.css`、`i18n.js`：顏色的點要和 chatpaint.SPEAKER_COLORS 同一組、同樣的順序；「說話者 n」五種語言在三個地方（i18n、chatpaint.SPEAKER）要一致
-8. `guide.py`：說明裡提到的頁面和開關名字
-9. `test_basics.py`：test_speakers_are_told_apart
+5. `service.py`、`report.py`、`history.py`：聲紋和取的名字平常只在記憶體：不寫進設定檔、匯出的設定、歷史、問題報告（報告只有記了幾個人）
+6. `voicebook.py`、`service.py`、`config.py`、`installer.iss`：記住取過名字的人（remember_speakers，預設關）：只有這個開著才寫 voices.json；關掉開關、清空名字、卸載（連「留下設定」也是）都要刪。全部重新分辨不會忘掉記住的人。換聲紋模型要改 voicebook.MODEL
+7. `overlay.py`、`chatpaint.py`、`transcript.py`：名字和顏色：浮動字幕、字幕檔都要用同一套（speaker_name、speaker_color）；改名字、全部重來的時候字幕檔裡已經記下的句子也要跟著（name_speaker、forget_speakers）
+8. `app.js`、`style.css`、`i18n.js`：顏色的點要和 chatpaint.SPEAKER_COLORS 同一組、同樣的順序；「說話者 n」五種語言在三個地方（i18n、chatpaint.SPEAKER）要一致
+9. `guide.py`：說明裡提到的頁面和開關名字
+10. `test_basics.py`：test_speakers_are_told_apart、test_named_voices_are_remembered
 
 自動把關：測試會擋：分人的規則變了（太短的不認新的人、像的歸同一個人）、聲紋被存檔或放進問題報告、重新分辨之後舊的標籤還在、介面沒有接 speakers、模型沒有鎖版本。門檻準不準，要用真的聲音量（乾淨的朗讀和 Discord 語音差很多）。
 
@@ -366,6 +367,7 @@
 | 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼；程式自己的短提示（略過幾則、引擎重開）也用 NOTES，介面那邊要有同名的 n_ 文字（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯）<br>`guide.py`：四個全域快速鍵的名稱（overlay、mic、copy、quick）（改壞不會報錯） |
 | 快速輸入框 | `livelingo/quickbox.py` | `service.py`：打的字（另開一個程式）（改壞不會報錯）<br>`__main__.py`：快速輸入模式（--quick-input）（改壞會報錯） |
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
+| 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字；留下設定時要刪的資料夾名字（models、engine）（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
 | 每一版改了什麼（五種語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
@@ -391,7 +393,7 @@
 | 文字辨識 | `livelingo/core/ocr.py` | `service.py`：文字辨識（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
 | 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
-| 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字只在記憶體裡（改壞會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |
+| 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字平常只在記憶體裡（改壞會報錯）<br>`voicebook.py`：聲紋的長度和模型（MODEL、DIM）要跟聲紋模型一致；換模型舊檔就作廢（改壞不會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
 | 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |

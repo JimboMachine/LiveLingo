@@ -2,7 +2,7 @@
   "2.4.0": {
     "zh-TW": [
       "即時字幕：對方還在說話，字幕和翻譯就先出來，說完再換成整句；譯文也改成一個字一個字出現，不用等整句翻完。",
-      "分辨說話者：好幾個人在同一個語音頻道時，照聲音分成說話者 1、2、3，字幕用不同顏色標出來，可以幫他們取名字。在「聲音裝置」打開，第一次會下載約 27 MB 的小模型；聲音的特徵只留在記憶體裡。",
+      "分辨說話者：好幾個人在同一個語音頻道時，照聲音分成說話者 1、2、3，字幕用不同顏色標出來，可以幫他們取名字，也可以選擇記住取過名字的人，下次開就認得。在「聲音裝置」打開，第一次會下載約 27 MB 的小模型；聲音的特徵不會離開這台電腦。",
       "你自己打的字、說的話會先翻，不用排在螢幕文字後面；很長的句子不會再被悄悄切掉；翻完會核對數字，對不上會提醒你。",
       "讀螢幕：換行的聊天會合成一句再翻；同一句話再出現一次也會翻；讀到全黑的畫面會告訴你原因。",
       "翻譯失敗時用看得懂的話說原因，可以直接按「重試」；翻譯引擎意外停止會自動重開。",
@@ -12,7 +12,7 @@
     ],
     "zh-CN": [
       "实时字幕：对方还在说话，字幕和翻译就先出来，说完再换成整句；译文也改成一个字一个字出现，不用等整句翻完。",
-      "分辨说话者：好几个人在同一个语音频道时，按声音分成说话者 1、2、3，字幕用不同颜色标出来，可以给他们取名字。在“声音设备”打开，第一次会下载约 27 MB 的小模型；声音的特征只留在内存里。",
+      "分辨说话者：好几个人在同一个语音频道时，按声音分成说话者 1、2、3，字幕用不同颜色标出来，可以给他们取名字，也可以选择记住取过名字的人，下次打开就认得。在“声音设备”打开，第一次会下载约 27 MB 的小模型；声音的特征不会离开这台电脑。",
       "你自己打的字、说的话会先翻，不用排在屏幕文字后面；很长的句子不会再被悄悄截掉；翻完会核对数字，对不上会提醒你。",
       "读屏幕：换行的聊天会合成一句再翻；同一句话再出现一次也会翻；读到全黑的画面会告诉你原因。",
       "翻译失败时用看得懂的话说原因，可以直接按“重试”；翻译引擎意外停止会自动重开。",
@@ -22,7 +22,7 @@
     ],
     "en": [
       "Live captions: captions and translation appear while the other person is still talking and are replaced by the finished sentence; translations now appear word by word instead of all at once.",
-      "Telling speakers apart: people in a voice channel are grouped by voice as Speaker 1, 2, 3 in different colours, and you can name them. Turn it on in “Audio devices” (a 27 MB model is downloaded once); voice features stay in memory only.",
+      "Telling speakers apart: people in a voice channel are grouped by voice as Speaker 1, 2, 3 in different colours. You can name them and keep named people for next time. Turn it on in “Audio devices” (27 MB download). Voices stay on this PC.",
       "What you type or say is translated first instead of waiting behind screen text; very long sentences are no longer silently cut; numbers are checked after translating and you are told when they do not match.",
       "Screen reading: wrapped chat lines are joined into one sentence; a sentence that appears again is translated again; a black capture now tells you why.",
       "A failed translation explains the reason in plain words with a “Try again” button; the translation engine restarts by itself if it stops.",
@@ -32,7 +32,7 @@
     ],
     "ko": [
       "실시간 자막: 상대가 말하는 중에도 자막과 번역이 먼저 나오고, 말이 끝나면 완성된 문장으로 바뀝니다. 번역도 한꺼번에가 아니라 한 글자씩 나타납니다.",
-      "화자 구분: 여러 사람이 같은 음성 채널에 있을 때 목소리에 따라 화자 1, 2, 3으로 나누어 자막에 다른 색으로 표시하고 이름도 붙일 수 있습니다. ‘오디오 장치’에서 켜며, 처음에 약 27 MB의 작은 모델을 내려받습니다. 목소리 특징은 메모리에만 있습니다.",
+      "화자 구분: 같은 음성 채널의 여러 사람을 목소리에 따라 화자 1, 2, 3으로 나누어 자막에 다른 색으로 표시합니다. 이름을 붙일 수 있고, 이름 붙인 사람을 다음에도 알아보게 기억시킬 수 있습니다. ‘오디오 장치’에서 켜며 처음에 약 27 MB 모델을 내려받습니다. 목소리 특징은 이 컴퓨터 밖으로 나가지 않습니다.",
       "내가 입력하거나 말한 문장을 먼저 번역하고, 화면 글자 뒤에서 기다리지 않습니다. 아주 긴 문장이 몰래 잘리지 않으며, 번역 후 숫자를 확인해 맞지 않으면 알려 줍니다.",
       "화면 읽기: 줄이 바뀐 채팅을 한 문장으로 합쳐 번역하고, 같은 문장이 다시 나와도 번역하며, 화면이 검게 잡히면 이유를 알려 줍니다.",
       "번역에 실패하면 이유를 알기 쉬운 말로 알려 주고 ‘다시 시도’ 버튼이 나옵니다. 번역 엔진이 멈추면 자동으로 다시 시작합니다.",
@@ -42,7 +42,7 @@
     ],
     "ja": [
       "リアルタイム字幕：相手が話している途中でも字幕と翻訳が先に出て、話し終わると完成した文に置き換わります。訳文も一度にではなく一文字ずつ表示されます。",
-      "話者の区別：複数の人が同じボイスチャンネルにいるとき、声によって話者 1、2、3 に分けて字幕に別々の色で表示し、名前も付けられます。「オーディオ機器」でオンにします。初回に約 27 MB の小さなモデルをダウンロードします。声の特徴はメモリにだけ置かれます。",
+      "話者の区別：同じボイスチャンネルの複数の人を声によって話者 1、2、3 に分け、字幕に別々の色で表示します。名前を付けられ、名前を付けた人を次回も分かるように覚えさせることもできます。「オーディオ機器」でオンにします（初回に約 27 MB のモデルをダウンロード）。声の特徴はこのパソコンの外に出ません。",
       "自分が入力した文や話した文を先に翻訳し、画面の文字の後ろで待たなくなりました。とても長い文が黙って切られることはなくなり、翻訳後に数字を確認して、合わないときは知らせます。",
       "画面の読み取り：折り返されたチャットは一文にまとめて翻訳し、同じ文がもう一度出ても翻訳し、画面が真っ黒に写るときは理由を知らせます。",
       "翻訳に失敗したときは理由を分かりやすい言葉で示し、「再試行」ボタンが出ます。翻訳エンジンが止まると自動で再起動します。",

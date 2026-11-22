@@ -1,6 +1,7 @@
 """
 分辨說話的人：每一句話算出一組「聲紋」（256 個數字），聲紋像的就當成同一個人，照出現的順序編成 1、2、3…。
-全部在本機執行；聲紋只留在記憶體裡，程式關掉就沒有了，不會存檔也不會傳出去。
+全部在本機執行，不會傳出去。聲紋平常只留在記憶體裡，程式關掉就沒有了；只有使用者打開「記住取過名字的人」，
+取過名字的那幾個人才會存在這台電腦上（livelingo/voicebook.py），下次開就認得。
 
 模型是 WeSpeaker 的 ResNet34（voxceleb_resnet34_LM.onnx，約 27 MB），用 onnxruntime 跑；
 它要的輸入是 80 維的 fbank（Kaldi 的算法），這裡用 numpy 自己算，不用多裝套件。
@@ -88,6 +89,7 @@ class Speakers:
         self.same, self.maybe, self.limit = same, maybe, limit
         self._sums: list[np.ndarray] = []      # 每個人：他說過的句子的聲紋加起來（長的句子算比較重）
         self.counts: list[int] = []            # 每個人說了幾句
+        self._known = 0                        # 前面幾個是以前記住的人（seed 放進來的），不算在人數上限裡
         self._lock = threading.Lock()
 
     def who(self, voice: np.ndarray | None, seconds: float) -> int | None:
@@ -104,7 +106,7 @@ class Speakers:
                     self._sums[best] = self._sums[best] + voice * min(float(seconds), 6.0)
                 self.counts[best] += 1
                 return best + 1
-            if seconds >= NEW_SECONDS and score < self.maybe and len(self._sums) < self.limit:
+            if seconds >= NEW_SECONDS and score < self.maybe and len(self._sums) - self._known < self.limit:
                 self._sums.append(voice * min(float(seconds), 6.0))
                 self.counts.append(1)
                 return len(self._sums)
@@ -117,11 +119,28 @@ class Speakers:
         with self._lock:
             return [{"id": i + 1, "count": n} for i, n in enumerate(self.counts)]
 
+    def seed(self, voice: np.ndarray, weight: float = 6.0) -> int:
+        """放進一個以前記住的人（還沒有人說話之前叫），回傳他的編號。weight：這份聲紋算「說過幾秒」那麼重。"""
+        with self._lock:
+            self._sums.append(np.asarray(voice, dtype=np.float32) * float(weight))
+            self.counts.append(0)
+            self._known += 1
+            return len(self._sums)
+
+    def voice_of(self, n: int) -> tuple[np.ndarray, float] | None:
+        """第 n 個人目前的聲紋（長度是 1）和它有多重（大約是拿來算的句子一共幾秒）。沒有這個人回傳 None。"""
+        with self._lock:
+            if not 1 <= n <= len(self._sums):
+                return None
+            norm = float(np.linalg.norm(self._sums[n - 1]))
+            return (self._sums[n - 1] / norm, norm) if norm > 0 else None
+
     def forget(self) -> None:
         """全部重來（換了一群人、或分錯了）。"""
         with self._lock:
             self._sums.clear()
             self.counts.clear()
+            self._known = 0
 
 
 class Voices:

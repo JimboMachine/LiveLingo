@@ -35,6 +35,7 @@ DEFAULTS = {
     "speech_mode": "fast",       # 語音辨識：fast 比較快 / accurate 比較準（慢大約一倍）
     "drop_echo": True,           # 麥克風收到喇叭播出來的對方聲音時，不要當成我說的話
     "live_captions": True,       # 即時字幕：對方還在說，就先把目前聽到的顯示出來、先翻（整句說完再換成正式的）
+    "remember_speakers": False,      # 記住取過名字的說話者：名字和聲紋存在這台電腦上（voices.json），下次開就認得。關掉會把存的刪掉
     "tell_speakers": False,      # 分辨不同的說話者（好幾個人在同一個語音頻道時，照聲音分成說話者 1、2、3）；第一次打開會下載一個小模型
     "ptt": False,                # 按住才說話：只有按著 ptt_key 的時候麥克風才收音
     "ptt_key": "F8",             # oswin.PTT_KEYS 裡的一個
@@ -91,7 +92,7 @@ DEFAULTS = {
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
-            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
+            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",

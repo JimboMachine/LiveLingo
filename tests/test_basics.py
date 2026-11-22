@@ -5072,3 +5072,160 @@ def test_used_installers_are_removed_after_updating(tmp_path, monkeypatch):
     boot = source[source.index("    def _boot(self)"):source.index("    def _boot(self)") + 400]
     assert boot.index("self._installers_cleanup()") < boot.index("self._update_if_needed()")      # 先清，再看要不要更新
     assert "up_back_kept" not in Path("livelingo/ui/i18n.js").read_text(encoding="utf-8")      # 介面不再說「安裝檔還留著」
+
+
+def test_named_voices_are_remembered(tmp_path, monkeypatch):
+    """記住取過名字的人：開了才存（voices.json），下次開一開口就認得；清空名字、關掉開關、卸載都會刪。別的地方都不能有名字和聲紋。"""
+    import json as json_mod
+    from pathlib import Path
+
+    import numpy as np
+
+    import livelingo.core.voices as voices_mod
+    import livelingo.service as service_mod
+    from livelingo import voicebook
+    from livelingo.core.voices import Speakers
+    from livelingo.service import Service
+
+    def voice(*parts):
+        v = np.zeros(256, dtype=np.float32)
+        for i, x in parts:
+            v[i] = x
+        return v / np.linalg.norm(v)
+
+    a, b, c = voice((0, 1)), voice((1, 1)), voice((2, 1))
+
+    # 一、存檔：存進去讀得回來；壞掉的、別的模型存的、長度不對的，都當作沒有；一個人都沒有就不留檔案
+    book = tmp_path / "book"
+    book.mkdir()
+    assert voicebook.load(book) == [] and voicebook.count(book) == 0
+    assert voicebook.save(book, [{"name": "  阿哲  Zq7 ", "voice": a * 3, "weight": 500.0}, {"name": "", "voice": b, "weight": 2.0},
+                                 {"name": "壞的", "voice": np.zeros(256), "weight": 2.0}, {"name": "短的", "voice": np.ones(8), "weight": 2.0}])
+    got = voicebook.load(book)
+    assert len(got) == 1 and got[0]["name"] == "阿哲 Zq7" and got[0]["weight"] == voicebook.MAX_WEIGHT      # 太重的壓到上限：下次還跟得上新的聲音
+    assert abs(float(got[0]["voice"] @ a) - 1.0) < 1e-5 and not (book / (voicebook.FILE + ".tmp")).exists()
+    saved = json_mod.loads((book / voicebook.FILE).read_text(encoding="utf-8"))
+    assert saved["kind"] == voicebook.KIND and saved["model"] == voicebook.MODEL and voicebook.DIM == 256
+    assert voicebook.save(book, [{"name": f"p{i}", "voice": voice((i, 1)), "weight": 5.0} for i in range(30)])
+    assert voicebook.count(book) == voicebook.MAX_PEOPLE
+    for bad in ("not json", json_mod.dumps({**saved, "model": "some-other-model"}), json_mod.dumps({**saved, "people": "x"}),
+                json_mod.dumps({**saved, "people": [{"name": "x", "voice": "AAAA", "weight": 1}, {"voice": 3}, 7]})):
+        (book / voicebook.FILE).write_text(bad, encoding="utf-8")
+        assert voicebook.load(book) == [], bad[:30]
+    assert voicebook.save(book, []) and not (book / voicebook.FILE).exists()
+    voicebook.clear(book)      # 沒有檔案也不會出事
+
+    # 二、分人：記住的人先放進去，一開口就是他；他們不佔「最多分幾個人」的名額
+    people = Speakers(limit=1)
+    assert people.seed(a, 10.0) == 1 and people.seed(b, 10.0) == 2 and people.people() == [{"id": 1, "count": 0}, {"id": 2, "count": 0}]
+    assert people.who(voice((1, 0.9), (7, 0.3)), 2.0) == 2 and people.who(c, 3.0) == 3 and people.who(voice((3, 1)), 3.0) is None
+    got = people.voice_of(2)
+    assert abs(float(np.linalg.norm(got[0])) - 1.0) < 1e-5 and 11.0 < got[1] <= 12.0 and people.voice_of(9) is None and people.voice_of(0) is None
+    people.forget()
+    assert people.people() == [] and people.who(c, 3.0) == 1 and people.who(a, 3.0) is None      # 忘掉之後名額照原本的算
+
+    # 三、服務
+    class FakeVoices:
+        def __init__(self, path=None):
+            self.speakers = Speakers()
+
+    monkeypatch.setattr("livelingo.assets.get_voice", lambda store, progress=None, cancel=None: Path(store) / "voice.onnx")
+    monkeypatch.setattr("livelingo.assets.has_voice", lambda store: True)
+    monkeypatch.setattr(voices_mod, "Voices", FakeVoices)
+    monkeypatch.setattr(service_mod, "VOICES_SAVE_EVERY", 0.0)
+    data = tmp_path / "data"
+    file = data / voicebook.FILE
+
+    def open_app():
+        service = Service(data)
+        service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False, ui_lang="zh-TW", tell_speakers=True)
+        service.translator = _FakeModel("你好")
+        threading.Thread(target=service._translate_worker, daemon=True).start()
+        service.speakers_load()
+        end = time.time() + 5
+        while service.speakers["state"] != "ready" and time.time() < end:
+            time.sleep(0.02)
+        assert service.speakers["state"] == "ready"
+        return service
+
+    def hear(service, vec, text, seconds=3.0):
+        n = service.voices.speakers.who(vec, seconds)
+        service._on_speech("loopback", text, "ko", 0.2, speaker=n)
+        end = time.time() + 5
+        while (not service.messages or service.messages[-1].get("pending")) and time.time() < end:
+            time.sleep(0.02)
+        return service.messages[-1]
+
+    secret = "阿哲Zq7"
+    first = open_app()
+    try:
+        assert first.cfg["remember_speakers"] is False and first.speakers_state()["remember"] is False
+        assert hear(first, a, "안녕")["speaker"] == 1 and hear(first, b, "반가워")["speaker"] == 2
+        assert first.speaker_rename(1, secret)["ok"]
+        assert not file.exists() and first.speakers_state()["people"][0]["known"] is False      # 沒開：取了名字也不存
+        assert first.update_config({"remember_speakers": True})["changed"] == ["remember_speakers"]
+        rows = voicebook.load(data)
+        assert [r["name"] for r in rows] == [secret] and float(rows[0]["voice"] @ a) > 0.99      # 只記取過名字的；2 號沒有名字，不記
+        state = first.speakers_state()
+        assert state["remember"] and [p["known"] for p in state["people"]] == [True, False]
+        # 設定檔、匯出的設定、歷史、問題報告裡沒有名字；報告只說記了幾個
+        assert secret not in (data / "config.json").read_text(encoding="utf-8") and secret not in json_mod.dumps(first._settings_now(), ensure_ascii=False)
+        report = first.report_make()["text"]
+        assert secret not in report and "remembered_voices_count: 1" in report
+        from livelingo import history as history_mod
+        assert secret not in (data / history_mod.FILE).read_text(encoding="utf-8")
+        assert [p.name for p in data.rglob("*") if p.is_file() and secret.encode("utf-8") in p.read_bytes()] == [voicebook.FILE]
+        # 他又說了幾句（聲音有一點不一樣）：聲紋跟著調整，也存進去
+        hear(first, voice((0, 0.95), (9, 0.31)), "가자")
+        assert float(voicebook.load(data)[0]["voice"][9]) > 0.01
+        first.speaker_rename(2, "小美")
+    finally:
+        first.shutdown()
+    assert sorted(r["name"] for r in voicebook.load(data)) == sorted([secret, "小美"])
+
+    second = open_app()      # 下次開程式
+    try:
+        state = second.speakers_state()
+        assert [(p["id"], p["name"], p["count"], p["known"]) for p in state["people"]] == [(1, secret, 0, True), (2, "小美", 0, True)]
+        said = hear(second, voice((1, 0.97), (8, 0.24)), "나야")      # 小美一開口就認得
+        assert (said["speaker"], said["voice"]) == (2, "小美") and second.speaker_tag(said) == (2, "小美")
+        assert hear(second, c, "누구세요")["speaker"] == 3 and second.messages[-1]["voice"] == ""      # 沒聽過的人是新的「說話者 3」
+        # 全部重新分辨：這一次分出來的沒名字的人忘掉，記住的人還在
+        assert second.speakers_forget()["ok"]
+        state = second.speakers_state()
+        assert [(p["name"], p["count"]) for p in state["people"]] == [(secret, 0), ("小美", 0)] and state["run"] == 2
+        assert sorted(r["name"] for r in voicebook.load(data)) == sorted([secret, "小美"])
+        # 把名字清空：忘掉那個人
+        assert second.speaker_rename(1, "")["ok"] and [r["name"] for r in voicebook.load(data)] == ["小美"]
+        # 聲紋模型還沒準備好的時候（還不知道以前記了誰）不能把檔案洗掉
+        loaded, second.voices = second.voices, None
+        second._voices_save()
+        assert [r["name"] for r in voicebook.load(data)] == ["小美"]
+        second.voices = loaded
+        # 關掉開關：存的刪掉，這一次開啟期間的名字還在；再打開就再存
+        assert second.update_config({"remember_speakers": False})["changed"] and not file.exists()
+        assert second.speakers_state()["people"][1]["name"] == "小美" and second.speakers_state()["people"][1]["known"] is False
+        assert second.update_config({"remember_speakers": True})["changed"] and [r["name"] for r in voicebook.load(data)] == ["小美"]
+        second.update_config({"remember_speakers": False})
+    finally:
+        second.shutdown()
+    assert not file.exists()      # 關著的時候，關程式也不會存
+
+    third = open_app()
+    try:
+        assert third.speakers_state()["people"] == []      # 沒有記住任何人
+    finally:
+        third.shutdown()
+
+    # 四、卸載：選「留下設定」的時候，記住的聲音也要刪（它不是設定）；介面有開關，而且說清楚存在哪、怎麼刪
+    root = Path(voicebook.__file__).parent
+    iss = (root.parent / "packaging" / "installer.iss").read_text(encoding="utf-8")
+    keep = iss[iss.index("if KeepData then"):iss.index("DelTree(data, True, True, True)")]
+    assert f"DeleteFile(data + '\\{voicebook.FILE}')" in keep
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'switchRow("remember_speakers"' in js and "p.known" in js and "spk_forgot_kept" in js
+    config_src = (root / "config.py").read_text(encoding="utf-8")
+    assert '"remember_speakers": False' in config_src      # 預設關：要使用者自己打開才會存別人的聲紋
+    source = (root / "service.py").read_text(encoding="utf-8")
+    boot = source[source.index("    def _boot(self)"):source.index("    def _boot(self)") + 700]
+    assert "self.speakers_load()" in boot      # 一開程式就準備好，不用等到開始收音才看得到記住的人
