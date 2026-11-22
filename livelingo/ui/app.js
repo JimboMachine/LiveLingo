@@ -69,7 +69,7 @@
     const page = $("settings-page");
     const el = S.view === "settings" && (page.querySelector(mark.key[0] === "#" ? mark.key : mark.key.startsWith("preset-") ? `[data-act="overlay-preset"][data-code="${mark.key.slice(7)}"]` : SAVE_TARGET[mark.key] || `[data-key="${mark.key}"][aria-pressed="true"]`)
       || page.querySelector(`[data-key="${mark.key}"], [data-change="${mark.key}"]`));
-    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches"));
+    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches, .packs"));
     if (row) row.classList.add("just-saved");
     chip.hidden = false;
     if (el) {
@@ -576,7 +576,9 @@
       </section>
       <section>${switchRow("use_context", t("use_context"), t("use_context_desc"))}
         ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>
-      <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}</section>
+      <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}
+        ${S.cfg.game_terms ? `<div class="packs">${["lol", "chat"].map((p) => `<button class="pack" id="pack-${p}" data-act="pack" data-pack="${p}" aria-pressed="${(S.cfg.term_packs || []).indexOf(p) >= 0}">
+          <span class="name">${ICON.check}${esc(t("pack_" + p))}</span><span class="desc">${esc(t("pack_" + p + "_desc"))}</span></button>`).join("")}</div>` : ""}</section>
       <section>
         <div><h2>${esc(t("gloss_title"))}</h2><div class="sub">${esc(t("gloss_hint"))}</div></div>
         <form class="gloss-form" id="gloss-form">
@@ -589,6 +591,14 @@
       <section>
         <div><h2>${esc(t("lessons_title"))}</h2><div class="sub">${esc(t("lessons_hint"))}</div></div>
         <div class="gloss"><div class="grow-head"><span>${esc(t("lessons_src"))}</span><span>${esc(t("lessons_dst"))}</span><span></span></div>${taught}</div>
+      </section>
+      <section>
+        <div><h2>${esc(t("lib_title"))}</h2><div class="sub">${esc(t("lib_hint"))}</div></div>
+        <div class="btn-row">
+          <button class="ghost" data-act="lib-export">${esc(t("lib_export"))}</button>
+          <button class="ghost" data-act="lib-import">${esc(t("lib_import"))}</button>
+          <input type="file" id="lib-file" accept=".json,application/json" hidden>
+        </div>
       </section>`;
   }
 
@@ -767,8 +777,8 @@
     const scroll = page.scrollTop;
     const active = page.contains(document.activeElement) ? document.activeElement : null;
     const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
-      ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
-    const typed = [...page.querySelectorAll("input[id]:not([type=range]), textarea[id]")].map((el) => [el.id, el.value]);
+      ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
+    const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "audio") page.innerHTML = devicesHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
@@ -1050,6 +1060,15 @@
     },
     quality: (el) => saveCfg({ quality: el.dataset.q }),
     tone: (el) => saveCfg({ tone: el.dataset.tone }),
+    "lib-export": async () => {
+      const r = await post("/api/library", { export: true });
+      toast(r.ok ? t("lib_exported", r) : t("lib_export_failed", { error: r.error || "" }), 9000, r.ok ? "info" : "warn");
+    },
+    "lib-import": () => { const f = $("lib-file"); f.value = ""; f.click(); },
+    pack: (el) => {      // 用語包可以多選
+      const now = (S.cfg.term_packs || []).slice(), p = el.dataset.pack;
+      saveCfg({ term_packs: now.indexOf(p) >= 0 ? now.filter((x) => x !== p) : now.concat(p) }, "#pack-" + p);
+    },
     toggle: (el) => saveCfg({ [el.dataset.key]: !S.cfg[el.dataset.key] }),
     set: (el) => saveCfg({ [el.dataset.key]: el.dataset.value }),
     "overlay-preset": async (el) => { const r = await post("/api/overlay", { preset: el.dataset.code }); if (r.ok && r.saved) flashSaved("preset-" + el.dataset.code); },
@@ -1130,6 +1149,14 @@
   });
 
   document.addEventListener("change", (e) => {
+    if (e.target.id === "lib-file") {      // 匯入詞彙檔：在這裡讀檔，內容交給程式檢查和合併
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      file.text().then((text) => { let data = null; try { data = JSON.parse(text); } catch (ex) { data = null; } return post("/api/library", { data }); })
+        .then((r) => toast(r.ok ? t("lib_imported", r) : t("lib_bad"), 9000, r.ok ? "info" : "warn"))
+        .catch(() => toast(t("lib_bad"), 9000, "warn"));
+      return;
+    }
     const key = e.target.dataset && e.target.dataset.change;
     if (!key) return;
     if (e.target.dataset.range || e.target.dataset.live) {      // 放開滑桿、選好顏色：這才算存好

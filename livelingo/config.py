@@ -21,6 +21,7 @@ DEFAULTS = {
     "tone": "casual",            # casual = 朋友語氣（韓文半語）；polite = 有禮貌
     "quality": "auto",           # auto = 照顯示卡自動決定；standard；high
     "game_terms": True,          # 內建的遊戲用語表（英雄聯盟，韓文和中文之間）
+    "term_packs": ["lol", "chat"],   # 用哪幾包內建用語（terms.PACKS）；game_terms 關掉時都不用
     "back_translate": True,
     "use_context": True,         # 翻譯時參考前面兩句對話（代名詞、省略的主詞比較不會翻錯）      # 我說的、打的翻成對方的語言之後，再翻回來給我看（回譯）
     "speaker_device": None,      # 對方的聲音從哪個播放裝置出來（裝置 id），None = Windows 預設
@@ -66,7 +67,7 @@ DEFAULTS = {
 # 介面可以改的設定（其他的只能直接改檔案）
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
-EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "back_translate", "use_context", "speaker_device", "speaker_name",
+EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
@@ -210,6 +211,23 @@ class Glossary:
             self.items = [i for i in self.items if i["src"] != src]
             self._save()
 
+    def merge(self, items) -> int:
+        """匯入：只加進原本沒有的詞（原本就有的不動），回傳加了幾個。"""
+        added = 0
+        with self._lock:
+            have = {i["src"].lower() for i in self.items}
+            for item in items if isinstance(items, list) else []:
+                if not isinstance(item, dict):
+                    continue
+                src, dst = str(item.get("src", "")).strip()[:80], str(item.get("dst", "")).strip()[:80]
+                if src and dst and src.lower() not in have:
+                    self.items.append({"src": src, "dst": dst})
+                    have.add(src.lower())
+                    added += 1
+            if added:
+                self._save()
+        return added
+
     def _save(self) -> None:
         try:
             _write_json(self.path, self.items)
@@ -256,6 +274,26 @@ class Lessons:
         with self._lock:
             self.items = [i for i in self.items if not (i["src"] == src and i["target"] == target)]
             self._save()
+
+    def merge(self, items, sources=(), targets=()) -> int:
+        """匯入：只加進原本沒教過的句子（同一句、同一個目標語言算教過），回傳加了幾句。
+        sources、targets：認得的原文語言和目標語言，別的不收。"""
+        added = 0
+        with self._lock:
+            have = {(i["src"], i["target"]) for i in self.items}
+            for item in items if isinstance(items, list) else []:
+                if not isinstance(item, dict) or len(self.items) >= self.LIMIT:
+                    continue
+                src, dst = str(item.get("src", "")).strip()[:500], str(item.get("dst", "")).strip()[:500]
+                lang, target = str(item.get("lang", "")), str(item.get("target", ""))
+                if not src or not dst or src == dst or lang not in sources or target not in targets or (src, target) in have:
+                    continue
+                self.items.append({"src": src, "dst": dst, "lang": lang, "target": target})
+                have.add((src, target))
+                added += 1
+            if added:
+                self._save()
+        return added
 
     def _save(self) -> None:
         try:

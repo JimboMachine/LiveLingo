@@ -38,7 +38,7 @@
     {"id": "meters", "row": "core", "name": "meters.py", "role": "音量", "files": ["livelingo/meters.py"]},
     {"id": "translate", "row": "core", "name": "translate.py", "role": "翻譯", "files": ["livelingo/core/translate.py"]},
     {"id": "engine", "row": "core", "name": "engine.py", "role": "翻譯引擎", "files": ["livelingo/core/engine.py"]},
-    {"id": "terms", "row": "core", "name": "terms.py", "role": "遊戲用語", "files": ["livelingo/terms.py", "livelingo/data/terms_lol.json"]},
+    {"id": "terms", "row": "core", "name": "terms.py", "role": "用語包（可多選）", "files": ["livelingo/terms.py", "livelingo/data/terms_lol.json", "livelingo/data/terms_chat.json"]},
     {"id": "romanize", "row": "core", "name": "romanize.py", "role": "韓文唸法", "files": ["livelingo/core/romanize.py"]},
     {"id": "paths", "row": "base", "name": "paths.py", "role": "路徑", "files": ["livelingo/paths.py"]},
     {"id": "oswin", "row": "base", "name": "oswin.py", "role": "Windows 功能", "files": ["livelingo/oswin.py"]},

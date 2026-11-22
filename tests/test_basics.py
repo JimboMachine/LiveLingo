@@ -845,6 +845,16 @@ def test_dependencies_hold():
     for parts in (("livelingo", "data", "tray.png"), ("livelingo", "data", "terms_lol.json"),
                   ("packaging", "livelingo.ico"), ("packaging", "livelingo.png")):
         assert root.joinpath(*parts).is_file(), parts
+
+    # 用語包：terms.PACKS 列的每一包都有資料檔、介面上有名字和說明，設定頁列的也是同一批
+    from livelingo.terms import PACKS
+
+    assert DEFAULTS["term_packs"] == list(PACKS)
+    assert re.search(r'\[([^\]]*)\]\.map\(\(p\) => `<button class="pack"', app).group(1).replace('"', "").split(", ") == list(PACKS)
+    for name in PACKS:
+        raw = json.loads(root.joinpath("livelingo", "data", f"terms_{name}.json").read_text(encoding="utf-8"))
+        assert raw["ko_zh"] and raw["zh_ko"], name
+        assert f"pack_{name}: " in i18n and f"pack_{name}_desc: " in i18n, name      # 五個語言都有，另一個測試會查
     spec, iss, build = read("packaging", "livelingo.spec"), read("packaging", "installer.iss"), read(".github", "workflows", "build.yml")
     assert "livelingo.ico" in spec and "SetupIconFile=livelingo.ico" in iss
 
@@ -1211,4 +1221,79 @@ def test_unsure_and_edit_original(tmp_path):
     finally:
         watcher_mod.message_lines = old
         service._stop_watcher()
+
+
+def test_term_packs(tmp_path):
+    """用語包可以多選：選了哪幾包就只用那幾包；只有子音的縮寫（ㄱㄱ、ㅊㅋㅊㅋ）認得；提示前面那句話跟著換。"""
+    from livelingo.core.translate import HINT_INTRO, HINT_INTRO_CHAT
+    from livelingo.service import Service
+    from livelingo.terms import PACKS
+
+    both, lol, chat = TermPack(), TermPack(["lol"]), TermPack(["chat"])
+    assert both.names == list(PACKS) and TermPack(["chat", "nope"]).names == ["chat"] and TermPack([]).names == []
+    assert both.find("ㄱㄱ 탑 갈게", "ko", "zh-TW") == [("탑", "上路"), ("ㄱㄱ", "走吧")]
+    assert lol.find("ㄱㄱ 탑 갈게", "ko", "zh-TW") == [("탑", "上路")]
+    assert chat.find("ㄱㄱ 탑 갈게", "ko", "zh-TW") == [("ㄱㄱ", "走吧")]
+    assert chat.find("ㅊㅋㅊㅋ", "ko", "zh-TW") == [("ㅊㅋ", "恭喜")]                # 重複打的也算
+    assert chat.find("ㅋㅋㅋㅋ ㅇㅋㅋ", "ko", "zh-TW") == []                           # 笑聲不是用語
+    assert chat.find("나 잠수 탈게", "ko", "zh-CN") == [("잠수", "暂时离开（挂机）")]
+    assert ("掛機", "잠수") in chat.find("我先掛機一下", "zh", "ko") and TermPack([]).find("탑 갈게", "ko", "zh-TW") == []
+    assert both.find("부캐로 할게", "ko", "zh-TW") == [("부캐", "小號")]              # 兩包都有的詞只出現一次
+
+    prompt = build_prompt("ㄱㄱ", "ko", "zh-TW", {}, "casual", [("ㄱㄱ", "走吧")], hint_intro=HINT_INTRO_CHAT)
+    assert HINT_INTRO_CHAT + "ㄱㄱ = 走吧" in prompt and "League of Legends" not in prompt
+    assert HINT_INTRO + "ㄱㄱ = 走吧" in build_prompt("ㄱㄱ", "ko", "zh-TW", {}, "casual", [("ㄱㄱ", "走吧")])
+
+    service = Service(tmp_path)
+    assert service.terms.names == list(PACKS) and service.translator.hint_intro == HINT_INTRO
+    result = service.update_config({"term_packs": ["chat", "lol", "nope"]})
+    assert result["saved"] and "term_packs" not in result["changed"]                    # 整理之後跟原本一樣：沒有變
+    assert service.update_config({"term_packs": ["chat"]})["changed"] == ["term_packs"]
+    assert service.terms.names == ["chat"] and service.translator.hint_intro == HINT_INTRO_CHAT
+    assert service._hints("ㄱㄱ 탑 갈게", "ko", "zh-TW") == [("ㄱㄱ", "走吧")]
+    assert Config(tmp_path)["term_packs"] == ["chat"]
+    service.update_config({"term_packs": "lol"})                                        # 不是清單：當成一包都沒選
+    assert service.cfg["term_packs"] == [] and service._hints("탑 갈게", "ko", "zh-TW") == []
+    service.update_config({"term_packs": ["lol"], "game_terms": False})
+    assert service._hints("탑 갈게", "ko", "zh-TW") == []                               # 總開關關掉就都不用
+
+
+def test_export_and_import_library(tmp_path):
+    """詞彙表和教過的句子：匯出成一個檔案；匯入只加原本沒有的，亂七八糟的檔案不收也不會弄壞原本的。"""
+    from pathlib import Path
+
+    from livelingo.service import LIBRARY_KIND, Service
+
+    mine = Service(tmp_path / "mine")
+    mine.cfg.set(transcript_dir=str(tmp_path / "out"))
+    mine.glossary.add("Faker", "Faker")
+    mine.lessons.add("我先去洗澡", "먼저 씻으러 갈게", "zh", "ko")
+    out = mine.export_library()
+    assert out["ok"] and out["sentences"] == 1 and out["words"] == len(mine.glossary.list())
+    data = json.loads(Path(out["path"]).read_text(encoding="utf-8"))
+    assert data["kind"] == LIBRARY_KIND and {"src": "Faker", "dst": "Faker"} in data["glossary"]
+
+    friend = Service(tmp_path / "friend")
+    friend.glossary.add("faker", "飛科")                                   # 朋友自己已經有這個詞：匯入不能蓋掉
+    before = len(friend.glossary.list())
+    events = []
+    friend.hub.publish = lambda name, payload: events.append(name)
+    result = friend.import_library(data)
+    assert result["ok"] and result["sentences"] == 1 and result["words"] == out["words"] - before
+    assert friend.glossary.as_dict()["faker"] == "飛科" and "Faker" not in friend.glossary.as_dict()
+    assert friend.lessons.list() == [{"src": "我先去洗澡", "dst": "먼저 씻으러 갈게", "lang": "zh", "target": "ko"}]
+    assert "glossary" in events and "lessons" in events
+    again = friend.import_library(data)                                    # 再匯入一次：什麼都不會多
+    assert again["ok"] and again["words"] == 0 and again["sentences"] == 0 and again["skipped"] == out["words"] + 1
+    assert Lessons(tmp_path / "friend").list() == friend.lessons.list()   # 有存進檔案
+
+    for bad in (None, [], "x", {"kind": "other"}, {"glossary": [{"src": "a", "dst": "b"}]}):
+        assert friend.import_library(bad) == {"ok": False, "error": "not_library"}
+    odd = {"kind": LIBRARY_KIND, "glossary": [1, {"src": "", "dst": "x"}, {"src": "新詞", "dst": "새말"}, {"src": "新詞", "dst": "別的"}],
+           "lessons": "nope"}
+    assert friend.import_library(odd)["words"] == 1 and friend.glossary.as_dict()["新詞"] == "새말"
+    odd = {"kind": LIBRARY_KIND, "lessons": [{"src": "a", "dst": "b", "lang": "xx", "target": "ko"},
+                                             {"src": "a", "dst": "b", "lang": "zh", "target": "klingon"},
+                                             {"src": "你好", "dst": "안녕", "lang": "zh", "target": "ko"}]}
+    assert friend.import_library(odd)["sentences"] == 1
 

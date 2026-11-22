@@ -72,7 +72,7 @@ class Server:
 
             def _body(self) -> dict:
                 length = int(self.headers.get("Content-Length") or 0)
-                if length <= 0 or length > 200_000:
+                if length <= 0 or length > 2_000_000:      # 匯入的詞彙檔可能有幾百句
                     return {}
                 try:
                     value = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -192,6 +192,10 @@ class Server:
                     if route == "/api/glossary/remove":
                         service.glossary_remove(str(body.get("src") or ""))
                         return self._json({"ok": True})
+                    if route == "/api/library":      # 詞彙表和教過的句子：匯出成檔案、從檔案匯入
+                        if body.get("export"):
+                            return self._json(service.export_library())
+                        return self._json(service.import_library(body.get("data")))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
                     if route == "/api/clear":

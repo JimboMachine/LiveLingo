@@ -22,13 +22,16 @@ from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language
 from .overlay import Overlay
 from .paths import self_command
-from .terms import TermPack
+from .terms import PACKS, TermPack
 from .transcript import Transcript
 from .tray import Tray
 
 VOICE_KIND = {"listen": "loopback", "mic": "mic"}
 SOURCE_OF = {"loopback": "listen", "mic": "mic"}
 VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也翻得了的語言
+
+
+LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
 
 
 class EventHub:
@@ -101,7 +104,7 @@ class Service:
         self.cfg.on_fail = lambda error: self.notice("save_failed", error=error)      # 設定檔寫不進去要讓使用者知道
         self.glossary = Glossary(data)
         self.lessons = Lessons(data)      # 使用者教過的整句翻法
-        self.terms = TermPack()
+        self.terms = TermPack(self.cfg["term_packs"])
         self.audio = audio or RealAudio()
         from .core import audio as audio_core
 
@@ -112,6 +115,7 @@ class Service:
         self.engine: Engine | None = None
         self.translator = Translator("http://127.0.0.1:8177", glossary=self.glossary.as_dict,
                                      tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list)
+        self._terms_changed()
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
         # quiet：麥克風開著卻完全沒聲音時是 "silent"，Windows 的隱私權設定擋住時是 "blocked"
@@ -367,6 +371,14 @@ class Service:
             return []
         return self.terms.find(text, source, target)
 
+    def _terms_changed(self) -> None:
+        """換了用語包：重新載入，提示前面那句話也跟著換（沒有選英雄聯盟就不說是在聊英雄聯盟）。"""
+        from .core.translate import HINT_INTRO, HINT_INTRO_CHAT
+
+        self.terms = TermPack(self.cfg["term_packs"])
+        self.translator.hint_intro = HINT_INTRO if "lol" in self.terms.names else HINT_INTRO_CHAT
+        self.translator.clear_cache()
+
     def _pronunciation(self, text: str, target: str) -> str:
         # 不管「顯示唸法」有沒有開都先算好，介面照設定決定要不要顯示，這樣開關一切換舊的句子也會跟著變
         return romanize(text) if LANGS[target]["family"] == "ko" else ""
@@ -613,6 +625,37 @@ class Service:
         self.translator.clear_cache()
         self.hub.publish("glossary", self.glossary.list())
 
+    def export_library(self) -> dict:
+        """把我的詞彙表和教過的句子存成一個檔案（放在字幕記錄的資料夾），可以備份或傳給朋友。"""
+        words, sentences = self.glossary.list(), self.lessons.list()
+        folder = self.transcript_dir()
+        path = folder / f"LiveLingo-library-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"app": "LiveLingo", "kind": LIBRARY_KIND, "version": 1,
+                                        "glossary": words, "lessons": sentences}, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
+        except OSError as ex:
+            self.log(f"library export failed: {ex!r}")
+            return {"ok": False, "error": str(ex)}
+        oswin.open_path(folder)
+        return {"ok": True, "path": str(path), "words": len(words), "sentences": len(sentences)}
+
+    def import_library(self, data) -> dict:
+        """匯入別人（或自己以前）匯出的檔案：只加原本沒有的，原本就有的不動。"""
+        if not isinstance(data, dict) or data.get("kind") != LIBRARY_KIND:
+            return {"ok": False, "error": "not_library"}
+        from .core.translate import SOURCES
+
+        given = sum(len(data.get(k)) for k in ("glossary", "lessons") if isinstance(data.get(k), list))
+        words = self.glossary.merge(data.get("glossary"))
+        sentences = self.lessons.merge(data.get("lessons"), sources=tuple(SOURCES), targets=tuple(LANGS))
+        if words or sentences:
+            self.translator.clear_cache()
+            self.hub.publish("glossary", self.glossary.list())
+            self.hub.publish("lessons", self.lessons.list())
+        return {"ok": True, "words": words, "sentences": sentences, "skipped": max(0, given - words - sentences)}
+
     def copy(self, msg_id: int) -> bool:
         with self._lock:
             msg = next((m for m in self.messages if m["id"] == msg_id), None)
@@ -642,6 +685,9 @@ class Service:
             changes.pop("tone")
         if changes.get("quality") not in (None, "auto", "standard", "high"):
             changes.pop("quality")
+        if "term_packs" in changes:
+            picked = changes["term_packs"] if isinstance(changes["term_packs"], list) else []
+            changes["term_packs"] = [name for name in PACKS if name in picked]
         for key, allowed in (("overlay_family", chatpaint.FAMILIES), ("overlay_align", chatpaint.ALIGNS), ("overlay_grow", chatpaint.GROWS)):
             if key in changes and changes[key] not in allowed:
                 changes.pop(key)
@@ -682,6 +728,8 @@ class Service:
             self.translator.clear_cache()
         if changed("game_terms"):
             self.translator.clear_cache()
+        if changed("term_packs"):
+            self._terms_changed()
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
         if changed("overlay", *OVERLAY_LOOK, "ui_lang", "my_lang", "their_lang"):

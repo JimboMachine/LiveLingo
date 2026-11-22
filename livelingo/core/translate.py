@@ -36,6 +36,8 @@ def to_script(text: str, code: str) -> str:
     return text
 
 HINT_INTRO = "They are talking about the game League of Legends. Use these translations for the game terms: "
+# 沒有選英雄聯盟的用語包時（只有聊天縮寫）用這句
+HINT_INTRO_CHAT = "They are chatting while playing an online game. Use these meanings for the chat slang: "
 
 # 實測：少了這段，模型常常自己加「嗯、啊、哇」或表情符號，還會把「我來」翻成「幫我」之類的
 FAITHFUL = ("Translate faithfully: keep the meaning, who is doing what, and the sentence type exactly as in the original. "
@@ -180,7 +182,7 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
 
 def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual",
                  hints: list[tuple[str, str]] | None = None, examples: list[tuple[str, str]] | None = None,
-                 style: str = "full", context: list[str] | None = None) -> str:
+                 style: str = "full", context: list[str] | None = None, hint_intro: str | None = None) -> str:
     """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。
     style：full = 平常用的；short = 語氣提示換成比較短的寫法（直述句被翻成問句時重翻用）；
     plain = 只有官方的提示（模型把原文原封不動吐回來時重翻用，意思最穩但語氣會比較正式）。"""
@@ -208,7 +210,7 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
         extra += "Keep these terms exactly as written, do not translate or change them: " + "; ".join(kept) + "\n"
     hints = [(a, b) for a, b in (hints or []) if a in text]
     if hints and style != "plain":
-        extra += HINT_INTRO + "; ".join(f"{a} = {b}" for a, b in hints) + "\n"
+        extra += (hint_intro or HINT_INTRO) + "; ".join(f"{a} = {b}" for a, b in hints) + "\n"
     words = [(a, b) for a, b in COMMON_WORDS.get((source, target), [])
              if a in text and not text.rstrip("。．.!！~～… ").endswith(a)]      # 單獨一句「等一下」是「等等我」，不算
     if words and style != "plain":
@@ -288,6 +290,7 @@ class Translator:
         self.hints = hints or (lambda text, source, target: [])
         self.lessons = lessons or (lambda: [])
         self.tone = tone
+        self.hint_intro = HINT_INTRO      # 用語提示前面那句話（照選了哪些用語包換）
         self.max_chars = max_chars
         self._lock = threading.Lock()  # 一次只翻一則，其他排隊
         self._cache: dict[tuple, str] = {}
@@ -305,7 +308,8 @@ class Translator:
     def _ask(self, text: str, source: str, target: str, hints: list, examples: list | None = None,
              style: str = "full", context: list[str] | None = None) -> str:
         payload = {
-            "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context),
+            "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context,
+                                   self.hint_intro),
             "max_tokens": min(1024, 64 + 4 * len(text)),
             "temperature": 0,
             "repeat_penalty": 1.0,
