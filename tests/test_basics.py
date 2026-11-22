@@ -759,3 +759,22 @@ def test_look_settings(tmp_path):
     cfg.set(window={"w": 700, "h": 600, "x": 0, "y": 0})
     cfg.save()
     assert Config(old)["window"]["w"] == 700
+
+
+def test_tray_setting(tmp_path):
+    from livelingo.service import Service
+    from livelingo.tray import TEXT, Tray, texts
+
+    assert set(TEXT) == {"zh-TW", "zh-CN", "en", "ko", "ja"}
+    assert all(set(v) == set(TEXT["zh-TW"]) for v in TEXT.values())
+    assert texts("xx") == TEXT["en"]
+
+    service = Service(tmp_path)
+    assert service.cfg["close_to_tray"] is True and service.cfg["tray_hint_shown"] is False
+    service.update_config({"close_to_tray": 0})
+    assert service.cfg["close_to_tray"] is False
+    tray = Tray(service)
+    assert tray.start() is (os.name == "nt") or tray.error      # Linux 上開不起來：程式照常運作，只是關視窗就等於結束
+    tray.notify_hidden()                                          # 圖示沒開起來也不會出錯
+    tray.stop()
+    service.shutdown()

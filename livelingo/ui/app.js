@@ -149,8 +149,7 @@
       return `<button class="card" data-act="source" data-key="${key}" aria-pressed="${s.on ? "true" : "false"}"
         data-busy="${s.busy ? "true" : "false"}" data-error="${s.error && !s.on ? "true" : "false"}"
         data-speaking="${s.on && s.speaking ? "true" : "false"}">
-        <div class="top">${ICON[key]}<span class="state">${esc(state)}</span></div>
-        <div class="name">${esc(t("src_" + key))}</div>
+        ${ICON[key]}<div class="name">${esc(t("src_" + key))}</div><span class="state">${esc(state)}</span>
         <div class="hint">${esc(sourceHint(key))}</div>
         ${key !== "screen" && s.on ? `<div class="vu" aria-hidden="true"><i data-vu="${key}"></i></div>` : ""}
       </button>`;

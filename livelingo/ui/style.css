@@ -169,18 +169,18 @@ input::placeholder { color: var(--faint); }
 .lang-picker .foot { display: flex; justify-content: flex-end; }
 .lang-picker .primary { height: 36px; border-radius: 10px; font-size: 13px; padding: 0 16px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.card { min-height: 84px; padding: 10px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); text-align: left; display: flex; flex-direction: column; gap: 6px; }
-.card .top { display: flex; align-items: center; justify-content: space-between; color: var(--dim); }
-.card .state { font-size: 11px; font-weight: 700; }
-.card .name { font-size: 14px; font-weight: 700; }
-.card .hint { font-size: 11px; color: var(--dim); line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.card { min-height: 60px; padding: 9px 12px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); text-align: left; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "icon name state" "icon hint state" "vu vu vu"; column-gap: 10px; row-gap: 1px; align-items: center; }
+.card > svg { grid-area: icon; color: var(--dim); }
+.card .state { grid-area: state; font-size: 11px; font-weight: 700; color: var(--dim); white-space: nowrap; }
+.card .name { grid-area: name; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .hint { grid-area: hint; font-size: 11px; color: var(--dim); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.card[aria-pressed="true"] .top { color: var(--accent); }
+.card[aria-pressed="true"] > svg, .card[aria-pressed="true"] .state { color: var(--accent); }
 .card[data-busy="true"] { border-color: var(--me-line); }
-.card[data-busy="true"] .top { color: var(--me); }
+.card[data-busy="true"] > svg, .card[data-busy="true"] .state { color: var(--me); }
 .card[data-error="true"] .hint { color: var(--danger); }
 .card[data-speaking="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
-.card .vu { height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: auto; }
+.card .vu { grid-area: vu; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 4px; }
 .card .vu i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.12s linear; }
 .mic-row { margin-top: 8px; }
 .mic-note + .mic-note { margin-top: 6px; }
