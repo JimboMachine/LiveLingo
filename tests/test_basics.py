@@ -1465,3 +1465,105 @@ def test_segmenter_tuning():
     seg.tune(1.2, 0.3)
     assert seg._opts.threshold == 0.3 and seg._opts.min_silence_duration_ms == 1200
 
+
+def test_speech_on_the_graphics_card(tmp_path, monkeypatch):
+    """語音辨識用顯示卡：檔案沒齊先用處理器並說要下載；下載的壓縮檔只拿 DLL；跑不起來自動退回處理器並通知。"""
+    import io
+    import zipfile
+
+    from livelingo.core.speech import Recognizer
+    from livelingo.service import Service
+
+    index = {"releases": {
+        "8.9.7.29": [{"filename": "nvidia_cudnn_cu12-8.9.7.29-py3-none-win_amd64.whl", "url": "https://x/8", "size": 1}],
+        "9.10.2.21": [{"filename": "nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_x86_64.whl", "url": "https://x/linux", "size": 2},
+                      {"filename": "nvidia_cudnn_cu12-9.10.2.21-py3-none-win_amd64.whl", "url": "https://x/9.10", "size": 3}],
+        "9.2.0.82": [{"filename": "nvidia_cudnn_cu12-9.2.0.82-py3-none-win_amd64.whl", "url": "https://x/9.2", "size": 4}],
+        "9.99.0.1": [{"filename": "nvidia_cudnn_cu12-9.99.0.1-py3-none-win_amd64.whl", "url": "https://x/yanked", "size": 5, "yanked": True}],
+        "weird": [{"filename": "x-win_amd64.whl", "url": "https://x/weird"}]}}
+    assert assets.pick_cudnn_wheel(index) == ("https://x/9.10", 3)                   # 最新的 9、Windows 版、沒被撤回
+    assert assets.pick_cudnn_wheel({"releases": {"8.1": index["releases"]["8.9.7.29"]}}) is None
+
+    wheel = io.BytesIO()
+    with zipfile.ZipFile(wheel, "w") as z:
+        z.writestr("nvidia/cudnn/bin/cudnn_ops64_9.dll", b"ops")
+        z.writestr("nvidia/cudnn/bin/cudnn64_9.dll", b"main")
+        z.writestr("nvidia/cudnn/include/cudnn.h", b"header")
+        z.writestr("nvidia_cudnn_cu12-9.10.2.21.dist-info/METADATA", b"meta")
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(assets.urllib.request, "urlopen", lambda req, timeout=0: Reply(json.dumps(index).encode()))
+    fetched = []
+
+    def fake_fetch(url, dest, progress=None, cancel=None, attempts=8):
+        fetched.append(url)
+        dest.write_bytes(wheel.getvalue())
+        if progress:
+            progress(50, 100)
+
+    monkeypatch.setattr(assets, "fetch", fake_fetch)
+    data = tmp_path / "data"
+    assert not assets.has_cudnn(data) and assets.cuda_runtime_dir(data) is None
+    folder = assets.get_cudnn(data)
+    assert fetched == ["https://x/9.10"] and sorted(p.name for p in folder.iterdir()) == ["cudnn64_9.dll", "cudnn_ops64_9.dll"]
+    assert assets.has_cudnn(data) and assets.get_cudnn(data) == folder and len(fetched) == 1      # 已經有了就不再下載
+
+    # ---- 程式這邊：狀態
+    service = Service(tmp_path / "svc")
+    events = []
+    service.hub.publish = lambda name, payload: events.append((name, dict(payload) if isinstance(payload, dict) else payload))
+    assert service._speech_engine() == ("cpu", "int8") and service.speech_gpu_state()["can"] is False      # 沒有顯示卡
+    service.update_config({"speech_device": "tpu"})
+    assert service.cfg["speech_device"] == "cpu"
+    service.cfg.set(speech_device="gpu")
+    assert service._speech_engine() == ("cpu", "int8") and service.speech_gpu["state"] == "off"            # 選了但沒有顯示卡
+    assert service.speech_gpu_download() is False
+
+    service.gpu = {"name": "NVIDIA GeForce RTX 4070", "vram_mb": 12282, "tier": "high"}
+    assert service._speech_engine() == ("cpu", "int8") and service.speech_gpu["state"] == "need"           # 檔案還沒下載
+    assets.cudnn_dir(service.data).mkdir(parents=True)
+    (assets.cudnn_dir(service.data) / "cudnn_ops64_9.dll").write_bytes(b"x")
+    assert service._speech_engine() == ("cpu", "int8") and service.speech_gpu["state"] == "failed"         # 有 cuDNN 但沒有顯示卡版的引擎
+    service.speech_gpu["state"] = "off"
+    cuda = service.data / "engine" / "cuda" / "llama"
+    cuda.mkdir(parents=True)
+    (cuda / "cublas64_12.dll").write_bytes(b"x")
+    assert service._speech_engine() == ("cuda", "float16") and service.speech_gpu_state()["active"] is True
+    assert service._speech_gpu_files() == [cuda, assets.cudnn_dir(service.data)]
+
+    service._speech_gpu_failed(RuntimeError("Library cudnn_ops64_9.dll is not found"))
+    assert service.speech_gpu["state"] == "failed" and service.speech_gpu["active"] is False
+    assert ("notice", {"code": "speech_gpu_failed"}) in [(n, {"code": p.get("code")}) for n, p in events if n == "notice"]
+    assert service._speech_engine() == ("cpu", "int8")                                                     # 這次開著的期間不再試
+    service._speech_device_changed()                                                                       # 使用者再選一次：重試
+    assert service.speech_gpu["state"] == "ready" and service.recognizer is None
+    assert [p["state"] for n, p in events if n == "speech_gpu"][-1] == "ready"
+
+    # ---- 辨識器：顯示卡那邊出錯，改用處理器把這一句重做
+    loads, fell = [], []
+    rec = Recognizer.__new__(Recognizer)
+    rec._lock = threading.Lock()
+    rec._fw = type("FW", (), {"pad_or_trim": None})()
+    rec._short_pad = rec._orig_pad = None
+    rec.device = "cuda"
+    rec.on_fallback = fell.append
+
+    def load(device, compute):
+        loads.append((device, compute))
+        rec.device = device
+
+    def run(audio, langs, share_encoder=True, stay=1.0):
+        if rec.device == "cuda":
+            raise RuntimeError("CUDA out of memory")
+        return "지금 갈게요", "ko", False
+
+    rec._load, rec._run = load, run
+    assert rec.transcribe(None, ["ko"]) == ("지금 갈게요", "ko", False)
+    assert loads == [("cpu", "int8")] and len(fell) == 1 and rec.device == "cpu"
+

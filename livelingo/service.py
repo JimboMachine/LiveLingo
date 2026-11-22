@@ -148,6 +148,9 @@ class Service:
         self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
         self._recent_voice: deque[dict] = deque(maxlen=12)      # 最近聽到的句子（兩邊都記），用來認出麥克風收到的喇叭聲音
         self.delays: deque[tuple[float, float]] = deque(maxlen=10)      # 最近幾句語音：（辨識秒數, 翻譯秒數）
+        # 語音辨識用顯示卡：state = off（沒選）/ need（要先下載）/ downloading / ready / failed（試過不行，已改用處理器）
+        self.speech_gpu = {"state": "off", "percent": 0, "error": "", "mb": assets.CUDNN_MB, "active": False}
+        self._speech_gpu_cancel = threading.Event()
         self._lock = threading.RLock()
         self._download_cancel = threading.Event()
         self._selecting = False
@@ -176,6 +179,7 @@ class Service:
             "gpu": self.gpu,
             "mode": self.mode,
             "delay": self.delay(),
+            "speech_gpu": self.speech_gpu_state(),
             "ptt_keys": list(oswin.PTT_KEYS),
             "fallback": self.fallback,
             "sources": self.sources,
@@ -228,6 +232,7 @@ class Service:
                 return
             self.overlay.apply()
             self.gpu = gpu.detect()
+            self._speech_engine()      # 先把「語音辨識用顯示卡」現在的狀態算好，介面才知道要不要顯示下載
             self._prepare()
         except Exception as ex:  # noqa: BLE001
             self.log(traceback.format_exc())
@@ -730,6 +735,8 @@ class Service:
             changes["overlay_name_colors"] = colors
         if changes.get("speech_mode") not in (None, *BEAMS):
             changes.pop("speech_mode")
+        if changes.get("speech_device") not in (None, "cpu", "gpu"):
+            changes.pop("speech_device")
         if changes.get("ptt_key") not in (None, *oswin.PTT_KEYS):
             changes.pop("ptt_key")
         if "end_silence" in changes:
@@ -776,6 +783,8 @@ class Service:
                 self.hub.publish("overlay", self.overlay.state())
         if changed("their_auto"):
             self._their_guess = ""
+        if changed("speech_device"):
+            threading.Thread(target=self._speech_device_changed, daemon=True).start()
         if changed("voice_sensitivity", "end_silence", "speech_mode"):      # 收音中直接換，不用重開
             with self._lock:
                 for pipe in self.pipelines.values():
@@ -986,7 +995,9 @@ class Service:
                 model_dir = self.data / "models" / "whisper"
                 if not (model_dir / "model.bin").exists():
                     raise RuntimeError("the speech model is missing")
-                self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]))
+                device, compute = self._speech_engine()
+                self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]), device=device,
+                                             compute_type=compute, on_fallback=self._speech_gpu_failed)
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
             capture = self.audio.capture(kind, device, on_error=self._voice_error, on_open=self._voice_opened)
             self.recognizer.beam = BEAMS[self.cfg["speech_mode"]]
@@ -1041,6 +1052,80 @@ class Service:
     def _restart_voice(self, key: str) -> None:
         self._stop_voice(key)
         threading.Thread(target=self._start_voice, args=(key,), daemon=True).start()
+
+    # ---- 語音辨識用顯示卡（實驗性：要有 NVIDIA 顯示卡、顯示卡版的翻譯引擎，再另外下載 cuDNN）
+
+    def speech_gpu_state(self) -> dict:
+        return dict(self.speech_gpu, can=self.gpu.get("tier", "cpu") != "cpu")
+
+    def _speech_gpu(self, **changes) -> None:
+        self.speech_gpu.update(changes)
+        self.hub.publish("speech_gpu", self.speech_gpu_state())
+
+    def _speech_gpu_files(self) -> list | None:
+        """用顯示卡辨識需要的兩個資料夾（CUDA、cuDNN）；有缺就回傳 None。"""
+        runtime = assets.cuda_runtime_dir(self.data)
+        return [runtime, assets.cudnn_dir(self.data)] if runtime and assets.has_cudnn(self.data) else None
+
+    def _speech_engine(self) -> tuple[str, str]:
+        """語音辨識現在該用什麼跑：（"cuda", "float16"）或（"cpu", "int8"）。順便更新給介面看的狀態。"""
+        if self.cfg["speech_device"] != "gpu" or self.gpu.get("tier", "cpu") == "cpu":
+            self._speech_gpu(state="off", active=False, error="")
+            return "cpu", "int8"
+        if self.speech_gpu["state"] in ("failed", "downloading"):
+            return "cpu", "int8"
+        folders = self._speech_gpu_files()
+        if not folders:
+            if assets.has_cudnn(self.data):      # cuDNN 有了，缺的是顯示卡版翻譯引擎帶來的 CUDA 檔案：下載也沒用
+                self._speech_gpu(state="failed", active=False,
+                                 error="the graphics card version of the translation engine is not installed")
+            else:
+                self._speech_gpu(state="need", active=False)
+            return "cpu", "int8"
+        oswin.add_dll_dirs(folders)
+        self._speech_gpu(state="ready", active=True, error="")
+        return "cuda", "float16"
+
+    def _speech_gpu_failed(self, ex: Exception) -> None:
+        self.log(f"speech recognition on the graphics card failed, using the processor instead: {ex!r}")
+        self._speech_gpu(state="failed", active=False, error=str(ex)[:300])
+        self.notice("speech_gpu_failed")
+
+    def _speech_device_changed(self) -> None:
+        """換了「用處理器／用顯示卡」或檔案下載好了：辨識器重新載入，收音中的來源重開。"""
+        if self.speech_gpu["state"] == "failed":
+            self.speech_gpu["state"] = "off"      # 再選一次顯示卡 = 再試一次
+        with self._lock:
+            self.recognizer = None
+        self._speech_engine()
+        for key in ("listen", "mic"):
+            if self.sources[key]["on"]:
+                self._restart_voice(key)
+
+    def speech_gpu_download(self, cancel: bool = False) -> bool:
+        """下載用顯示卡辨識需要的 cuDNN（約 700 MB）。"""
+        if cancel:
+            self._speech_gpu_cancel.set()
+            return True
+        if self.speech_gpu["state"] == "downloading" or self.gpu.get("tier", "cpu") == "cpu":
+            return False
+        self._speech_gpu_cancel.clear()
+        self._speech_gpu(state="downloading", percent=0, error="")
+
+        def work():
+            try:
+                assets.get_cudnn(self.data, lambda done, total: self._speech_gpu(
+                    percent=int(done * 100 / total) if total else 0), self._speech_gpu_cancel.is_set)
+            except Exception as ex:  # noqa: BLE001
+                self.log(f"cuDNN download failed: {ex!r}")
+                cancelled = self._speech_gpu_cancel.is_set()
+                self._speech_gpu(state="need", percent=0, error="" if cancelled else str(ex)[:300])
+                return
+            self.speech_gpu["state"] = "off"
+            self._speech_device_changed()
+
+        threading.Thread(target=work, daemon=True, name="cudnn").start()
+        return True
 
     def _mic_gate(self) -> bool:
         """麥克風現在要不要收音：開了「按住才說話」就只有按著那個鍵的時候才收。"""

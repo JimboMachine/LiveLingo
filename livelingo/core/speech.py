@@ -96,12 +96,19 @@ class Segmenter:
 
 class Recognizer:
     def __init__(self, model_dir: Path, threads: int = 4, device: str = "cpu", compute_type: str = "int8",
-                 window: int = 15):
+                 window: int = 15, on_fallback=None):
         import faster_whisper.transcribe as fw
-        from faster_whisper import WhisperModel
 
-        self.model = WhisperModel(str(model_dir), device=device, compute_type=compute_type, cpu_threads=threads,
-                                  local_files_only=True)
+        self.model_dir, self.threads = model_dir, threads
+        # on_fallback(錯誤)：本來要用顯示卡，結果不行（少了檔案、記憶體不夠…），已經改用處理器
+        self.on_fallback = on_fallback or (lambda ex: None)
+        try:
+            self._load(device, compute_type)
+        except Exception as ex:  # noqa: BLE001
+            if device == "cpu":
+                raise
+            self._load("cpu", "int8")
+            self.on_fallback(ex)
         self.window = window
         self.beam = 1          # 1 = 快；5 = 比較準、慢大約一倍（設定裡的「比較準」）
         self._lock = threading.Lock()
@@ -115,6 +122,13 @@ class Recognizer:
             return self._orig_pad(array, frames, axis=axis)
 
         self._short_pad = short_pad
+
+    def _load(self, device: str, compute_type: str) -> None:
+        from faster_whisper import WhisperModel
+
+        self.model = WhisperModel(str(self.model_dir), device=device, compute_type=compute_type,
+                                  cpu_threads=self.threads, local_files_only=True)
+        self.device = device
 
     @staticmethod
     def pick_language(probs, langs: list[str], stay: float = 1.0) -> str:
@@ -171,9 +185,15 @@ class Recognizer:
             try:
                 try:
                     text, lang, unsure = self._run(audio, langs, stay=stay)
-                except Exception:  # noqa: BLE001  加速的算法萬一不相容，退回標準算法
-                    self._fw.pad_or_trim = self._orig_pad
-                    text, lang, unsure = self._run(audio, langs, share_encoder=False, stay=stay)
+                except Exception as ex:  # noqa: BLE001
+                    if getattr(self, "device", "cpu") != "cpu":
+                        # 顯示卡跑不起來（常見：少了 cuDNN、顯示記憶體被遊戲佔滿）：改用處理器，這一句重來
+                        self._load("cpu", "int8")
+                        self.on_fallback(ex)
+                        text, lang, unsure = self._run(audio, langs, stay=stay)
+                    else:      # 加速的算法萬一不相容，退回標準算法
+                        self._fw.pad_or_trim = self._orig_pad
+                        text, lang, unsure = self._run(audio, langs, share_encoder=False, stay=stay)
             finally:
                 self._fw.pad_or_trim = self._orig_pad
         if not text or _HALLUCINATIONS.search(text):

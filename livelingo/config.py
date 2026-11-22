@@ -30,6 +30,7 @@ DEFAULTS = {
     "mic_name": "",
     "voice_sensitivity": 3,      # 多小聲算有人在說話：1（很吵的環境，只收清楚的聲音）到 5（小聲說話也收）
     "end_silence": 0.6,          # 停頓多久算一句話說完（秒），0.3 到 1.5
+    "speech_device": "cpu",      # 語音辨識用 cpu 處理器 / gpu 顯示卡（要另外下載 cuDNN，不行會自動退回處理器）
     "speech_mode": "fast",       # 語音辨識：fast 比較快 / accurate 比較準（慢大約一倍）
     "drop_echo": True,           # 麥克風收到喇叭播出來的對方聲音時，不要當成我說的話
     "ptt": False,                # 按住才說話：只有按著 ptt_key 的時候麥克風才收音
@@ -73,7 +74,7 @@ DEFAULTS = {
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
-            "voice_sensitivity", "end_silence", "speech_mode", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
+            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",

@@ -162,6 +162,7 @@ input::placeholder { color: var(--faint); }
 .note, .mic-note { padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; }
 .note { color: var(--dim); }
 .note svg, .mic-note > svg { color: var(--accent); margin-top: 1px; flex: none; }
+.note > button { flex: none; height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; margin-left: auto; align-self: center; }
 .note.warn, .mic-note.warn, .toast[data-level="warn"] { border-left-color: var(--me); }
 .note.warn svg, .mic-note.warn > svg { color: var(--me); }
 .note.error, .mic-note.error, .toast[data-level="error"] { border-left-color: var(--danger); }

@@ -491,12 +491,29 @@
       : t("delay_none");
   }
 
+  // 語音辨識用顯示卡（有 NVIDIA 顯示卡才出現）：選了之後照狀態顯示「要下載／下載中／已啟用／不行，已改回處理器」
+  function speechGpuHTML() {
+    const g = S.speechGpu || {};
+    if (!g.can) return "";
+    let note = "";
+    if (S.cfg.speech_device === "gpu") {
+      if (g.state === "need") note = `<div class="note warn">${ICON.info}<span>${esc(t("sgpu_need", { mb: g.mb }))}${g.error ? " " + esc(t("sgpu_error", { error: g.error })) : ""}</span>
+        <button class="primary small" data-act="sgpu-download">${esc(t("sgpu_download"))}</button></div>`;
+      else if (g.state === "downloading") note = `<div class="note">${ICON.info}<span id="sgpu-percent">${esc(t("sgpu_downloading", { percent: g.percent || 0 }))}</span>
+        <button class="ghost small" data-act="sgpu-cancel">${esc(t("cancel"))}</button></div>`;
+      else if (g.state === "failed") note = `<div class="note warn">${ICON.info}<span>${esc(t("sgpu_failed"))}${g.error ? " " + esc(t("sgpu_error", { error: g.error })) : ""}</span></div>`;
+      else if (g.state === "ready") note = `<div class="note">${ICON.info}<span>${esc(t("sgpu_ready"))}</span></div>`;
+    }
+    return choiceRow("speech_device", t("speech_device"), [["cpu", t("speech_cpu")], ["gpu", t("speech_gpu")]]) + note;
+  }
+
   // 聲音設定頁下半：辨識要快還是準、多小聲算說話、停多久算說完、回音、按住才說話（第一次設定的精靈不放這些）
   function voiceTuningHTML() {
     if (!S.ui.devices || !S.ui.devices.ok) return "";
     return `
       <section><div><h2>${esc(t("tune_title"))}</h2><div class="sub">${esc(t("tune_hint"))}</div></div>
         ${choiceRow("speech_mode", t("speech_mode"), [["fast", t("speech_fast")], ["accurate", t("speech_accurate")]])}
+        ${speechGpuHTML()}
         <div class="note" id="delay-note">${ICON.info}<span>${esc(delayText())}</span></div>
         ${rangeRow("voice_sensitivity", t("sensitivity"), 1, 5, 1, RANGE_TEXT.voice_sensitivity)}
         ${rangeRow("end_silence", t("end_silence"), 0.3, 1.5, 0.1, RANGE_TEXT.end_silence)}
@@ -1090,6 +1107,8 @@
     },
     quality: (el) => saveCfg({ quality: el.dataset.q }),
     tone: (el) => saveCfg({ tone: el.dataset.tone }),
+    "sgpu-download": () => post("/api/speech_gpu", { download: true }),
+    "sgpu-cancel": () => post("/api/speech_gpu", { cancel: true }),
     "lib-export": async () => {
       const r = await post("/api/library", { export: true });
       toast(r.ok ? t("lib_exported", r) : t("lib_export_failed", { error: r.error || "" }), 9000, r.ok ? "info" : "warn");
@@ -1287,6 +1306,13 @@
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
+    speech_gpu: (d) => {
+      const before = S.speechGpu || {};
+      S.speechGpu = d;
+      const percent = $("sgpu-percent");
+      if (percent && d.state === "downloading" && before.state === "downloading") percent.textContent = t("sgpu_downloading", { percent: d.percent || 0 });
+      else if (S.view === "settings" && S.ui.tab === "audio" && !S.ui.live) renderSettingsPage();
+    },
     delay: (d) => { S.delay = d; const note = $("delay-note"); if (note) note.querySelector("span").textContent = delayText(); },
     vu: (d) => { S.vu = d; paintVu(); },
     find_mic: (d) => {
@@ -1325,7 +1351,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
-    S.delay = st.delay || null; S.pttKeys = st.ptt_keys || [];
+    S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || [];
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;

@@ -233,6 +233,25 @@ def key_down(name: str) -> bool:
         return False
 
 
+_dll_dirs: list = []
+
+
+def add_dll_dirs(folders) -> None:
+    """把資料夾加進「找 DLL 的地方」（語音辨識用顯示卡時，CUDA 和 cuDNN 的檔案在使用者的資料夾裡）。"""
+    import os
+
+    for folder in folders:
+        folder = str(folder)
+        if not IS_WIN or folder in _dll_dirs:
+            continue
+        _dll_dirs.append(folder)
+        os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
+        try:
+            os.add_dll_directory(folder)
+        except OSError:
+            pass
+
+
 def open_path(path) -> bool:
     """用 Windows 預設的程式打開檔案或資料夾。"""
     if not IS_WIN:

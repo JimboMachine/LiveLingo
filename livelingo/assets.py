@@ -47,6 +47,71 @@ class DownloadError(Exception):
     pass
 
 
+# ---- 語音辨識用顯示卡：除了翻譯引擎帶的 CUDA 檔案（cublas），還需要 NVIDIA 的 cuDNN。
+# NVIDIA 把它放在 PyPI 上（nvidia-cudnn-cu12），是一個壓縮檔，裡面的 DLL 拿出來就能用。
+CUDNN_INDEX = "https://pypi.org/pypi/nvidia-cudnn-cu12/json"
+CUDNN_MB = 700
+
+
+def cudnn_dir(data: Path) -> Path:
+    return data / "engine" / "cudnn"
+
+
+def has_cudnn(data: Path) -> bool:
+    return any(cudnn_dir(data).glob("cudnn*.dll"))
+
+
+def cuda_runtime_dir(data: Path) -> Path | None:
+    """翻譯引擎（顯示卡版）帶來的 CUDA 檔案放在哪個資料夾；沒有顯示卡版的引擎就沒有。"""
+    for p in engine_dir(data, "cuda").rglob("cublas64_*.dll"):
+        return p.parent
+    return None
+
+
+def pick_cudnn_wheel(index: dict) -> tuple[str, int] | None:
+    """從 PyPI 的清單裡挑最新的 cuDNN 9（Windows 64 位元）。回傳（網址, 位元組數）。"""
+    best = None
+    for version, files in (index.get("releases") or {}).items():
+        try:
+            key = tuple(int(n) for n in version.split("."))
+        except ValueError:
+            continue
+        if not key or key[0] != 9:
+            continue
+        for f in files:
+            if str(f.get("filename", "")).endswith("win_amd64.whl") and not f.get("yanked"):
+                if best is None or key > best[0]:
+                    best = (key, f["url"], int(f.get("size") or 0))
+    return (best[1], best[2]) if best else None
+
+
+def get_cudnn(data: Path, progress=None, cancel=None) -> Path:
+    """下載 cuDNN，把裡面的 DLL 放進資料夾。progress(已下載位元組, 總位元組)。"""
+    folder = cudnn_dir(data)
+    if has_cudnn(data):
+        return folder
+    try:
+        req = urllib.request.Request(CUDNN_INDEX, headers={**UA, "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            picked = pick_cudnn_wheel(json.loads(r.read().decode("utf-8")))
+    except Exception as e:  # noqa: BLE001
+        raise DownloadError(f"cuDNN list: {e}") from e
+    if not picked:
+        raise DownloadError("no Windows build of cuDNN 9 was found")
+    folder.mkdir(parents=True, exist_ok=True)
+    wheel = folder / "cudnn.whl"
+    fetch(picked[0], wheel, progress, cancel)
+    with zipfile.ZipFile(wheel) as z:
+        for info in z.infolist():
+            name = Path(info.filename).name
+            if name.lower().endswith(".dll") and "/bin/" in "/" + info.filename.replace("\\", "/"):
+                (folder / name).write_bytes(z.read(info))
+    wheel.unlink()
+    if not has_cudnn(data):
+        raise DownloadError("the cuDNN download did not contain the expected files")
+    return folder
+
+
 def engine_dir(data: Path, kind: str) -> Path:
     return data / "engine" / kind
 
