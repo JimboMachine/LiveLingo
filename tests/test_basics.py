@@ -3357,7 +3357,7 @@ def test_problem_report_is_shown_first_and_never_sent(tmp_path, monkeypatch):
     assert not list(tmp_path.glob("out/*")) and not opened and not copied      # 做出來只是給他看：沒存檔、沒開資料夾、沒複製
     for title in ("發生了什麼事", "LiveLingo", "這台電腦", "健康檢查", "收音和螢幕", "儲存空間", "設定", "最近的紀錄", "翻譯引擎的紀錄"):
         assert f"== {title} ==" in text, title
-    assert "聽對方說話十分鐘後就沒字幕了" in text and "version: 2.3.0" in text and "screens: 2560x1440 at 0,0 (main)" in text
+    assert "聽對方說話十分鐘後就沒字幕了" in text and f"version: {__import__('livelingo').__version__}" in text and "screens: 2560x1440 at 0,0 (main)" in text
     assert f"word_list_count: {len(service.glossary.list())}" in text and "history_count: 1" in text and "llama_server: model loaded" in text
     assert re.search(r"\[(ok|warn|bad|off)\] engine: engine_", text) and "line 299" in text and "line 99\r\n" not in text      # 紀錄只有最後 200 行
     log_rows = text.split("== 最近的紀錄 ==\r\n")[1].split("\r\n\r\n")[0].split("\r\n")
@@ -3382,7 +3382,7 @@ def test_problem_report_is_shown_first_and_never_sent(tmp_path, monkeypatch):
     # 做報告的時候出錯：還是給得出一份（至少有版本和紀錄）
     monkeypatch.setattr(service, "health", lambda: 1 / 0)
     broken = service.report_make()["text"]
-    assert "report_error: ZeroDivisionError" in broken and "version: 2.3.0" in broken
+    assert "report_error: ZeroDivisionError" in broken and f"version: {__import__('livelingo').__version__}" in broken
 
     root = Path(report.__file__).parent
     server = (root / "server.py").read_text(encoding="utf-8")
