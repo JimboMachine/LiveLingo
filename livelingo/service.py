@@ -20,6 +20,10 @@ from .config import ACCENTS, DEFAULTS, EDITABLE, MAX_REGIONS, OVERLAY_FORMS, OVE
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language, similarity
+from .hotkeys import ACTIONS as HOTKEY_ACTIONS
+from .hotkeys import NOTES as HOTKEY_NOTES
+from .hotkeys import Hotkeys
+from .hotkeys import normalize as hotkey_normalize
 from .overlay import BAR_LOOK, Overlay
 from .paths import self_command
 from .terms import PACKS, TermPack
@@ -160,6 +164,8 @@ class Service:
         self._ids = itertools.count(1)
         self.transcript = Transcript()
         self.tray = Tray(self)
+        self.hotkeys = Hotkeys(self._hotkey, on_state=lambda states: self.hub.publish("hotkeys", self.hotkeys_state()))
+        self._quick = None             # 快速輸入框開著的時候是那個小程式
         self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
         self._recent_voice: deque[dict] = deque(maxlen=12)      # 最近聽到的句子（兩邊都記），用來認出麥克風收到的喇叭聲音
         self.delays: deque[tuple[float, float]] = deque(maxlen=10)      # 最近幾句語音：（辨識秒數, 翻譯秒數）
@@ -209,6 +215,7 @@ class Service:
             "view": self.view,
             "overlay": self.overlay.state(),
             "record": self.record_state(),
+            "hotkeys": self.hotkeys_state(),
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -251,6 +258,7 @@ class Service:
             if self._update_if_needed():
                 return
             self.overlay.apply()
+            self.start_hotkeys()
             self.gpu = gpu.detect()
             self._speech_engine()      # 先把「語音辨識用顯示卡」現在的狀態算好，介面才知道要不要顯示下載
             self._prepare()
@@ -711,6 +719,132 @@ class Service:
             msg = next((m for m in self.messages if m["id"] == msg_id), None)
         return bool(msg and msg.get("translated") and oswin.copy_text(msg["translated"]))
 
+    # ------------------------------------------------------------------ 全域快速鍵、快速輸入框
+
+    def hotkeys_state(self) -> dict:
+        """available：這台電腦能不能用全域快速鍵；states：每個動作 ok（可以用）/ taken（被別的程式佔用）/ off（沒設定）。"""
+        return {"available": self.hotkeys.available, "states": dict(self.hotkeys.states),
+                "defaults": dict(DEFAULTS["hotkeys"])}
+
+    def start_hotkeys(self) -> None:
+        try:
+            self.hotkeys.start()
+            self.hotkeys.set(self.cfg["hotkeys"])
+        except Exception as ex:  # noqa: BLE001  （快速鍵登記不了，其他功能照常）
+            self.log(f"hotkeys failed: {ex!r}")
+
+    def pause_hotkeys(self, on: bool) -> None:
+        """設定頁在等使用者按新的組合時先停用（最多 30 秒，介面沒回來也會自己恢復）。"""
+        self.hotkeys.pause(bool(on))
+        if on:
+            timer = threading.Timer(30, lambda: self.hotkeys.pause(False))
+            timer.daemon = True
+            timer.start()
+
+    def _clean_hotkeys(self, sent) -> dict | None:
+        if not isinstance(sent, dict):
+            return None
+        now = {name: hotkey_normalize(self.cfg["hotkeys"].get(name, "")) for name in HOTKEY_ACTIONS}
+        keys = dict(now)
+        for name, combo in sent.items():
+            if name not in HOTKEY_ACTIONS:
+                continue
+            combo = str(combo or "").strip()
+            fixed = hotkey_normalize(combo)
+            if combo and not fixed:
+                self.notice("hotkey_invalid")
+                continue
+            keys[name] = fixed
+        for name in sent:      # 兩個動作不能用同一組鍵：撞到的那一個不改（整組一起送來、互換的不算撞到）
+            if name in keys and keys[name] and any(other != name and keys[other] == keys[name] for other in keys):
+                keys[name] = now[name]
+                self.notice("hotkey_same")
+        return keys
+
+    def _note(self, key: str) -> None:
+        """按了快速鍵之後的短提示：顯示在浮動留言上（人在遊戲裡），主視窗也跳一則。"""
+        table = HOTKEY_NOTES.get(self.cfg["ui_lang"], HOTKEY_NOTES["en"])
+        self.overlay.note(table[key])
+        self.hub.publish("notice", {"code": "hotkey_note", "text": table[key]})
+
+    def _hotkey(self, name: str) -> None:
+        """快速鍵被按下（在快速鍵那條執行緒上）。只做很快的事，慢的另外開執行緒。"""
+        if name == "quick":
+            self.quick_input()      # 要在收到快速鍵的這條執行緒上開，Windows 才會讓輸入框跑到最前面
+        else:
+            threading.Thread(target=self._hotkey_work, args=(name,), daemon=True, name="hotkey").start()
+
+    def _hotkey_work(self, name: str) -> None:
+        try:
+            if name == "overlay":
+                self.update_config({"overlay": not self.cfg["overlay"]})
+            elif name == "mic":
+                if self.phase != "ready":
+                    self._note("not_ready")
+                elif not self.sources["mic"]["busy"]:
+                    turn_on = not self.sources["mic"]["on"]
+                    self.set_source("mic", turn_on)
+                    self._note("mic_on" if turn_on else "mic_off")
+            elif name == "copy":
+                self._note("copied" if self.copy_last() else "nothing")
+        except Exception:  # noqa: BLE001
+            self.log(traceback.format_exc())
+
+    def copy_last(self) -> bool:
+        """複製我上一句（打的或說的）翻好的話。沒有的話回傳 False。"""
+        with self._lock:
+            msg = next((m for m in reversed(self.messages) if m["who"] == "me" and m.get("translated")
+                        and not m.get("error")), None)
+        if not msg or not oswin.copy_text(msg["translated"]):
+            return False
+        with self._lock:
+            msg["copied"] = True
+        self.hub.publish("message", dict(msg))      # 只更新畫面上的「已複製」，不要在浮動留言上再跳一次
+        return True
+
+    def quick_input(self) -> bool:
+        """
+        叫出快速輸入框（另外開的小程式）。打完按 Enter：當成我打的字送去翻譯，翻好會自動複製；輸入框自己消失。
+        只收使用者在那個框裡打的字，不會替他在別的程式裡打字或貼上。已經開著就不再開一個。
+        """
+        if self._quick is not None and self._quick.poll() is None:
+            return False
+        if self.phase != "ready":
+            self._note("not_ready")
+            return False
+        fake = os.environ.get("LIVELINGO_FAKE_QUICK")      # 測試用：不開輸入框，當成打了這句
+        if fake:
+            self.submit("typed", fake)
+            return True
+        out = self.data / "quick.json"
+        try:
+            out.unlink(missing_ok=True)
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            child = subprocess.Popen([*self_command(), "--quick-input", str(out), "--lang", self.cfg["ui_lang"]],
+                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     creationflags=flags)
+        except OSError as ex:
+            self.log(f"quick input could not start: {ex!r}")
+            return False
+        self._quick = child
+        oswin.allow_foreground(child.pid)
+
+        def wait():
+            try:
+                child.wait(timeout=180)
+            except subprocess.TimeoutExpired:
+                child.kill()
+            try:
+                if out.exists():
+                    text = str(json.loads(out.read_text(encoding="utf-8")).get("text", ""))
+                    out.unlink(missing_ok=True)
+                    self.submit("typed", text[:500])
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+
+        threading.Thread(target=wait, daemon=True, name="quick-input").start()
+        return True
+
     def clear_messages(self) -> None:
         with self._lock:
             self.messages.clear()
@@ -794,6 +928,12 @@ class Service:
                     changes[key] = max(low, min(high, int(changes[key])))
                 except (TypeError, ValueError):
                     changes.pop(key)
+        if "hotkeys" in changes:      # 可以只送其中一個動作；空字串 = 不用；不能用的組合、跟別的動作撞到的都不收
+            fixed = self._clean_hotkeys(changes["hotkeys"])
+            if fixed is None:
+                changes.pop("hotkeys")
+            else:
+                changes["hotkeys"] = fixed
         for key in changes:
             if isinstance(DEFAULTS[key], bool):
                 changes[key] = bool(changes[key])
@@ -821,6 +961,8 @@ class Service:
                 self.hub.publish("overlay", self.overlay.state())
         if changed("their_auto"):
             self._their_guess = ""
+        if changed("hotkeys"):
+            self.hotkeys.set(after["hotkeys"])
         if changed("listen_apps"):
             self._apps_audio_off = False      # 換了選擇：再試一次
             if self.sources["listen"]["on"]:
@@ -1511,6 +1653,9 @@ class Service:
         if self.closing.is_set():
             return
         self.tray.stop()
+        self.hotkeys.stop()
+        if self._quick is not None and self._quick.poll() is None:
+            self._quick.kill()
         if self.transcript.on:      # 記錄到一半就關程式：先存起來，不要弄丟
             try:
                 self.transcript.stop(self.transcript_dir(), self.cfg["ui_lang"], bool(self.cfg["transcript_original"]))

@@ -172,6 +172,19 @@
 
 自動把關：只能靠 Windows 上的自我檢查和截圖。
 
+### 改快速鍵或快速輸入框
+
+1. `hotkeys.py`：動作名稱（ACTIONS）、能用的鍵、短提示的五種語言
+2. `config.py`：預設的組合
+3. `service.py`：檢查送來的組合、每個動作做什麼、設定頁等新組合時先停用
+4. `app.js`：動作清單、按鍵怎麼變成組合的寫法、狀態怎麼顯示
+5. `i18n.js`：每個動作的名稱和說明
+6. `overlay.py`、`chatpaint.py`：短提示怎麼顯示、停留多久
+7. `quickbox.py`、`__main__.py`：輸入框的參數和交回去的檔案
+8. `selftest.py`、`test_basics.py`：登記、按下、輸入框的檢查
+
+自動把關：測試會擋：組合鍵的寫法、兩個動作撞鍵、五種語言的提示、這兩個檔案裡出現替人打字或讀按鍵的函式。真的按下去有沒有反應、輸入框有沒有跑到遊戲上面，只能在 Windows 上試。
+
 ### 改聊天區（可以好幾個、可以跟著程式視窗）
 
 1. `config.py`：regions 的欄位、舊版 region 的搬移、最多幾個
@@ -226,9 +239,11 @@
 | --- | --- | --- |
 | 視窗 | `livelingo/window.py` | `__main__.py`：開視窗（改壞會報錯） |
 | 系統匣 | `livelingo/tray.py` | `window.py`：系統匣有沒有開起來（改壞不會報錯）<br>`service.py`：系統匣（改壞會報錯） |
-| 浮動留言 | `livelingo/overlay.py` | `service.py`：浮動留言（改壞會報錯） |
+| 浮動留言 | `livelingo/overlay.py` | `hotkeys.py`：短提示顯示在浮動留言上（note）（改壞不會報錯）<br>`service.py`：浮動留言（改壞會報錯） |
 | 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯） |
-| 框選聊天區 | `livelingo/region.py` | `__main__.py`：框選模式（改壞會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
+| 框選聊天區 | `livelingo/region.py` | `quickbox.py`：顏色和字型（改壞會報錯）<br>`__main__.py`：框選模式（改壞會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
+| 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯） |
+| 快速輸入框 | `livelingo/quickbox.py` | `service.py`：打的字（另開一個程式）（改壞不會報錯）<br>`__main__.py`：快速輸入模式（--quick-input）（改壞會報錯） |
 | 字幕記錄 | `livelingo/transcript.py` | `service.py`：字幕記錄（改壞會報錯） |
 
 ### 中樞（所有東西都經過這裡）
@@ -237,8 +252,8 @@
 | --- | --- | --- |
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
-| 主體 | `livelingo/service.py` | `app.js`：事件名稱、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯） |
-| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
+| 主體 | `livelingo/service.py` | `app.js`：事件名稱、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯） |
+| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、五種語言的短提示（改壞不會報錯）<br>`quickbox.py`：五種語言的提示（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
 

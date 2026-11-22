@@ -116,6 +116,11 @@ def main() -> None:
         real_speech = service._on_speech
         service._on_speech = lambda kind, text, lang, seconds=0.0, unsure=False: real_speech(
             kind, text, lang, seconds, kind == "loopback")
+    taken = os.environ.get("LIVELINGO_FAKE_HOTKEYS")      # 假的全域快速鍵；值是「假裝被別的程式佔用」的組合，用逗號分開
+    if taken is not None:
+        from livelingo.hotkeys import FakeBackend
+
+        service.hotkeys.backend = FakeBackend(taken=[c for c in taken.split(",") if c.strip()])
     server = Server(service, port=int(os.environ.get("LIVELINGO_PORT", "0")))
     server.token = os.environ.get("LIVELINGO_TOKEN", server.token)
     server.start()

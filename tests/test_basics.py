@@ -792,7 +792,7 @@ def test_dependencies_hold():
     import re
     from pathlib import Path
 
-    from livelingo import chatpaint, region, transcript, tray
+    from livelingo import chatpaint, hotkeys, quickbox, region, transcript, tray
     from livelingo.config import ACCENTS, DEFAULTS, EDITABLE, THEMES
 
     root = Path(__file__).resolve().parent.parent
@@ -813,7 +813,7 @@ def test_dependencies_hold():
     # 文字：視窗外面的每一張文字表（系統匣、浮動留言、框選、字幕檔）五種語言都有，欄位一樣多
     tables = {"tray.TEXT": tray.TEXT, "chatpaint.NAMES": chatpaint.NAMES, "chatpaint.HINTS": chatpaint.HINTS,
               "chatpaint.SAMPLES": chatpaint.SAMPLES, "region.HINTS": region.HINTS, "region.FONTS": region.FONTS,
-              "transcript.TITLES": transcript.TITLES}
+              "transcript.TITLES": transcript.TITLES, "hotkeys.NOTES": hotkeys.NOTES, "quickbox.HINTS": quickbox.HINTS}
     for name, table in tables.items():
         assert set(table) == set(UI_LANGS), (name, set(table) ^ set(UI_LANGS))
         shapes = {lang: (sorted(v) if isinstance(v, dict) else len(v) if isinstance(v, list) else 1) for lang, v in table.items()}
@@ -2041,3 +2041,155 @@ def test_display_mode_screens_and_saved_layouts(tmp_path, monkeypatch):
     for name in ("index.html", "app.js", "style.css"):
         assert "view-subtitle" not in (ui / name).read_text(encoding="utf-8"), name
     assert DEFAULTS["overlay_form"] == "float" and DEFAULTS["overlay_layouts"] == []
+
+
+def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
+    """
+    全域快速鍵：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框；按鍵可以自己設定，
+    被別的程式佔用的會標出來；設定頁等新組合的時候先停用。快速輸入框打的字當成我打的字去翻譯，不會替人在別的程式打字。
+    """
+    import ast
+    from pathlib import Path
+
+    from livelingo import hotkeys, oswin, quickbox
+    from livelingo.config import DEFAULTS, EDITABLE
+    from livelingo.service import Service
+
+    # ---- 組合鍵的寫法
+    assert hotkeys.normalize("alt + ctrl+s") == "Ctrl+Alt+S" and hotkeys.normalize("win+shift+f12") == "Shift+Win+F12"
+    for bad in ("S", "F5", "Ctrl+Ctrl+S", "Ctrl+;", "Ctrl+Alt", "", None, "Ctrl+Space"):
+        assert hotkeys.normalize(bad) == "", bad      # 沒有修飾鍵的不收：不能搶走平常打字和遊戲用的鍵
+    assert hotkeys.parse("Ctrl+Alt+S") == (0x2 | 0x1, ord("S")) and hotkeys.parse("Shift+F1") == (0x4, 0x70)
+    assert set(DEFAULTS["hotkeys"]) == set(hotkeys.ACTIONS) and "hotkeys" in EDITABLE
+    combos = [hotkeys.normalize(c) for c in DEFAULTS["hotkeys"].values()]
+    assert all(combos) and len(set(combos)) == len(combos)
+
+    # ---- 沒有 Windows 的地方：設定照存，狀態都是 off，不會出錯
+    plain = hotkeys.Hotkeys(lambda name: None, backend=hotkeys._NoBackend())
+    plain.start()
+    assert not plain.available and set(plain.set(DEFAULTS["hotkeys"]).values()) == {"off"}
+
+    monkeypatch.delenv("LIVELINGO_FAKE_QUICK", raising=False)
+    copied = []
+    monkeypatch.setattr(oswin, "copy_text", lambda text: copied.append(text) or True)
+    service = Service(tmp_path)
+    notices, events = [], []
+    service.notice = lambda code, **kw: notices.append(code)
+    publish = service.hub.publish
+    service.hub.publish = lambda name, data=None: (events.append((name, data)), publish(name, data))[1]
+    backend = hotkeys.FakeBackend(taken=["Ctrl+Alt+C"])
+    service.hotkeys.backend = backend
+    service._hotkey = lambda name: service._hotkey_work(name) if name != "quick" else service.quick_input()      # 測試裡直接做，不另開執行緒
+    service.hotkeys.on_fire = service._hotkey
+    try:
+        service.start_hotkeys()
+        state = service.state()["hotkeys"]
+        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok"}
+        assert state["defaults"] == DEFAULTS["hotkeys"]
+
+        # 開關字幕
+        was = service.cfg["overlay"]
+        assert backend.press("Ctrl+Alt+S") and service.cfg["overlay"] is (not was)
+        backend.press("Ctrl+Alt+S")
+        assert service.cfg["overlay"] is was
+
+        # 被佔用的那一組按了沒反應；換一組就好了，而且只動那一個
+        assert not backend.press("Ctrl+Alt+C")
+        result = service.update_config({"hotkeys": {"copy": "ctrl+shift+c"}})
+        assert result["saved"] and result["changed"] == ["hotkeys"]
+        assert service.cfg["hotkeys"] == {**DEFAULTS["hotkeys"], "copy": "Ctrl+Shift+C"}
+        assert service.hotkeys.states["copy"] == "ok" and ("hotkeys", service.hotkeys_state()) in events
+        # 跟別的動作一樣的、不能用的：不收，也說了為什麼
+        assert service.update_config({"hotkeys": {"mic": "Ctrl+Alt+S"}})["changed"] == [] and notices[-1] == "hotkey_same"
+        assert service.update_config({"hotkeys": {"mic": "M"}})["changed"] == [] and notices[-1] == "hotkey_invalid"
+        # 兩個互換是可以的；空字串 = 不用
+        swapped = service.update_config({"hotkeys": {"overlay": "Ctrl+Alt+M", "mic": "Ctrl+Alt+S"}})
+        assert swapped["changed"] == ["hotkeys"] and service.cfg["hotkeys"]["mic"] == "Ctrl+Alt+S"
+        service.update_config({"hotkeys": {"quick": ""}})
+        assert service.hotkeys.states["quick"] == "off" and not backend.press("Ctrl+Alt+T")
+        service.update_config({"hotkeys": DEFAULTS["hotkeys"]})      # 恢復預設
+        assert service.cfg["hotkeys"] == DEFAULTS["hotkeys"]
+        saved = __import__("json").loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+        assert saved["hotkeys"] == DEFAULTS["hotkeys"]
+
+        # 設定頁在等新組合：先停用，恢復之後照舊
+        before = service.cfg["overlay"]
+        service.pause_hotkeys(True)
+        assert not backend.press("Ctrl+Alt+S") and service.cfg["overlay"] is before
+        service.pause_hotkeys(False)
+        assert backend.press("Ctrl+Alt+S") and service.cfg["overlay"] is (not before)
+
+        # 複製我上一句的翻譯：只找我說的、已經翻好的；沒有就說沒有
+        service.update_config({"hotkeys": {"copy": "Ctrl+Shift+C"}})
+        notes = []
+        service.overlay.note = notes.append
+        service.cfg.set(ui_lang="zh-TW")
+        backend.press("Ctrl+Shift+C")
+        assert copied == [] and notes[-1] == hotkeys.NOTES["zh-TW"]["nothing"]
+        service.cfg.set(ui_lang="ko")
+        service.messages.extend([
+            {"id": 1, "who": "me", "via": "typed", "original": "等我一下", "translated": "잠깐만 기다려", "copied": False},
+            {"id": 2, "who": "them", "via": "heard", "original": "알겠어", "translated": "知道了", "copied": False},
+            {"id": 3, "who": "me", "via": "spoken", "original": "還沒翻好", "translated": "", "pending": True, "copied": False}])
+        backend.press("Ctrl+Shift+C")
+        assert copied == ["잠깐만 기다려"] and notes[-1] == hotkeys.NOTES["ko"]["copied"]
+        assert service.messages[0]["copied"] is True and events[-2][0] == "message" and events[-2][1]["id"] == 1
+
+        # 麥克風：引擎還沒好的時候不動，說一聲；好了之後開、關，各有提示
+        calls = []
+        service.set_source = lambda key, on: (calls.append((key, on)), service.sources[key].update(on=on))
+        backend.press("Ctrl+Alt+M")
+        assert calls == [] and notes[-1] == hotkeys.NOTES["ko"]["not_ready"]
+        service.phase = "ready"
+        backend.press("Ctrl+Alt+M")
+        backend.press("Ctrl+Alt+M")
+        assert calls == [("mic", True), ("mic", False)] and notes[-2:] == [hotkeys.NOTES["ko"]["mic_on"], hotkeys.NOTES["ko"]["mic_off"]]
+
+        # 快速輸入框：打的字當成我打的字去翻譯（翻好自動複製是打字本來就有的）；引擎沒好就不開
+        sent = []
+        service.submit = lambda via, text, **kw: sent.append((via, text))
+        monkeypatch.setenv("LIVELINGO_FAKE_QUICK", "等我一下")
+        service.update_config({"hotkeys": {"quick": "Ctrl+Alt+T"}})
+        assert backend.press("Ctrl+Alt+T") and sent == [("typed", "等我一下")]
+        service.phase = "starting"
+        assert not service.quick_input() and len(sent) == 1
+    finally:
+        service.shutdown()
+    assert backend.registered == {}
+
+    # ---- 浮動留言上的短提示：幾秒就消失，不受「留言不會自己消失」影響，新的換掉舊的
+    from livelingo import overlay
+
+    other = Service(tmp_path / "b")
+    ov = other.overlay
+    ov.window_class = overlay.MemoryWindow
+    other.cfg.set(overlay=True, overlay_seconds=0)
+    ov.apply()
+    try:
+        ov.push("heard", "知道了", key=7)
+        ov.note("麥克風：開")
+        ov.note("麥克風：關")
+        assert [(i["kind"], i["text"]) for i in ov.items] == [("heard", "知道了"), ("note", "麥克風：關")]
+        import time as _time
+
+        image, _wait = ov.frame(_time.monotonic() + 1)
+        assert image is not None
+        ov.frame(_time.monotonic() + overlay.NOTE_SECONDS + 1)
+        assert [i["kind"] for i in ov.items] == ["heard"]
+    finally:
+        other.shutdown()
+
+    # ---- 快速輸入框本身：五種語言都有提示，放在螢幕下方置中；這個小程式裡沒有任何「替人打字、貼上」的東西
+    assert quickbox.place((0, 0, 1920, 1080)) == ((1920 - quickbox.SIZE[0]) // 2, int(1080 * 0.66))
+    assert quickbox.place((1920, 0, 2560, 1440))[0] == 1920 + (2560 - quickbox.SIZE[0]) // 2
+    root = Path(__file__).resolve().parent.parent / "livelingo"
+    for name in ("quickbox.py", "hotkeys.py"):
+        source = (root / name).read_text(encoding="utf-8")
+        for banned in ("SendInput", "keybd_event", "SetWindowsHookEx", "GetAsyncKeyState", "clipboard"):
+            assert banned not in source, (name, banned)
+    main = (root / "__main__.py").read_text(encoding="utf-8")
+    assert "--quick-input" in main
+    # 真的程式有把系統匣圖示和快速鍵開起來（之前只有健康檢查會開系統匣）
+    calls = {ast.unparse(n.func) for path in ("window.py", "service.py")
+             for n in ast.walk(ast.parse((root / path).read_text(encoding="utf-8"))) if isinstance(n, ast.Call)}
+    assert "service.tray.start" in calls and "self.start_hotkeys" in calls

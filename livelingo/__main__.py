@@ -23,6 +23,11 @@ def main() -> int:
 
         select(Path(_arg("--select-region")), _arg("--lang", "zh-TW"))
         return 0
+    if "--quick-input" in sys.argv:      # 快速輸入框：打的字寫到檔案就結束
+        from .quickbox import ask
+
+        ask(Path(_arg("--quick-input")), _arg("--lang", "zh-TW"))
+        return 0
     if "--selftest" in sys.argv:
         from .selftest import run as selftest
 

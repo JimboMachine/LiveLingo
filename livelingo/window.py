@@ -146,6 +146,7 @@ def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event 
             started["ok"] = True
             service.window = ctl
             ctl.set_chrome(*service.chrome)
+            service.tray.start()      # 系統匣圖示：有它，關視窗才能收到系統匣而不是結束程式
             try:
                 oswin.exclude_from_capture(int(win.native.Handle.ToInt32()))
             except Exception as ex:  # noqa: BLE001

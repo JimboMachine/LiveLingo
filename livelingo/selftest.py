@@ -17,7 +17,7 @@ from pathlib import Path
 
 def run(out: Path, window: bool = True) -> int:
     results: dict = {}
-    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray", "app_audio"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
+    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray", "app_audio", "hotkeys", "quick_input"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
 
     def check(name, fn):
         started = time.time()
@@ -150,6 +150,53 @@ def run(out: Path, window: bool = True) -> int:
         info["exit"] = done.returncode
         assert done.returncode == 0 and info.get("opened") and not info.get("error"), info
         return info
+
+    def hotkeys():
+        """全域快速鍵：真的跟 Windows 登記得起來、按下的通知會送到、同一組被登記走時看得出來。"""
+        import ctypes
+        import threading
+
+        from . import hotkeys as hk
+
+        fired = threading.Event()
+        first = hk.Hotkeys(lambda name: fired.set() if name == "overlay" else None)
+        if not first.available:
+            return {"available": False}
+        second = hk.Hotkeys(lambda name: None)
+        combo = "Ctrl+Alt+Shift+F11"
+        try:
+            first.start()
+            states = first.set({"overlay": combo})
+            assert states["overlay"] == "ok", states
+            second.start()
+            taken = second.set({"mic": combo})      # 同一組已經被登記走了：要標成被佔用
+            assert taken["mic"] == "taken", taken
+            backend = first.backend
+            number = next(n for n, name in backend._ids.items() if name == "overlay")
+            ctypes.windll.user32.PostThreadMessageW(backend._thread_id, backend._WM_HOTKEY, number, 0)      # 模擬 Windows 的通知，不送任何按鍵
+            assert fired.wait(3), "hotkey message was not delivered"
+            first.pause(True)
+            freed = second.set({"mic": combo})      # 放掉之後別人就登記得到
+            assert freed["mic"] == "ok", freed
+        finally:
+            first.stop()
+            second.stop()
+        return {"available": True, "registered": combo, "taken_detected": True, "fired": True}
+
+    def quick_input():
+        """快速輸入框：另外開的小程式開得起來，打的字有交回來。"""
+        import subprocess
+
+        if sys.platform != "win32":
+            return {"available": False}
+        result = tmp / "quick.json"
+        head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        done = subprocess.run([*head, "--quick-input", str(result), "--lang", "zh-TW"], timeout=60, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW,
+                              env={**os.environ, "LIVELINGO_FAKE_QUICK": "等我一下"})
+        info = json.loads(result.read_text(encoding="utf-8")) if result.exists() else {}
+        assert done.returncode == 0 and info.get("text") == "等我一下", {"exit": done.returncode, **info}
+        return {"exit": done.returncode, "text": info["text"]}
 
     def screen_grab():
         import mss
@@ -291,6 +338,8 @@ def run(out: Path, window: bool = True) -> int:
     check("second_mic_way", second_mic_way)
     check("mic_capture", mic_capture)
     check("app_audio", app_audio)
+    check("hotkeys", hotkeys)
+    check("quick_input", quick_input)
     check("screen_grab", screen_grab)
     check("floating_chat", floating_chat)
 

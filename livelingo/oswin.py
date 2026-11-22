@@ -82,6 +82,18 @@ def read_clipboard() -> str:
         u32.CloseClipboard()
 
 
+def allow_foreground(pid: int) -> bool:
+    """讓我們自己開的小程式（快速輸入框）可以把視窗放到最前面。只是給那個程式許可，不會動到別的視窗。"""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.user32.AllowSetForegroundWindow(int(pid)))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def acquire_single_instance() -> bool:
     """第一個開的回傳 True；已經有一個在跑就回傳 False。"""
     global _mutex

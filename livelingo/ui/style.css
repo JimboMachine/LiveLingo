@@ -450,3 +450,17 @@ input::placeholder { color: var(--faint); }
 .layout-item .qcard { flex: 1; min-width: 0; min-height: 0; }
 .layout-item .icon-btn { align-self: center; }
 #layout-form input { flex: 1; min-width: 180px; max-width: 320px; }
+
+/* 快速鍵 */
+.hotkey-row { align-items: flex-start; padding-top: 12px; padding-bottom: 12px; }
+.hk-keys { display: flex; align-items: center; gap: 2px; flex: none; }
+.keycap { min-width: 132px; min-height: 44px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 13px; }
+.keycap:hover { border-color: var(--accent); }
+.keycap.empty { color: var(--dim); border-style: dashed; }
+.keycap.rec { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.keycap kbd { font: inherit; font-weight: 600; min-width: 26px; padding: 3px 7px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line-2); border-bottom-width: 2px; }
+.hk-state { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; color: var(--dim); }
+.hk-state svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.hk-state.ok { color: var(--accent); }
+.hk-state.taken { color: var(--me); }
+.hk-keys span.icon-btn { visibility: hidden; }

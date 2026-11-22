@@ -46,6 +46,8 @@ DEFAULTS = {
     "show_pronunciation": True,  # 韓文下面顯示唸法
     "copy_spoken": True,         # 我用說的翻出來的句子也自動複製
     "setup_done": False,
+    # 全域快速鍵（hotkeys.ACTIONS）：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框。空字串 = 不用
+    "hotkeys": {"overlay": "Ctrl+Alt+S", "mic": "Ctrl+Alt+M", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Alt+T"},
     "window": {"w": 980, "h": 720, "x": None, "y": None},
     "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
     "accent": "mint",            # 強調色：mint / blue / violet / rose / cyan
@@ -82,7 +84,7 @@ THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done", "hotkeys",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

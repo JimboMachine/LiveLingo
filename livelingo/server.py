@@ -209,6 +209,11 @@ class Server:
                         return self._json(service.import_library(body.get("data")))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
+                    if route == "/api/hotkeys":      # 設定頁在等使用者按新的組合：先停用，按完恢復
+                        service.pause_hotkeys(bool(body.get("pause")))
+                        return self._json({"ok": True, **service.hotkeys_state()})
+                    if route == "/api/quick_input":      # 設定頁的「現在試試看」：跟按快速鍵叫出輸入框一樣
+                        return self._json({"ok": service.quick_input()})
                     if route == "/api/clear":
                         service.clear_messages()
                         return self._json({"ok": True})

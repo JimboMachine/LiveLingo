@@ -10,6 +10,7 @@
     cfg: null, phase: "starting", detail: {}, gpu: {}, mode: {}, fallback: false, version: "",
     sources: {}, messages: [], glossary: [], lessons: [], canWindow: false, view: "main", overlay: { editing: false, running: false }, vu: {},
     record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
+    hotkeys: { available: false, states: {}, defaults: {} },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -59,7 +60,7 @@
     quality: '[data-act="quality"][aria-pressed="true"]', my_lang: "#sel-my", their_lang: "#sel-their", their_auto: "#sel-their",
     speaker_device: '[data-act="device"][data-key="speaker"]', mic_device: '[data-act="device"][data-key="mic"]',
     transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]', overlay_map: "#screen-map",
-    overlay_look: '[data-act="overlay-look-reset"]'
+    overlay_look: '[data-act="overlay-look-reset"]', hotkeys: '[data-act="hotkey-reset"]'
   };
   let savedTimer = null;
   function placeSaved() {      // 設定頁重畫之後也會再叫一次，回饋不會因為重畫就不見
@@ -931,6 +932,44 @@
     }).join("")}</div>`;
   }
 
+  // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
+  const HOTKEYS = ["overlay", "mic", "copy", "quick"];
+  const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
+  function hotkeysHTML() {
+    const hk = S.hotkeys || { available: false, states: {} };
+    const row = (name) => {
+      const combo = (S.cfg.hotkeys || {})[name] || "", rec = S.ui.hotkeyRec === name, state = (hk.states || {})[name] || "off";
+      const status = rec ? `<div class="hk-state">${esc(t("hk_rec_hint"))}</div>`
+        : !hk.available || !combo ? ""
+        : state === "taken" ? `<div class="hk-state taken">${esc(t("hk_taken"))}</div>`
+        : state === "ok" ? `<div class="hk-state ok">${ICON.check}<span>${esc(t("hk_ok"))}</span></div>` : "";
+      return `<div class="setting-row hotkey-row"><div><div>${esc(t("hk_" + name))}</div><div class="desc">${esc(t("hk_" + name + "_desc"))}</div>${status}</div>
+        <div class="hk-keys">
+          <button class="keycap${rec ? " rec" : ""}${combo ? "" : " empty"}" id="hk-${name}" data-act="hotkey-set" data-name="${name}"
+            aria-label="${esc(t("hk_change", { name: t("hk_" + name), combo: combo || t("hk_none") }))}">${rec ? esc(t("hk_press")) : combo ? comboHTML(combo) : esc(t("hk_none"))}</button>
+          ${combo && !rec ? `<button class="icon-btn" data-act="hotkey-clear" data-name="${name}" aria-label="${esc(t("hk_clear", { name: t("hk_" + name) }))}">${ICON.x}</button>` : `<span class="icon-btn" aria-hidden="true"></span>`}
+        </div></div>`;
+    };
+    return (hk.available ? "" : `<div class="note">${ICON.info}<span>${esc(t("hk_unavailable"))}</span></div>`)
+      + HOTKEYS.map(row).join("")
+      + `<div class="btn-row"><button class="ghost" data-act="quick-try">${esc(t("hk_try"))}</button>
+          <button class="ghost" data-act="hotkey-reset">${esc(t("hk_reset"))}</button></div>`;
+  }
+  function hotkeyRecord(name) {      // name：開始等哪個動作的新組合；null：不等了
+    if ((S.ui.hotkeyRec || null) === (name || null)) return;
+    S.ui.hotkeyRec = name || null;
+    post("/api/hotkeys", { pause: !!name });
+    if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage();
+  }
+  async function saveHotkey(name, combo) {
+    S.ui.hotkeyRec = null;
+    await post("/api/hotkeys", { pause: false });
+    const r = await post("/api/config", { hotkeys: { [name]: combo } });
+    if (!(r && r.ok && r.saved)) toast(t("n_save_failed", { error: (r && r.error) || "" }), 8000, "error");
+    else if ((r.changed || []).includes("hotkeys")) { $("toast").hidden = true; flashSaved("#hk-" + name); }      // 沒被收下（跟別的動作撞到）就不說已儲存
+    if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage();
+  }
+
   function generalPage() {
     return `
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
@@ -943,6 +982,7 @@
         ${switchRow("show_pronunciation", t("show_pron"))}
         ${switchRow("copy_spoken", t("copy_spoken"))}
       </section>
+      <section><div><h2>${esc(t("hk_title"))}</h2><div class="sub">${esc(t("hk_hint"))}</div></div>${hotkeysHTML()}</section>
       <section><div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div></section>`;
   }
 
@@ -1304,6 +1344,10 @@
     accent: (el) => saveCfg({ accent: el.dataset.code }),
     swap: () => saveCfg({ my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang, their_auto: false }),
     "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
+    "hotkey-set": (el) => hotkeyRecord(S.ui.hotkeyRec === el.dataset.name ? null : el.dataset.name),
+    "hotkey-clear": (el) => saveHotkey(el.dataset.name, ""),
+    "hotkey-reset": () => saveCfg({ hotkeys: S.hotkeys.defaults || {} }),
+    "quick-try": async () => { const r = await post("/api/quick_input"); if (r && !r.ok && S.phase === "ready") toast(t("n_save_failed", { error: "" }), 5000, "warn"); },
     "wz-begin": () => { if (S.phase === "need_download") post("/api/download"); wizardGo(1); },
     "wz-next": () => wizardGo(S.ui.wz + 1),
     "wz-prev": () => wizardGo(S.ui.wz - 1),
@@ -1415,6 +1459,27 @@
     mapPlace(next, false);
     clearTimeout(mapKeyTimer);
     mapKeyTimer = setTimeout(() => { S.ui.mapDrag = false; mapPlace(S.ui.screens.rect, true); }, 500);
+  });
+
+  document.addEventListener("keydown", (e) => {      // 正在等新的快速鍵：這一下按鍵就是答案，不要讓它做別的事
+    const name = S.ui.hotkeyRec;
+    if (!name) return;
+    if (e.key === "Tab") { hotkeyRecord(null); return; }
+    e.preventDefault(); e.stopPropagation();
+    if (["Control", "Alt", "Shift", "Meta", "OS"].includes(e.key)) return;
+    const mods = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Win"].filter(Boolean);
+    if (e.key === "Escape" && !mods.length) { hotkeyRecord(null); return; }
+    if ((e.key === "Backspace" || e.key === "Delete") && !mods.length) { saveHotkey(name, ""); return; }
+    const code = e.code || "";
+    const key = /^Key[A-Z]$/.test(code) ? code.slice(3) : /^Digit\d$/.test(code) ? code.slice(5) : /^F([1-9]|1[0-2])$/.test(code) ? code : "";
+    if (!key) { toast(t("hk_bad_key"), 5000, "warn"); return; }
+    if (!mods.length) { toast(t("hk_need_mod"), 5000, "warn"); return; }
+    saveHotkey(name, [...mods, key].join("+"));
+  }, true);
+  document.addEventListener("focusout", (e) => {      // 點到別的地方：不等了
+    const name = S.ui.hotkeyRec;
+    if (!name || !e.target || e.target.id !== "hk-" + name) return;
+    setTimeout(() => { if (S.ui.hotkeyRec === name && (document.activeElement || {}).id !== "hk-" + name) hotkeyRecord(null); }, 60);
   });
 
   document.addEventListener("submit", async (e) => {
@@ -1544,6 +1609,7 @@
         if (before.running !== d.running) loadScreens();
       }
     },
+    hotkeys: (d) => { S.hotkeys = d; if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage(); },
     saved: (d) => flashSaved(d.what === "region" && d.id ? "#region-" + d.id : d.what),
     screen_stats: (d) => {      // 讀螢幕的統計：直接換那一行字，不重畫整頁（免得正在打的名字被打斷）
       S.screenStats = d;
@@ -1572,6 +1638,7 @@
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
     S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
+    S.hotkeys = st.hotkeys || S.hotkeys;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
     renderAll();

@@ -14,6 +14,7 @@ from .config import DEFAULTS, MAX_LAYOUTS, OVERLAY_FORMS, OVERLAY_LOOK
 MIN_SIZE = (240, 110)
 FADE_IN, FADE_OUT = 0.22, 0.9
 MAX_ITEMS = 40
+NOTE_SECONDS = 3.0      # 程式自己的短提示停留幾秒
 
 
 BAR_LOOK = {"overlay_align": "center", "overlay_grow": "up", "overlay_lines": 2}      # 底部字幕條固定的排法，其他外觀照設定
@@ -570,7 +571,8 @@ class Overlay:
             return
         self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"])
 
-    def push(self, kind: str, text: str, original: str = "", key=None) -> None:
+    def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0) -> None:
+        """life：這一則自己停留幾秒（0 = 照設定的停留時間）。"""
         with self._lock:
             now = time.monotonic()
             for item in self.items:
@@ -579,9 +581,14 @@ class Overlay:
                     break
             else:
                 self.items.append({"key": key if key is not None else f"x{now}", "kind": kind, "text": text,
-                                   "original": original, "at": now, "version": 0})
+                                   "original": original, "at": now, "version": 0, "life": float(life)})
                 del self.items[:-MAX_ITEMS]
         self._wake.set()
+
+    def note(self, text: str) -> None:
+        """程式自己的短提示（按了快速鍵之後告訴你發生了什麼事）。幾秒就消失，新的會換掉舊的。"""
+        self.on_removed("note")
+        self.push("note", text, key="note", life=NOTE_SECONDS)
 
     def on_removed(self, key) -> None:
         with self._lock:
@@ -744,6 +751,11 @@ class Overlay:
 
     # ---- 畫 ----
 
+    @staticmethod
+    def _life(item: dict, life: float) -> float:
+        """這一則停留幾秒：自己有指定就用自己的（程式的短提示），不然照設定；0 = 不會自己消失。"""
+        return float(item.get("life") or life)
+
     def _alpha(self, item: dict, now: float, life: float) -> float:
         age = now - item["at"]
         if age < FADE_IN:
@@ -763,7 +775,7 @@ class Overlay:
         if tile is None:
             names = chatpaint.NAMES.get(cfg["ui_lang"] or "en", chatpaint.NAMES["en"])
             original = item["original"] if cfg["overlay_original"] and item["original"] != item["text"] else ""
-            tile = chatpaint.paint_message(item["kind"], names[item["kind"]], item["text"], width, size,
+            tile = chatpaint.paint_message(item["kind"], names.get(item["kind"], chatpaint.NOTE_NAME), item["text"], width, size,
                                            original=original, backdrop=int(cfg["overlay_backdrop"]),
                                            han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]), style=style)
             if len(self._tiles) > 120:
@@ -783,18 +795,18 @@ class Overlay:
         life = 0.0 if self.editing else float(cfg["overlay_seconds"])
         width, height = max(40, self.rect[2]), max(40, self.rect[3])
         with self._lock:
-            if life > 0:
-                self.items = [i for i in self.items if now - i["at"] < life]
+            self.items = [i for i in self.items if not self._life(i, life) or now - i["at"] < self._life(i, life)]
             items = list(self.items)
         if self.editing and not items:
             lang = cfg["ui_lang"] or "en"
             items = [{"key": f"sample{n}", "kind": kind, "text": text, "original": "", "at": now - 5, "version": 0}
                      for n, (kind, text) in enumerate(chatpaint.SAMPLES.get(lang, chatpaint.SAMPLES["en"]))]
-        alphas = [1.0 if self.editing else self._alpha(i, now, life) for i in items]
+        alphas = [1.0 if self.editing else self._alpha(i, now, self._life(i, life)) for i in items]
         moving = any(a < 0.999 for a in alphas)
         wait = 0.04 if moving else 1.0
-        if life > 0 and items and not moving:
-            wait = max(0.04, min(1.0, min(life - FADE_OUT - (now - i["at"]) for i in items)))
+        ends = [self._life(i, life) - FADE_OUT - (now - i["at"]) for i in items if self._life(i, life)]
+        if ends and not moving:
+            wait = max(0.04, min(1.0, min(ends)))
         signature = (tuple((i["key"], i["version"], round(a, 2)) for i, a in zip(items, alphas)), tuple(self.rect),
                      size, self.editing, cfg["overlay_original"], cfg["overlay_backdrop"], cfg["ui_lang"],
                      chatpaint.style_key(chatpaint.style_of(cfg)))
