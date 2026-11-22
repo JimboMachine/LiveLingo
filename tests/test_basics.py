@@ -3567,3 +3567,77 @@ def test_my_own_sentences_are_translated_first(tmp_path):
     finally:
         service.closing.set()
         worker.join(2)
+
+
+def test_wrapped_lines_are_joined_and_repeats_are_new(monkeypatch):
+    """讀螢幕：一則訊息換成兩三行的接回一則再翻；有人又說了一次一樣的話要算新的一則；
+    聊天框收起來又打開、舊訊息重新出現時不重翻；換行訊息的上半捲出畫面之後，剩下的幾行不重翻。"""
+    import numpy as np
+
+    from livelingo.core import watcher as watcher_mod
+    from livelingo.core.ocr import Line
+    from livelingo.core.watcher import ScreenWatcher, SeenLines, join_wrapped, new_from, text_edge
+
+    def row(text, y, w, x=10, h=20):
+        return Line(text, x, y, h, 0.95, w)
+
+    # ---- 換行：上一行寫到最右邊，而且下一行的第一個詞本來就放不進去
+    seen = SeenLines()
+    rows = [row("오늘 저녁에 같이 게임 할 사람 있으면", 0, 470), row("디스코드로 들어와", 26, 220), row("ㅇㅋ 갈게", 52, 110)]
+    known, edge = text_edge(rows, 500)
+    assert (known, edge) == (480.0, 480.0)
+    joined = join_wrapped(rows, seen, edge)
+    assert [ln.text for ln, _ in joined] == ["오늘 저녁에 같이 게임 할 사람 있으면 디스코드로 들어와", "ㅇㅋ 갈게"]
+    assert joined[0][1] == ["오늘 저녁에 같이 게임 할 사람 있으면", "디스코드로 들어와"] and joined[0][0].w == 470
+    # 中文沒有空白：接的時候不加空白
+    zh = [row("我們今天晚上要不要一起打排位我剛剛看了一下", 0, 470), row("時間應該可以", 26, 150)]
+    assert [ln.text for ln, _ in join_wrapped(zh, SeenLines(), 480.0)] == ["我們今天晚上要不要一起打排位我剛剛看了一下時間應該可以"]
+    # 短短的兩則各自一行：下一則的第一個詞放得進上一行，是另一則訊息，不接
+    short = [row("안녕", 0, 60), row("뭐해 지금", 26, 120)]
+    assert len(join_wrapped(short, SeenLines(), 480.0)) == 2
+    # 還不知道文字最右邊在哪裡（最長的一行還不到區域六成寬）：不接
+    assert text_edge(short, 500) == (130.0, 0.0) and len(join_wrapped(rows, SeenLines(), 0.0)) == 3
+    # 沒有對齊同一個左邊、行距太大、沒有寬度的：不接
+    assert len(join_wrapped([rows[0], row("디스코드로 들어와", 26, 220, x=60)], SeenLines(), 480.0)) == 2
+    assert len(join_wrapped([rows[0], row("디스코드로 들어와", 90, 220)], SeenLines(), 480.0)) == 2
+    assert len(join_wrapped([Line(rows[0].text, 10, 0, 20, 0.9), rows[1]], SeenLines(), 480.0)) == 2
+    # 以前單獨讀到過的那一行是一則獨立的訊息：之後下面來了新的一行，不會被接上去
+    alone = SeenLines()
+    alone.add(rows[0].text)
+    assert len(join_wrapped(rows[:2], alone, 480.0)) == 2
+
+    # ---- 上一次和這一次怎麼對
+    assert new_from(["a1", "b2", "gg"], ["b2", "gg", "gg"]) == 2          # 往上捲了一行，下面多了一則 gg
+    assert new_from(["a1", "b2", "gg"], ["a1", "b2", "gg"]) == 3          # 沒變
+    assert new_from(["gg", "gg"], ["gg", "gg", "gg"]) == 2
+    assert new_from([], ["a1"]) is None and new_from(["a1"], []) is None
+    assert new_from(["a1", "b2", "c3", "d4"], ["d4", "x1", "y2", "z3"]) is None      # 只對得上一行，不到一半：不算數
+    assert new_from(["a1", "b2", "c3"], ["x1", "y2"]) is None
+
+    # ---- 整條：盯著螢幕的那一條線
+    pages = {
+        10: [row("안녕하세요 반갑습니다", 0, 200), row("빨리 와", 26, 80)],
+        60: [row("안녕하세요 반갑습니다", 0, 200), row("빨리 와", 26, 80), row("빨리 와", 52, 80)],             # 又說了一次
+        110: [row("빨리 와", 0, 80), row("빨리 와", 26, 80),
+              row("오늘 저녁에 같이 게임 할 사람 있으면", 52, 470), row("디스코드로 들어와", 78, 220)],           # 一則換行的
+        160: [],                                                                                               # 聊天框收起來
+        210: [row("빨리 와", 0, 80), row("빨리 와", 26, 80),
+              row("오늘 저녁에 같이 게임 할 사람 있으면", 52, 470), row("디스코드로 들어와", 78, 220)],           # 又打開：都是舊的
+        250: [row("디스코드로 들어와", 0, 220), row("지금 갈게 기다려", 26, 200)],                               # 換行那則的上半捲出去了
+    }
+    monkeypatch.setattr(watcher_mod, "message_lines", lambda shade: pages[shade])
+
+    class FakeOcr:
+        def read(self, bgr):
+            return int(bgr[0, 0, 0])
+
+    got = []
+    watcher = ScreenWatcher(FakeOcr(), lambda text, lang, score, region: got.append(text), source_langs={"ko"})
+    watcher.set_regions([{"id": "a", "left": 0, "top": 0, "width": 500, "height": 200}])
+    slot = watcher._slots[0]
+    for shade in pages:
+        frame = np.full((200, 500, 3), shade, dtype=np.uint8)
+        watcher._look(slot, lambda place: frame)      # 第一次：畫面剛變，等它停下來
+        watcher._look(slot, lambda place: frame)      # 第二次：停下來了，辨識
+    assert got == ["안녕하세요 반갑습니다", "빨리 와", "빨리 와", "오늘 저녁에 같이 게임 할 사람 있으면 디스코드로 들어와", "지금 갈게 기다려"]
+    assert slot.stats["sent"] == 5 and slot.stats["scans"] == 6

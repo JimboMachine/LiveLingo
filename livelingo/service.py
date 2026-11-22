@@ -1854,7 +1854,11 @@ class Service:
                     bgr = np.ascontiguousarray(np.asarray(sct.grab(region))[:, :, :3])
             else:
                 bgr = np.ascontiguousarray(grab(region))
-            lines = [ln.text for ln in message_lines(ocr.read(bgr))]
+            from .core.watcher import SeenLines, join_wrapped, text_edge
+
+            rows = message_lines(ocr.read(bgr))
+            # 跟平常讀的時候一樣把換行的訊息接回一則，這裡看到的才是真的會拿去翻的樣子
+            lines = [ln.text for ln, _ in join_wrapped(rows, SeenLines(), text_edge(rows, bgr.shape[1])[1])]
             return {"ok": True, "lines": lines[-12:]}
         except Exception as ex:  # noqa: BLE001
             self.log(traceback.format_exc())

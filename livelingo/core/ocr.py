@@ -17,6 +17,7 @@ class Line:
     y: int
     h: int
     score: float
+    w: int = 0      # 這一列有多寬（0 = 不知道；知道寬度才判斷得出「這一行是不是寫滿了才換行」）
 
 
 def has_hangul(s: str) -> bool:
@@ -54,7 +55,8 @@ class OcrEngine:
             xs = [p[0] for p in box]
             txt = txt.strip()
             if txt:
-                lines.append(Line(txt, int(min(xs) / s), int(min(ys) / s), max(1, int((max(ys) - min(ys)) / s)), float(score)))
+                lines.append(Line(txt, int(min(xs) / s), int(min(ys) / s), max(1, int((max(ys) - min(ys)) / s)), float(score),
+                                  max(0, int((max(xs) - min(xs)) / s))))
         lines.sort(key=lambda l: (l.y, l.x))
         return lines
 
@@ -79,5 +81,6 @@ def message_lines(lines: list[Line], min_score: float = 0.6) -> list[Line]:
         text = " ".join(l.text for l in row).strip()
         score = min(l.score for l in row)
         if text and score >= min_score:
-            out.append(Line(text, row[0].x, row[0].y, row[0].h, score))
+            right = max(l.x + l.w for l in row) if all(l.w for l in row) else row[0].x
+            out.append(Line(text, row[0].x, row[0].y, row[0].h, score, right - row[0].x))
     return out
