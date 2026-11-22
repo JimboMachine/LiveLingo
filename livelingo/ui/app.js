@@ -9,6 +9,7 @@
   const S = {
     cfg: null, phase: "starting", detail: {}, gpu: {}, mode: {}, fallback: false, version: "",
     sources: {}, messages: [], glossary: [], lessons: [], canWindow: false, view: "main", overlay: { editing: false, running: false }, vu: {},
+    record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -51,9 +52,10 @@
   }
 
   let toastTimer = null;
-  function toast(text, ms) {
+  function toast(text, ms, level) {      // level：info（預設）/ warn / error
     const el = $("toast");
     el.textContent = text;
+    el.dataset.level = level || "info";
     el.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, ms || 4200);
@@ -71,8 +73,12 @@
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     frame: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>',
     chat: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h3M10 7h10M4 12h3M10 12h7M4 17h3M10 17h9"/></svg>',
-    swap: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>'
+    swap: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>',
+    bubble: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>',
+    shield: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   };
+  const MARK = window.BRAND.mark;      // 品牌標誌和名字都在 brand.js
+  const WORDMARK = `${window.BRAND.name[0]}<b>${window.BRAND.name[1]}</b>`;
 
   // ---------------------------------------------------------------- 固定文字
 
@@ -84,6 +90,32 @@
       el.setAttribute("aria-label", t(el.dataset.i18nLabel));
       el.title = t(el.dataset.i18nLabel);
     });
+  }
+
+  // ---------------------------------------------------------------- 主題
+
+  const ACCENTS = { mint: ["#4ADE9A", "#0B8A5C"], blue: ["#6CB6FF", "#1D6FD1"], violet: ["#B7A1FF", "#6B4FD8"], rose: ["#FF8FA8", "#C8325A"], cyan: ["#4DD8E6", "#0B7F8C"] };
+  const systemDark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const isDark = () => (S.cfg.theme === "system" ? !systemDark || systemDark.matches : S.cfg.theme !== "light");
+
+  function applyTheme() {
+    const root = document.documentElement, dark = isDark();
+    root.dataset.theme = dark ? "dark" : "light";
+    if (S.cfg.accent && S.cfg.accent !== "mint") root.dataset.accent = S.cfg.accent; else delete root.dataset.accent;
+    // Windows 的標題列也換成同一個顏色
+    const css = getComputedStyle(root), hex = (name) => css.getPropertyValue(name).trim();
+    const chrome = { caption: hex("--surface"), text: hex("--text"), dark };
+    if (JSON.stringify(chrome) !== S.ui.chrome && /^#[0-9a-f]{6}$/i.test(chrome.caption)) { S.ui.chrome = JSON.stringify(chrome); post("/api/chrome", chrome); }
+  }
+  if (systemDark && systemDark.addEventListener) systemDark.addEventListener("change", () => { if (S.cfg && S.cfg.theme === "system") applyTheme(); });
+
+  function themeHTML() {
+    const pill = (id) => `<button class="pill tall" data-act="theme" data-code="${id}" aria-pressed="${(S.cfg.theme || "dark") === id}">${esc(t("theme_" + id))}</button>`;
+    const dark = isDark();
+    const swatch = (id, n) => `<button class="swatch" data-act="accent" data-code="${id}" style="--sw:${ACCENTS[id][dark ? 0 : 1]}" aria-pressed="${(S.cfg.accent || "mint") === id}" aria-label="${esc(t("accent_title"))} ${n + 1}" title="${esc(t("accent_title"))} ${n + 1}"></button>`;
+    return `<div class="pills">${["dark", "light", "system"].map(pill).join("")}</div>
+      <div class="sub">${esc(t("accent_title"))}</div>
+      <div class="swatches">${Object.keys(ACCENTS).map(swatch).join("")}</div>`;
   }
 
   // ---------------------------------------------------------------- 主畫面
@@ -166,12 +198,12 @@
     }
     if (mic.on && mic.quiet === "blocked") return { text: t("mic_blocked"), buttons: winBtn + findBtn };
     if (mic.on && mic.quiet) return { text: t("mic_silent"), buttons: findBtn };
-    if (mic.error && !mic.on && !mic.busy) return { text: t("mic_failed"), detail: mic.error, buttons: findBtn };
+    if (mic.error && !mic.on && !mic.busy) return { text: t("mic_failed"), detail: mic.error, buttons: findBtn, level: "error" };
     return null;
   }
 
   function noticeHTML(n, icon) {
-    return `<div class="mic-note ${n.busy ? "busy" : ""}">${icon}<div><div class="text">${esc(n.text)}</div>
+    return `<div class="mic-note ${n.busy ? "info" : (n.level || "warn")}">${icon}<div><div class="text">${esc(n.text)}</div>
       ${n.detail ? `<div class="detail">${esc(n.detail)}</div>` : ""}
       ${n.buttons ? `<div class="btns">${n.buttons}</div>` : ""}</div></div>`;
   }
@@ -185,13 +217,47 @@
     const row = $("mic-row");
     const listen = S.sources.listen || {};
     const html = micNoticeHTML()
-      + (listen.error && !listen.on && !listen.busy ? noticeHTML({ text: t("listen_failed"), detail: listen.error }, ICON.listen) : "");
+      + (listen.error && !listen.on && !listen.busy ? noticeHTML({ text: t("listen_failed"), detail: listen.error, level: "error" }, ICON.listen) : "");
     row.hidden = !html;
     row.innerHTML = html;
   }
 
+  // 字幕記錄：右上角的按鈕（開始 / 結束並儲存），存好之後在來源卡片下面說存到哪了
+  function recClock() {
+    const s = Math.max(0, Math.floor(Date.now() / 1000 - S.record.since));
+    const two = (n) => String(n).padStart(2, "0");
+    return (s >= 3600 ? Math.floor(s / 3600) + ":" : "") + two(Math.floor(s / 60) % 60) + ":" + two(s % 60);
+  }
+
+  function renderRecord() {
+    const r = S.record, btn = $("btn-record");
+    btn.setAttribute("aria-pressed", r.on ? "true" : "false");
+    btn.title = t(r.on ? "rec_stop" : "rec_start");
+    btn.disabled = !!r.saving;
+    btn.innerHTML = r.saving ? `<i class="rec-dot live"></i><span>${esc(t("rec_saving"))}</span>` : r.on
+      ? `<i class="rec-dot live"></i><span class="label">${esc(t("rec_stop"))}</span><span class="rec-time" id="rec-time">${recClock()}</span>`
+      : `<i class="rec-dot"></i><span class="label">${esc(t("rec_start"))}</span>`;
+    const row = $("rec-row");
+    const show = !r.on && r.file && !S.ui.recHidden;
+    row.hidden = !show;
+    row.innerHTML = show ? noticeHTML({
+      level: "info", text: t("rec_saved", { name: r.name, count: r.saved }), detail: r.folder,
+      buttons: `<button class="primary" data-act="rec-open" data-what="file">${esc(t("rec_open_file"))}</button>
+        <button class="ghost" data-act="rec-open" data-what="folder">${esc(t("rec_open_folder"))}</button>
+        <button class="ghost" data-act="rec-dismiss">${esc(t("dismiss"))}</button>` }, ICON.check) : "";
+  }
+  setInterval(() => { const el = S.record.on && $("rec-time"); if (el) el.textContent = recClock(); }, 1000);
+
+  function recordHTML() {
+    return `<div class="setting-row"><div><div>${esc(t("rec_folder"))}</div><div class="desc path">${esc(S.record.folder)}</div></div></div>
+      <div class="btn-row">${S.canWindow ? `<button class="ghost" data-act="rec-choose">${esc(t("rec_choose"))}</button>` : ""}
+        <button class="ghost" data-act="rec-open" data-what="folder">${esc(t("rec_open_folder"))}</button></div>
+      ${switchRow("transcript_original", t("rec_original"), t("rec_original_desc"))}`;
+  }
+
   function renderLangs() {
-    $("pair-label").textContent = langName(S.cfg.their_lang) + " ⇄ " + langName(S.cfg.my_lang);
+    const auto = !!S.cfg.their_auto;
+    $("pair-label").textContent = (auto ? t("auto_pair", { lang: langName(S.cfg.their_lang) }) : langName(S.cfg.their_lang)) + " ⇄ " + langName(S.cfg.my_lang);
     $("lang-chip").setAttribute("aria-expanded", S.ui.langOpen ? "true" : "false");
     const picker = $("lang-picker");
     picker.hidden = !S.ui.langOpen;
@@ -199,7 +265,9 @@
       const opts = (side, current) => PAIR_LANGS.map((code) =>
         `<button class="pill" data-act="set-lang" data-side="${side}" data-code="${code}" aria-pressed="${current === code}">${esc(langName(code))}</button>`).join("");
       picker.innerHTML = `
-        <div class="group"><div class="dim small">${esc(t("their_lang"))}</div><div class="opts">${opts("their_lang", S.cfg.their_lang)}</div></div>
+        <div class="group"><div class="dim small">${esc(t("their_lang"))}</div><div class="opts">
+          <button class="pill" data-act="set-auto" aria-pressed="${auto}">${esc(t("auto_detect"))}</button>${opts("their_lang", auto ? "" : S.cfg.their_lang)}</div>
+          ${auto ? `<div class="dim small auto-now">${esc(t("auto_hint", { lang: langName(S.cfg.their_lang) }))}</div>` : ""}</div>
         <div class="group"><div class="dim small">${esc(t("my_lang"))}</div><div class="opts">${opts("my_lang", S.cfg.my_lang)}</div></div>
         <div class="foot"><button class="primary" data-act="toggle-langs">${esc(t("done"))}</button></div>`;
     }
@@ -274,7 +342,10 @@
     const box = $("messages");
     box.innerHTML = "";
     if (!S.messages.length) {
-      box.innerHTML = `<div class="empty"><b>${esc(t("empty_title"))}</b><span>${esc(t("empty_body"))}</span></div>`;
+      const step = (n, text) => `<li><i>${n}</i><span>${esc(text)}</span></li>`;
+      box.innerHTML = `<div class="empty">${MARK}<b>${esc(t("empty_title"))}</b>
+        <ol>${step(1, t("empty_s1"))}${step(2, t("empty_s2"))}${step(3, t("empty_s3"))}</ol>
+        <button class="ghost" data-act="try-one">${esc(t("try_one"))}</button></div>`;
       return;
     }
     S.messages.forEach(upsertMessage);
@@ -363,13 +434,21 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["overlay", "nav_overlay", "chat"], ["general", "nav_general", "globe"]];
+  const TABS = [["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["overlay", "nav_overlay", "chat"], ["general", "nav_general", "globe"], ["about", "nav_about", "info"]];
 
-  function renderSettingsNav() {
-    $("settings-nav").innerHTML = `
-      <button class="back" data-act="view" data-view="main">${ICON.back}<span>${esc(t("back"))}</span></button>
-      <div class="title">${esc(t("settings"))}</div>` +
-      TABS.map(([id, key, icon]) => `<button class="tab" data-act="tab" data-tab="${id}" ${S.ui.tab === id ? 'aria-current="page"' : ""}>${ICON[icon]}<span>${esc(t(key))}</span></button>`).join("");
+  // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
+  function renderRail() {
+    const item = (to, key, icon) => {
+      const here = to === "main" ? S.view === "main" : (S.view === "settings" && S.ui.tab === to);
+      return `<button class="rail-item" data-act="nav" data-to="${to}" ${here ? 'aria-current="page"' : ""} title="${esc(t(key))}">${ICON[icon]}<span>${esc(t(key))}</span></button>`;
+    };
+    $("rail").innerHTML = `
+      <div class="rail-brand">${MARK}<div class="wordmark">${WORDMARK}</div></div>
+      ${item("main", "nav_chat", "bubble")}
+      <div class="rail-title">${esc(t("settings"))}</div>
+      ${TABS.filter(([id]) => id !== "about").map(([id, key, icon]) => item(id, key, icon)).join("")}
+      <div class="grow"></div>
+      ${item("about", "nav_about", "info")}`;
   }
 
   function switchRow(key, label, desc) {
@@ -503,7 +582,8 @@
     const options = (current) => PAIR_LANGS.map((c) =>
       `<option value="${c}" ${c === current ? "selected" : ""}>${esc(langName(c))}</option>`).join("");
     return `<div class="pair-select">
-      <div class="field"><label for="sel-their">${esc(t("their_lang"))}</label><select id="sel-their" data-change="their_lang">${options(S.cfg.their_lang)}</select></div>
+      <div class="field"><label for="sel-their">${esc(t("their_lang"))}</label><select id="sel-their" data-change="their_lang">
+        <option value="auto" ${S.cfg.their_auto ? "selected" : ""}>${esc(S.cfg.their_auto ? t("auto_pair", { lang: langName(S.cfg.their_lang) }) : t("auto_detect"))}</option>${options(S.cfg.their_auto ? "" : S.cfg.their_lang)}</select></div>
       <button class="swap" data-act="swap" aria-label="${esc(t("swap"))}" title="${esc(t("swap"))}">${ICON.swap}</button>
       <div class="field"><label for="sel-my">${esc(t("my_lang"))}</label><select id="sel-my" data-change="my_lang">${options(S.cfg.my_lang)}</select></div>
     </div>`;
@@ -521,14 +601,27 @@
     return `
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
       <section><div><h2>${esc(t("trans_title"))}</h2><div class="sub">${esc(t("trans_hint"))}</div></div>${pairSelectHTML()}</section>
+      <section><div><h2>${esc(t("theme_title"))}</h2><div class="sub">${esc(t("theme_hint"))}</div></div>${themeHTML()}</section>
+      <section><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
       <section><h2>${esc(t("window_title"))}</h2>
         ${S.canWindow ? switchRow("on_top", t("on_top")) : ""}
         ${switchRow("show_pronunciation", t("show_pron"))}
         ${switchRow("copy_spoken", t("copy_spoken"))}
       </section>
-      <section><h2>${esc(t("about_title"))}</h2>
-        <div class="note">${ICON.info}<span>${esc(t("about_version", { version: S.version }))}<br>${esc(t("about_update"))}</span></div>
-        <div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div>
+      <section><div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div></section>`;
+  }
+
+  function aboutPage() {
+    const fact = (icon, title, text) => `<div class="fact">${ICON[icon]}<div><b>${esc(title)}</b><span>${esc(text)}</span></div></div>`;
+    return `
+      <section class="about-hero">${MARK}
+        <div><div class="wordmark big">${WORDMARK}</div><div class="tagline">${esc(t("tagline"))}</div>
+        <div class="version">${esc(t("about_version", { version: S.version }))}</div></div>
+      </section>
+      <section>
+        ${fact("shield", t("about_local_title"), t("about_local"))}
+        ${fact("quality", t("about_engine_title"), t("about_engine"))}
+        ${fact("info", t("about_update_title"), t("about_update"))}
       </section>`;
   }
 
@@ -539,18 +632,21 @@
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
+    else if (S.ui.tab === "about") page.innerHTML = aboutPage();
     else page.innerHTML = generalPage();
     page.scrollTop = scroll;
     paintLevels();
   }
 
-  function renderSettings() { renderSettingsNav(); renderSettingsPage(); }
+  function renderSettings() { renderRail(); renderSettingsPage(); }
 
   function openTab(tab) {
     const wasAudio = S.ui.tab === "audio";
     S.ui.tab = tab;
     renderSettings();
-    $("settings-page").scrollTop = 0;
+    const page = $("settings-page");
+    page.scrollTop = 0;
+    page.classList.remove("in"); void page.offsetWidth; page.classList.add("in");      // 換頁的淡入
     if (tab === "audio") openDevices();
     else if (wasAudio) post("/api/meters", { on: false });
   }
@@ -700,7 +796,8 @@
   function showView(view) {
     S.view = view;
     app.dataset.view = view;
-    if (view === "settings") { renderSettings(); if (S.ui.tab === "audio") openDevices(); }
+    renderRail();
+    if (view === "settings") { renderSettingsPage(); if (S.ui.tab === "audio") openDevices(); }
     if (view === "wizard") renderWizard();
     if (view === "subtitle") renderSubtitle();
     renderOverlay();
@@ -717,13 +814,16 @@
   }
 
   function renderAll() {
+    applyTheme();
     applyI18n();
     renderStatus();
     renderLangs();
+    renderRecord();
     renderSources();
     renderMessages();
     renderSubtitle();
-    if (S.view === "settings") renderSettings();
+    renderRail();
+    if (S.view === "settings") renderSettingsPage();
     if (S.view === "wizard") renderWizard();
     renderOverlay();
     renderOverlayState();
@@ -734,7 +834,9 @@
   const actions = {
     view: (el) => setView(el.dataset.view),
     "toggle-langs": () => { S.ui.langOpen = !S.ui.langOpen; renderLangs(); },
-    "set-lang": (el) => post("/api/config", { [el.dataset.side]: el.dataset.code }),
+    "set-lang": (el) => post("/api/config", el.dataset.side === "their_lang"
+      ? { their_lang: el.dataset.code, their_auto: false } : { [el.dataset.side]: el.dataset.code }),
+    "set-auto": () => post("/api/config", { their_auto: true }),
     source: (el) => {
       const key = el.dataset.key;
       post("/api/source", { key, on: !(S.sources[key] || {}).on });
@@ -774,6 +876,15 @@
     },
     copy: async (el) => { const r = await post("/api/copy", { id: Number(el.dataset.id) }); if (r.ok) toast(t("copied"), 1600); },
     tab: (el) => openTab(el.dataset.tab),
+    "try-one": () => { const say = $("say"); say.value = t("say_placeholder").replace(/^[^：:]*[：:]\s*/, ""); say.focus(); },
+    nav: (el) => {
+      const to = el.dataset.to;
+      if (to === "main") {
+        if (S.view === "settings" && S.ui.tab === "audio") post("/api/meters", { on: false });
+        if (S.view !== "main") setView("main");
+      } else if (S.view === "settings") openTab(to);
+      else { S.ui.tab = to; setView("settings"); }
+    },
     device: (el) => {
       const key = el.dataset.key;
       post("/api/config", key === "speaker"
@@ -785,6 +896,13 @@
     toggle: (el) => post("/api/config", { [el.dataset.key]: !S.cfg[el.dataset.key] }),
     "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
     "find-dismiss": () => { S.ui.find = null; renderMicViews(); },
+    record: () => { if (!S.record.saving) post("/api/record", { on: !S.record.on }); },
+    "rec-open": async (el) => {
+      const r = await post("/api/record", { open: el.dataset.what });
+      if (!r.ok) toast(t("rec_open_failed", { path: el.dataset.what === "file" ? S.record.file : S.record.folder }), 9000, "warn");
+    },
+    "rec-dismiss": () => { S.ui.recHidden = true; renderRecord(); },
+    "rec-choose": () => post("/api/record", { choose: true }),
     "update-now": () => post("/api/update", { choice: "now" }),
     "update-later": () => post("/api/update", { choice: "later" }),
     "update-cancel": () => post("/api/update", { choice: "cancel" }),
@@ -803,7 +921,9 @@
       S.ui.ocr = await post("/api/ocr_test"); renderSettingsPage();
     },
     "ui-lang": (el) => post("/api/config", { ui_lang: el.dataset.code }),
-    swap: () => post("/api/config", { my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang }),
+    theme: (el) => post("/api/config", { theme: el.dataset.code }),
+    accent: (el) => post("/api/config", { accent: el.dataset.code }),
+    swap: () => post("/api/config", { my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang, their_auto: false }),
     "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
     "wz-begin": () => { if (S.phase === "need_download") post("/api/download"); wizardGo(1); },
     "wz-next": () => wizardGo(S.ui.wz + 1),
@@ -841,7 +961,8 @@
 
   document.addEventListener("change", (e) => {
     const key = e.target.dataset && e.target.dataset.change;
-    if (key) post("/api/config", { [key]: e.target.value });
+    if (key === "their_lang") post("/api/config", e.target.value === "auto" ? { their_auto: true } : { their_lang: e.target.value, their_auto: false });
+    else if (key) post("/api/config", { [key]: e.target.value });
   });
 
   document.addEventListener("submit", async (e) => {
@@ -851,7 +972,7 @@
       const input = $("say");
       const text = input.value.trim();
       if (!text) return;
-      if (S.phase !== "ready") { toast(t("n_not_ready")); return; }
+      if (S.phase !== "ready") { toast(t("n_not_ready"), 4200, "warn"); return; }
       input.value = "";
       post("/api/send", { text });
     } else if (form.id === "gloss-form") {
@@ -891,7 +1012,7 @@
       S.sources[d.key] = d;
       renderSources();
       if (d.key === "mic" && (d.quiet || "") !== (before.quiet || "") && S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
-      if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000);
+      if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000, "error");
     },
     message: (m) => {
       const i = S.messages.findIndex((x) => x.id === m.id);
@@ -911,10 +1032,18 @@
       if (!S.messages.length) renderMessages();
       renderSubtitle();
     },
+    record: (d) => {
+      const was = S.record.on;
+      S.record = d;
+      if (was !== d.on) S.ui.recHidden = false;
+      renderRecord();
+      if (was !== d.on && S.view === "settings" && S.ui.tab === "general") renderSettingsPage();
+    },
     cleared: () => { S.messages = []; renderMessages(); renderSources(); renderSubtitle(); },
     config: (cfg) => {
       const before = S.cfg;
       S.cfg = cfg;
+      if (before.theme !== cfg.theme || before.accent !== cfg.accent) applyTheme();
       if (before.ui_lang !== cfg.ui_lang) { renderAll(); return; }
       renderLangs(); renderSources(); renderOverlayState();
       if (S.view === "settings") renderSettingsPage();
@@ -932,7 +1061,7 @@
       } else S.ui.find = d;      // 換了麥克風：留在畫面上，可以按「換回去」
       renderMicViews();
     },
-    notice: (d) => toast(t("n_" + d.code, d), 7000),
+    notice: (d) => toast(t("n_" + d.code, d.lang ? { ...d, lang: langName(d.lang) } : d), 7000, /failed|small/.test(d.code) ? "warn" : "info"),
     overlay: (d) => {
       S.overlay = d;
       renderOverlayState();
@@ -959,10 +1088,12 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
-    S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay;
+    S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
     renderAll();
+    const splash = $("splash");
+    if (splash) { splash.classList.add("gone"); setTimeout(() => splash.remove(), 400); }
     if (view !== st.view) post("/api/view", { view });
     if (view === "settings") { renderSettings(); if (S.ui.tab === "audio") openDevices(); }
     return true;

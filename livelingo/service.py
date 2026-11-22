@@ -7,6 +7,7 @@ import itertools
 import json
 import os
 import queue
+import re
 import subprocess
 import threading
 import time
@@ -15,16 +16,18 @@ from collections import deque
 from pathlib import Path
 
 from . import __version__, assets, gpu, oswin, updater
-from .config import EDITABLE, UI_LANGS, Config, Glossary, Lessons
+from .config import ACCENTS, EDITABLE, THEMES, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language
 from .overlay import Overlay
 from .paths import self_command
 from .terms import TermPack
+from .transcript import Transcript
 
 VOICE_KIND = {"listen": "loopback", "mic": "mic"}
 SOURCE_OF = {"loopback": "listen", "mic": "mic"}
+VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也翻得了的語言
 
 
 class EventHub:
@@ -128,8 +131,11 @@ class Service:
         self.recognizer = None
         self.pipelines: dict = {}
         self.meters = None
+        self.chrome = ("#171A1E", "#F2F4F6", True)      # 標題列的顏色（底色、文字、是不是深色）
         self.closing = threading.Event()
         self._ids = itertools.count(1)
+        self.transcript = Transcript()
+        self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
         self._lock = threading.RLock()
         self._download_cancel = threading.Event()
         self._selecting = False
@@ -167,6 +173,7 @@ class Service:
             "can_window": bool(self.window or self.can_window),
             "view": self.view,
             "overlay": self.overlay.state(),
+            "record": self.record_state(),
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -359,6 +366,9 @@ class Service:
                 self.messages.append(msg)
         self.hub.publish("message", msg)
         self.overlay.on_message(msg)
+        if self.transcript.on:
+            self.transcript.add(msg)
+            self.hub.publish("record", self.record_state())
         return msg
 
     def _drop(self, msg_id: int) -> None:
@@ -368,6 +378,73 @@ class Service:
                     self.messages.remove(old)
         self.hub.publish("message_removed", {"id": msg_id})
         self.overlay.on_removed(msg_id)
+        self.transcript.drop(msg_id)
+
+    # ------------------------------------------------------------------ 字幕記錄
+
+    def transcript_dir(self) -> Path:
+        chosen = str(self.cfg["transcript_dir"] or "").strip()
+        if chosen:
+            return Path(chosen)
+        return (oswin.documents_dir() / "LiveLingo") if oswin.IS_WIN else (self.data / "transcripts")
+
+    def record_state(self) -> dict:
+        return self.transcript.state(self.transcript_dir())
+
+    def set_recording(self, on: bool, wait: float = 20.0) -> dict:
+        """
+        開始或結束字幕記錄。結束時把這段時間的字幕存成 txt 檔；一句都沒有就不存。
+        按結束的時候還有句子在翻：最多等 wait 秒讓它們翻完再存（在背景等，畫面先顯示「儲存中」）。
+        """
+        if on and not self.transcript.on:
+            self.transcript.start()
+        elif not on and self.transcript.on and not self.transcript.closing:
+            self.transcript.closing = True
+            if wait > 0 and self.transcript.has_pending():
+                threading.Thread(target=self._finish_recording, args=(wait,), daemon=True).start()
+            else:
+                self._finish_recording(0)
+                return self.record_state()
+        state = self.record_state()
+        self.hub.publish("record", state)
+        return state
+
+    def _finish_recording(self, wait: float) -> None:
+        self.transcript.close(wait)
+        try:
+            path = self.transcript.stop(self.transcript_dir(), self.cfg["ui_lang"], bool(self.cfg["transcript_original"]))
+            if path is None:
+                self.notice("record_empty")
+            else:
+                self.log(f"subtitle log saved: {path}")
+        except OSError as ex:
+            self.log(f"subtitle log could not be saved: {ex!r}")
+            self.transcript.closing = False      # 沒存成功：記錄留著，換個資料夾可以再按一次結束
+            self.notice("record_failed", error=str(ex))
+        self.hub.publish("record", self.record_state())
+
+    def open_transcript(self, what: str) -> bool:
+        target = self.transcript.last if what == "file" else self.transcript_dir()
+        if not target:
+            return False
+        if what != "file":
+            try:
+                Path(target).mkdir(parents=True, exist_ok=True)
+            except OSError:
+                return False
+        return oswin.open_path(target)
+
+    def choose_transcript_dir(self) -> bool:
+        """讓使用者用 Windows 的視窗選字幕記錄要存在哪。"""
+        if not self.window or not hasattr(self.window, "choose_folder"):
+            return False
+        picked = self.window.choose_folder(str(self.transcript_dir()))
+        if not picked:
+            return False
+        self.cfg.set(transcript_dir=picked)
+        self.hub.publish("config", self.cfg.snapshot())
+        self.hub.publish("record", self.record_state())
+        return True
 
     def submit(self, via: str, text: str, lang: str | None = None) -> None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。"""
@@ -483,6 +560,10 @@ class Service:
         for key in ("my_lang", "their_lang"):
             if key in changes and changes[key] not in LANGS:
                 changes.pop(key)
+        if changes.get("theme") not in (None, *THEMES):
+            changes.pop("theme")
+        if changes.get("accent") not in (None, *ACCENTS):
+            changes.pop("accent")
         if changes.get("tone") not in (None, "casual", "polite"):
             changes.pop("tone")
         if changes.get("quality") not in (None, "auto", "standard", "high"):
@@ -493,7 +574,7 @@ class Service:
                     changes[key] = max(low, min(high, int(changes[key])))
                 except (TypeError, ValueError):
                     changes.pop(key)
-        for key in ("overlay", "overlay_original", "overlay_mine"):
+        for key in ("overlay", "overlay_original", "overlay_mine", "their_auto", "transcript_original"):
             if key in changes:
                 changes[key] = bool(changes[key])
         before = self.cfg.snapshot()
@@ -516,7 +597,9 @@ class Service:
             self.overlay.apply()
             if changed("overlay"):
                 self.hub.publish("overlay", self.overlay.state())
-        if changed("my_lang", "their_lang", "also_english"):
+        if changed("their_auto"):
+            self._their_guess = ""
+        if changed("my_lang", "their_lang", "their_auto", "also_english"):
             threading.Thread(target=self._languages_changed, daemon=True).start()
         if changed("speaker_device") and self.sources["listen"]["on"]:
             self._restart_voice("listen")
@@ -542,8 +625,12 @@ class Service:
     # ------------------------------------------------------------------ 來源：螢幕
 
     def _screen_langs(self) -> set[str]:
-        langs = {LANGS[self.cfg["their_lang"]]["family"]}
-        if self.cfg["also_english"] and LANGS[self.cfg["my_lang"]]["family"] != "en":
+        my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
+        langs = {their}
+        if self.cfg["their_auto"] and their != "ko":
+            # 自動偵測：中文和日文用同一個文字辨識模型，兩種都收（韓文是另一個模型，要等聲音判斷出韓文才會換過去）
+            langs |= {"zh", "ja"} - {my}
+        if self.cfg["also_english"] and my != "en":
             langs.add("en")
         return langs
 
@@ -661,7 +748,48 @@ class Service:
 
     def _voice_langs(self, key: str) -> list[str]:
         my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
-        return [their] if key == "listen" else list(dict.fromkeys([my, their]))
+        if key == "listen":
+            # 自動偵測：四種語言都聽，目前判斷到的排第一個
+            return list(dict.fromkeys([their, *VOICE_FAMILIES])) if self.cfg["their_auto"] else [their]
+        return list(dict.fromkeys([my, their]))
+
+    def _their_language_heard(self, family: str, text: str) -> None:
+        """
+        自動偵測：對方這句話聽起來是 family 這個語言。跟目前以為的不一樣，而且夠確定
+        （句子夠長，或是連續兩句都是它），就把「對方用的語言」換過去。
+        對方說的剛好是我的語言時不換：那句話本來就看得懂，換了反而我說的話沒有東西可以翻。
+        """
+        my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
+        if family in (their, my) or family not in VOICE_FAMILIES:
+            self._their_guess = ""
+            return
+        letters = len(re.sub(r"[\W_]+", "", text))
+        solid = letters >= (16 if family == "en" else 6)
+        if not solid and self._their_guess != family:
+            self._their_guess = family
+            return
+        self._their_guess = ""
+        code = family if family in LANGS else ("zh-CN" if self.cfg["ui_lang"] == "zh-CN" else "zh-TW")
+        before = self.cfg.snapshot()
+        self.cfg.set(their_lang=code)
+        self.log(f"auto-detect: the other person now speaks {code} (was {before['their_lang']})")
+        self.hub.publish("config", self.cfg.snapshot())
+        self.notice("their_switched", lang=code)
+        self.overlay.apply()
+        threading.Thread(target=self._their_language_switched, daemon=True).start()
+
+    def _their_language_switched(self) -> None:
+        with self._lock:
+            pipe = self.pipelines.get("listen")
+            if pipe:
+                pipe.langs = self._voice_langs("listen")      # 不用重開收音，換個順序就好
+            if self.watcher:
+                was_on = self.sources["screen"]["on"]
+                self._stop_watcher()
+                if was_on:
+                    self._start_screen()
+            if self.sources["mic"]["on"]:
+                self._restart_voice("mic")
 
     def _start_voice(self, key: str) -> None:
         kind = VOICE_KIND[key]
@@ -679,6 +807,8 @@ class Service:
             pipe = SpeechPipeline(capture, self.recognizer, self._voice_langs(key),
                                   on_text=self._on_speech, on_state=self._on_speaking,
                                   end_silence=float(self.cfg["end_silence"]), on_level=self._on_level)
+            if key == "listen" and self.cfg["their_auto"]:
+                pipe.stay = 1.5
             old = self.pipelines.pop(key, None)
             if old:
                 old.stop()
@@ -728,6 +858,8 @@ class Service:
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
             return
+        if kind == "loopback" and self.cfg["their_auto"]:
+            self._their_language_heard(lang, text)
         if lang == "zh":
             from .core.translate import to_script
 
@@ -884,6 +1016,15 @@ class Service:
         if self.window:
             self.window.focus()
 
+    def set_chrome(self, caption: str, text: str, dark: bool) -> bool:
+        """介面換主題時，把標題列的顏色一起換掉。"""
+        import re
+
+        if not (re.fullmatch(r"#[0-9A-Fa-f]{6}", caption or "") and re.fullmatch(r"#[0-9A-Fa-f]{6}", text or "")):
+            return False
+        self.chrome = (caption, text, bool(dark))
+        return bool(self.window and self.window.set_chrome(*self.chrome))
+
     def set_view(self, view: str) -> None:
         """main（主畫面）/ settings（設定）/ subtitle（字幕列）/ wizard（第一次設定）。"""
         if view not in ("main", "settings", "subtitle", "wizard"):
@@ -900,6 +1041,11 @@ class Service:
     def shutdown(self) -> None:
         if self.closing.is_set():
             return
+        if self.transcript.on:      # 記錄到一半就關程式：先存起來，不要弄丟
+            try:
+                self.transcript.stop(self.transcript_dir(), self.cfg["ui_lang"], bool(self.cfg["transcript_original"]))
+            except OSError as ex:
+                self.log(f"subtitle log could not be saved: {ex!r}")
         self.closing.set()
         self._download_cancel.set()
         if self.meters:

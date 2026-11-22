@@ -190,6 +190,17 @@ class Server:
                     if route == "/api/clear":
                         service.clear_messages()
                         return self._json({"ok": True})
+                    if route == "/api/record":
+                        if "on" in body:
+                            return self._json({"ok": True, **service.set_recording(bool(body.get("on")))})
+                        if body.get("open"):
+                            return self._json({"ok": service.open_transcript(str(body.get("open")))})
+                        if body.get("choose"):
+                            threading.Thread(target=service.choose_transcript_dir, daemon=True).start()
+                            return self._json({"ok": True})
+                        return self._json({"ok": True, **service.record_state()})
+                    if route == "/api/chrome":
+                        return self._json({"ok": service.set_chrome(str(body.get("caption")), str(body.get("text")), bool(body.get("dark")))})
                     if route == "/api/view":
                         service.set_view(str(body.get("view")))
                         return self._json({"ok": True})

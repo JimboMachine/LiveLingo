@@ -236,7 +236,7 @@ def run(out: Path, window: bool = True) -> int:
         base = f"http://127.0.0.1:{srv.port}"
         with urllib.request.urlopen(base + "/", timeout=10) as r:
             assert b"LiveLingo" in r.read()
-        for f in ("app.js", "i18n.js", "style.css"):
+        for f in ("app.js", "brand.js", "i18n.js", "style.css"):
             with urllib.request.urlopen(f"{base}/{f}", timeout=10) as r:
                 assert r.status == 200 and len(r.read()) > 1000
         try:
@@ -276,6 +276,15 @@ def run(out: Path, window: bool = True) -> int:
         info: dict = {}
         done = threading.Event()
 
+        def snap(name: str) -> None:
+            import mss
+            from PIL import Image
+
+            w, h, x, y = service.window.geometry()
+            with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                shot = sct.grab({"left": max(0, x - 8), "top": max(0, y - 8), "width": w + 16, "height": h + 16})
+                Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX").save(out.with_name(name))
+
         def on_loaded(win):
             if done.is_set():
                 return
@@ -299,6 +308,23 @@ def run(out: Path, window: bool = True) -> int:
                     service.set_view("wizard")
                     time.sleep(1.0)
                     info["size_after"] = service.window.geometry()
+                    # 把真的視窗拍下來（含 Windows 的標題列），之後看得到外觀在 Windows 上是不是對的；拍不到不算錯
+                    try:
+                        info["title_bar"] = service.window.set_chrome(*service.chrome)
+                        snap("window-wizard.png")
+                        service.cfg.set(setup_done=True)
+                        service.set_view("main")
+                        time.sleep(1.5)
+                        snap("window-main.png")
+                        service.update_config({"theme": "light", "accent": "violet"})
+                        time.sleep(1.5)
+                        info["chrome_light"] = list(service.chrome)
+                        snap("window-light.png")
+                    except Exception as ex:  # noqa: BLE001
+                        info["snapshots"] = repr(ex)
+                    finally:
+                        service.update_config({"theme": "dark", "accent": "mint"})
+                        service.cfg.set(setup_done=False)
             except Exception:  # noqa: BLE001
                 info["error"] = traceback.format_exc()[-1500:]
             finally:

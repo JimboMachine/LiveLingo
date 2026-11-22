@@ -1,6 +1,7 @@
 """只有 Windows 才用得到的小工具：剪貼簿、單一執行個體、讓視窗不被螢幕擷取拍到。"""
 
 import sys
+from pathlib import Path
 
 IS_WIN = sys.platform == "win32"
 MUTEX_NAME = "LiveLingoRunning"   # 安裝程式用這個名字判斷 LiveLingo 是不是還開著
@@ -117,6 +118,35 @@ def exclude_from_capture(hwnd: int) -> None:
         pass
 
 
+def style_title_bar(hwnd: int, caption: str = "#171A1E", text: str = "#F2F4F6", dark: bool = True) -> bool:
+    """把 Windows 的標題列改成和程式一樣的顏色，視窗從上到下才是同一套。顏色是 #RRGGBB。
+
+    用的是 Windows 自己提供的視窗外觀設定（Windows 11 才能指定顏色；Windows 10 只會變成深色或淺色），
+    拖曳、貼齊螢幕邊緣、改大小都還是 Windows 原本的行為。
+    """
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    def colorref(value: str) -> wintypes.DWORD:
+        value = value.lstrip("#")
+        r, g, b = int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+        return wintypes.DWORD(r | (g << 8) | (b << 16))
+
+    try:
+        set_attr = ctypes.windll.dwmapi.DwmSetWindowAttribute
+        set_attr.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+        ok = True
+        on = ctypes.c_int(1 if dark else 0)
+        set_attr(hwnd, 20, ctypes.byref(on), ctypes.sizeof(on))                  # 深色或淺色的標題列
+        for attribute, value in ((35, colorref(caption)), (36, colorref(text)), (34, colorref(caption))):      # 底色、文字、外框
+            ok = set_attr(hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value)) == 0 and ok
+        return ok
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def work_area() -> tuple[int, int, int, int]:
     """主螢幕扣掉工作列之後的範圍 (left, top, width, height)。"""
     if IS_WIN:
@@ -170,6 +200,33 @@ def mic_privacy_blocked() -> bool | None:
             if value.lower() == "deny":
                 return True
     return False if seen else None
+
+
+def documents_dir() -> Path:
+    """使用者的「文件」資料夾（可能被搬到 OneDrive，所以要問 Windows，不能自己猜）。"""
+    if IS_WIN:
+        try:
+            import ctypes
+
+            buf = ctypes.create_unicode_buffer(520)
+            if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0 and buf.value:      # 5 = CSIDL_PERSONAL
+                return Path(buf.value)
+        except Exception:  # noqa: BLE001
+            pass
+    return Path.home() / "Documents"
+
+
+def open_path(path) -> bool:
+    """用 Windows 預設的程式打開檔案或資料夾。"""
+    if not IS_WIN:
+        return False
+    import os
+
+    try:
+        os.startfile(str(path))      # noqa: S606
+        return True
+    except OSError:
+        return False
 
 
 def open_mic_settings() -> bool:

@@ -11,7 +11,10 @@ UI_LANGS = ("zh-TW", "zh-CN", "en", "ko", "ja")      # 翻譯語言有幾種，�
 DEFAULTS = {
     "ui_lang": None,             # 介面語言；None = 第一次開啟時照 Windows 的語言決定
     "my_lang": "zh-TW",          # 我看得懂的語言
-    "their_lang": "ko",          # 對方用的語言
+    "their_lang": "ko",          # 對方用的語言（開了自動偵測時：目前判斷到的語言）
+    "their_auto": False,         # 自動偵測對方用的語言
+    "transcript_dir": "",        # 字幕記錄存在哪個資料夾（空的：文件\\LiveLingo）
+    "transcript_original": True, # 字幕記錄裡同時留原文
     "tone": "casual",            # casual = 朋友語氣（韓文半語）；polite = 有禮貌
     "quality": "auto",           # auto = 照顯示卡自動決定；standard；high
     "game_terms": True,          # 內建的遊戲用語表（英雄聯盟，韓文和中文之間）
@@ -26,7 +29,10 @@ DEFAULTS = {
     "show_pronunciation": True,  # 韓文下面顯示唸法
     "copy_spoken": True,         # 我用說的翻出來的句子也自動複製
     "setup_done": False,
-    "window": {"w": 460, "h": 780, "x": None, "y": None},
+    "window": {"w": 980, "h": 720, "x": None, "y": None},
+    "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
+    "accent": "mint",            # 強調色：mint / blue / violet / rose / cyan
+    "layout": 2,                 # 2 = 左邊有固定導覽的版面（2.3.0 起）；舊設定檔沒有這個值
     "overlay": True,             # 浮動留言：翻譯像實況聊天室一樣直接顯示在遊戲畫面上
     "overlay_rect": None,        # 浮動留言的位置和大小 [x, y, 寬, 高]，None = 預設位置
     "overlay_font": 24,          # 字體大小
@@ -43,7 +49,9 @@ DEFAULTS = {
 }
 
 # 介面可以改的設定（其他的只能直接改檔案）
-EDITABLE = {"ui_lang", "my_lang", "their_lang", "tone", "quality", "game_terms", "speaker_device", "speaker_name",
+THEMES = ("dark", "light", "system")
+ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
+EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "tone", "quality", "game_terms", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine"}
 
@@ -92,8 +100,15 @@ class Config:
                     self.data[k] = v
         except Exception:  # noqa: BLE001  沒有設定檔或檔案壞了就用預設值
             pass
+        else:
+            if "layout" not in saved:      # 從舊版升上來：原本是很窄的視窗，新版面需要寬一點，只調這一次
+                self.data["layout"] = 1
         if self.data["ui_lang"] not in UI_LANGS:
             self.data["ui_lang"] = system_ui_lang()
+        if self.data["layout"] < 2:
+            if self.data["window"]["w"] < 900:
+                self.data["window"] = dict(DEFAULTS["window"])
+            self.data["layout"] = 2
 
     def __getitem__(self, key):
         with self._lock:

@@ -15,6 +15,7 @@ from . import oswin
 MAIN_MIN = (380, 150)
 SETTINGS_SIZE = (900, 800)
 SUBTITLE_SIZE = (900, 150)
+NORMAL_VIEWS = ("main", "settings")      # 這兩個畫面共用同一個視窗大小
 
 
 class WindowCtl:
@@ -70,8 +71,9 @@ class WindowCtl:
             return 0, 0, 1920, 1080
 
     def apply_view(self, view: str, previous: str) -> None:
+        """對話和設定用同一個視窗大小，切換時不動；只有字幕列和第一次設定會改大小。"""
         geom = self.geometry()
-        if previous == "main" and geom:
+        if previous in NORMAL_VIEWS and view not in NORMAL_VIEWS and geom:
             self.main_geom = geom
         if previous == "subtitle" and geom:
             self.subtitle_pos = (geom[2], geom[3])
@@ -85,7 +87,7 @@ class WindowCtl:
             return
         if previous == "subtitle":
             self.set_on_top(self.service.cfg["on_top"])
-        if view in ("settings", "wizard"):
+        if view == "wizard":
             w, h = min(SETTINGS_SIZE[0], sw - 40), min(SETTINGS_SIZE[1], sh - 80)
             self._safe(self.win.resize, w, h)
             if geom:      # 變寬之後如果超出螢幕，往左移回來
@@ -93,15 +95,37 @@ class WindowCtl:
                 y = min(geom[3], sy + sh - h - 50)
                 if (x, y) != (geom[2], geom[3]) or previous == "subtitle":
                     self._safe(self.win.move, max(sx, x), max(sy, y))
-        elif view == "main" and self.main_geom:
+        elif previous not in NORMAL_VIEWS and self.main_geom:
             w, h, x, y = self.main_geom
             self._safe(self.win.resize, w, h)
             self._safe(self.win.move, x, y)
 
     def save_geometry(self) -> None:
-        geom = self.geometry() if self.service.view == "main" else self.main_geom
+        geom = self.geometry() if self.service.view in NORMAL_VIEWS else self.main_geom
         if geom and geom[0] >= MAIN_MIN[0] and geom[1] >= 300 and geom[2] > -30000:
             self.service.cfg.set(window={"w": geom[0], "h": geom[1], "x": geom[2], "y": geom[3]})
+
+    def choose_folder(self, start: str = "") -> str:
+        """跳出 Windows 的「選擇資料夾」視窗，回傳選到的資料夾；按取消回傳空字串。"""
+        try:
+            import webview
+
+            kind = getattr(getattr(webview, "FileDialog", None), "FOLDER", None)
+            if kind is None:
+                kind = webview.FOLDER_DIALOG
+            picked = self.win.create_file_dialog(kind, directory=start or "")
+            return str(picked[0]) if picked else ""
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"folder dialog failed: {ex!r}")
+            return ""
+
+    def set_chrome(self, caption: str, text: str, dark: bool) -> bool:
+        """標題列的顏色跟著介面的主題。"""
+        try:
+            return oswin.style_title_bar(int(self.win.native.Handle.ToInt64()), caption, text, dark)
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"title bar colours failed: {ex!r}")
+            return False
 
 
 def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event | None = None) -> bool:
@@ -134,6 +158,7 @@ def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event 
         def shown():
             started["ok"] = True
             service.window = ctl
+            ctl.set_chrome(*service.chrome)
             try:
                 oswin.exclude_from_capture(int(win.native.Handle.ToInt32()))
             except Exception as ex:  # noqa: BLE001

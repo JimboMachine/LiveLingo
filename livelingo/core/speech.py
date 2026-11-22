@@ -103,13 +103,22 @@ class Recognizer:
 
         self._short_pad = short_pad
 
+    @staticmethod
+    def pick_language(probs, langs: list[str], stay: float = 1.0) -> str:
+        """
+        從語音模型給的機率裡，在 langs 這幾個語言中選一個。langs[0] 是「目前以為的語言」：
+        stay 大於 1 的時候它比較不容易被換掉，短短一兩個字的句子才不會讓語言跳來跳去。
+        """
+        allowed = [(l, p * (stay if l == langs[0] else 1.0)) for l, p in probs if l in langs]
+        return max(allowed, key=lambda x: x[1])[0] if allowed else langs[0]
+
     def _decode(self, audio: np.ndarray, lang: str | None):
         return self.model.transcribe(
             audio, language=lang, beam_size=1, temperature=0.0, condition_on_previous_text=False,
             without_timestamps=True, chunk_length=self.window,
             initial_prompt="以下是繁體中文的句子。" if lang == "zh" else None)
 
-    def _run(self, audio: np.ndarray, langs: list[str], share_encoder: bool = True):
+    def _run(self, audio: np.ndarray, langs: list[str], share_encoder: bool = True, stay: float = 1.0):
         m = self.model
         lang, enc = langs[0], None
         if len(langs) > 1:
@@ -122,9 +131,7 @@ class Recognizer:
                 probs = [(tok[2:-2], p) for tok, p in m.model.detect_language(enc)[0]]
             else:
                 _, _, probs = m.detect_language(audio)
-            allowed = [(l, p) for l, p in probs if l in langs]
-            if allowed:
-                lang = max(allowed, key=lambda x: x[1])[0]
+            lang = self.pick_language(probs, langs, stay)
         if enc is not None:
             real_encode, pending = m.encode, [enc]
             m.encode = lambda features: pending.pop() if pending else real_encode(features)
@@ -140,16 +147,17 @@ class Recognizer:
                 del m.encode
         return " ".join(p for p in parts if p).strip(), lang
 
-    def transcribe(self, audio: np.ndarray, langs: list[str]) -> tuple[str, str] | None:
+    def transcribe(self, audio: np.ndarray, langs: list[str], stay: float = 1.0) -> tuple[str, str] | None:
         """audio：16 kHz 單聲道。langs：可能的語言（zh / ko / en / ja），多於一個時會自動判斷是哪個。"""
+        langs = list(langs)      # 辨識到一半時清單可能被換掉（自動偵測換語言），先留一份
         with self._lock:
             self._fw.pad_or_trim = self._short_pad
             try:
                 try:
-                    text, lang = self._run(audio, langs)
+                    text, lang = self._run(audio, langs, stay=stay)
                 except Exception:  # noqa: BLE001  加速的算法萬一不相容，退回標準算法
                     self._fw.pad_or_trim = self._orig_pad
-                    text, lang = self._run(audio, langs, share_encoder=False)
+                    text, lang = self._run(audio, langs, share_encoder=False, stay=stay)
             finally:
                 self._fw.pad_or_trim = self._orig_pad
         if not text or _HALLUCINATIONS.search(text):
@@ -171,6 +179,7 @@ class SpeechPipeline(threading.Thread):
         self.capture = capture
         self.recognizer = recognizer
         self.langs = langs
+        self.stay = 1.0          # 大於 1：比較相信 langs[0]（自動偵測對方語言時用）
         self.on_text = on_text
         self.on_state = on_state or (lambda kind, speaking: None)
         # on_level(來源, 現在的音量 0~1, 已經連續幾秒完全沒聲音)：給介面畫音量條、提醒「麥克風沒聲音」
@@ -208,7 +217,7 @@ class SpeechPipeline(threading.Thread):
             for utter in self.segmenter.feed(audio):
                 t = time.time()
                 try:
-                    res = self.recognizer.transcribe(utter, self.langs)
+                    res = self.recognizer.transcribe(utter, self.langs, self.stay)
                 except Exception as ex:  # noqa: BLE001
                     self.on_text(self.capture.kind, str(ex), "error", 0.0)
                     continue

@@ -3,6 +3,7 @@
 import json
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from livelingo import assets, gpu, updater
@@ -615,3 +616,146 @@ def test_update_asks_first(tmp_path, monkeypatch):
     service.update_choice("now")
     assert service._update_if_needed() is False and calls == [] and notices == []
     service.shutdown()
+
+
+def test_auto_detect_their_language(tmp_path):
+    from livelingo.core.speech import Recognizer
+    from livelingo.service import Service
+
+    pick = Recognizer.pick_language
+    probs = [("en", 0.05), ("ko", 0.40), ("ja", 0.45), ("zh", 0.05), ("fr", 0.9)]
+    assert pick(probs, ["ko", "ja"]) == "ja"                    # 沒有偏好：機率高的贏，不在清單裡的語言不算
+    assert pick(probs, ["ko", "zh", "en", "ja"], stay=1.5) == "ko"   # 差一點點：留在目前的語言
+    assert pick([("ja", 0.8), ("ko", 0.1)], ["ko", "zh", "en", "ja"], stay=1.5) == "ja"
+    assert pick([], ["ko", "ja"]) == "ko"
+
+    service = Service(tmp_path)
+    notices = []
+    service.notice = lambda code, **kw: notices.append((code, kw))
+    service.update_config({"my_lang": "zh-TW", "their_lang": "ko"})
+    assert service._voice_langs("listen") == ["ko"] and service._screen_langs() == {"ko"}
+    service.update_config({"their_auto": True})
+    assert service.cfg["their_auto"] is True and service.cfg["their_lang"] == "ko"
+    assert service._voice_langs("listen") == ["ko", "zh", "en", "ja"]
+    assert service._voice_langs("mic") == ["zh", "ko"]
+
+    service._on_speech("loopback", "はい", "ja")                # 短短一句：先不換
+    assert service.cfg["their_lang"] == "ko"
+    service._on_speech("loopback", "탑 갈게", "ko")              # 又回到韓文：剛剛那句不算
+    service._on_speech("loopback", "うん", "ja")
+    assert service.cfg["their_lang"] == "ko"
+    service._on_speech("loopback", "行こう", "ja")              # 連續兩句都是日文：換
+    assert service.cfg["their_lang"] == "ja" and notices[-1] == ("their_switched", {"lang": "ja"})
+    assert service._voice_langs("listen") == ["ja", "ko", "zh", "en"]
+    assert service._voice_langs("mic") == ["zh", "ja"]
+    assert service._screen_langs() == {"ja"}                    # 我用中文：螢幕上的中文不用翻
+    assert service._target_for({"who": "me", "lang": "zh"}) == "ja"
+
+    service._on_speech("loopback", "지금 용 잡으러 가자 빨리 와", "ko")   # 夠長的一句：馬上換
+    assert service.cfg["their_lang"] == "ko"
+    service._on_speech("loopback", "我們現在去打龍，快點過來", "zh")       # 對方說的是我的語言：不換
+    assert service.cfg["their_lang"] == "ko" and service.cfg["their_auto"] is True
+
+    service.update_config({"my_lang": "ko", "their_lang": "en"})
+    assert service._screen_langs() == {"en", "zh", "ja"}        # 中文、日文、英文同一個文字模型：都收
+    service._on_speech("loopback", "我們現在去打龍，快點過來", "zh")
+    assert service.cfg["their_lang"] == "zh-TW"
+
+    service.update_config({"their_lang": "ja", "their_auto": False})      # 自己選了語言：不再自動換
+    service._on_speech("loopback", "지금 용 잡으러 가자 빨리 와", "en")
+    assert service.cfg["their_lang"] == "ja" and service._voice_langs("listen") == ["ja"]
+    service.shutdown()
+
+
+def test_subtitle_log(tmp_path):
+    from livelingo.service import Service
+    from livelingo.transcript import render
+
+    service = Service(tmp_path / "data")
+    notices = []
+    service.notice = lambda code, **kw: notices.append(code)
+    folder = tmp_path / "我的字幕"
+    service.cfg.set(transcript_dir=str(folder), ui_lang="zh-TW")
+    assert service.record_state()["on"] is False and service.record_state()["folder"] == str(folder)
+
+    def said(msg_id, who, via, original, translated="", **more):
+        service._post({"id": msg_id, "who": who, "via": via, "original": original, "lang": "ko",
+                       "translated": translated, "pending": not translated, "error": "", "time": "15:31", **more})
+
+    said(1, "them", "heard", "記錄之前說的", "不會存進去")
+    assert service.set_recording(True)["on"] is True
+    said(2, "them", "heard", "탑 갈게")                         # 先出現原文
+    said(2, "them", "heard", "탑 갈게", "我去上路。")            # 翻好了：同一則，不會變兩行
+    said(3, "me", "typed", "等我一下", "잠깐만 기다려")
+    said(4, "them", "screen", "ㅋㅋㅋ", "哈哈哈")
+    said(5, "them", "screen", "看錯的字", "會被拿掉")
+    service._drop(5)
+    said(6, "me", "spoken", "還沒翻完")
+    assert service.record_state()["count"] == 4
+    waiting = service.set_recording(False)                        # 還有一句在翻：先等它，這時候說的新句子不收
+    assert waiting["on"] is True and waiting["saving"] is True
+    said(60, "them", "heard", "按了結束之後才說的", "不會存進去")
+    said(6, "me", "spoken", "還沒翻完", "아직 안 끝났어")
+    for _ in range(50):
+        if not service.record_state()["on"]:
+            break
+        time.sleep(0.1)
+    state = service.record_state()
+    assert state["on"] is False and state["saving"] is False and state["saved"] == 4 and state["name"].startswith("LiveLingo ") and state["name"].endswith(".txt")
+    raw = (folder / state["name"]).read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf") and b"\r\n" in raw     # 記事本打得開、不會亂碼
+    text = raw.decode("utf-8-sig")
+    assert "LiveLingo 字幕記錄" in text and "不會存進去" not in text and "會被拿掉" not in text
+    assert "對方：탑 갈게\r\n→ 我去上路。" in text and text.count("탑 갈게") == 1
+    assert "我：等我一下\r\n→ 잠깐만 기다려" in text and "聊天：ㅋㅋㅋ\r\n→ 哈哈哈" in text
+    assert text.endswith("我：還沒翻完\r\n→ 아직 안 끝났어\r\n")
+
+    said(7, "them", "heard", "記錄結束之後說的", "不會存進去")
+    service.set_recording(True)
+    assert service.set_recording(False)["file"] == "" and notices == ["record_empty"]     # 一句都沒有：不存檔
+    assert len(list(folder.glob("*.txt"))) == 1
+
+    service.update_config({"transcript_original": False})
+    service.set_recording(True)
+    said(8, "them", "heard", "탑 갈게", "我去上路。")
+    said(80, "me", "spoken", "一直翻不出來的")
+    second = service.set_recording(False, wait=0)                 # 不等：還沒翻完的只留原文
+    assert second["name"] != state["name"]                       # 同一分鐘存兩次：不會蓋掉前一個
+    assert "對方：我去上路。" in (folder / second["name"]).read_text(encoding="utf-8-sig")
+
+    service.set_recording(True)                                   # 記錄到一半關程式：自動存起來
+    said(9, "me", "typed", "關掉之前", "끄기 전에")
+    service.shutdown()
+    assert len(list(folder.glob("*.txt"))) == 3
+
+    en = render([{"who": "them", "via": "heard", "original": "탑 갈게", "translated": "Going top.", "at": 0}], "en", 0, 60)
+    assert "Them: 탑 갈게" in en and "LiveLingo Subtitle log" in en
+
+
+def test_look_settings(tmp_path):
+    import json
+
+    from livelingo.config import Config
+    from livelingo.service import Service
+
+    service = Service(tmp_path)
+    assert (service.cfg["theme"], service.cfg["accent"]) == ("dark", "mint")
+    service.update_config({"theme": "light", "accent": "violet"})
+    assert (service.cfg["theme"], service.cfg["accent"]) == ("light", "violet")
+    service.update_config({"theme": "neon", "accent": "#123456"})          # 不認得的值不收
+    assert (service.cfg["theme"], service.cfg["accent"]) == ("light", "violet")
+    assert service.set_chrome("#FFFFFF", "#111111", False) in (True, False)
+    assert service.chrome == ("#FFFFFF", "#111111", False)
+    service.set_chrome("red; drop", "#111111", False)                       # 不是顏色：不收
+    assert service.chrome == ("#FFFFFF", "#111111", False)
+    service.shutdown()
+
+    # 從舊版升級：以前比較窄的視窗放不下左邊的導覽，放寬一次；之後使用者自己調的大小要留著
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "config.json").write_text(json.dumps({"window": {"w": 520, "h": 760, "x": 40, "y": 40}, "setup_done": True}), encoding="utf-8")
+    cfg = Config(old)
+    assert cfg["window"]["w"] >= 900 and cfg["layout"] == 2 and cfg["setup_done"] is True
+    cfg.set(window={"w": 700, "h": 600, "x": 0, "y": 0})
+    cfg.save()
+    assert Config(old)["window"]["w"] == 700
