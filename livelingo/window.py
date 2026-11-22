@@ -214,7 +214,8 @@ def _run_browser(url: str, service, quit_event: threading.Event) -> None:
     edge = _find_edge() if sys.platform == "win32" else None
     if edge:
         subprocess.Popen([edge, f"--app={url}", "--window-size=480,820",
-                          f"--user-data-dir={service.data / 'edge-profile'}"], stdin=subprocess.DEVNULL)
+                          f"--user-data-dir={service.data / 'edge-profile'}"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         import webbrowser
 

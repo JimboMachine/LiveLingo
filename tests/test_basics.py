@@ -1884,3 +1884,24 @@ def test_several_named_screen_regions(tmp_path, monkeypatch):
         assert [r["id"] for r in service.cfg["regions"]] == ["r1"]
     finally:
         service._stop_watcher()
+
+
+def test_child_processes_get_all_three_handles():
+    """
+    每個另外開的程序都要指定輸入、輸出、錯誤輸出要接到哪裡。打包後的程式沒有主控台，
+    從某些地方啟動時沒指定的那一個會讓子程序直接開不起來（WinError 50，自動檢查抓到過）。
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "livelingo"
+    missing = []
+    for path in sorted(root.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in ("run", "Popen")
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess"):
+                continue
+            given = {k.arg for k in node.keywords}
+            if "stdin" not in given or not ("capture_output" in given or {"stdout", "stderr"} <= given):
+                missing.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert not missing, missing

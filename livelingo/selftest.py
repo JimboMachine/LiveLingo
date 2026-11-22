@@ -143,8 +143,9 @@ def run(out: Path, window: bool = True) -> int:
             return {"available": False}
         result = tmp / "app-audio.json"
         head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        # 三個輸出入都要指定：沒有主控台的打包版從某些地方啟動時，沒指定的那個會讓子程序開不起來
         done = subprocess.run([*head, "--probe-app-audio", str(result)], timeout=60, stdin=subprocess.DEVNULL,
-                              creationflags=subprocess.CREATE_NO_WINDOW)
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
         info = json.loads(result.read_text(encoding="utf-8")) if result.exists() else {}
         info["exit"] = done.returncode
         assert done.returncode == 0 and info.get("opened") and not info.get("error"), info

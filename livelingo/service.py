@@ -985,7 +985,8 @@ class Service:
                         self.window.minimize()
                     try:
                         subprocess.run([*self_command(), "--select-region", str(out), "--lang", self.cfg["ui_lang"]],
-                                       timeout=300, stdin=subprocess.DEVNULL)
+                                       timeout=300, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.DEVNULL)
                     finally:
                         if self.window:
                             self.window.restore()
