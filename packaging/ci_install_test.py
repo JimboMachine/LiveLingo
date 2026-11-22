@@ -321,6 +321,8 @@ saved.update(store_dir=str(KEPT_MOVED), my_lang="zh-TW")
 code = subprocess.run([str(APP_DIR / "unins000.exe"), *SILENT, "/KEEPDATA=1"], timeout=600).returncode
 print("uninstaller exit code", code)
 wait_for("the program folder to be removed", lambda: not APP.exists() and not (APP_DIR / "_internal").exists(), 180)
+# 資料夾是卸載的最後一步才刪的（程式檔刪完之後），所以要再等一下
+wait_for("the large files to be removed", lambda: not any((DATA / n).exists() for n in ("models", "engine", "update", "webview")), 120)
 for path in (DESKTOP, START, KEPT_MOVED, DATA / "models", DATA / "engine", DATA / "update", DATA / "webview"):
     print(f"{path}: {'still there' if path.exists() else 'removed'}")
     if path.exists():
@@ -364,6 +366,7 @@ saved["store_dir"] = str(MOVED)
 code = subprocess.run([str(APP_DIR / "unins000.exe"), *SILENT], timeout=600).returncode
 print("uninstaller exit code", code)
 wait_for("the program folder to be removed", lambda: not APP.exists() and not (APP_DIR / "_internal").exists(), 180)
+wait_for("the data folder to be removed", lambda: not DATA.exists(), 120)
 for path in (DESKTOP, START, DATA, MOVED):
     print(f"{path}: {'still there' if path.exists() else 'removed'}")
     if path.exists():
