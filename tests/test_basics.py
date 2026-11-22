@@ -3949,3 +3949,45 @@ def test_engine_needs_a_key(tmp_path, monkeypatch):
     translator.clear_cache()
     translator.translate("你好", "ko", "zh")
     assert sent[-1]["Authorization"] == f"Bearer {first.key}"
+
+
+def test_every_package_is_pinned():
+    """套件全部鎖在確切的版本：requirements.txt 和 constraints.txt 對得上，自動打包兩段都照著裝，裝完還會核對一次。"""
+    import importlib.util
+    import re
+    from pathlib import Path
+
+    import pytest
+
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location("check_pins", root / "packaging" / "check_pins.py")
+    check = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check)
+
+    direct = check.read_pins(root.joinpath("requirements.txt").read_text(encoding="utf-8"))
+    pins = check.read_pins(root.joinpath("constraints.txt").read_text(encoding="utf-8"))
+    assert len(direct) == 11 and len(pins) > 50
+    assert all(pins.get(name) == version for name, version in direct.items())
+    for tool in ("pyinstaller", "pytest", "opencv-python-headless", "ctranslate2", "onnxruntime"):
+        assert tool in pins, tool                                  # 打包工具和帶進來的大套件也要鎖
+    for loose in ("numpy", "numpy>=2", "pillow~=13.0", "mss==10.*"):
+        with pytest.raises(ValueError):
+            check.read_pins(loose)
+    assert check.read_pins("# note\nPyYAML==6.0.4  # why\n\ncharset_normalizer==3.5.2\n") == {"pyyaml": "6.0.4", "charset-normalizer": "3.5.2"}
+
+    # 核對：從直接要的套件一路找下去，沒鎖的、版本不同的都抓出來；這個平台沒裝的不算
+    world = {"app": ("1.0", ["lib>=1", "winonly; sys_platform == 'win32'", "extra-thing; extra == 'gui'"]),
+             "lib": ("2.1", ["deep"]), "deep": ("0.3", ["app"])}
+    wanted = lambda req: None if ";" in req else re.split(r"[<>=!~ ]", req)[0]
+    look = lambda name: world.get(name)
+    assert check.problems(["App", "missing"], {"app": "1.0", "lib": "2.1", "deep": "0.3"}, look, wanted) == []
+    assert check.problems(["app"], {"app": "1.0", "lib": "2.0"}, look, wanted) == [
+        "deep 0.3 is installed but not pinned in constraints.txt", "lib: constraints.txt says 2.0, installed is 2.1"]
+    assert check._wanted("colorama>=0.4; sys_platform == 'nowhere'") is None and check._wanted("idna (>=3.4)") == "idna"
+    assert check._wanted("socks>=1; extra == 'socks'") is None
+
+    build = root.joinpath(".github", "workflows", "build.yml").read_text(encoding="utf-8")
+    installs = [line for line in build.splitlines() if "pip install" in line]
+    assert len(installs) == 2 and all("-c constraints.txt" in line for line in installs)
+    assert build.count("python packaging/check_pins.py") == 2
+    assert "-c constraints.txt" in root.joinpath("README.md").read_text(encoding="utf-8")

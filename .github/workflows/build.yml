@@ -25,7 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install numpy pillow opencv-python-headless opencc-python-reimplemented==0.1.7 pytest
+      - run: pip install numpy pillow opencv-python-headless opencc-python-reimplemented pytest -c constraints.txt
+      - run: python packaging/check_pins.py pytest opencv-python-headless
       - run: python -m pytest tests -q
 
   windows:
@@ -39,7 +40,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pyinstaller pytest
+        run: pip install -r requirements.txt pyinstaller pytest -c constraints.txt
+
+      # 裝進來的每個套件（連它們自己帶進來的）都要跟 constraints.txt 鎖的一樣，不然就停
+      - name: Check pinned versions
+        run: python packaging/check_pins.py pyinstaller pytest
 
       - name: Checks
         run: python -m pytest tests -q

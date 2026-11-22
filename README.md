@@ -62,7 +62,7 @@
 ## 給開發者
 
 ```
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt   # 每個套件都鎖在確切的版本
 python -m livelingo                 # 從原始碼執行（Windows）
 python -m pytest tests              # 不需要模型的檢查
 python -m livelingo --selftest out.json --no-window

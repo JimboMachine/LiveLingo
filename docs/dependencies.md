@@ -115,13 +115,13 @@
 
 ### 新增一個 Python 套件
 
-1. `requirements.txt`：套件和版本
+1. `requirements.txt`：requirements.txt 寫確切的版本；constraints.txt 要補上這個套件和它帶進來的每一個（自動打包紅的時候，訊息會列出少了哪些）
 2. `livelingo.spec`：執行時才載入的要點名，會讀自己資料夾的要整包帶走
 3. `build.yml`：檢查那一段的手寫清單
 4. `selftest.py`：打包後真的載得到；跟電腦環境有關的列為只記錄
 5. `service.py`：載不到的時候程式照常能用
 
-自動把關：測試會擋：打包設定沒點名執行時才載入的套件。自動打包裡「檢查」那一段的套件清單是手寫的，要自己補。
+自動把關：測試會擋：打包設定沒點名執行時才載入的套件、套件沒鎖在確切的版本、兩份清單版本不一樣。自動打包會擋：實際裝進來的套件（連帶進來的）有一個沒鎖或版本不同。自動打包裡「檢查」那一段的套件清單是手寫的，要自己補。
 
 ### 改版本號或發佈
 
@@ -295,10 +295,10 @@
 
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
-| 套件清單 | `requirements.txt` | `livelingo.spec`：執行時才載入的套件要點名（改壞不會報錯）<br>`build.yml`：要裝的套件（檢查那一段是手寫清單）（改壞不會報錯） |
+| 套件清單與鎖定的版本 | `requirements.txt`<br>`constraints.txt` | `livelingo.spec`：執行時才載入的套件要點名（改壞不會報錯）<br>`build.yml`：要裝的套件（檢查那一段是手寫清單）；兩段都用 -c constraints.txt，裝完跑 check_pins.py 核對（改壞不會報錯） |
 | 給使用者看的說明：功能、安裝、下載大小、更新 | `README.md` | 沒有別的地方用到它 |
 | 打包設定 | `packaging/livelingo.spec` | `installer.iss`：打包出來的資料夾（改壞不會報錯）<br>`build.yml`：打包（改壞不會報錯） |
-| 自動打包與發佈 | `.github/workflows/build.yml`<br>`packaging/ci_install_test.py` | `updater.py`：發佈出去的檔名（改壞不會報錯） |
+| 自動打包與發佈 | `.github/workflows/build.yml`<br>`packaging/ci_install_test.py`<br>`packaging/check_pins.py` | `updater.py`：發佈出去的檔名（改壞不會報錯） |
 | 安裝程式 | `packaging/installer.iss` | `updater.py`：靜默安裝的參數（改壞不會報錯）<br>`build.yml`：做安裝檔（改壞不會報錯） |
 | 版本號 | `livelingo/__init__.py` | `changes.py`：現在是哪一版（改壞會報錯）<br>`__main__.py`：版本號（改壞會報錯）<br>`service.py`：版本號（改壞會報錯）<br>`updater.py`：比較版本（改壞會報錯）<br>`build.yml`：版本號、發佈標籤（改壞不會報錯） |
 | 自動更新 | `livelingo/updater.py` | `guide.py`：下載網址要和更新用的是同一個地方（改壞不會報錯）<br>`service.py`：檢查更新（改壞會報錯） |
