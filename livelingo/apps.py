@@ -14,15 +14,19 @@ _SKIP = {"applicationframehost.exe", "textinputhost.exe", "shellexperiencehost.e
 
 
 def _fake() -> list[dict] | None:
-    """測試用：LIVELINGO_FAKE_APPS="Discord.exe|Discord - 一般;League of Legends.exe|League of Legends" """
+    """測試用：LIVELINGO_FAKE_APPS="Discord.exe|Discord - 一般;League of Legends.exe|League of Legends|0,0,1920,1080"（最後是視窗位置，可省略）"""
     raw = os.environ.get("LIVELINGO_FAKE_APPS")
     if raw is None:
         return None
     out = []
     for n, part in enumerate(p for p in raw.split(";") if p.strip()):
         exe, _, title = part.partition("|")
+        rect = (100 + 40 * n, 80 + 30 * n, 1280, 720)
+        head, _, where = title.rpartition("|")      # 標題裡自己也可能有 |，只有最後一段是四個數字才當成位置
+        if len(where.split(",")) == 4 and all(v.strip().lstrip("-").isdigit() for v in where.split(",")):
+            title, rect = head, tuple(int(v) for v in where.split(","))
         out.append({"exe": exe.strip(), "name": display_name(exe.strip()), "title": title.strip(), "pids": [1000 + n],
-                    "hwnd": 5000 + n})
+                    "hwnd": 5000 + n, "rect": rect})
     return out
 
 
@@ -49,14 +53,36 @@ def _exe_of(pid: int) -> str:
         k32.CloseHandle(wintypes.HANDLE(handle))
 
 
+_pixels_set = False
+
+
+def _real_pixels() -> None:
+    """請 Windows 給真正的像素位置（不然螢幕有放大 125%、150% 的時候，視窗位置會跟擷取畫面對不上）。只做一次。"""
+    global _pixels_set
+    if _pixels_set:
+        return
+    _pixels_set = True
+    try:
+        import ctypes
+
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)      # 已經設過會失敗，沒關係
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def windows() -> list[dict]:
-    """畫面上看得到、有標題的視窗：[{"hwnd", "pid", "exe", "title"}]，照前後順序（最上面的在前）。"""
+    """
+    畫面上看得到、有標題的視窗：[{"hwnd", "pid", "exe", "title", "rect", "minimized"}]，照前後順序（最上面的在前）。
+    rect 是 (左, 上, 寬, 高)，單位是螢幕上真正的像素。
+    """
     if not IS_WIN:
-        return [{"hwnd": a["hwnd"], "pid": a["pids"][0], "exe": a["exe"], "title": a["title"]} for a in _fake() or []]
+        return [{"hwnd": a["hwnd"], "pid": a["pids"][0], "exe": a["exe"], "title": a["title"], "rect": a["rect"],
+                 "minimized": False} for a in _fake() or []]
     import ctypes
     from ctypes import wintypes
 
     u32 = ctypes.windll.user32
+    _real_pixels()
     found: list[dict] = []
     own = os.getpid()
 
@@ -76,13 +102,29 @@ def windows() -> list[dict]:
                 return True
             exe = _exe_of(pid.value)
             if exe and exe.lower() not in _SKIP:
-                found.append({"hwnd": int(hwnd), "pid": int(pid.value), "exe": exe, "title": buf.value})
+                box = wintypes.RECT()
+                u32.GetWindowRect(hwnd, ctypes.byref(box))
+                found.append({"hwnd": int(hwnd), "pid": int(pid.value), "exe": exe, "title": buf.value,
+                              "rect": (box.left, box.top, box.right - box.left, box.bottom - box.top),
+                              "minimized": bool(u32.IsIconic(hwnd))})
         except Exception:  # noqa: BLE001
             pass
         return True
 
     u32.EnumWindows(each, 0)
     return found
+
+
+def window_rect(exe: str) -> tuple[int, int, int, int] | None:
+    """這個程式現在最大的那個視窗在螢幕上的位置 (左, 上, 寬, 高)；沒開、或縮到工作列了就是 None。"""
+    best = None
+    for w in windows():
+        if w["exe"].lower() != exe.lower() or w["minimized"]:
+            continue
+        _left, _top, width, height = w["rect"]
+        if width >= 120 and height >= 80 and (best is None or width * height > best[2] * best[3]):
+            best = tuple(int(v) for v in w["rect"])
+    return best
 
 
 def running() -> list[dict]:

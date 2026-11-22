@@ -1204,7 +1204,7 @@ def test_unsure_and_edit_original(tmp_path):
 
     # 讀螢幕：辨識分數跟著文字一起交出來，分數低的做記號
     got = []
-    service.submit = lambda via, text, lang=None, unsure=False: got.append((via, text, unsure))
+    service.submit = lambda via, text, lang=None, unsure=False, place="": got.append((via, text, unsure))
 
     class FakeOcr:
         family = "ko"
@@ -1221,7 +1221,8 @@ def test_unsure_and_edit_original(tmp_path):
     frames = iter([np.zeros((60, 200, 3), np.uint8)] * 2 + [np.full((60, 200, 3), 90, np.uint8)] * 50)
     service.grab = lambda region: next(frames)
     service._load_ocr = lambda: FakeOcr()
-    service.cfg.set(region={"left": 0, "top": 0, "width": 200, "height": 60}, interval=0.02)
+    service.cfg.set(regions=[{"id": "r1", "name": "", "on": True, "app": "", "anchor": None,
+                              "left": 0, "top": 0, "width": 200, "height": 60}], interval=0.02)
     try:
         service._start_screen()
         wait(lambda: len(got) >= 2)
@@ -1731,3 +1732,155 @@ def test_listen_to_chosen_programs_only(tmp_path, monkeypatch):
     service.update_config({"listen_apps": "Discord.exe"})
     assert service.cfg["listen_apps"] == []
 
+
+
+def test_several_named_screen_regions(tmp_path, monkeypatch):
+    """
+    聊天區可以好幾個、各有名字和開關；區域可以跟著指定程式的視窗；讀到幾行、翻了幾行、略過幾行有數字。
+    舊版只有一個聊天區的設定檔會自動搬過來。
+    """
+    import numpy as np
+
+    import livelingo.core.watcher as watcher_mod
+    from livelingo import apps
+    from livelingo.config import MAX_REGIONS
+    from livelingo.core.ocr import Line
+    from livelingo.service import Service
+
+    # ---- 舊設定檔：region 搬成 regions 的第一個
+    (tmp_path / "old").mkdir()
+    (tmp_path / "old" / "config.json").write_text(json.dumps({"region": {"left": 5, "top": 6, "width": 300, "height": 120}, "layout": 2}),
+                                                  encoding="utf-8")
+    moved = Config(tmp_path / "old")
+    assert moved["region"] is None and moved["regions"] == [
+        {"id": "r1", "name": "", "on": True, "app": "", "anchor": None, "left": 5, "top": 6, "width": 300, "height": 120}]
+
+    # ---- 程式視窗的位置
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Discord.exe|Discord|100,50,1000,700;Game.exe|Game")
+    assert apps.window_rect("discord.exe") == (100, 50, 1000, 700) and apps.window_rect("Nope.exe") is None
+
+    service = Service(tmp_path)
+    notices, events = [], []
+    service.notice = lambda code, **kw: notices.append(code)
+    publish = service.hub.publish
+    service.hub.publish = lambda name, data=None: (events.append((name, data)), publish(name, data))[1]
+
+    def frame(*box):
+        monkeypatch.setenv("LIVELINGO_FAKE_REGION", ",".join(str(v) for v in box))
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    # ---- 框第一個、再新增一個、重框指定的那一個
+    frame(10, 20, 400, 200)
+    service.select_region(then_enable=False)
+    wait(lambda: len(service.cfg["regions"]) == 1 and not service._selecting)
+    frame(500, 20, 300, 200)
+    service.select_region(then_enable=False, new=True)
+    wait(lambda: len(service.cfg["regions"]) == 2 and not service._selecting)
+    assert [r["id"] for r in service.cfg["regions"]] == ["r1", "r2"] and all(r["on"] for r in service.cfg["regions"])
+    assert ("saved", {"what": "region", "id": "r2"}) in events
+    frame(520, 40, 320, 220)
+    service.select_region(then_enable=False, rid="r2")
+    wait(lambda: service.cfg["regions"][1]["left"] == 520 and not service._selecting)
+    assert service.cfg["regions"][0]["left"] == 10 and len(service.cfg["regions"]) == 2
+    frame(1, 1, 10, 10)                                   # 太小的框不收
+    service.select_region(then_enable=False, new=True)
+    wait(lambda: "region_small" in notices and not service._selecting)
+    assert len(service.cfg["regions"]) == 2
+
+    # ---- 介面只能改名字、開關、跟著哪個程式、刪除；位置大小改不了，亂送的會被擋掉
+    sent = [dict(r) for r in service.cfg["regions"]]
+    sent[0].update(name="  遊戲   聊天  ", left=9999, width=1)
+    sent[1].update(name="Discord 文字", app="Discord.exe")
+    sent += [{"id": "made-up", "left": 0, "top": 0, "width": 50, "height": 50}, "junk", dict(sent[0])]
+    result = service.update_config({"regions": sent})
+    first, second = service.cfg["regions"]
+    assert result["saved"] and "regions" in result["changed"] and len(service.cfg["regions"]) == 2
+    assert first["name"] == "遊戲 聊天" and first["left"] == 10 and first["width"] == 400
+    assert second["app"] == "Discord.exe" and second["anchor"] == [100, 50]
+    # 跟著的視窗搬家：讀的位置跟著搬；視窗不見了就先不讀
+    assert service._locate(second) == {"left": 520, "top": 40, "width": 320, "height": 220}
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Discord.exe|Discord|400,250,1000,700")
+    assert service._locate(second) == {"left": 820, "top": 240, "width": 320, "height": 220}
+    assert service._locate(first) == {"left": 10, "top": 20, "width": 400, "height": 200}
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Game.exe|Game")
+    assert service._locate(second) is None
+    assert service.ocr_test("r2") == {"ok": False, "error": "app_closed", "app": "Discord"}
+    # 要跟的程式沒開：不知道視窗在哪，不存，並且告訴使用者
+    sent = [dict(r) for r in service.cfg["regions"]]
+    sent[0]["app"] = "Nope.exe"
+    result = service.update_config({"regions": sent})
+    assert "regions" not in result["changed"] and "region_app_closed" in notices and service.cfg["regions"][0]["app"] == ""
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Discord.exe|Discord|100,50,1000,700")
+
+    # ---- 最多 MAX_REGIONS 個
+    full = [dict(service.cfg["regions"][0], id=f"x{n}") for n in range(MAX_REGIONS)]
+    service.cfg.set(regions=full)
+    service.select_region(then_enable=False, new=True)
+    assert "regions_full" in notices and not service._selecting and len(service.cfg["regions"]) == MAX_REGIONS
+    service.cfg.set(regions=[first, second])
+
+    # ---- 同時讀兩個區域：各自記各自看過的句子，訊息標是哪個區域讀到的，統計數字對得起來
+    class FakeOcr:
+        family = "ko"
+
+        def read(self, bgr):
+            return int(bgr[0, 0, 0])                      # 用畫面的顏色代表是哪個區域、第幾個畫面
+
+    pages = {
+        10: [Line("안녕하세요 반갑습니다", 0, 0, 20, 0.95), Line("hello there", 0, 30, 20, 0.9)],
+        120: [Line("안녕하세요 반갑습니다", 0, 0, 20, 0.95), Line("지금 갈게요 기다려", 0, 30, 20, 0.95)],
+        220: [Line("안녕하세요 반갑습니다", 0, 0, 20, 0.95)],
+    }
+    monkeypatch.setattr(watcher_mod, "message_lines", lambda shade: pages[shade])
+    shade = {"r1": 10, "r2": 220}
+    service.grab = lambda place: np.full((60, 200, 3), shade["r1" if place["left"] == 10 else "r2"], np.uint8)
+    service._load_ocr = lambda: FakeOcr()
+    got = []
+    service.submit = lambda via, text, lang=None, unsure=False, place="": got.append((text, place))
+    service.cfg.set(interval=0.02)
+    try:
+        service._start_screen()
+        wait(lambda: len(got) >= 2)
+        assert sorted(got) == [("안녕하세요 반갑습니다", "Discord 文字"), ("안녕하세요 반갑습니다", "遊戲 聊天")]
+        shade["r1"] = 120                                 # 第一個區域多了一行
+        wait(lambda: len(got) >= 3)
+        assert got[2] == ("지금 갈게요 기다려", "遊戲 聊天")
+        stats = service.watcher.stats()
+        assert stats["r1"] == {"scans": 2, "lines": 4, "sent": 2, "repeat": 1, "other": 1, "old": 0}
+        assert stats["r2"] == {"scans": 1, "lines": 1, "sent": 1, "repeat": 0, "other": 0, "old": 0}
+        wait(lambda: any(name == "screen_stats" and data == stats for name, data in events))
+        assert service.state()["screen_stats"] == stats
+
+        # 改名字不會從頭讀（不會把畫面上的舊訊息再翻一次）；關掉一個就只讀剩下的
+        sent = [dict(r) for r in service.cfg["regions"]]
+        sent[0]["name"] = "LoL"
+        sent[1]["on"] = False
+        service.update_config({"regions": sent})
+        assert [r["id"] for r in service.watcher.regions] == ["r1"] and service.watcher.stats()["r1"]["sent"] == 2
+        shade["r1"] = 10
+        time.sleep(0.3)
+        assert len(got) == 3
+        # 只剩一個區域開著：訊息不用再標是哪裡
+        service.watcher.set_regions(service._regions_on())
+        service._on_screen_line("새로운 줄입니다", "ko", 0.9, service.cfg["regions"][0])
+        assert got[-1] == ("새로운 줄입니다", "")
+
+        # 全部關掉：讀螢幕這個來源跟著關
+        service.sources["screen"]["on"] = True
+        sent[0]["on"] = False
+        service.update_config({"regions": sent})
+        assert not service.sources["screen"]["on"] and not service.cfg["sources"]["screen"]
+        # 再打開讀螢幕：有框過但全關著，就把第一個打開
+        service.phase = "ready"
+        service.set_source("screen", True)
+        assert service.cfg["regions"][0]["on"] and not service.cfg["regions"][1]["on"]
+        # 刪掉一個
+        service.update_config({"regions": [dict(service.cfg["regions"][0])]})
+        assert [r["id"] for r in service.cfg["regions"]] == ["r1"]
+    finally:
+        service._stop_watcher()

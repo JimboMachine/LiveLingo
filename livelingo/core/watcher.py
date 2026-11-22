@@ -66,27 +66,82 @@ def wanted(text: str, source_langs: set[str]) -> str | None:
     return None
 
 
+class _Slot:
+    """一個區域目前讀到哪裡：上一張畫面、看過的句子、統計數字。"""
+
+    def __init__(self, region: dict):
+        self.region = region
+        self.prev = self.last_done = self.moving_since = None
+        self.first = True
+        self.seen = SeenLines()
+        # scans 辨識了幾次；lines 讀到幾行 = sent 拿去翻的 + repeat 讀過的 + other 不是要翻的語言 + old 一開始就在畫面上的
+        self.stats = {"scans": 0, "lines": 0, "sent": 0, "repeat": 0, "other": 0, "old": 0}
+
+    @staticmethod
+    def key(region: dict) -> tuple:
+        """位置、大小或跟著的程式變了才算換了一個區域；只改名字或開關不會從頭讀。"""
+        return (region.get("id"), region.get("left"), region.get("top"), region.get("width"), region.get("height"),
+                region.get("app") or "", tuple(region.get("anchor") or ()))
+
+
 class ScreenWatcher(threading.Thread):
+    """
+    每隔一下子看一次螢幕上框選的區域，有新的一行就交給 on_message。可以同時看好幾個區域，各自記各自看過的句子。
+    locate(區域) 回傳現在實際要擷取的位置（跟著程式視窗的區域會跟著視窗移動）；回傳 None 表示現在不讀（視窗沒開、縮小了）。
+    """
+
     def __init__(self, ocr: OcrEngine, on_message, on_status=None, interval: float = 0.7,
-                 source_langs: set[str] | None = None, first_scan_keep: int = 4, grab=None):
+                 source_langs: set[str] | None = None, first_scan_keep: int = 4, grab=None, locate=None, on_stats=None):
         super().__init__(daemon=True)
         self.ocr = ocr
-        self.on_message = on_message          # on_message(原文, 語言代碼, 辨識分數 0~1)
+        self.on_message = on_message          # on_message(原文, 語言代碼, 辨識分數 0~1, 區域)
         self.on_status = on_status or (lambda s: None)
+        self.on_stats = on_stats or (lambda stats: None)      # on_stats({區域 id: 統計數字})，數字有變才呼叫
         self.interval = interval
         self.source_langs = source_langs or {"ko"}
         self.first_scan_keep = first_scan_keep
         self.grab = grab                      # 測試時可以換成別的擷取函式
-        self.region: dict | None = None       # {"left","top","width","height"}
+        self.locate = locate or (lambda region: region)
         self.paused = False
         self._halt = threading.Event()
-        self._reset = True
+        self._lock = threading.Lock()
+        self._slots: list[_Slot] = []
         self.failed = False
-        self.seen = SeenLines()
 
-    def set_region(self, region: dict | None):
-        self.region = region
-        self._reset = True
+    @property
+    def regions(self) -> list[dict]:
+        with self._lock:
+            return [slot.region for slot in self._slots]
+
+    @property
+    def region(self) -> dict | None:
+        regions = self.regions
+        return regions[0] if regions else None
+
+    @property
+    def seen(self) -> SeenLines:
+        with self._lock:
+            return self._slots[0].seen if self._slots else SeenLines()
+
+    def set_regions(self, regions: list[dict]) -> None:
+        """換成這幾個區域。沒變的區域接著讀（不會把畫面上的舊訊息再翻一次），新的和改過位置的從頭開始。"""
+        with self._lock:
+            old = {_Slot.key(slot.region): slot for slot in self._slots}
+            slots = []
+            for region in regions:
+                slot = old.get(_Slot.key(region)) or _Slot(region)
+                slot.region = region
+                slots.append(slot)
+            self._slots = slots
+
+    def set_region(self, region: dict | None) -> None:
+        """只看一個區域（每次呼叫都從頭開始讀）。"""
+        with self._lock:
+            self._slots = [_Slot(region)] if region else []
+
+    def stats(self) -> dict:
+        with self._lock:
+            return {str(slot.region.get("id") or ""): dict(slot.stats) for slot in self._slots}
 
     def stop(self):
         self._halt.set()
@@ -109,50 +164,70 @@ class ScreenWatcher(threading.Thread):
             self.on_status(str(ex))
 
     def _loop(self, grab):
-        prev = last_done = moving_since = None
-        first = True
+        told = None
         while not self._halt.is_set():
             time.sleep(self.interval)
-            region = self.region
-            if not region or self.paused:
+            if self.paused:
                 continue
-            if self._reset:
-                self._reset = False
-                prev = last_done = None
-                first = True
-                self.seen = SeenLines()
-            try:
-                bgr = np.ascontiguousarray(grab(region))
-                th = self._thumb(bgr)
-                stable = prev is not None and float(np.abs(th - prev).mean()) < 1.0
-                # 只要有幾個小格子明顯變了就算有變化（一行新訊息只佔畫面很小一塊）
-                changed = last_done is None or int((np.abs(th - last_done) > 16).sum()) >= 3
-                prev = th
-                now = time.monotonic()
-                # 等畫面停下來（捲動、動畫結束）再辨識，避免讀到一半的字；
-                # 如果畫面一直在動（動態貼圖之類），最多等 3 秒就照樣辨識
-                if not changed:
-                    moving_since = None
-                    continue
-                if not stable:
-                    moving_since = moving_since or now
-                    if now - moving_since < 3.0:
-                        continue
-                moving_since = None
-                last_done = th
-                lines = message_lines(self.ocr.read(bgr))
-                fresh = []
-                for ln in lines:
-                    lang = wanted(ln.text, self.source_langs)
-                    if lang and not self.seen.seen(ln.text):
-                        self.seen.add(ln.text)
-                        fresh.append((ln.text, lang, ln.score))
-                if first:
-                    # 第一次只翻畫面最下面幾則，免得一口氣翻一整頁
-                    first = False
-                    fresh = fresh[-self.first_scan_keep:]
-                for text, lang, score in fresh:
-                    self.on_message(text, lang, score)
-            except Exception as ex:  # noqa: BLE001
-                self.on_status(str(ex))
-                time.sleep(2)
+            with self._lock:
+                slots = list(self._slots)
+            for slot in slots:
+                if self._halt.is_set() or self.paused:
+                    break
+                try:
+                    self._look(slot, grab)
+                except Exception as ex:  # noqa: BLE001
+                    self.on_status(str(ex))
+                    time.sleep(2)
+            now = self.stats()
+            if now != told:
+                told = now
+                try:
+                    self.on_stats(now)
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def _look(self, slot: _Slot, grab) -> None:
+        place = self.locate(slot.region)
+        if not place:
+            slot.prev = None      # 視窗回來之後等畫面停下來再讀
+            return
+        bgr = np.ascontiguousarray(grab(place))
+        th = self._thumb(bgr)
+        stable = slot.prev is not None and float(np.abs(th - slot.prev).mean()) < 1.0
+        # 只要有幾個小格子明顯變了就算有變化（一行新訊息只佔畫面很小一塊）
+        changed = slot.last_done is None or int((np.abs(th - slot.last_done) > 16).sum()) >= 3
+        slot.prev = th
+        now = time.monotonic()
+        # 等畫面停下來（捲動、動畫結束）再辨識，避免讀到一半的字；
+        # 如果畫面一直在動（動態貼圖之類），最多等 3 秒就照樣辨識
+        if not changed:
+            slot.moving_since = None
+            return
+        if not stable:
+            slot.moving_since = slot.moving_since or now
+            if now - slot.moving_since < 3.0:
+                return
+        slot.moving_since = None
+        slot.last_done = th
+        lines = message_lines(self.ocr.read(bgr))
+        slot.stats["scans"] += 1
+        slot.stats["lines"] += len(lines)
+        fresh = []
+        for ln in lines:
+            lang = wanted(ln.text, self.source_langs)
+            if not lang:
+                slot.stats["other"] += 1      # 不是要翻的語言（自己的語言、數字、符號）
+            elif slot.seen.seen(ln.text):
+                slot.stats["repeat"] += 1     # 之前讀過的同一行
+            else:
+                slot.seen.add(ln.text)
+                fresh.append((ln.text, lang, ln.score))
+        if slot.first:
+            # 第一次只翻畫面最下面幾則，免得一口氣翻一整頁
+            slot.first = False
+            slot.stats["old"] += max(0, len(fresh) - self.first_scan_keep)
+            fresh = fresh[-self.first_scan_keep:]
+        slot.stats["sent"] += len(fresh)
+        for text, lang, score in fresh:
+            self.on_message(text, lang, score, slot.region)

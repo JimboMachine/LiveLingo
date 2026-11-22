@@ -36,7 +36,10 @@ DEFAULTS = {
     "drop_echo": True,           # 麥克風收到喇叭播出來的對方聲音時，不要當成我說的話
     "ptt": False,                # 按住才說話：只有按著 ptt_key 的時候麥克風才收音
     "ptt_key": "F8",             # oswin.PTT_KEYS 裡的一個
-    "region": None,              # 螢幕上框選的聊天區 {"left","top","width","height"}
+    "region": None,              # 舊版只有一個聊天區的時候用的；開程式時會搬進 regions，之後都是 None
+    # 螢幕上框選的聊天區，可以好幾個：{"id","name","left","top","width","height","on",
+    #   "app"（跟著哪個程式的視窗，空的 = 固定在螢幕上的位置）,"anchor"（框的時候那個視窗的左上角 [x, y]）}
+    "regions": [],
     "also_english": False,       # 螢幕上的英文訊息也翻譯
     "sources": {"screen": False, "listen": False, "mic": False},
     "on_top": True,
@@ -75,11 +78,12 @@ DEFAULTS = {
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
-            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
+            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
+MAX_REGIONS = 6
 OVERLAY_LOOK = tuple(k for k in DEFAULTS if k.startswith("overlay_") and k != "overlay_rect")      # 「恢復預設外觀」會還原的項目
 
 
@@ -133,6 +137,11 @@ class Config:
         else:
             if "layout" not in saved:      # 從舊版升上來：原本是很窄的視窗，新版面需要寬一點，只調這一次
                 self.data["layout"] = 1
+        old = self.data.get("region")
+        if isinstance(old, dict) and not self.data["regions"]:      # 舊版的單一聊天區搬成第一個區域
+            self.data["regions"] = [{"id": "r1", "name": "", "on": True, "app": "", "anchor": None,
+                                     **{k: int(old.get(k, 0)) for k in ("left", "top", "width", "height")}}]
+        self.data["region"] = None
         if self.data["ui_lang"] not in UI_LANGS:
             self.data["ui_lang"] = system_ui_lang()
         if self.data["layout"] < 2:

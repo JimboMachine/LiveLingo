@@ -164,10 +164,11 @@ class Server:
                         service.submit("typed", str(body.get("text") or "")[:500])
                         return self._json({"ok": True})
                     if route == "/api/region":
-                        service.select_region(then_enable=bool(body.get("enable", True)))
+                        service.select_region(then_enable=bool(body.get("enable", True)),
+                                              rid=str(body["id"]) if body.get("id") else None, new=bool(body.get("new")))
                         return self._json({"ok": True})
                     if route == "/api/ocr_test":
-                        return self._json(service.ocr_test())
+                        return self._json(service.ocr_test(str(body["id"]) if body.get("id") else None))
                     if route == "/api/meters":
                         service.set_meters(bool(body.get("on")))
                         return self._json({"ok": True})

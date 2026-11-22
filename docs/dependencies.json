@@ -115,7 +115,7 @@
     {"from": "config", "to": "translate", "what": "介面語言要等於翻譯語言", "kind": "name"},
     {"from": "watcher", "to": "ocr", "what": "辨識結果", "kind": "import"},
     {"from": "watcher", "to": "translate", "what": "判斷語言", "kind": "import"},
-    {"from": "service", "to": "apps", "what": "開著的程式清單、程式的最上層程序", "kind": "import"},
+    {"from": "service", "to": "apps", "what": "開著的程式清單、程式的最上層程序、視窗在螢幕上的位置", "kind": "import"},
     {"from": "service", "to": "procaudio", "what": "只聽指定程式（可多選），不行就退回整台電腦", "kind": "import"},
     {"from": "procaudio", "to": "audio", "what": "取樣率、每段長度（對外的樣子要跟 Capture 一樣）", "kind": "import"},
     {"from": "appjs", "to": "apps", "what": "程式清單的欄位（exe、name、title）", "kind": "name"},
@@ -213,6 +213,7 @@
     {"id": "model", "title": "換模型或下載來源", "guard": "測試會看模式的選法和引擎檔案的挑法。真的下載只在自動打包的自我檢查裡跑。", "steps": [{"nodes": ["assets"], "check": "檔案清單、大小、網址"}, {"nodes": ["gpu"], "check": "哪種顯示卡用哪個模型"}, {"nodes": ["service"], "check": "準備流程、缺什麼、退回標準模式"}, {"nodes": ["engine", "ocr", "speech"], "check": "各自去哪裡找檔案"}, {"nodes": ["appjs", "i18n"], "check": "第一次開啟的下載畫面"}]},
     {"id": "audio", "title": "改收音或語音辨識", "guard": "測試用假的音訊裝置。真的麥克風和喇叭只能在你的電腦上確認。", "steps": [{"nodes": ["audio"], "check": "裝置、兩種收音方式"}, {"nodes": ["speech"], "check": "斷句、辨識、選語言"}, {"nodes": ["meters"], "check": "音量"}, {"nodes": ["service"], "check": "找麥克風、自動偵測語言"}, {"nodes": ["appjs"], "check": "音量條、錯誤訊息"}, {"nodes": ["tests"], "check": "假裝置的檢查"}]},
     {"id": "window", "title": "改視窗行為", "guard": "只能靠 Windows 上的自我檢查和截圖。", "steps": [{"nodes": ["window"], "check": "大小、置頂、關閉"}, {"nodes": ["oswin"], "check": "Windows 功能"}, {"nodes": ["config"], "check": "記住的視窗設定"}, {"nodes": ["tray"], "check": "關掉視窗後還在不在"}, {"nodes": ["appjs"], "check": "切換畫面模式"}, {"nodes": ["selftest"], "check": "視窗截圖"}]},
+    {"id": "regions", "title": "改聊天區（可以好幾個、可以跟著程式視窗）", "guard": "測試會擋：舊設定檔沒搬過來、介面改得到位置大小、統計數字對不起來。區域多一個欄位時下面每一處都要認得它。", "steps": [{"nodes": ["config"], "check": "regions 的欄位、舊版 region 的搬移、最多幾個"}, {"nodes": ["service"], "check": "介面送來的清單怎麼檢查、框選之後存哪一個、跟著視窗時實際讀哪裡"}, {"nodes": ["watcher"], "check": "哪些欄位變了算換了一個區域（要從頭讀）、每個區域的統計"}, {"nodes": ["apps"], "check": "視窗位置（放大比例不同的螢幕要拿真正的像素）"}, {"nodes": ["region"], "check": "框選畫面交回來的位置"}, {"nodes": ["appjs"], "check": "區域卡片、主畫面那一列、第一次設定的那一步"}, {"nodes": ["tests"], "check": "區域的檢查"}]},
     {"id": "translation", "title": "改翻譯的做法", "guard": "測試有固定的句子在把關，例如陳述句不能變成問句。", "steps": [{"nodes": ["translate"], "check": "提示、整理輸出、補救"}, {"nodes": ["terms"], "check": "遊戲用語"}, {"nodes": ["config"], "check": "詞彙表、學過的句子"}, {"nodes": ["service"], "check": "翻成哪種語言、重試"}, {"nodes": ["romanize"], "check": "韓文唸法"}, {"nodes": ["tests"], "check": "固定句子的檢查"}]}
   ]
 }

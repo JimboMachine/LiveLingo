@@ -160,6 +160,18 @@
 
 自動把關：只能靠 Windows 上的自我檢查和截圖。
 
+### 改聊天區（可以好幾個、可以跟著程式視窗）
+
+1. `config.py`：regions 的欄位、舊版 region 的搬移、最多幾個
+2. `service.py`：介面送來的清單怎麼檢查、框選之後存哪一個、跟著視窗時實際讀哪裡
+3. `watcher.py`：哪些欄位變了算換了一個區域（要從頭讀）、每個區域的統計
+4. `apps.py`：視窗位置（放大比例不同的螢幕要拿真正的像素）
+5. `region.py`：框選畫面交回來的位置
+6. `app.js`：區域卡片、主畫面那一列、第一次設定的那一步
+7. `test_basics.py`：區域的檢查
+
+自動把關：測試會擋：舊設定檔沒搬過來、介面改得到位置大小、統計數字對不起來。區域多一個欄位時下面每一處都要認得它。
+
 ### 改翻譯的做法
 
 1. `translate.py`：提示、整理輸出、補救
@@ -237,6 +249,6 @@
 | --- | --- | --- |
 | 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯） |
 | Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、螢幕大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯） |
-| 開著哪些程式 | `livelingo/apps.py` | `service.py`：開著的程式清單、程式的最上層程序（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
+| 開著哪些程式 | `livelingo/apps.py` | `service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
 | 模型下載 | `livelingo/assets.py` | `service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN）（改壞會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯） |
 | 顯示卡判斷 | `livelingo/gpu.py` | `service.py`：選模式（改壞會報錯） |

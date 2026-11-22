@@ -69,7 +69,7 @@
     const page = $("settings-page");
     const el = S.view === "settings" && (page.querySelector(mark.key[0] === "#" ? mark.key : mark.key.startsWith("preset-") ? `[data-act="overlay-preset"][data-code="${mark.key.slice(7)}"]` : SAVE_TARGET[mark.key] || `[data-key="${mark.key}"][aria-pressed="true"]`)
       || page.querySelector(`[data-key="${mark.key}"], [data-change="${mark.key}"]`));
-    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches, .packs, .device.app"));
+    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches, .packs, .device.app, .region-card"));
     if (row) row.classList.add("just-saved");
     chip.hidden = false;
     if (el) {
@@ -231,11 +231,15 @@
     paintVu();
     renderMicRow();
     const row = $("region-row");
-    const r = S.cfg.region;
+    const live = regions().filter((x) => x.on);
+    const r = live[0];
     const showRegion = !!(r && (S.sources.screen || {}).on);
     row.hidden = !(showRegion || S.messages.length);
+    // 只讀一個區域：可以直接重框；讀好幾個：到設定頁管理
     row.innerHTML = (showRegion
-      ? `<span>${esc(t("region_now", { w: r.width, h: r.height }))} · <button data-act="region">${esc(t("region_change"))}</button></span>`
+      ? (live.length > 1
+        ? `<span>${esc(t("regions_now", { n: live.length }))} · <button data-act="nav" data-to="screen">${esc(t("nav_screen"))}</button></span>`
+        : `<span>${esc(t("region_now", { w: r.width, h: r.height }))} · <button data-act="region" data-id="${esc(r.id)}">${esc(t("region_change"))}</button></span>`)
       : "<span></span>")
       + (S.messages.length ? `<button data-act="clear">${esc(t("clear"))}</button>` : "");
     const mic = $("sub-mic");
@@ -373,7 +377,8 @@
     const icon = m.via === "screen" ? ICON.screen : (m.via === "heard" ? ICON.listen : (m.via === "spoken" ? ICON.mic : ""));
     // 語音的句子：後面標從說完到翻好花了幾秒
     const took = m.took > 0 && !m.pending ? ` · <span class="took" title="${esc(t("took_hint"))}">${esc(t("took", { s: Number(m.took).toFixed(1) }))}</span>` : "";
-    return `${icon}<span>${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}${took}</span>`;
+    const place = m.place ? ` · ${esc(m.place)}` : "";      // 同時讀好幾個聊天區時，標是哪一個讀到的
+    return `${icon}<span>${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}${place}${took}</span>`;
   }
 
   function fixHTML(m) {
@@ -576,9 +581,15 @@
     post("/api/meters", { on: true });
   }
 
+  // 打開某個設定分頁時要另外去拿的資料：聲音頁要裝置和音量，聲音頁和螢幕頁都要開著的程式清單
+  function tabOpened() {
+    if (S.ui.tab === "audio") openDevices();
+    if (S.ui.tab === "screen") loadApps();
+  }
+
   async function loadApps() {
     S.ui.apps = await get("/api/apps") || null;
-    if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
+    if (S.view === "settings" && (S.ui.tab === "audio" || S.ui.tab === "screen")) renderSettingsPage();
   }
 
   function refreshDevicePanels() {
@@ -679,26 +690,74 @@
       </section>`;
   }
 
-  function screenPage() {
-    const r = S.cfg.region;
+  // ---------------------------------------------------------------- 螢幕上的聊天區（可以好幾個）
+
+  function regions() { return (S.cfg && S.cfg.regions) || []; }
+
+  function regionStats(id) {
+    const n = (S.screenStats || {})[id];
+    if (!n || !n.lines) return t("rstat_none");
+    return t("rstat", { lines: n.lines, sent: n.sent, skipped: n.lines - n.sent, repeat: n.repeat + n.old, other: n.other });
+  }
+
+  function ocrResultHTML() {
     const o = S.ui.ocr;
-    let result = "";
-    if (o === "reading") result = `<div class="note">${ICON.info}<span>${esc(t("ocr_reading"))}</span></div>`;
-    else if (o && !o.ok) result = `<div class="note warn">${ICON.info}<span>${esc(t("ocr_failed", { error: o.error }))}</span></div>`;
-    else if (o && !o.lines.length) result = `<div class="note">${ICON.info}<span>${esc(t("ocr_nothing"))}</span></div>`;
-    else if (o) result = `<div class="ocr-lines">${o.lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>`;
-    return `
-      <section>
-        <div><h2>${esc(t("screen_title"))}</h2><div class="sub">${esc(t("screen_hint"))}</div></div>
-        <div class="note">${ICON.info}<span>${esc(r ? t("region_size", { w: r.width, h: r.height, x: r.left, y: r.top }) : t("region_none"))}</span></div>
-        <div class="btn-row">
-          <button class="primary big" data-act="region">${ICON.frame}${esc(r ? t("region_change") : t("region_pick"))}</button>
-          <button class="ghost" data-act="ocr-test" ${r ? "" : "disabled"}>${esc(t("ocr_test"))}</button>
+    if (o === "reading") return `<div class="note">${ICON.info}<span>${esc(t("ocr_reading"))}</span></div>`;
+    if (o && !o.ok) return `<div class="note warn">${ICON.info}<span>${esc(o.error === "app_closed" ? t("n_region_app_closed", { app: o.app }) : t("ocr_failed", { error: o.error }))}</span></div>`;
+    if (o && !o.lines.length) return `<div class="note">${ICON.info}<span>${esc(t("ocr_nothing"))}</span></div>`;
+    if (o) return `<div class="ocr-lines">${o.lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>`;
+    return "";
+  }
+
+  function regionCard(r, i) {
+    const open = ((S.ui.apps && S.ui.apps.apps) || []).filter((a) => a.running);
+    const options = [["", t("region_fixed")]].concat(open.map((a) => [a.exe, a.name]));
+    // 選過的程式現在沒開：還是要列出來，不然下拉選單會顯示成別的
+    if (r.app && !options.some((o) => o[0].toLowerCase() === r.app.toLowerCase())) options.push([r.app, `${appName(r.app)}（${t("apps_closed")}）`]);
+    const label = r.name || t("region_n", { n: i + 1 });
+    return `<div class="region-card" id="region-${esc(r.id)}" data-on="${r.on ? "true" : "false"}">
+        <div class="rhead">
+          <input class="rname" type="text" data-change="region-name" data-id="${esc(r.id)}" value="${esc(r.name || "")}" placeholder="${esc(t("region_n", { n: i + 1 }))}" maxlength="30" aria-label="${esc(t("region_name"))}">
+          <button class="switch" role="switch" data-act="region-on" data-id="${esc(r.id)}" aria-checked="${r.on ? "true" : "false"}" aria-label="${esc(t("region_on"))}：${esc(label)}"><span></span></button>
         </div>
-        <div class="sub">${esc(t("ocr_test_hint"))}</div>
-        ${result}
+        <div class="dnote">${esc(t("region_size", { w: r.width, h: r.height, x: r.left, y: r.top }))}</div>
+        <div class="rfollow"><label for="rapp-${esc(r.id)}">${esc(t("region_follow"))}</label>
+          <select id="rapp-${esc(r.id)}" data-change="region-app" data-id="${esc(r.id)}">${options.map((o) => `<option value="${esc(o[0])}" ${o[0].toLowerCase() === (r.app || "").toLowerCase() ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select></div>
+        <div class="dnote" id="rstat-${esc(r.id)}">${esc(regionStats(r.id))}</div>
+        <div class="btn-row">
+          <button class="ghost small" data-act="region" data-id="${esc(r.id)}" data-keep="1">${esc(t("region_change"))}</button>
+          <button class="ghost small" data-act="ocr-test" data-id="${esc(r.id)}">${esc(t("ocr_test"))}</button>
+          <button class="ghost small" data-act="region-remove" data-id="${esc(r.id)}">${esc(t("region_remove"))}</button>
+        </div>
+        ${S.ui.ocrId === r.id ? ocrResultHTML() : ""}
+      </div>`;
+  }
+
+  function screenPage() {
+    const list = regions();
+    const full = list.length >= 6;
+    return `
+      <section id="regions-section">
+        <div><h2>${esc(t("screen_title"))}</h2><div class="sub">${esc(t("screen_hint"))}</div></div>
+        ${list.length ? `<div class="sub">${esc(t("regions_hint"))}</div>${list.map(regionCard).join("")}
+          <div class="btn-row"><button class="ghost" data-act="region-add" ${full ? "disabled" : ""}>${ICON.frame}${esc(t("region_add"))}</button>
+            <span class="dim small">${esc(t("regions_max", { max: 6 }))}</span></div>
+          <div class="sub">${esc(t("ocr_test_hint"))}</div>
+          <div class="note">${ICON.info}<span>${esc(t("region_follow_hint"))}</span></div>`
+        : `<div class="note">${ICON.info}<span>${esc(t("region_none"))}</span></div>
+          <div class="btn-row"><button class="primary big" data-act="region">${ICON.frame}${esc(t("region_pick"))}</button></div>`}
       </section>
       <section>${switchRow("also_english", t("also_english"))}</section>`;
+  }
+
+  // 區域的名字、開關、跟著哪個程式、刪除：都是把整份清單送回去存（位置和大小只有框選畫面能改）
+  async function saveRegions(list, mark) {
+    const r = await post("/api/config", { regions: list });
+    if (!(r && r.ok && r.saved)) toast(t("n_save_failed", { error: (r && r.error) || "" }), 8000, "error");
+    else if (r.changed.indexOf("regions") >= 0) flashSaved(mark);
+    if (r && r.config) S.cfg = r.config;
+    if (S.view === "settings") renderSettingsPage();      // 沒存成（例如要跟的程式沒開）也要畫回原本的樣子
+    renderSources();
   }
 
   function rangeRow(key, label, min, max, step, text) {
@@ -883,7 +942,7 @@
     const page = $("settings-page");
     page.scrollTop = 0;
     page.classList.remove("in"); void page.offsetWidth; page.classList.add("in");      // 換頁的淡入
-    if (tab === "audio") openDevices();
+    tabOpened();
     if (tab === "overlay") refreshPreview();
     else if (wasAudio) post("/api/meters", { on: false });
   }
@@ -928,7 +987,7 @@
     const names = shortNames();
     if (S.ui.wz === 1) return `<div class="wz-body">${devicesHTML()}</div>`;
     if (S.ui.wz === 2) {
-      const r = S.cfg.region;
+      const r = regions()[0];
       return `<div class="wz-body"><div class="wz-split">
         <div class="wz-art" aria-hidden="true"><div class="t"></div>
           <div class="box"><span class="tag">${esc(t("wz_region_here"))}</span>
@@ -1034,7 +1093,7 @@
     S.view = view;
     app.dataset.view = view;
     renderRail();
-    if (view === "settings") { renderSettingsPage(); if (S.ui.tab === "audio") openDevices(); }
+    if (view === "settings") { renderSettingsPage(); tabOpened(); }
     if (view === "wizard") renderWizard();
     if (view === "subtitle") renderSubtitle();
     renderOverlay();
@@ -1078,7 +1137,11 @@
       const key = el.dataset.key;
       post("/api/source", { key, on: !(S.sources[key] || {}).on });
     },
-    region: () => post("/api/region", { enable: true }),
+    // 主畫面和「還沒框過」的按鈕：框好就開始讀；設定頁裡各區域的「重新框選」：只換位置，開關不動
+    region: (el) => post("/api/region", { enable: !el.dataset.keep, id: el.dataset.id || undefined }),
+    "region-add": () => post("/api/region", { enable: false, new: true }),
+    "region-on": (el) => saveRegions(regions().map((r) => (r.id === el.dataset.id ? Object.assign({}, r, { on: !r.on }) : r)), "#region-" + el.dataset.id),
+    "region-remove": (el) => saveRegions(regions().filter((r) => r.id !== el.dataset.id), "#regions-section"),
     clear: () => post("/api/clear"),
     fix: (el) => {
       const id = Number(el.dataset.id);
@@ -1183,9 +1246,10 @@
     "mic-settings": () => post("/api/mic_settings"),
     "gloss-remove": (el) => post("/api/glossary/remove", { src: el.dataset.src }),
     "lesson-remove": (el) => post("/api/lessons/remove", { src: el.dataset.src, target: el.dataset.target }),
-    "ocr-test": async () => {
+    "ocr-test": async (el) => {
+      S.ui.ocrId = el.dataset.id || "";
       S.ui.ocr = "reading"; renderSettingsPage();
-      S.ui.ocr = await post("/api/ocr_test"); renderSettingsPage();
+      S.ui.ocr = await post("/api/ocr_test", { id: S.ui.ocrId || undefined }) || { ok: false, error: "no response" }; renderSettingsPage();
     },
     "ui-lang": (el) => saveCfg({ ui_lang: el.dataset.code }),
     theme: (el) => saveCfg({ theme: el.dataset.code }),
@@ -1199,7 +1263,7 @@
     "wz-finish": async () => {
       await post("/api/config", { setup_done: true });
       setView("main");
-      if (S.cfg.region) post("/api/source", { key: "screen", on: true });
+      if (regions().length) post("/api/source", { key: "screen", on: true });
     },
     "overlay-toggle": async () => {
       const on = !S.cfg.overlay;
@@ -1247,6 +1311,11 @@
     }
     const key = e.target.dataset && e.target.dataset.change;
     if (!key) return;
+    if (key === "region-name" || key === "region-app") {
+      const id = e.target.dataset.id, field = key === "region-name" ? "name" : "app";
+      saveRegions(regions().map((r) => (r.id === id ? Object.assign({}, r, { [field]: e.target.value }) : r)), "#region-" + id);
+      return;
+    }
     if (e.target.dataset.range || e.target.dataset.live) {      // 放開滑桿、選好顏色：這才算存好
       clearTimeout(liveTimer); liveTimer = null; livePatch = null; S.ui.live = null;
       saveCfg(patchOf(e.target), e.target.id ? "#" + e.target.id : key);
@@ -1368,7 +1437,11 @@
       renderOverlayState();
       if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage();
     },
-    saved: (d) => flashSaved(d.what),
+    saved: (d) => flashSaved(d.what === "region" && d.id ? "#region-" + d.id : d.what),
+    screen_stats: (d) => {      // 讀螢幕的統計：直接換那一行字，不重畫整頁（免得正在打的名字被打斷）
+      S.screenStats = d;
+      Object.keys(d).forEach((id) => { const el = $("rstat-" + id); if (el) el.textContent = regionStats(id); });
+    },
     view: (d) => { if (d.view !== S.view) showView(d.view); },
     region_done: () => {
       if (S.view === "wizard") renderWizard();
@@ -1390,7 +1463,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
-    S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || [];
+    S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
@@ -1398,7 +1471,7 @@
     const splash = $("splash");
     if (splash) { splash.classList.add("gone"); setTimeout(() => splash.remove(), 400); }
     if (view !== st.view) post("/api/view", { view });
-    if (view === "settings") { renderSettings(); if (S.ui.tab === "audio") openDevices(); }
+    if (view === "settings") { renderSettings(); tabOpened(); }
     return true;
   }
 

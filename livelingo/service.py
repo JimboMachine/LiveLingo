@@ -16,7 +16,7 @@ from collections import deque
 from pathlib import Path
 
 from . import __version__, apps, assets, chatpaint, gpu, oswin, updater
-from .config import ACCENTS, DEFAULTS, EDITABLE, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
+from .config import ACCENTS, DEFAULTS, EDITABLE, MAX_REGIONS, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language, similarity
@@ -195,6 +195,7 @@ class Service:
             "gpu": self.gpu,
             "mode": self.mode,
             "delay": self.delay(),
+            "screen_stats": self.watcher.stats() if self.watcher else {},
             "speech_gpu": self.speech_gpu_state(),
             "ptt_keys": list(oswin.PTT_KEYS),
             "fallback": self.fallback,
@@ -386,7 +387,7 @@ class Service:
         if not self.cfg["setup_done"]:
             return
         want = self.cfg["sources"]
-        if want.get("screen") and self.cfg["region"]:
+        if want.get("screen") and self._regions_on():
             self.set_source("screen", True)
         for key in ("listen", "mic"):
             if want.get(key):
@@ -510,10 +511,11 @@ class Service:
         return {"hear": round(sum(r[0] for r in rows) / len(rows), 1),
                 "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
 
-    def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0) -> int | None:
+    def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
+               place: str = "") -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
-        hear：語音辨識花了幾秒。回傳這則訊息的編號。"""
+        hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。回傳這則訊息的編號。"""
         text = text.strip()
         if not text:
             return None
@@ -522,7 +524,7 @@ class Service:
         msg = {"id": next(self._ids), "who": who, "via": via, "original": text, "lang": lang,
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
                "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time(),
-               "hear": round(float(hear), 1), "took": 0.0}
+               "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30]}
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
             self._post(msg)
         self.jobs.put(msg)
@@ -734,6 +736,12 @@ class Service:
             picked = changes["listen_apps"] if isinstance(changes["listen_apps"], list) else []
             names = [str(p).strip()[:120] for p in picked if isinstance(p, str) and str(p).strip()]
             changes["listen_apps"] = list({n.lower(): n for n in names}.values())[:12]
+        if "regions" in changes:
+            fixed = self._clean_regions(changes["regions"])
+            if fixed is None:
+                changes.pop("regions")
+            else:
+                changes["regions"] = fixed
         if "term_packs" in changes:
             picked = changes["term_packs"] if isinstance(changes["term_packs"], list) else []
             changes["term_packs"] = [name for name in PACKS if name in picked]
@@ -807,6 +815,8 @@ class Service:
             self._apps_audio_off = False      # 換了選擇：再試一次
             if self.sources["listen"]["on"]:
                 self._restart_voice("listen")
+        if changed("regions"):
+            self._regions_changed()
         if changed("speech_device"):
             threading.Thread(target=self._speech_device_changed, daemon=True).start()
         if changed("voice_sensitivity", "end_silence", "speech_mode"):      # 收音中直接換，不用重開
@@ -859,6 +869,63 @@ class Service:
             self.ocr = OcrEngine(self.data / "models" / "ocr", scale=float(self.cfg["ocr_scale"]), family=family)
         return self.ocr
 
+    def _regions_on(self) -> list[dict]:
+        """開著的聊天區。"""
+        return [dict(r) for r in self.cfg["regions"] if r.get("on")]
+
+    def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None) -> None:
+        many = len(self._regions_on()) > 1      # 只有一個區域時不用標是哪裡讀到的
+        self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "")
+
+    def _locate(self, region: dict) -> dict | None:
+        """這個區域現在實際在螢幕上的哪裡。跟著程式視窗的：視窗搬到哪就跟到哪，視窗沒開或縮小了就先不讀。"""
+        place = {k: int(region[k]) for k in ("left", "top", "width", "height")}
+        exe, anchor = region.get("app"), region.get("anchor")
+        if not exe or not anchor:
+            return place
+        rect = apps.window_rect(exe)
+        if rect is None:
+            return None
+        place["left"] += rect[0] - int(anchor[0])
+        place["top"] += rect[1] - int(anchor[1])
+        return place
+
+    def _clean_regions(self, sent) -> list[dict] | None:
+        """
+        介面送來的區域清單：只能改名字、開關、跟著哪個程式，或是拿掉某一個；位置和大小只有框選畫面能改。
+        要跟著的程式現在沒開（不知道視窗在哪）就不存，回傳 None。
+        """
+        if not isinstance(sent, list):
+            return None
+        have = {r["id"]: r for r in self.cfg["regions"]}
+        out = []
+        for item in sent[:MAX_REGIONS]:
+            old = have.get(item.get("id")) if isinstance(item, dict) else None
+            if old is None or any(r["id"] == old["id"] for r in out):
+                continue
+            region = dict(old)
+            if isinstance(item.get("name"), str):
+                region["name"] = " ".join(item["name"].split())[:30]
+            if "on" in item:
+                region["on"] = bool(item["on"])
+            if isinstance(item.get("app"), str) and item["app"].strip()[:120] != (old.get("app") or ""):
+                exe = item["app"].strip()[:120]
+                rect = apps.window_rect(exe) if exe else None
+                if exe and rect is None:
+                    self.notice("region_app_closed", app=apps.display_name(exe))
+                    return None
+                region["app"], region["anchor"] = exe, ([rect[0], rect[1]] if rect else None)
+            out.append(region)
+        return out
+
+    def _regions_changed(self) -> None:
+        """區域的清單改了（改名、開關、拿掉、換位置）：正在讀的話直接換，不用重開。"""
+        active = self._regions_on()
+        if self.watcher:
+            self.watcher.set_regions(active)
+        if not active and (self.sources["screen"]["on"] or self.cfg["sources"].get("screen")):
+            self.set_source("screen", False)      # 沒有開著的區域了
+
     def _start_screen(self) -> None:
         from .core.watcher import ScreenWatcher
 
@@ -867,11 +934,11 @@ class Service:
             ocr = self._load_ocr()
             if self.watcher is None:
                 self.watcher = ScreenWatcher(
-                    ocr, on_message=lambda text, lang, score=1.0: self.submit("screen", text, lang, unsure=score < 0.8),
-                    on_status=self._screen_error,
+                    ocr, on_message=self._on_screen_line, on_status=self._screen_error,
                     interval=float(self.cfg["interval"]), source_langs=self._screen_langs(),
-                    grab=getattr(self, "grab", None))
-                self.watcher.set_region(self.cfg["region"])
+                    grab=getattr(self, "grab", None), locate=self._locate,
+                    on_stats=lambda stats: self.hub.publish("screen_stats", stats))
+                self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
             self.watcher.paused = False
             self._source("screen", on=True, busy=False)
@@ -892,9 +959,15 @@ class Service:
             self.watcher.stop()
             self.watcher = None
 
-    def select_region(self, then_enable: bool = True) -> None:
-        """跳出框選畫面（另外開一個小程式），框好之後存起來。"""
+    def select_region(self, then_enable: bool = True, rid: str | None = None, new: bool = False) -> None:
+        """
+        跳出框選畫面（另外開一個小程式），框好之後存起來。
+        rid：重框哪一個區域；new：新增一個。都沒給：有區域就重框第一個，沒有就新增。
+        """
         if self._selecting:
+            return
+        if (new or not self.cfg["regions"]) and len(self.cfg["regions"]) >= MAX_REGIONS:
+            self.notice("regions_full", max=MAX_REGIONS)
             return
         self._selecting = True
 
@@ -924,11 +997,29 @@ class Service:
             finally:
                 self._selecting = False
             if region and region.get("width", 0) >= 60 and region.get("height", 0) >= 30:
-                ok = self.cfg.set(region=region)
+                box = {k: int(region[k]) for k in ("left", "top", "width", "height")}
+                regions = [dict(r) for r in self.cfg["regions"]]
+                target = None if new else next((r for r in regions if r["id"] == rid), regions[0] if regions and not rid else None)
+                if target is None:
+                    used = {r["id"] for r in regions}
+                    target = {"id": next(f"r{n}" for n in itertools.count(1) if f"r{n}" not in used),
+                              "name": "", "on": True, "app": "", "anchor": None}
+                    regions.append(target)
+                target.update(box)
+                if target.get("app"):      # 跟著程式視窗的區域：記下現在視窗在哪，之後視窗搬家就照差多少跟著搬
+                    rect = apps.window_rect(target["app"])
+                    if rect is None:
+                        self.notice("region_app_closed", app=apps.display_name(target["app"]))
+                        target["app"], target["anchor"] = "", None
+                    else:
+                        target["anchor"] = [rect[0], rect[1]]
+                if then_enable:
+                    target["on"] = True
+                ok = self.cfg.set(regions=regions[:MAX_REGIONS])
                 self.hub.publish("config", self.cfg.snapshot())
-                self.stored("region", ok)
-                if self.watcher:
-                    self.watcher.set_region(region)
+                if ok:
+                    self.hub.publish("saved", {"what": "region", "id": target["id"]})
+                self._regions_changed()
                 if then_enable:
                     self.set_source("screen", True)
             elif region:
@@ -937,11 +1028,15 @@ class Service:
 
         threading.Thread(target=work, daemon=True, name="region").start()
 
-    def ocr_test(self) -> dict:
-        """設定頁的「試讀一次」：現在就讀一次框選的區域，回傳讀到的文字。"""
-        region = self.cfg["region"]
-        if not region:
+    def ocr_test(self, rid: str | None = None) -> dict:
+        """設定頁的「試讀一次」：現在就讀一次框選的區域（rid 沒給就是第一個開著的），回傳讀到的文字。"""
+        regions = self.cfg["regions"]
+        chosen = next((r for r in regions if r["id"] == rid), None) if rid else next(iter(self._regions_on() or regions), None)
+        if not chosen:
             return {"ok": False, "error": "no_region"}
+        region = self._locate(chosen)
+        if region is None:
+            return {"ok": False, "error": "app_closed", "app": apps.display_name(chosen.get("app") or "")}
         try:
             import numpy as np
 
@@ -1247,8 +1342,14 @@ class Service:
             self.notice("not_ready")      # 已經記下來了，翻譯引擎準備好之後會自動打開
             return
         if key == "screen":
-            if on and not self.cfg["region"]:
+            if on and not self.cfg["regions"]:
                 self.select_region(then_enable=True)
+            elif on and not self._regions_on():      # 有框過，但全部關著：把第一個打開
+                regions = [dict(r) for r in self.cfg["regions"]]
+                regions[0]["on"] = True
+                self.cfg.set(regions=regions)
+                self.hub.publish("config", self.cfg.snapshot())
+                threading.Thread(target=self._start_screen, daemon=True).start()
             elif on:
                 threading.Thread(target=self._start_screen, daemon=True).start()
             else:
