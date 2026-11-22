@@ -4288,6 +4288,19 @@ def test_lost_audio_device_is_reconnected(tmp_path, monkeypatch):
     class FakeRecognizer:
         beam = 1
 
+    class FakePipeline:      # 真的那個要語音模型的套件；這裡只測斷線重連，換成假的，沒裝那個套件的地方也能跑
+        def __init__(self, capture, *a, **kw):
+            self.capture, self.stay = capture, 1.0
+
+        def start(self):
+            self.capture.start()
+
+        def stop(self):
+            self.capture.stop()
+
+    from livelingo.core import speech
+    monkeypatch.setattr(speech, "SpeechPipeline", FakePipeline)
+
     def wait(test):
         end = time.time() + 5
         while time.time() < end and not test():
