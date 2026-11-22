@@ -3322,3 +3322,93 @@ def test_toast_is_not_mistaken_for_a_volume_bar():
     for attr in re.findall(r'querySelectorAll\("\[data-(\w+)\]"\)\.forEach\(\(el\) => \{\n[^}]*el\.style\.width', js):
         assert attr in ("vu", "level"), attr
         assert f'id="toast"' not in "".join(re.findall(rf"<[^>]*data-{attr}=[^>]*>", (root / "index.html").read_text(encoding="utf-8")))
+
+
+def test_usage_numbers_are_local_counts_only(tmp_path, monkeypatch):
+    """第 50 項：每天翻了幾句、失敗幾次、平均等多久。只有數字、只在這台電腦上；一句只算一次；可以關掉、可以清除。"""
+    import json as _json
+    import re
+    from pathlib import Path
+
+    from livelingo import usage
+    from livelingo.config import DEFAULTS, EDITABLE, UI_LANGS
+    from livelingo.service import Service
+
+    assert DEFAULTS["usage_keep"] is True and "usage_keep" in EDITABLE
+
+    day = 86400
+    clock = [1_800_000_000.0]
+    u = usage.Usage(tmp_path, now=lambda: clock[0])
+    assert u.summary()["since"] == "" and u.summary()["today"] == {"count": 0, "heard": 0, "screen": 0, "spoken": 0, "typed": 0, "failed": 0, "wait": None}
+    u.add("heard", wait=2.0)
+    u.add("typed", wait=1.0)
+    u.add("screen", failed=True, wait=30.0)      # 失敗的不算進平均
+    u.add("nonsense", wait=1.0)      # 不認得的來源不記
+    u.add("spoken", wait=9999)      # 離譜的等待時間（電腦睡著了）：這句算，時間不算
+    assert u.summary()["today"] == {"count": 4, "heard": 1, "screen": 1, "spoken": 1, "typed": 1, "failed": 1, "wait": 1.5}
+    saved = _json.loads((tmp_path / usage.FILE).read_text(encoding="utf-8"))      # 第一句就寫檔，之後 15 秒內不重寫
+    assert list(saved) == ["days"] and sum(saved["days"][d]["heard"] for d in saved["days"]) == 1
+    u.flush()
+    saved = _json.loads((tmp_path / usage.FILE).read_text(encoding="utf-8"))
+    row = next(iter(saved["days"].values()))
+    assert set(row) == {"heard", "screen", "spoken", "typed", "failed", "wait", "waited"} and row["waited"] == 2      # 檔案裡只有數字
+    assert all(isinstance(v, (int, float)) for v in row.values())
+
+    clock[0] += 3 * day
+    u.add("heard", wait=4.0)
+    s = u.summary()
+    assert s["today"]["count"] == 1 and s["week"]["count"] == 5 and s["week"]["wait"] == round(7.0 / 3, 1) and s["month"]["failed"] == 1
+    assert len(s["days"]) == usage.CHART_DAYS and [d["count"] for d in s["days"]][-4:] == [4, 0, 0, 1] and s["days"][-4]["failed"] == 1
+    clock[0] += 10 * day
+    assert u.summary()["week"]["count"] == 0 and u.summary()["month"]["count"] == 5
+
+    # 重開：數字還在；超過 90 天的丟掉；檔案壞了從頭來
+    u.flush()
+    again = usage.Usage(tmp_path, now=lambda: clock[0])
+    assert again.summary()["month"]["count"] == 5 and again.summary()["since"] == s["days"][-4]["day"]
+    clock[0] += 78 * day
+    old = usage.Usage(tmp_path, now=lambda: clock[0])
+    assert old.summary()["since"] == s["days"][-1]["day"]      # 最早那天超過 90 天，丟掉了
+    (tmp_path / usage.FILE).write_text("{broken", encoding="utf-8")
+    assert usage.Usage(tmp_path).summary()["since"] == ""
+
+    # 關掉不記；清除
+    again.configure(False)
+    again.add("heard", wait=1.0)
+    assert again.summary()["today"]["count"] == 0 and again.summary()["keep"] is False
+    assert again.clear() >= 1 and not (tmp_path / usage.FILE).exists() and again.summary()["since"] == ""
+
+    # 這個檔案不連網路
+    source = Path(usage.__file__).read_text(encoding="utf-8")
+    for banned in ("urllib", "socket", "requests", "http.client", "subprocess"):
+        assert banned not in source, banned
+
+    # 接到服務上：翻好一句算一次，重翻不再算，失敗算失敗
+    data = tmp_path / "data"
+    data.mkdir()
+    service = Service(data)
+    msg = {"id": 7, "via": "heard", "hear": 0.5, "at": time.time() - 1.0}
+    service._count(msg)
+    service._count(msg)
+    service._count({"id": 8, "via": "typed", "at": time.time()}, failed=True)
+    state = service.usage_state()
+    assert state["ok"] and state["today"]["count"] == 2 and state["today"]["failed"] == 1 and 1.4 <= state["today"]["wait"] <= 2.0
+    report = service.report_make()["text"]
+    assert "today: count=2, heard=1, typed=1, failed=1" in report and "recorded: yes" in report
+    service.update_config({"usage_keep": False})
+    service._count({"id": 9, "via": "typed", "at": time.time()})
+    assert service.usage_state()["today"]["count"] == 2 and service.usage.keep is False
+    cleared = service.usage_clear()
+    assert cleared["ok"] and cleared["removed"] == 1 and cleared["since"] == ""
+    body = Path(usage.__file__).with_name("service.py").read_text(encoding="utf-8")
+    worker = body[body.index("    def _translate_worker"):body.index("    def _count")]
+    assert worker.count("self._count(msg") == 2 and "self._count(msg, failed=True)" in worker and "self.usage.flush()" in body
+
+    root = Path(usage.__file__).parent
+    server = (root / "server.py").read_text(encoding="utf-8")
+    assert 'url.path == "/api/usage"' in server and "service.usage_clear()" in server
+    js, i18n = (root / "ui" / "app.js").read_text(encoding="utf-8"), (root / "ui" / "i18n.js").read_text(encoding="utf-8")
+    for piece in ('get("/api/usage")', 'post("/api/usage", { clear: true })', 'switchRow("usage_keep"', 'data-act="use-clear-yes"'):
+        assert piece in js, piece
+    for key in ("use_title", "use_day", "use_split", "use_clear_ask"):
+        assert len(re.findall(rf"\b{key}: ", i18n)) == len(UI_LANGS), key

@@ -266,6 +266,16 @@
 
 自動把關：測試會擋：報告裡出現對話、詞彙表、取的名字、個人資料夾；report.py 裡出現連網路的東西；還沒給使用者看過就能存檔。新的設定值會不會洩漏內容，要自己看一次。
 
+### 加新的輸入來源（新的 via），或改翻譯的流程
+
+1. `usage.py`：新的來源要加進 VIAS，不然那種句子不會被算到
+2. `service.py`：一句只算一次（_count 用訊息編號擋重翻）；翻譯失敗走 failed
+3. `app.js`、`i18n.js`：來源的分項那一句（use_split）要加新的來源，五種語言
+4. `report.py`：問題報告的使用數字那一段會自動帶新的來源
+5. `test_basics.py`：test_usage_numbers_are_local_counts_only
+
+自動把關：測試會擋：翻譯流程裡沒有記數、usage.py 出現連網路的東西、檔案裡出現數字以外的東西。新的來源有沒有算進去，要自己看一次。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -307,6 +317,7 @@
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
 | 每一版改了什麼（五種語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
 | 問題報告：先給使用者看，不自己送出 | `livelingo/report.py` | `service.py`：把狀態、設定、紀錄排成一份文字；存檔、複製用的是剛才給使用者看過的那一份（改壞會報錯）<br>`app.js`：預覽的欄位（text、lines、bytes）和存好之後的檔名（改壞不會報錯） |
+| 使用數字：每天幾句、失敗幾次、平均等多久（只有數字） | `livelingo/usage.py` | `service.py`：翻好一句（或翻失敗）就記一次；關程式時把還沒寫的寫進檔案（改壞會報錯）<br>`app.js`：健康檢查頁的三個數字和 14 天小圖（today、week、month、days）（改壞不會報錯）<br>`report.py`：問題報告裡放使用數字（只有次數）（改壞不會報錯）<br>`storage.py`：usage.json 算在「設定和紀錄」那一項的大小裡（改壞不會報錯） |
 
 ### 中樞（所有東西都經過這裡）
 
@@ -315,7 +326,7 @@
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
 | 主體 | `livelingo/service.py` | `app.js`：事件名稱、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯） |
-| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、五種語言的短提示（改壞不會報錯）<br>`quickbox.py`：五種語言的提示（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、五種語言的標題（改壞不會報錯）<br>`changes.py`：五種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明五種介面語言都要寫（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
+| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、五種語言的短提示（改壞不會報錯）<br>`quickbox.py`：五種語言的提示（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、五種語言的標題（改壞不會報錯）<br>`changes.py`：五種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明五種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
 

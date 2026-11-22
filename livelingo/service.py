@@ -32,6 +32,7 @@ from .paths import self_command
 from .terms import PACKS, TermPack
 from .transcript import Transcript
 from .tray import Tray
+from .usage import Usage
 
 VOICE_KIND = {"listen": "loopback", "mic": "mic"}
 SOURCE_OF = {"loopback": "listen", "mic": "mic"}
@@ -181,6 +182,8 @@ class Service:
         self._ids = itertools.count(1)
         self.transcript = Transcript()
         self.history = History(self.data, bool(self.cfg["history_keep"]), int(self.cfg["history_days"]))
+        self.usage = Usage(self.data, bool(self.cfg["usage_keep"]))      # 每天幾句、失敗幾次、平均等多久（只有數字）
+        self._counted: set[int] = set()      # 已經算進使用數字的訊息（重翻不再算）
         self.tray = Tray(self)
         self.hotkeys = Hotkeys(self._hotkey, on_state=lambda states: self.hub.publish("hotkeys", self.hotkeys_state()))
         self._quick = None             # 快速輸入框開著的時候是那個小程式
@@ -687,6 +690,7 @@ class Service:
                     continue
                 msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
                            pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
+                self._count(msg)
                 if msg["who"] == "me" and target != self.cfg["my_lang"] and not msg.get("copied"):
                     if msg["via"] == "typed" or self.cfg["copy_spoken"]:
                         msg["copied"] = oswin.copy_text(out)
@@ -694,7 +698,22 @@ class Service:
                 self._want_back(msg)
             except Exception as ex:  # noqa: BLE001
                 self.log(traceback.format_exc())
+                self._count(msg, failed=True)
                 self._post(dict(msg, pending=False, error=str(ex)))
+
+    def _count(self, msg: dict, failed: bool = False) -> None:
+        """算進使用數字：一句只算一次。等多久 = 辨識的秒數 + 從這句出現到翻好的秒數。"""
+        if msg["id"] in self._counted:
+            return
+        self._counted.add(msg["id"])
+        self.usage.add(msg["via"], wait=float(msg.get("hear") or 0.0) + max(0.0, time.time() - float(msg.get("at") or time.time())), failed=failed)
+
+    def usage_state(self) -> dict:
+        return {"ok": True, **self.usage.summary()}
+
+    def usage_clear(self) -> dict:
+        removed = self.usage.clear()
+        return {"ok": not self.usage.error, "removed": removed, **self.usage.summary()}
 
     def _want_back(self, msg: dict) -> None:
         """我說的話翻成對方的語言之後，排一個回譯（排在佇列最後面，不會擋到後面進來的句子）。"""
@@ -1108,7 +1127,10 @@ class Service:
                  "free_gb": round(state["free"] / 1e9, 1)}
         for row in state["items"]:
             store[row["id"]] = f"{round(row['bytes'] / 1e6, 1)} MB" + ("" if row["used"] else " (not in use)")
-        sections: list = [("app", app), ("computer", machine), ("health", lights), ("sources", sources), ("storage", store)]
+        used = self.usage.summary()
+        numbers = {name: {k: v for k, v in used[key].items() if k == "count" or v} for name, key in (("today", "today"), ("last_7_days", "week"), ("last_30_days", "month"))}
+        numbers["recorded"] = used["keep"]
+        sections: list = [("app", app), ("computer", machine), ("health", lights), ("sources", sources), ("storage", store), ("usage", numbers)]
         dropped = 0
         if settings:
             cfg = self._settings_now()
@@ -1545,6 +1567,8 @@ class Service:
             self.hotkeys.set(after["hotkeys"])
         if changed("history_keep", "history_days"):
             self.history.configure(after["history_keep"], after["history_days"])
+        if changed("usage_keep"):
+            self.usage.configure(after["usage_keep"])
             self.hub.publish("history", self.history.state())
         if changed("listen_apps"):
             self._apps_audio_off = False      # 換了選擇：再試一次
@@ -2246,6 +2270,7 @@ class Service:
                 self.log(f"subtitle log could not be saved: {ex!r}")
         self.closing.set()
         self._download_cancel.set()
+        self.usage.flush()
         if self.meters:
             self.meters.stop()
         self.overlay.stop()

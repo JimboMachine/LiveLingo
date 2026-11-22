@@ -522,3 +522,23 @@ input::placeholder { color: var(--faint); }
 #report textarea { width: 100%; min-height: 72px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--ground); color: var(--text); font: inherit; font-size: 14px; line-height: 1.5; resize: vertical; }
 #rep-text { margin: 0; max-height: 360px; overflow: auto; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--ground); color: var(--text); font: 12px/1.6 ui-monospace, Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 #report .primary { height: 40px; border-radius: 10px; font-size: 14px; }
+
+/* 使用數字：三個數字，加最近 14 天的小圖 */
+.stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stat { padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.stat-label { font-size: 13px; color: var(--dim); }
+.stat-value { font-size: 26px; font-weight: 700; line-height: 1.25; color: var(--text); font-variant-numeric: tabular-nums; }
+.stat-value small { font-size: 13px; font-weight: 400; color: var(--dim); }
+.stat-line { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.stat-line[data-bad="true"] { color: var(--text); }
+.stat-line[data-bad="true"]::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); margin-right: 6px; }
+.use-chart { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.use-bars { list-style: none; margin: 0; padding: 0; height: 96px; display: flex; align-items: flex-end; gap: 6px; border-bottom: 1px solid var(--line-2); }
+.use-day { flex: 1 1 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+.use-bar { width: 100%; max-width: 24px; border-radius: 4px 4px 0 0; background: var(--faint); }
+.use-day[data-today="true"] .use-bar { background: var(--accent); }
+.use-day:hover .use-bar { filter: brightness(1.15); }
+.use-top { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
+.use-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-top: 4px; }
+.use-chart figcaption { font-size: 12px; color: var(--dim); margin-top: 6px; }
+@media (max-width: 720px) { .stat-row { grid-template-columns: 1fr; } }

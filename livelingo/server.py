@@ -103,6 +103,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.health())
+                if url.path == "/api/usage":      # 使用數字：今天、最近 7 天、30 天各幾句、失敗幾次、平均等多久
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.usage_state())
                 if url.path == "/api/storage":      # 儲存空間：放在哪、每一樣佔多少、還剩多少
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -258,6 +262,8 @@ class Server:
                         if body.get("open"):
                             return self._json(service.storage_open())
                         return self._json({"ok": False})
+                    if route == "/api/usage":
+                        return self._json(service.usage_clear() if body.get("clear") else {"ok": False})
                     if route == "/api/history":
                         if body.get("clear"):
                             return self._json(service.history_clear())

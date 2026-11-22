@@ -574,7 +574,7 @@
     if (S.ui.tab === "screen") loadApps();
     if (S.ui.tab === "overlay") loadScreens();
     if (S.ui.tab === "history") { S.ui.hist = null; loadHistory(); }
-    if (S.ui.tab === "health") loadHealth();
+    if (S.ui.tab === "health") { S.ui.useAsk = false; loadHealth(); loadUsage(); }
     if (S.ui.tab === "storage") { S.ui.storeAsk = ""; loadStorage(); }
   }
 
@@ -961,7 +961,48 @@
           <button class="ghost" data-act="health-again">${esc(t("h_again"))}</button></div>
         ${rows}
       </section>
+      ${usageHTML()}
       ${reportHTML()}`;
+  }
+  // 使用數字：今天、最近 7 天、30 天各幾句、失敗幾次、平均等多久；下面是最近 14 天每天幾句的小圖
+  function usageHTML() {
+    const u = S.ui.usage;
+    const head = `<div><h2>${esc(t("use_title"))}</h2><div class="sub">${esc(t("use_hint"))}</div></div>`;
+    if (!u) return `<section id="usage">${head}<div class="hist-none">…</div></section>`;
+    const num = (n) => Number(n).toLocaleString(S.cfg.ui_lang);
+    const tile = (key, label) => {
+      const d = u[key];
+      return `<div class="stat" id="use-${key}"><div class="stat-label">${esc(label)}</div>
+        <div class="stat-value">${esc(num(d.count))} <small>${esc(t("use_unit"))}</small></div>
+        <div class="stat-line" data-bad="${d.failed > 0}">${esc(d.failed ? t("use_failed", { n: num(d.failed) }) : t("use_no_failed"))}</div>
+        <div class="stat-line">${esc(d.wait == null ? t("use_no_wait") : t("use_wait", { s: d.wait.toFixed(1) }))}</div></div>`;
+    };
+    const max = Math.max(1, ...u.days.map((d) => d.count)), any = u.days.some((d) => d.count), short = (day) => day.slice(5).replace("-", "/");
+    const bars = u.days.map((d, i) => {
+      const tip = t("use_day", { day: short(d.day), n: num(d.count), failed: num(d.failed) });
+      return `<li class="use-day" ${i === u.days.length - 1 ? 'data-today="true"' : ""} title="${esc(tip)}" aria-label="${esc(tip)}">
+        ${i === u.days.length - 1 && d.count ? `<span class="use-top">${esc(num(d.count))}</span>` : ""}<span class="use-bar" style="height:${d.count ? Math.max(4, Math.round(100 * d.count / max)) : 0}%"></span></li>`;
+    }).join("");
+    const m = u.month;
+    const chart = any ? `<figure class="use-chart"><ol class="use-bars">${bars}</ol>
+        <div class="use-axis" aria-hidden="true"><span>${esc(short(u.days[0].day))}</span><span>${esc(t("use_today"))}</span></div>
+        <figcaption>${esc(t("use_chart", { max: num(max) }))}</figcaption></figure>
+      <div class="sub" id="use-split">${esc(t("use_month"))}：${esc(t("use_split", { heard: num(m.heard), screen: num(m.screen), spoken: num(m.spoken), typed: num(m.typed) }))}</div>` : "";
+    const ask = S.ui.useAsk ? `<div class="note warn" id="use-ask">${ICON.info}<span>${esc(t("use_clear_ask"))}</span>
+        <button class="danger" data-act="use-clear-yes">${esc(t("use_clear_yes"))}</button><button class="ghost" data-act="use-clear-no">${esc(t("cancel"))}</button></div>`
+      : `<div class="btn-row"><button class="ghost" data-act="use-clear" ${u.since ? "" : "disabled"}>${esc(t("use_clear"))}</button>
+        ${u.since ? `<span class="sub">${esc(t("use_since", { day: u.since }))}</span>` : ""}</div>`;
+    return `<section id="usage">${head}
+      ${u.since ? `<div class="stat-row">${tile("today", t("use_today"))}${tile("week", t("use_week"))}${tile("month", t("use_month"))}</div>${chart}`
+        : `<div class="hist-none" id="use-empty">${esc(t("use_empty"))}</div>`}
+      ${switchRow("usage_keep", t("use_keep"), t("use_keep_desc"))}
+      ${ask}</section>`;
+  }
+  async function loadUsage() {
+    const r = await get("/api/usage");
+    if (!r || r.error) return;
+    S.ui.usage = r;
+    if (S.view === "settings" && S.ui.tab === "health") renderSettingsPage();
   }
   // 問題報告：先做出來整份給使用者看，他按了才存成檔案或複製；程式不會自己送出任何東西
   function reportHTML() {
@@ -1656,7 +1697,16 @@
       const r = await post("/api/report", { copy: true });
       toast(t(r && r.ok ? "rep_copied" : "n_report_none"), 5000, r && r.ok ? "info" : "warn");
     },
-    "health-again": async () => { await loadHealth(); const b = document.querySelector('[data-act="health-again"]'); if (b) b.focus(); },
+    "use-clear": () => { S.ui.useAsk = true; renderSettingsPage(); const b = document.querySelector('[data-act="use-clear-no"]'); if (b) b.focus(); },
+    "use-clear-no": () => { S.ui.useAsk = false; renderSettingsPage(); const b = document.querySelector('[data-act="use-clear"]'); if (b) b.focus(); },
+    "use-clear-yes": async () => {
+      const r = await post("/api/usage", { clear: true });
+      S.ui.useAsk = false;
+      if (r && r.ok) { S.ui.usage = r; toast(t("use_cleared"), 4200); }
+      renderSettingsPage();
+      const b = document.querySelector('[data-act="toggle"][data-key="usage_keep"]'); if (b) b.focus();
+    },
+    "health-again": async () => { loadUsage(); await loadHealth(); const b = document.querySelector('[data-act="health-again"]'); if (b) b.focus(); },
     "hist-more": () => loadHistory(true),
     "hist-export": async () => {
       const r = await post("/api/history", { export: true, q: (S.ui.hist && S.ui.hist.q) || "" });
@@ -1969,6 +2019,7 @@
     if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();      // 還在問「確定嗎」：Esc 就是不要
     if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();
     if (S.ui.report && S.view === "settings" && S.ui.tab === "health") actions["report-back"]();
+    if (S.ui.useAsk && S.view === "settings" && S.ui.tab === "health") actions["use-clear-no"]();
     if (S.ui.storeAsk && S.view === "settings") actions["store-remove-no"]({ dataset: { id: S.ui.storeAsk } });
     if (S.ui.backAsk && S.view === "settings") actions["rollback-no"]();
   });
