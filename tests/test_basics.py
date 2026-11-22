@@ -2573,3 +2573,115 @@ def test_settings_export_import_reset_undo(tmp_path, monkeypatch):
         assert now["transcript_dir"] == mine["transcript_dir"]
     finally:
         service.shutdown()
+
+
+def test_text_colours_are_readable_and_everything_has_a_keyboard_path():
+    """第 43 項：字的顏色對背景夠清楚（WCAG AA，4.5 比 1），字不小於 12px，滑鼠點得到的都是真的按鈕。"""
+    import re
+    from pathlib import Path
+    ui = Path(__file__).resolve().parents[1] / "livelingo" / "ui"
+    css = (ui / "style.css").read_text(encoding="utf-8")
+    js = (ui / "app.js").read_text(encoding="utf-8")
+    html = (ui / "index.html").read_text(encoding="utf-8")
+
+    def tokens(selector):
+        block = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css).group(1)
+        return dict(re.findall(r"--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6})", block))
+
+    def rgb(c):
+        return [int(c[i:i + 2], 16) for i in (1, 3, 5)]
+
+    def lum(c):
+        r, g, b = [v / 255 / 12.92 if v / 255 <= 0.03928 else ((v / 255 + 0.055) / 1.055) ** 2.4 for v in c]
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    def ratio(a, b):
+        x, y = lum(a), lum(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+
+    def soft(accent, ground):      # --accent-soft：一成強調色蓋在底色上
+        return [accent[i] * 0.10 + ground[i] * 0.90 for i in range(3)]
+
+    dark = tokens(":root")
+    light = {**dark, **tokens(':root[data-theme="light"]')}
+    accents = ("blue", "violet", "rose", "cyan")
+    themes = [("dark", dark, [dark] + [{**dark, **tokens(f':root[data-accent="{a}"]')} for a in accents]),
+              ("light", light, [light] + [{**light, **tokens(f':root[data-theme="light"][data-accent="{a}"]')} for a in accents])]
+    low = []
+    for name, base, variants in themes:
+        grounds = [rgb(base[k]) for k in ("ground", "surface", "surface-2")]
+        for key in ("text", "dim", "faint", "me", "danger"):
+            for g in grounds:
+                if ratio(rgb(base[key]), g) < 4.5:
+                    low.append((name, key, base[key], round(ratio(rgb(base[key]), g), 2)))
+        for key in ("me", "me-dim"):      # 我說的話那一塊的底色
+            if ratio(rgb(base[key]), rgb(base["me-bg"])) < 4.5:
+                low.append((name, key, "on me-bg"))
+        for v in variants:
+            a = rgb(v["accent"])
+            if ratio(a, rgb(v["accent-ink"])) < 4.5:
+                low.append((name, "accent-ink", v["accent"]))
+            for g in grounds:      # 強調色的字會放在一般底色上，也會放在淡淡的強調色底上
+                worst = min(ratio(a, g), ratio(a, soft(a, g)))
+                if worst < 4.5:
+                    low.append((name, "accent", v["accent"], round(worst, 2)))
+    assert not low, low
+
+    # 色票上畫的顏色要和樣式表裡的一樣，不然選了一個顏色出來是另一個
+    table = {m[0]: (m[1], m[2]) for m in re.findall(r'(\w+): \["(#[0-9A-Fa-f]{6})", "(#[0-9A-Fa-f]{6})"\]', re.search(r"const ACCENTS = \{([^}]*)\}", js).group(1))}
+    assert table["mint"] == (dark["accent"], light["accent"])
+    for a in accents:
+        assert table[a] == (tokens(f':root[data-accent="{a}"]')["accent"], tokens(f':root[data-theme="light"][data-accent="{a}"]')["accent"]), a
+
+    # 字不小於 12px（font-size: 0 是把字藏起來，不算）
+    sizes = [float(s) for s in re.findall(r"font-size:\s*([0-9.]+)px", css + js + html)]
+    assert all(s == 0 or s >= 12 for s in sizes), sorted(set(s for s in sizes if 0 < s < 12))
+    assert not re.search(r"font-size:\s*[0-9.]+(em|rem|%)", css + js + html)      # 用 px，才檢查得到
+
+    # 點得到的東西都是鍵盤也到得了的：data-act 只放在 button 上
+    for src in (js, html):
+        for tag in re.findall(r"<([a-z0-9]+)\b[^<>]*\bdata-act=", src):
+            assert tag == "button", tag
+    assert "onclick=" not in js + html
+    assert not re.search(r'tabindex="-1"', js + html)
+    assert ":focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }" in css
+    for bad in re.findall(r"[^{}]*:focus[^{}]*\{[^}]*outline:\s*(?:none|0)[^}]*\}", css):      # 拿掉外框的地方要有別的看得到的標示
+        assert "border-color" in bad or "box-shadow" in bad, bad
+
+
+def test_keyboard_only_paths():
+    """第 43 項：沒有滑鼠也能做完每一件事。框選可以用方向鍵；畫面重畫之後焦點不會掉；蓋板開著的時候底下的不能按。"""
+    from pathlib import Path
+
+    from livelingo import region
+
+    # 框選：第一下方向鍵先放一個框在主螢幕中間
+    assert region.first_box(1920, 1080) == (576, 405, 1344, 675)
+    assert region.first_box(1920, 1080, 1920, 0)[0] == 1920 + 576      # 主螢幕不在最左邊的時候（左邊還有一台）
+    box = (100, 100, 400, 300)
+    assert region.nudge(box, region.STEP, 0, False, 1920, 1080) == (120, 100, 420, 300)
+    assert region.nudge(box, 0, -region.STEP, False, 1920, 1080) == (100, 80, 400, 280)
+    assert region.nudge((0, 0, 300, 200), -region.STEP, -region.STEP, False, 1920, 1080) == (0, 0, 300, 200)      # 到邊了就不動，大小不變
+    assert region.nudge((1700, 900, 1920, 1080), 20, 20, False, 1920, 1080) == (1700, 900, 1920, 1080)
+    assert region.nudge(box, region.STEP, region.STEP, True, 1920, 1080) == (100, 100, 420, 320)      # Shift：動右下角
+    assert region.nudge(box, -1000, -1000, True, 1920, 1080) == (100, 100, 100 + region.SMALLEST[0], 100 + region.SMALLEST[1])
+    assert region.nudge(box, 5000, 5000, True, 1920, 1080) == (100, 100, 1920, 1080)
+    assert region.nudge((400, 300, 100, 100), 0, 0, False, 1920, 1080) == (100, 100, 400, 300)      # 滑鼠從右下往左上拖出來的框
+    src = (Path(region.__file__)).read_text(encoding="utf-8")
+    for key in ('"<Return>"', '"<Escape>"', "<Shift-{name}>", '"Left"', '"Right"', '"Up"', '"Down"'):
+        assert key in src, key
+    assert set(region.HINTS) == set(UI_LANGS)
+    for text in region.HINTS.values():
+        assert "Shift" in text and "Enter" in text and "Esc" in text
+
+    js = (Path(region.__file__).parent / "ui" / "app.js").read_text(encoding="utf-8")
+    # 焦點看守：重畫之後找回同一顆按鈕；用滑鼠的時候不搶
+    assert "new MutationObserver(focusRepair).observe(app" in js
+    assert 'document.addEventListener("focusin"' in js and 'document.addEventListener("pointerdown"' in js
+    # 蓋板（更新、下載、錯誤）開著的時候底下的都不能按
+    assert '["rail", "view-main", "view-settings", "view-wizard"].forEach((id) => { $(id).inert = !!html; });' in js
+    assert 'role="alertdialog" aria-modal="true"' in js
+    # Esc 關掉還在問的確認；Ctrl+數字換頁
+    assert 'if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();' in js
+    assert 'if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();' in js
+    assert "/^[1-9]$/.test(e.key)" in js

@@ -143,7 +143,7 @@
 
   // ---------------------------------------------------------------- 主題
 
-  const ACCENTS = { mint: ["#4ADE9A", "#0B8A5C"], blue: ["#6CB6FF", "#1D6FD1"], violet: ["#B7A1FF", "#6B4FD8"], rose: ["#FF8FA8", "#C8325A"], cyan: ["#4DD8E6", "#0B7F8C"] };
+  const ACCENTS = { mint: ["#4ADE9A", "#076F49"], blue: ["#6CB6FF", "#175DB3"], violet: ["#B7A1FF", "#6044CF"], rose: ["#FF8FA8", "#B0264B"], cyan: ["#4DD8E6", "#096A75"] };
   const systemDark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
   const isDark = () => (S.cfg.theme === "system" ? !systemDark || systemDark.matches : S.cfg.theme !== "light");
 
@@ -1263,8 +1263,12 @@
   function wizardGo(step) {
     const was = S.ui.wz;
     S.ui.wz = Math.max(0, Math.min(3, step));
+    const held = $("wizard").contains(document.activeElement) && (document.activeElement.dataset.act || "wz-next");
     renderWizard();
     $("wizard").scrollTop = 0;
+    const same = held && $("wizard").querySelector(`.wz-foot [data-act="${held}"]`);      // 用鍵盤一路按「下一步」或「上一步」：焦點留在同一顆上，沒有了就停在主要的按鈕
+    const main = same && !same.disabled ? same : $("wizard").querySelector(".wz-foot .primary");
+    if (held && main && !main.disabled) main.focus({ preventScroll: true });
     if (S.ui.wz === 1) openDevices();
     else if (was === 1) post("/api/meters", { on: false });
   }
@@ -1299,7 +1303,8 @@
       html = `<h2>${esc(t("dl_title"))}</h2><p>${esc(downloadLine())}</p><div class="bar"><span style="width:${percent()}%"></span></div>`;
     }
     el.hidden = !html;
-    el.innerHTML = html ? `<div class="panel">${html}</div>` : "";
+    el.innerHTML = html ? `<div class="panel" role="alertdialog" aria-modal="true">${html}</div>` : "";
+    ["rail", "view-main", "view-settings", "view-wizard"].forEach((id) => { $(id).inert = !!html; });      // 蓋板開著：底下的不能按，Tab 也不會跑到底下
   }
 
   // ---------------------------------------------------------------- 畫面切換
@@ -1365,6 +1370,8 @@
       document.querySelectorAll(".fixslot").forEach((s) => { s.innerHTML = ""; });
       slot.innerHTML = fixHTML(m);
       slot.scrollIntoView({ block: "nearest" });
+      const first = slot.querySelector("input, textarea");
+      if (first) first.focus({ preventScroll: true });
     },
     "fix-word": (el) => {
       const input = el.closest(".fix").querySelector(".fix-src");
@@ -1537,6 +1544,101 @@
     if (fn) { e.preventDefault(); fn(el); }
   });
 
+  // ---------------------------------------------------------------- 鍵盤：畫面重畫之後，焦點不能掉
+  // 這裡的畫面大多是整塊換掉重畫的。換掉的那一塊裡如果正好有焦點，焦點就會掉回最上面，只用鍵盤的人得從頭再 Tab 一次。
+  // 所以記住最後停在哪個東西上；它被換掉了，就在新的畫面裡找回同一個；找不到（例如那一列被刪了）就停在最近的地方。
+
+  const FOCUS_DATA = ["key", "value", "code", "q", "tone", "id", "pack", "exe", "side", "to", "src", "target", "view", "name"];
+  const FOCUSABLE = 'button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]';
+  let focusLast = null;      // 最後停的地方 { el, home, exact, loose, index }
+  let focusLost = null;      // 原來的地方暫時不見了，先停在替代的地方 { mark, stand, at, wait }
+  let focusMine = false;     // 這一次移動焦點是這段程式做的，不是使用者
+
+  const canFocus = (el) => !!el && el.isConnected && !el.disabled && el.getClientRects().length > 0 && !el.closest("[inert]");
+  function focusMark(el) {
+    const loose = el.dataset.act ? `[data-act="${el.dataset.act}"]` : el.name ? `${el.tagName.toLowerCase()}[name="${CSS.escape(el.name)}"]` : el.tagName.toLowerCase();
+    const exact = el.id ? "#" + CSS.escape(el.id) : loose + FOCUS_DATA.filter((k) => el.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(el.dataset[k])}"]`).join("");
+    const homes = [];      // 外面一層一層有 id 的區塊，由近到遠；在每一層裡它是同一種按鈕的第幾個
+    for (let box = el.parentElement && el.parentElement.closest("[id]"); box && box !== app && homes.length < 4; box = box.parentElement && box.parentElement.closest("[id]")) {
+      homes.push({ sel: "#" + CSS.escape(box.id), index: Math.max(0, [...box.querySelectorAll(loose)].indexOf(el)) });
+    }
+    return { el, homes, exact, loose };
+  }
+  function focusFind(f, same) {
+    const first = (box) => [...box.querySelectorAll(FOCUSABLE)].find(canFocus) || null;
+    const shown = (h) => { const box = document.querySelector(h.sel); return box && box.getClientRects().length && !box.closest("[inert]") ? box : null; };
+    if (same) {      // 同一個東西（重畫之後是新的元素，但是同一顆按鈕）
+      const h = f.homes[0], home = h ? document.querySelector(h.sel) : app;
+      if (!home) return null;
+      const hits = [...home.querySelectorAll(f.exact)].filter(canFocus);
+      if (hits.length < 2) return hits[0] || null;
+      const nth = [...home.querySelectorAll(f.loose)][h ? h.index : 0];
+      return hits.indexOf(nth) >= 0 ? nth : hits[0];
+    }
+    if (!$("overlay").hidden) return first($("overlay"));      // 蓋板開著：只能停在蓋板裡
+    for (const h of f.homes) {      // 最近一層還在的區塊：同一種按鈕裡最近的那個（刪掉一列，就停在下一列的同一顆），沒有就這一區的第一個
+      const home = shown(h);
+      if (!home) continue;
+      const kin = [...home.querySelectorAll(f.loose)].filter(canFocus);
+      const hit = kin[Math.min(h.index, kin.length - 1)] || first(home);
+      if (hit) return hit;
+    }
+    const page = S.view === "settings" ? $("settings-page") : S.view === "wizard" ? $("wizard") : $("view-main");      // 整頁換掉了：新的那一頁的第一個
+    return first(page) || document.querySelector('.rail-item[aria-current="page"]');
+  }
+  function focusPut(el, same) {
+    focusMine = true;
+    el.focus({ preventScroll: same });      // 找回同一個的時候畫面不要跳；換地方停的時候要捲到看得見
+    focusMine = false;
+  }
+  function focusRepair() {
+    const active = document.activeElement;
+    const adrift = !active || active === document.body || !canFocus(active);
+    if (focusLost && (adrift || active === focusLost.stand)) {      // 原來的那個回來了（例如按鈕忙完又可以按了）就回去
+      const back = focusFind(focusLost.mark, true);
+      if (back) { focusLost = null; focusPut(back, true); return; }
+      if (!focusLost.wait && Date.now() - focusLost.at > 8000) focusLost = null;
+    }
+    if (!adrift || !focusLast) return;
+    const f = focusLast;
+    if (f.el === active ? false : canFocus(f.el)) return;      // 東西還在，是使用者自己把焦點移開的
+    const again = focusFind(f, true);
+    if (again) { focusPut(again, true); return; }
+    const stand = focusFind(f, false);
+    if (!focusLost) focusLost = { mark: f, at: Date.now(), wait: !$("overlay").hidden };
+    focusLost.stand = stand;
+    if (stand) focusPut(stand, false);
+  }
+  document.addEventListener("focusin", (e) => {
+    if (!focusMine) focusLost = null;
+    if (e.target && e.target !== document.body && e.target.closest("#app")) focusLast = focusMark(e.target);
+  });
+  document.addEventListener("pointerdown", () => { focusLast = null; focusLost = null; }, true);      // 用滑鼠點別的地方：照滑鼠的
+  new MutationObserver(focusRepair).observe(app, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "hidden", "inert", "data-view"] });
+
+  // Ctrl+1 到 Ctrl+9 換頁；在左邊導覽上可以用上下鍵
+  document.addEventListener("keydown", (e) => {
+    if (S.ui.hotkeyRec) return;
+    const items = [...document.querySelectorAll("#rail .rail-item")].filter(canFocus);
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && /^[1-9]$/.test(e.key) && items[Number(e.key) - 1]) {
+      e.preventDefault();
+      items[Number(e.key) - 1].focus();
+      items[Number(e.key) - 1].click();
+      return;
+    }
+    const at = items.indexOf(document.activeElement);
+    if (at >= 0 && e.key === "ArrowRight") {      // 從導覽直接跳進右邊那一頁的第一個東西
+      const page = S.view === "settings" ? $("settings-page") : $("view-main");
+      const first = [...page.querySelectorAll(FOCUSABLE)].find(canFocus);
+      if (first) { e.preventDefault(); first.focus(); }
+      return;
+    }
+    const to = at < 0 ? -1 : { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1 }[e.key];
+    if (to == null || to < 0 || !items[to]) return;
+    e.preventDefault();
+    items[to].focus();
+  });
+
   let liveTimer = null, livePatch = null;
   function patchOf(el) {      // 一個控制項現在的值，寫成要送去存的樣子
     const value = el.type === "range" ? Number(el.value) : el.value;
@@ -1688,8 +1790,14 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    if (S.ui.langOpen) { S.ui.langOpen = false; renderLangs(); }
-    document.querySelectorAll(".fixslot").forEach((s) => { s.innerHTML = ""; });
+    if (S.ui.langOpen) { S.ui.langOpen = false; renderLangs(); if ($("lang-picker").contains(document.activeElement) || document.activeElement === document.body) $("lang-chip").focus(); }
+    document.querySelectorAll(".fixslot").forEach((s) => {
+      const back = s.contains(document.activeElement) && s.closest(".msg").querySelector('[data-act="fix"]');
+      s.innerHTML = "";
+      if (back) back.focus();
+    });
+    if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();      // 還在問「確定嗎」：Esc 就是不要
+    if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();
   });
 
   // ---------------------------------------------------------------- 背景送來的事件
