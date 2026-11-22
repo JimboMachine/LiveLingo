@@ -895,6 +895,7 @@
         ${bar ? "" : choiceRow("overlay_grow", t("ov_grow"), [["up", t("ov_grow_up")], ["down", t("ov_grow_down")]])}
         ${bar ? "" : rangeRow("overlay_lines", t("ov_lines"), 0, 12, 1, RANGE_TEXT.overlay_lines)}
         ${rangeRow("overlay_seconds", t("ov_seconds"), 0, 60, 1, RANGE_TEXT.overlay_seconds)}
+        <div class="sub">${esc(t("ov_seconds_hint"))}</div>
         ${switchRow("overlay_original", t("ov_original"))}
         ${switchRow("overlay_mine", t("ov_mine"))}
       </section>

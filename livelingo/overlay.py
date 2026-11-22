@@ -15,6 +15,14 @@ MIN_SIZE = (240, 110)
 FADE_IN, FADE_OUT = 0.22, 0.9
 MAX_ITEMS = 40
 NOTE_SECONDS = 3.0      # 程式自己的短提示停留幾秒
+READ_START = 3.0        # 看到一則留言、眼睛移過去要的時間
+
+
+def read_seconds(text: str) -> float:
+    """邊打遊戲邊讀完這一句大概要幾秒：中文、韓文、日文一秒 5 個字，英文一秒 15 個字母（大約 3 個單字）。"""
+    wide = sum(1 for ch in text if ord(ch) >= 0x1100)
+    narrow = sum(1 for ch in text if ord(ch) < 0x1100 and not ch.isspace())
+    return wide / 5 + narrow / 15
 
 
 BAR_LOOK = {"overlay_align": "center", "overlay_grow": "up", "overlay_lines": 2}      # 底部字幕條固定的排法，其他外觀照設定
@@ -761,8 +769,13 @@ class Overlay:
 
     @staticmethod
     def _life(item: dict, life: float) -> float:
-        """這一則停留幾秒：自己有指定就用自己的（程式的短提示），不然照設定；0 = 不會自己消失。"""
-        return float(item.get("life") or life)
+        """這一則停留幾秒：自己有指定就用自己的（程式的短提示），不然照設定；0 = 不會自己消失。
+        設定的秒數是「最少」停留多久：長的句子來不及讀完，所以照長度多留一下（最多到設定的三倍再加 5 秒）。"""
+        own = float(item.get("life") or 0.0)
+        if own or life <= 0:
+            return own or 0.0
+        need = READ_START + 1.5 * read_seconds(str(item.get("text") or ""))
+        return max(life, min(need, 3 * life + 5))
 
     def _alpha(self, item: dict, now: float, life: float) -> float:
         age = now - item["at"]

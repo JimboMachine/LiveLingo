@@ -4079,3 +4079,19 @@ def test_long_text_is_split_not_cut():
     ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
     assert f'id="say" autocomplete="off" maxlength="{MAX_TEXT}"' in ui.joinpath("index.html").read_text(encoding="utf-8")
     assert f'class="edit-src" rows="2" maxlength="{MAX_TEXT}"' in ui.joinpath("app.js").read_text(encoding="utf-8")
+
+
+def test_long_sentences_stay_longer_on_the_overlay():
+    """浮動留言停留的時間：設定的秒數是最少的，長的句子照閱讀時間多留，但有上限；程式的短提示和「不會消失」不受影響。"""
+    from livelingo import overlay
+
+    life = overlay.Overlay._life
+    assert overlay.read_seconds("가자") == 0.4 and overlay.read_seconds("hello there") == 10 / 15
+    assert life({"text": "가자"}, 15) == 15                                  # 短句：照設定
+    long_ko = "지금 바텀에 정글이 오고 있으니까 조심하고 용 나오기 전에 와드 좀 박아 줘"
+    assert 15 < life({"text": long_ko * 2}, 15) < 50                          # 長句：多留一下
+    assert life({"text": long_ko}, 5) == 3 + 1.5 * overlay.read_seconds(long_ko) > 5
+    assert life({"text": long_ko * 20}, 5) == 20                             # 再長也有上限（三倍再加 5 秒）
+    assert life({"text": long_ko * 20}, 0) == 0                              # 設成不會消失：不變
+    assert life({"text": long_ko * 20, "life": 3.0}, 15) == 3.0              # 程式自己的短提示：照它自己的
+    assert life({"text": "a few short words"}, 8) == 8

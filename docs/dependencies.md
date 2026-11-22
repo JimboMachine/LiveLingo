@@ -75,8 +75,8 @@
 1. `config.py`：浮動留言的設定（overlay_…）
 2. `service.py`、`server.py`：檢查允許的值、改了之後馬上重畫、預覽圖
 3. `chatpaint.py`：字型、顏色、描邊、換行
-4. `overlay.py`：位置、大小、淡出
-5. `app.js`、`i18n.js`、`style.css`：設定畫面的控制項和預覽
+4. `overlay.py`：位置、大小、淡出；停留時間（設定的秒數是最少的，長句照 read_seconds 多留）
+5. `app.js`、`i18n.js`、`style.css`：設定畫面的控制項和預覽；停留時間的說明（ov_seconds_hint）要跟實際做法一致
 6. `selftest.py`、`build.yml`：截圖
 
 自動把關：測試會把留言畫出來比大小。真的蓋在畫面上的樣子要看自動打包附的截圖。
