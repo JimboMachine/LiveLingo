@@ -558,14 +558,17 @@ class Service:
             try:
                 now = time.time()
                 self._revivals = [t for t in self._revivals if now - t < REVIVE_WINDOW]
+                again = len(self._revivals) < REVIVE_TIMES
                 self.log(f"the translation engine stopped by itself (exit code {self.engine.proc.returncode}); "
-                         f"restart {len(self._revivals) + 1} of {REVIVE_TIMES}")
+                         + (f"restart {len(self._revivals) + 1} of {REVIVE_TIMES}" if again
+                            else f"not restarting, it already stopped {REVIVE_TIMES} times in {REVIVE_WINDOW / 60:.0f} minutes"))
                 try:      # 重開會把 engine.log 蓋掉：先留一份，才看得到它為什麼停
                     (self.data / "engine-stopped.log").write_bytes((self.data / "engine.log").read_bytes()[-200_000:])
                 except OSError:
                     pass
                 if len(self._revivals) >= REVIVE_TIMES:
-                    return self._engine_lost(RuntimeError("the translation engine keeps stopping (see engine-stopped.log)"))
+                    return self._engine_lost(RuntimeError("the translation engine keeps stopping (see engine-stopped.log)"),
+                                             code="keeps_stopping")
                 self._revivals.append(now)
                 self._say("engine_restarting")
                 self.engine.stop()
@@ -576,7 +579,7 @@ class Service:
                         raise RuntimeError("the translation engine did not become ready in time")
                 except Exception as ex:  # noqa: BLE001
                     engine.stop()
-                    return self._engine_lost(ex)
+                    return self._engine_lost(ex, code="restart_failed")
                 if self.closing.is_set():
                     engine.stop()
                     return False
@@ -588,7 +591,8 @@ class Service:
             finally:
                 self._engine_ok.set()
 
-    def _engine_lost(self, ex: Exception) -> bool:
+    def _engine_lost(self, ex: Exception, code: str = "") -> bool:
+        """code：介面用使用者的語言說明的原因代碼（err_代碼）；沒有的話就顯示電腦回報的原文。"""
         self.log(f"the translation engine could not be restarted ({self.mode}): {ex!r}")
         if self.mode["engine"] == "cuda" and not self.fallback:
             # 顯示卡模式一直停（最常見：顯示記憶體被遊戲佔滿）：改用不需要顯示卡的標準模式
@@ -596,7 +600,8 @@ class Service:
             self.notice("gpu_fallback")
             self._prepare()
             return self.phase == "ready"
-        self.set_phase("error", message=str(ex), log=str(self.data / "engine.log"))
+        self.set_phase("error", message=str(ex), code=code,
+                       log=str(self.data / ("engine-stopped.log" if code == "keeps_stopping" else "engine.log")))
         return False
 
     def _resume_sources(self) -> None:

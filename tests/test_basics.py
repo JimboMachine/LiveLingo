@@ -4244,3 +4244,12 @@ def test_failed_translation_says_why_and_can_be_retried(tmp_path):
     finally:
         service.closing.set()
         worker.join(2)
+
+    # 引擎一直自己停、不再重開的那個畫面：也用看得懂的話說，紀錄檔指向停之前留下來的那一份
+    lost = Service(tmp_path / "lost")
+    assert lost._engine_lost(RuntimeError("the translation engine keeps stopping"), code="keeps_stopping") is False
+    assert lost.phase == "error" and lost.detail["code"] == "keeps_stopping" and lost.detail["log"].endswith("engine-stopped.log")
+    assert i18n.count("err_restart_failed: ") == len(UI_LANGS) and 'code="restart_failed"' in ui.parent.joinpath("service.py").read_text(encoding="utf-8")
+    assert i18n.count("err_keeps_stopping: ") == len(UI_LANGS) and 'd.code ? t("err_" + d.code) : (d.message || "")' in app
+    lost._engine_lost(RuntimeError("boom"))
+    assert lost.detail["code"] == "" and lost.detail["message"] == "boom" and lost.detail["log"].endswith("engine.log")

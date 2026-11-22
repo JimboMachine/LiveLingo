@@ -1477,7 +1477,7 @@
             <div class="btn-row center"><button class="ghost" data-act="update-cancel">${esc(t("cancel"))}</button></div>` : "");
       }
     } else if (S.phase === "error") {
-      html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.message || "")}</p>` +
+      html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.code ? t("err_" + d.code) : (d.message || ""))}</p>` +
         (d.log ? `<p>${esc(t("err_log", { path: d.log }))}</p>` : "") +
         `<button class="primary" data-act="retry">${esc(t("retry"))}</button>`;
     } else if (S.view !== "wizard" && S.phase === "need_download") {
