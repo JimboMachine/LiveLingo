@@ -285,9 +285,23 @@ def run(out: Path, window: bool = True) -> int:
     def engine_online():
         from . import assets
 
-        releases = assets.list_engine_releases()
-        picked = {kind: [n for n, _ in (assets.pick_engine_assets(releases, kind) or [])] for kind in ("cpu", "cuda")}
+        import urllib.request
+
+        picked = {"tag": assets.ENGINE_TAG, **{kind: [n for n, _, _ in assets.ENGINE_FILES[kind]] for kind in ("cpu", "cuda")}}
         assert picked["cpu"] and len(picked["cuda"]) == 2, picked
+        # 鎖定的每一個下載都還在不在（只要第一個位元組；模型有好幾 GB，不整個抓）。大小對不上也算壞掉
+        gone = []
+        for url, size, _ in assets.pinned():
+            try:
+                req = urllib.request.Request(url, headers={**assets.UA, "Range": "bytes=0-0"})
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    total = (r.headers.get("Content-Range") or "").rpartition("/")[2]
+                    if total.isdigit() and int(total) != size:
+                        gone.append(f"{url}: {total} bytes, expected {size}")
+            except Exception as ex:  # noqa: BLE001
+                gone.append(f"{url}: {ex}")
+        assert not gone, gone
+        picked["pinned"] = len(assets.pinned())
         if sys.platform == "win32":
             import subprocess
 

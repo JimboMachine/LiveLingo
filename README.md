@@ -19,7 +19,7 @@
 
 1. 下載安裝檔：**[LiveLingo-Setup.exe](https://github.com/JimboMachine/LiveLingo/releases/latest/download/LiveLingo-Setup.exe)**
 2. 點兩下安裝。安裝完桌面會有 LiveLingo 的圖示。
-3. 第一次開啟會下載翻譯需要的檔案（約 4 GB，有 RTX 4070 以上顯示卡時約 9 GB），只需要下載這一次。下載的同時可以先選聲音裝置、框出聊天區。
+3. 第一次開啟會下載翻譯需要的檔案（約 4 GB，有 RTX 4070 以上顯示卡時約 10 GB），只需要下載這一次。下載的同時可以先選聲音裝置、框出聊天區。
 
 > Windows 可能會跳出「Windows 已保護您的電腦」。這是因為安裝檔沒有付費的數位簽章，按「其他資訊」再按「仍要執行」就可以。
 

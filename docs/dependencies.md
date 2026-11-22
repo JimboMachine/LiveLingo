@@ -144,15 +144,18 @@
 
 自動把關：測試會擋：畫面載入的檔案不存在、自我檢查沒看、載入順序錯。
 
-### 換模型或下載來源
+### 換模型、換引擎版本或下載來源
 
-1. `assets.py`：檔案清單、大小、網址
-2. `gpu.py`：哪種顯示卡用哪個模型
-3. `service.py`：準備流程、缺什麼、退回標準模式
-4. `engine.py`、`ocr.py`、`speech.py`：各自去哪裡找檔案
-5. `app.js`、`i18n.js`：第一次開啟的下載畫面
+1. `assets.py`：版本代碼（Hugging Face 的 commit、ENGINE_TAG），還有 CHECKS、ENGINE_FILES 裡每個檔案的位元組數和 sha256，要一起換
+2. `engine.py`：換引擎版本時：command() 用的每個參數新版還在不在（--swa-full、--cache-ram、--chat-template gemma…）
+3. `selftest.py`：engine_online 會抓鎖定的引擎並跑 --version；鎖定的網址有一個不在就會紅
+4. `README.md`：下載大小變了要改 README 的「約幾 GB」
+5. `gpu.py`：哪種顯示卡用哪個模型
+6. `service.py`：準備流程、缺什麼、退回標準模式
+7. `engine.py`、`ocr.py`、`speech.py`：各自去哪裡找檔案
+8. `app.js`、`i18n.js`：第一次開啟的下載畫面
 
-自動把關：測試會看模式的選法和引擎檔案的挑法。真的下載只在自動打包的自我檢查裡跑。
+自動把關：測試會擋：有檔案沒鎖在確切的版本、少了大小或 sha256、下載完沒核對。自動打包的自我檢查會確認每個鎖定的網址還在、大小一樣，並真的下載引擎跑一次。新版引擎認不認得我們用的參數，測試看不出來。
 
 ### 改收音或語音辨識
 
@@ -293,6 +296,7 @@
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
 | 套件清單 | `requirements.txt` | `livelingo.spec`：執行時才載入的套件要點名（改壞不會報錯）<br>`build.yml`：要裝的套件（檢查那一段是手寫清單）（改壞不會報錯） |
+| 給使用者看的說明：功能、安裝、下載大小、更新 | `README.md` | 沒有別的地方用到它 |
 | 打包設定 | `packaging/livelingo.spec` | `installer.iss`：打包出來的資料夾（改壞不會報錯）<br>`build.yml`：打包（改壞不會報錯） |
 | 自動打包與發佈 | `.github/workflows/build.yml`<br>`packaging/ci_install_test.py` | `updater.py`：發佈出去的檔名（改壞不會報錯） |
 | 安裝程式 | `packaging/installer.iss` | `updater.py`：靜默安裝的參數（改壞不會報錯）<br>`build.yml`：做安裝檔（改壞不會報錯） |
@@ -362,5 +366,5 @@
 | 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`changes.py`：changes.json 放在哪（改壞會報錯）<br>`guide.py`：help.json 和品牌標誌放在哪（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯） |
 | Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、接著哪些螢幕和各自的大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯） |
 | 開著哪些程式 | `livelingo/apps.py` | `service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
-| 模型下載 | `livelingo/assets.py` | `storage.py`：模型和引擎的檔名、資料夾（改壞會報錯）<br>`service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN）（改壞會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯） |
+| 模型下載 | `livelingo/assets.py` | `storage.py`：模型和引擎的檔名、資料夾（改壞會報錯）<br>`service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN）（改壞會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯）<br>`README.md`：第一次下載大約幾 GB（要和實際的檔案大小對得上）（改壞不會報錯） |
 | 顯示卡判斷 | `livelingo/gpu.py` | `service.py`：選模式（改壞會報錯） |

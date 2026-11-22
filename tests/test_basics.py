@@ -41,19 +41,95 @@ def test_gpu_modes(monkeypatch):
     assert gpu.detect()["name"] == "NVIDIA GeForce RTX 5090"
 
 
-def test_engine_asset_picking():
-    def asset(name):
-        return {"name": name, "browser_download_url": "https://example.invalid/" + name}
+def test_downloads_are_pinned_and_checked(tmp_path, monkeypatch):
+    """要下載的檔案都鎖在確切的版本、都有大小和 sha256；下載完會核對，不對的不會留下來、也不會被拿來用。"""
+    import hashlib
+    import io
+    import re
+    from pathlib import Path
 
-    releases = [
-        {"assets": [asset("llama-b9000-bin-ubuntu-x64.zip")]},
-        {"assets": [asset("llama-b8999-bin-win-cpu-x64.zip"), asset("llama-b8999-bin-win-cuda-12.4-x64.zip"),
-                    asset("cudart-llama-bin-win-cuda-12.4-x64.zip"), asset("llama-b8999-bin-win-cpu-arm64.zip")]},
-    ]
-    assert [n for n, _ in assets.pick_engine_assets(releases, "cpu")] == ["llama-b8999-bin-win-cpu-x64.zip"]
-    assert [n for n, _ in assets.pick_engine_assets(releases, "cuda")] == [
-        "llama-b8999-bin-win-cuda-12.4-x64.zip", "cudart-llama-bin-win-cuda-12.4-x64.zip"]
-    assert assets.pick_engine_assets([{"assets": []}], "cuda") is None
+    import pytest
+
+    # ---- 每一個下載都鎖住了
+    files = [(url, name) for url, name, _ in assets.MODELS.values()] + [(url, rel) for url, rel, _ in assets.OCR_FILES + assets.WHISPER_FILES]
+    assert {name for _, name in files} == set(assets.CHECKS)                       # 每個檔案都有核對用的資料，沒有多的
+    for url, _ in files:
+        assert re.search(r"/resolve/[0-9a-f]{40}/", url), url                      # 鎖在一個 commit 上，不是 main
+    for size, digest in assets.CHECKS.values():
+        assert size > 0 and re.fullmatch(r"[0-9a-f]{64}", digest)
+    assert re.fullmatch(r"b\d+", assets.ENGINE_TAG) and f"/download/{assets.ENGINE_TAG}" in assets.ENGINE_BASE
+    assert len(assets.ENGINE_FILES["cpu"]) == 1 and len(assets.ENGINE_FILES["cuda"]) == 2
+    for kind, engine_files in assets.ENGINE_FILES.items():
+        for name, size, digest in engine_files:
+            assert name.endswith("-x64.zip") and size > 0 and re.fullmatch(r"[0-9a-f]{64}", digest)
+        assert assets.ENGINE_MB[kind] == round(sum(size for _, size, _ in engine_files) / 1e6)
+    assert len(assets.pinned()) == len(files) + 3 and all(url.startswith("https://") for url, _, _ in assets.pinned())
+    source = (Path(assets.__file__)).read_text(encoding="utf-8")
+    assert "resolve/main" not in source and "api.github.com" not in source         # 不再抓「最新的」
+
+    # ---- 下載完核對
+    good = b"the real file " * 100
+    check = (len(good), hashlib.sha256(good).hexdigest())
+    served = []
+
+    class Reply(io.BytesIO):
+        status = 200
+
+        def __init__(self, body):
+            super().__init__(body)
+            self.headers = {"Content-Length": str(len(body))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def serve(*bodies):
+        queue_ = list(bodies)
+
+        def urlopen(req, timeout=0):
+            served.append(req.headers.get("Range"))
+            return Reply(queue_.pop(0))
+
+        monkeypatch.setattr(assets.urllib.request, "urlopen", urlopen)
+
+    monkeypatch.setattr(assets.time, "sleep", lambda s: None)
+    dest = tmp_path / "model.bin"
+    serve(good)
+    assets.fetch("https://x/model", dest, check=check)
+    assert dest.read_bytes() == good and not dest.with_name("model.bin.part").exists()
+
+    dest.unlink()
+    serve(b"something else entirely", b"still not the file")                       # 兩次都不是那個檔案
+    with pytest.raises(assets.DownloadError, match="not the expected one"):
+        assets.fetch("https://x/model", dest, check=check)
+    assert not dest.exists() and not dest.with_name("model.bin.part").exists()      # 沒留下來
+
+    serve(b"wrong the first time", good)                                           # 第一次不對：整個重抓，第二次對了
+    assets.fetch("https://x/model", dest, check=check)
+    assert dest.read_bytes() == good
+
+    dest.unlink()
+    serve(good)                                                                    # 沒給核對資料（更新安裝檔自己另外核對）：照舊
+    assets.fetch("https://x/model", dest)
+    assert dest.read_bytes() == good
+
+    # ---- 引擎：照鎖定的檔名和雜湊抓
+    asked = []
+
+    def fake_fetch(url, dest, progress=None, cancel=None, attempts=8, check=None):
+        asked.append((url, check))
+        import zipfile
+
+        with zipfile.ZipFile(dest, "w") as z:
+            z.writestr("llama-server.exe", b"exe")
+
+    monkeypatch.setattr(assets, "fetch", fake_fetch)
+    monkeypatch.setattr(assets.sys, "platform", "win32")
+    exe = assets.get_engine(tmp_path / "data", "cuda")
+    assert exe.name == "llama-server.exe"
+    assert asked == [(f"{assets.ENGINE_BASE}/{name}", (size, digest)) for name, size, digest in assets.ENGINE_FILES["cuda"]]
 
 
 def test_terms_and_prompt():
@@ -1483,7 +1559,7 @@ def test_speech_on_the_graphics_card(tmp_path, monkeypatch):
         "9.2.0.82": [{"filename": "nvidia_cudnn_cu12-9.2.0.82-py3-none-win_amd64.whl", "url": "https://x/9.2", "size": 4}],
         "9.99.0.1": [{"filename": "nvidia_cudnn_cu12-9.99.0.1-py3-none-win_amd64.whl", "url": "https://x/yanked", "size": 5, "yanked": True}],
         "weird": [{"filename": "x-win_amd64.whl", "url": "https://x/weird"}]}}
-    assert assets.pick_cudnn_wheel(index) == ("https://x/9.10", 3)                   # 最新的 9、Windows 版、沒被撤回
+    assert assets.pick_cudnn_wheel(index) == ("https://x/9.10", 3, "")               # 最新的 9、Windows 版、沒被撤回
     assert assets.pick_cudnn_wheel({"releases": {"8.1": index["releases"]["8.9.7.29"]}}) is None
 
     wheel = io.BytesIO()
@@ -1503,7 +1579,7 @@ def test_speech_on_the_graphics_card(tmp_path, monkeypatch):
     monkeypatch.setattr(assets.urllib.request, "urlopen", lambda req, timeout=0: Reply(json.dumps(index).encode()))
     fetched = []
 
-    def fake_fetch(url, dest, progress=None, cancel=None, attempts=8):
+    def fake_fetch(url, dest, progress=None, cancel=None, attempts=8, check=None):
         fetched.append(url)
         dest.write_bytes(wheel.getvalue())
         if progress:
