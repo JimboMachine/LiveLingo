@@ -75,6 +75,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 @keyframes saved-pop { 0% { opacity: 0; transform: translateY(5px) scale(0.9); } 8% { opacity: 1; transform: none; } 82% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-4px); } }
 .just-saved { animation: saved-row 1.5s ease-out; border-radius: 10px; }
 @keyframes saved-row { 0% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); background-color: color-mix(in srgb, var(--accent) 22%, transparent); } 100% { box-shadow: 0 0 0 6px transparent; background-color: transparent; } }
+.quality.presets { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.presets .qcard { min-height: 0; }
+@media (max-width: 620px) { .quality.presets { grid-template-columns: 1fr; } }
 .setting-row.choice { flex-wrap: wrap; }
 .setting-row.choice .pills { justify-content: flex-end; }
 .swatches.small { align-items: center; }

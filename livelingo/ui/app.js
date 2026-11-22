@@ -67,7 +67,7 @@
     document.querySelectorAll(".just-saved").forEach((el) => el.classList.remove("just-saved"));
     if (!mark || Date.now() > mark.until) { chip.hidden = true; return; }
     const page = $("settings-page");
-    const el = S.view === "settings" && (page.querySelector(mark.key[0] === "#" ? mark.key : SAVE_TARGET[mark.key] || `[data-key="${mark.key}"][aria-pressed="true"]`)
+    const el = S.view === "settings" && (page.querySelector(mark.key[0] === "#" ? mark.key : mark.key.startsWith("preset-") ? `[data-act="overlay-preset"][data-code="${mark.key.slice(7)}"]` : SAVE_TARGET[mark.key] || `[data-key="${mark.key}"][aria-pressed="true"]`)
       || page.querySelector(`[data-key="${mark.key}"], [data-change="${mark.key}"]`));
     const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches"));
     if (row) row.classList.add("just-saved");
@@ -624,6 +624,10 @@
         </div>
         <div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>
       </section>
+      <section><div><h2>${esc(t("ov_presets"))}</h2><div class="sub">${esc(t("ov_presets_hint"))}</div></div>
+        <div class="quality presets">${["chat", "subtitle", "quiet"].map((id) => `<button class="qcard" data-act="overlay-preset" data-code="${id}">
+          <span class="head"><span class="name">${esc(t("ov_preset_" + id))}</span></span><span class="desc">${esc(t("ov_preset_" + id + "_desc"))}</span></button>`).join("")}</div>
+      </section>
       <figure class="ov-preview"><img id="ov-preview" alt="${esc(t("ov_preview"))}" ${S.ui.preview ? `src="${S.ui.preview}"` : ""}>
         <figcaption>${esc(t("ov_preview"))}</figcaption></figure>
       <section><h2>${esc(t("ov_text_title"))}</h2>
@@ -1002,6 +1006,7 @@
     tone: (el) => saveCfg({ tone: el.dataset.tone }),
     toggle: (el) => saveCfg({ [el.dataset.key]: !S.cfg[el.dataset.key] }),
     set: (el) => saveCfg({ [el.dataset.key]: el.dataset.value }),
+    "overlay-preset": async (el) => { const r = await post("/api/overlay", { preset: el.dataset.code }); if (r.ok && r.saved) flashSaved("preset-" + el.dataset.code); },
     "overlay-look-reset": async () => { const r = await post("/api/overlay", { reset_look: true }); if (r.ok && r.saved) flashSaved("overlay_look"); },
     "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
     "find-dismiss": () => { S.ui.find = null; renderMicViews(); },

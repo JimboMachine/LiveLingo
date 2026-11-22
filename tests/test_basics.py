@@ -984,3 +984,36 @@ def test_floating_chat_look(tmp_path):
     service.update_config({k: DEFAULTS[k] for k in OVERLAY_LOOK})                  # 「恢復預設外觀」送的就是這個
     assert chatpaint.style_of(service.cfg) == chatpaint.DEFAULT_STYLE and service.cfg["overlay_font"] == DEFAULTS["overlay_font"]
     assert service.overlay_preview() != before
+
+
+def test_floating_chat_presets(tmp_path):
+    """一鍵版面：外觀整組換、位置跟著搬、存得起來；先前自己調的東西不會殘留到下一個版面。"""
+    from livelingo import chatpaint, overlay
+    from livelingo.config import DEFAULTS, EDITABLE, OVERLAY_LOOK
+    from livelingo.service import Service
+
+    for name, preset in overlay.PRESETS.items():
+        assert set(preset["look"]) <= set(OVERLAY_LOOK) <= EDITABLE, name
+    service = Service(tmp_path)
+    service.hub.publish = lambda name, data: None
+    assert service.overlay.apply_preset("nonsense") is None
+
+    service.update_config({"overlay_color": "#FF0000", "overlay_family": "kai"})
+    result = service.overlay.apply_preset("subtitle")
+    assert result["saved"] is True
+    cfg = Config(tmp_path)
+    assert (cfg["overlay_align"], cfg["overlay_names"], cfg["overlay_lines"], cfg["overlay_font"]) == ("center", False, 2, 30)
+    assert (cfg["overlay_color"], cfg["overlay_family"]) == ("#FFFFFF", "sans")      # 自己調過的也回到這個版面的樣子
+    left, top, width, height = overlay.oswin.work_area()
+    x, y, w, h = cfg["overlay_rect"]
+    assert abs((x + w / 2) - (left + width / 2)) <= 2 and y > top + height / 2      # 正下方置中
+    assert service.overlay.rect == cfg["overlay_rect"]
+
+    service.overlay.apply_preset("quiet")
+    cfg = Config(tmp_path)
+    assert (cfg["overlay_align"], cfg["overlay_grow"], cfg["overlay_names"]) == ("right", "down", True)
+    assert cfg["overlay_rect"][0] > left + width / 2 and cfg["overlay_rect"][1] < top + height / 2      # 右上角
+
+    service.overlay.apply_preset("chat")
+    assert chatpaint.style_of(service.cfg) == chatpaint.DEFAULT_STYLE
+    assert service.cfg["overlay_rect"] == overlay.default_rect() and service.cfg["overlay_font"] == DEFAULTS["overlay_font"]

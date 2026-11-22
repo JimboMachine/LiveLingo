@@ -218,6 +218,9 @@ class Server:
                             service.overlay.set_edit(bool(body.get("edit")))
                         if body.get("reset"):
                             service.overlay.reset_position()
+                        if body.get("preset"):      # 一鍵版面：外觀和位置一起換
+                            result = service.overlay.apply_preset(str(body.get("preset")))
+                            return self._json({"ok": result is not None, **(result or {}), **service.overlay.state()})
                         if body.get("reset_look"):      # 恢復預設外觀（位置不動）
                             result = service.update_config({k: DEFAULTS[k] for k in OVERLAY_LOOK})
                             return self._json({"ok": True, **result, **service.overlay.state()})

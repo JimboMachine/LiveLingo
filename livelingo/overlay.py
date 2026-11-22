@@ -9,6 +9,7 @@ import threading
 import time
 
 from . import chatpaint, oswin
+from .config import DEFAULTS, OVERLAY_LOOK
 
 MIN_SIZE = (240, 110)
 FADE_IN, FADE_OUT = 0.22, 0.9
@@ -21,6 +22,27 @@ def default_rect() -> list[int]:
     w = max(MIN_SIZE[0], min(620, int(width * 0.30)))
     h = max(MIN_SIZE[1], int(height * 0.30))
     return [left + 24, top + int(height * 0.36), w, h]
+
+
+# 一鍵版面：外觀（沒寫到的項目用預設值）和位置（主螢幕工作區的 左、上、寬、高 比例；None = 預設位置）
+PRESETS = {
+    "chat": {"look": {}, "place": None},
+    "subtitle": {"look": {"overlay_align": "center", "overlay_names": False, "overlay_lines": 2, "overlay_font": 30,
+                          "overlay_backdrop": 45, "overlay_seconds": 8},
+                 "place": (0.18, 0.74, 0.64, 0.20)},
+    "quiet": {"look": {"overlay_align": "right", "overlay_grow": "down", "overlay_font": 18, "overlay_opacity": 70,
+                       "overlay_outline": 1, "overlay_lines": 4, "overlay_seconds": 8},
+              "place": (0.70, 0.05, 0.28, 0.24)},
+}
+
+
+def preset_rect(name: str) -> list[int]:
+    place = PRESETS[name]["place"]
+    if not place:
+        return default_rect()
+    left, top, width, height = oswin.work_area()
+    return [left + int(width * place[0]), top + int(height * place[1]),
+            max(MIN_SIZE[0], int(width * place[2])), max(MIN_SIZE[1], int(height * place[3]))]
 
 
 # ---------------------------------------------------------------------- 視窗（只有 Windows）
@@ -495,6 +517,17 @@ class Overlay:
         self.service.stored("overlay_rect", ok)
         self._last = None
         self._wake.set()
+
+    def apply_preset(self, name: str) -> dict | None:
+        """套用一個一鍵版面：外觀整組換掉、搬到那個版面的位置。回傳和 update_config 一樣；沒有這個版面回傳 None。"""
+        if name not in PRESETS:
+            return None
+        self.rect = preset_rect(name)
+        placed = self.service.cfg.set(overlay_rect=list(self.rect))
+        result = self.service.update_config({**{k: DEFAULTS[k] for k in OVERLAY_LOOK}, **PRESETS[name]["look"]})
+        self._last = None
+        self._wake.set()
+        return {**result, "saved": bool(result["saved"] and placed)}
 
     def _moved(self, rect, final: bool) -> None:
         self.rect = [int(v) for v in rect]
