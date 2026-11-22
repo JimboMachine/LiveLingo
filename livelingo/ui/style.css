@@ -65,7 +65,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; 
 #app { height: 100%; position: relative; display: flex; }
 .view { display: none; height: 100%; flex: 1; min-width: 0; }
 #app[data-view="main"] #view-main { display: flex; flex-direction: column; }
-#app[data-view="subtitle"] #view-subtitle { display: flex; }
 #app[data-view="settings"] #view-settings { display: flex; }
 #app[data-view="main"] #view-main, #app[data-view="settings"] #view-settings { animation: view-in 0.16s ease-out; }
 .page.in > section { animation: view-in 0.16s ease-out; }
@@ -110,7 +109,7 @@ button:active:not(:disabled) { transform: scale(0.98); }
 
 /* ---------- 左邊的導覽 ---------- */
 .rail { width: 216px; flex: none; padding: 14px 10px 12px; border-right: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
-#app[data-view="subtitle"] .rail, #app[data-view="wizard"] .rail { display: none; }
+#app[data-view="wizard"] .rail { display: none; }
 .rail-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 14px; }
 .rail-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--faint); padding: 14px 12px 6px; }
 .rail-item { position: relative; height: 40px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--dim); font-size: 14px; text-align: left; }
@@ -271,16 +270,9 @@ input::placeholder { color: var(--faint); }
 .saybar input { width: 0; flex: 1; height: 46px; padding: 0 14px; border-radius: 12px; font-size: 15px; }
 .saybar .primary { height: 46px; font-size: 15px; }
 
-/* ---------- 字幕列 ---------- */
-#view-subtitle { align-items: stretch; padding: 8px; }
-.subbar { flex: 1; border-radius: 14px; background: color-mix(in srgb, var(--ground) 92%, transparent); border: 1px solid var(--line-2); padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .badge { flex: none; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-size: 12px; font-weight: 700; }
 .badge.me { background: rgba(242, 184, 75, 0.14); color: var(--me); }
 .badge:empty { display: none; }
-.sub-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.sub-main { font-size: 20px; font-weight: 700; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.sub-main.idle { font-size: 14px; font-weight: 400; color: var(--dim); }
-.sub-orig { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- 設定 ---------- */
 .page { flex: 1; min-width: 0; padding: 28px max(32px, calc((100% - 760px) / 2)); display: flex; flex-direction: column; gap: 24px; overflow-y: auto; }
@@ -442,3 +434,19 @@ input::placeholder { color: var(--faint); }
 .region-card .rfollow select { flex: 1; min-width: 180px; max-width: 360px; }
 .region-card .btn-row { margin: 0; }
 .region-card .btn-row button { min-height: 36px; padding: 6px 14px; font-size: 13px; }
+
+/* 顯示方式的三張卡片、縮小的螢幕圖、自己存的版面 */
+.presets .qcard[aria-pressed="true"] .name { color: var(--accent); }
+.screen-map { position: relative; width: 100%; max-width: 620px; max-height: 300px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; touch-action: none; }
+.screen-map .mon { position: absolute; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px; border: 2px solid var(--line-2); border-radius: 8px; background: var(--surface); color: var(--dim); font-size: 13px; padding: 7px 10px; }
+.screen-map .mon[aria-pressed="true"] { border-color: var(--accent); color: var(--text); }
+.screen-map .mon small { font-size: 11px; color: var(--faint); }
+.screen-map .map-box { position: absolute; min-width: 10px; min-height: 8px; border: 2px solid var(--accent); border-radius: 5px; background: var(--accent-soft); cursor: grab; touch-action: none; }
+.screen-map .map-box:active { cursor: grabbing; }
+.screen-map .map-box.bar { cursor: default; border-style: dashed; pointer-events: none; }
+.screen-map .map-box .grip { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 3px 0 4px 0; background: var(--accent); cursor: nwse-resize; }
+.layouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.layout-item { display: flex; align-items: stretch; gap: 4px; border-radius: 12px; }
+.layout-item .qcard { flex: 1; min-width: 0; min-height: 0; }
+.layout-item .icon-btn { align-self: center; }
+#layout-form input { flex: 1; min-width: 180px; max-width: 320px; }

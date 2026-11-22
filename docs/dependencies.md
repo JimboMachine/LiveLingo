@@ -80,6 +80,18 @@
 
 自動把關：測試會把留言畫出來比大小。真的蓋在畫面上的樣子要看自動打包附的截圖。
 
+### 改顯示方式、位置或螢幕（浮在畫面上、底部字幕條、只在視窗裡）
+
+1. `config.py`：overlay、overlay_form、overlay_monitor、overlay_rect、overlay_layouts；哪些算外觀（OVERLAY_LOOK）
+2. `overlay.py`：現在該在哪（_home）、字幕條固定的排法（BAR_LOOK）、拉回畫面、一鍵版面和自己存的版面
+3. `oswin.py`：接著哪些螢幕
+4. `service.py`、`server.py`：允許的值、/api/overlay 和 /api/screens、預覽圖也要照字幕條的排法
+5. `tray.py`：系統匣的開關改的是 overlay
+6. `app.js`、`i18n.js`、`style.css`：三張卡片、縮小的螢幕圖（拖的時候不能重畫整頁）、版面清單
+7. `test_basics.py`：顯示方式的檢查
+
+自動把關：測試會擋：位置算錯、螢幕拔掉沒拉回來、字幕條改到使用者自己的設定、存的版面套不回來。
+
 ### 換標誌或品牌色
 
 1. `brand.js`：介面裡的標誌，還有三個圖示檔
@@ -226,7 +238,7 @@
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
 | 主體 | `livelingo/service.py` | `app.js`：事件名稱、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯） |
-| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：浮動留言的設定（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
+| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
 
@@ -248,7 +260,7 @@
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
 | 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯） |
-| Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、螢幕大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯） |
+| Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、接著哪些螢幕和各自的大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯） |
 | 開著哪些程式 | `livelingo/apps.py` | `service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
 | 模型下載 | `livelingo/assets.py` | `service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN）（改壞會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯） |
 | 顯示卡判斷 | `livelingo/gpu.py` | `service.py`：選模式（改壞會報錯） |

@@ -58,7 +58,7 @@
     ui_lang: '[data-act="ui-lang"][aria-pressed="true"]', tone: '[data-act="tone"][aria-pressed="true"]',
     quality: '[data-act="quality"][aria-pressed="true"]', my_lang: "#sel-my", their_lang: "#sel-their", their_auto: "#sel-their",
     speaker_device: '[data-act="device"][data-key="speaker"]', mic_device: '[data-act="device"][data-key="mic"]',
-    transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]',
+    transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]', overlay_map: "#screen-map",
     overlay_look: '[data-act="overlay-look-reset"]'
   };
   let savedTimer = null;
@@ -69,7 +69,7 @@
     const page = $("settings-page");
     const el = S.view === "settings" && (page.querySelector(mark.key[0] === "#" ? mark.key : mark.key.startsWith("preset-") ? `[data-act="overlay-preset"][data-code="${mark.key.slice(7)}"]` : SAVE_TARGET[mark.key] || `[data-key="${mark.key}"][aria-pressed="true"]`)
       || page.querySelector(`[data-key="${mark.key}"], [data-change="${mark.key}"]`));
-    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches, .packs, .device.app, .region-card"));
+    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches, .packs, .device.app, .region-card, .presets, .screen-map, .layout-item"));
     if (row) row.classList.add("just-saved");
     chip.hidden = false;
     if (el) {
@@ -242,8 +242,6 @@
         : `<span>${esc(t("region_now", { w: r.width, h: r.height }))} · <button data-act="region" data-id="${esc(r.id)}">${esc(t("region_change"))}</button></span>`)
       : "<span></span>")
       + (S.messages.length ? `<button data-act="clear">${esc(t("clear"))}</button>` : "");
-    const mic = $("sub-mic");
-    mic.classList.toggle("on", !!(S.sources.mic || {}).on);
   }
 
   function paintVu() {
@@ -440,21 +438,6 @@
     box.scrollTop = box.scrollHeight;
   }
 
-  function renderSubtitle() {
-    const last = S.messages[S.messages.length - 1];
-    const badge = $("sub-badge"), main = $("sub-main"), orig = $("sub-orig");
-    if (!last) {
-      badge.textContent = ""; orig.textContent = "";
-      main.textContent = t("subtitle_idle"); main.className = "sub-main idle";
-      return;
-    }
-    badge.textContent = t("who_" + last.who);
-    badge.className = "badge" + (last.who === "me" ? " me" : "");
-    main.className = "sub-main";
-    main.textContent = last.pending || last.error ? last.original : last.translated;
-    orig.textContent = last.pending || last.error ? "" : last.original;
-  }
-
   // ---------------------------------------------------------------- 聲音裝置（設定頁和第一次設定共用）
 
   function deviceNote(group, d) {
@@ -585,6 +568,7 @@
   function tabOpened() {
     if (S.ui.tab === "audio") openDevices();
     if (S.ui.tab === "screen") loadApps();
+    if (S.ui.tab === "overlay") loadScreens();
   }
 
   async function loadApps() {
@@ -795,24 +779,90 @@
       ${["heard", "screen", "me"].map((who) => `<label class="color-pick"><input type="color" id="col-name-${who}" data-change="overlay_name_colors" data-sub="${who}" data-live="overlay_name_colors" value="${esc(colors[who] || "#FFFFFF")}"><span>${esc(t("ov_name_" + who))}</span></label>`).join("")}</div></div>`;
   }
 
+  // 顯示方式：浮在畫面上 / 底部字幕條 / 只在視窗裡（三種共用下面同一組外觀設定）
+  function displayMode() { return !S.cfg.overlay ? "window" : (S.cfg.overlay_form === "bar" ? "bar" : "float"); }
+
+  // 縮小的螢幕圖：每個螢幕一塊，留言是上面的方框。位置都用百分比，所以不用量畫面大小。
+  function mapBounds() {
+    const ms = S.ui.screens.monitors;
+    const x0 = Math.min(...ms.map((m) => m.left)), y0 = Math.min(...ms.map((m) => m.top));
+    const x1 = Math.max(...ms.map((m) => m.left + m.width)), y1 = Math.max(...ms.map((m) => m.top + m.height));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  function mapStyle(r, b) {
+    return `left:${((r[0] - b.x) * 100 / b.w).toFixed(3)}%;top:${((r[1] - b.y) * 100 / b.h).toFixed(3)}%;width:${(r[2] * 100 / b.w).toFixed(3)}%;height:${(r[3] * 100 / b.h).toFixed(3)}%`;
+  }
+  function mapWhere(r) { return t("map_where", { x: r[0], y: r[1], w: r[2], h: r[3] }); }
+  function mapHTML() {
+    const sc = S.ui.screens, mode = displayMode();
+    if (!sc || !sc.monitors || mode === "window") return "";
+    const b = mapBounds(), bar = mode === "bar";
+    return `<section><div><h2>${esc(t("map_title"))}</h2><div class="sub">${esc(t(bar ? "map_hint_bar" : "map_hint_float"))}</div></div>
+        <div class="screen-map" id="screen-map" style="aspect-ratio:${b.w} / ${b.h}">
+          ${sc.monitors.map((m, i) => `<button class="mon" data-act="map-monitor" data-code="${i}" style="${mapStyle([m.left, m.top, m.width, m.height], b)}" aria-pressed="${sc.monitor === i}"
+            aria-label="${esc(t("map_screen_pick", { n: i + 1, w: m.width, h: m.height }))}" title="${esc(t("map_screen_pick", { n: i + 1, w: m.width, h: m.height }))}"><span>${esc(t("map_screen", { n: i + 1 }))}</span><small>${m.width}×${m.height}</small></button>`).join("")}
+          <div class="map-box${bar ? " bar" : ""}" id="map-box" style="${mapStyle(sc.rect, b)}" ${bar ? "" : `tabindex="0" role="group" aria-label="${esc(t("map_box"))}"`}>${bar ? "" : '<i class="grip"></i>'}</div>
+        </div>
+        <div class="dim small" id="map-where">${esc(mapWhere(sc.rect))}</div>
+        ${bar ? "" : `<div class="btn-row">
+          <button class="ghost" data-act="overlay-edit">${ICON.frame}${esc(S.overlay.editing ? t("ov_done") : t("ov_move"))}</button>
+          <button class="ghost" data-act="overlay-reset">${esc(t("ov_reset"))}</button></div>`}
+      </section>`;
+  }
+  function paintMapBox() {      // 只換方框的位置（真的留言被拖動時一秒會來很多次，不重畫整頁）
+    const sc = S.ui.screens, box = $("map-box"), where = $("map-where");
+    if (!sc || !box) return;
+    box.style.cssText = mapStyle(sc.rect, mapBounds());
+    if (where) where.textContent = mapWhere(sc.rect);
+  }
+  async function loadScreens() {
+    S.ui.screens = await get("/api/screens") || null;
+    if (S.view === "settings" && S.ui.tab === "overlay" && !S.ui.mapDrag) renderSettingsPage();
+  }
+  let mapTimer = null, mapSent = 0;
+  function mapPlace(rect, final) {      // 拖的時候一秒最多送十幾次；放開那一次才存，存好顯示「已儲存」
+    S.ui.screens.rect = rect;
+    paintMapBox();
+    clearTimeout(mapTimer);
+    const send = async () => {
+      mapSent = Date.now();
+      const r = await post("/api/overlay", { rect, final });
+      if (final && r && r.ok) {
+        if (r.rect) { S.ui.screens.rect = r.rect; paintMapBox(); }
+        if (r.saved) flashSaved("overlay_map"); else toast(t("n_save_failed", { error: "" }), 8000, "error");
+      }
+    };
+    if (final || Date.now() - mapSent > 70) send(); else mapTimer = setTimeout(send, 70);
+  }
+
+  function layoutsHTML() {
+    const list = S.cfg.overlay_layouts || [];
+    return `<section id="layouts-section"><div><h2>${esc(t("lay_mine"))}</h2><div class="sub">${esc(t("lay_hint", { max: 5 }))}</div></div>
+        ${list.length ? `<div class="layouts">${list.map((l, i) => `<div class="layout-item" id="layout-${i}">
+          <button class="qcard" data-act="layout-apply" data-code="${i}"><span class="head"><span class="name">${esc(l.name)}</span></span>
+            <span class="desc">${esc(t("mode_" + (l.form === "bar" ? "bar" : "float")))} · ${esc(t("lay_apply"))}</span></button>
+          <button class="icon-btn" data-act="layout-remove" data-code="${i}" aria-label="${esc(t("lay_remove", { name: l.name }))}" title="${esc(t("lay_remove", { name: l.name }))}">${ICON.x}</button></div>`).join("")}</div>` : ""}
+        <form class="btn-row" id="layout-form"><input type="text" id="layout-name" name="name" maxlength="24" placeholder="${esc(t("lay_name"))}" aria-label="${esc(t("lay_name"))}">
+          <button class="ghost" type="submit">${esc(t("lay_save"))}</button></form>
+      </section>`;
+  }
+
   function overlayPage() {
-    const on = !!S.cfg.overlay;
-    const editing = !!S.overlay.editing;
+    const mode = displayMode(), on = mode !== "window", bar = mode === "bar";
     return `
       <section>
-        <div><h2>${esc(t("ov_title"))}</h2><div class="sub">${esc(t("ov_hint"))}</div></div>
-        ${switchRow("overlay", t("ov_enable"))}
-        <div class="btn-row">
-          <button class="primary big" data-act="overlay-edit" ${on ? "" : "disabled"}>${ICON.frame}${esc(editing ? t("ov_done") : t("ov_move"))}</button>
-          <button class="ghost" data-act="overlay-test" ${on ? "" : "disabled"}>${esc(t("ov_test"))}</button>
-          <button class="ghost" data-act="overlay-reset" ${on ? "" : "disabled"}>${esc(t("ov_reset"))}</button>
-        </div>
-        <div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>
+        <div><h2>${esc(t("mode_title"))}</h2><div class="sub">${esc(t("mode_hint"))}</div></div>
+        <div class="quality presets" id="display-mode">${["float", "bar", "window"].map((id) => `<button class="qcard" data-act="display-mode" data-code="${id}" aria-pressed="${mode === id}">
+          <span class="head"><span class="name">${esc(t("mode_" + id))}</span></span><span class="desc">${esc(t("mode_" + id + "_desc"))}</span></button>`).join("")}</div>
+        <div class="btn-row"><button class="ghost" data-act="overlay-test" ${on ? "" : "disabled"}>${esc(t("ov_test"))}</button></div>
+        ${on ? `<div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>` : ""}
       </section>
+      ${mapHTML()}
       <section><div><h2>${esc(t("ov_presets"))}</h2><div class="sub">${esc(t("ov_presets_hint"))}</div></div>
         <div class="quality presets">${["chat", "subtitle", "quiet"].map((id) => `<button class="qcard" data-act="overlay-preset" data-code="${id}">
           <span class="head"><span class="name">${esc(t("ov_preset_" + id))}</span></span><span class="desc">${esc(t("ov_preset_" + id + "_desc"))}</span></button>`).join("")}</div>
       </section>
+      ${layoutsHTML()}
       <figure class="ov-preview"><img id="ov-preview" alt="${esc(t("ov_preview"))}" ${S.ui.preview ? `src="${S.ui.preview}"` : ""}>
         <figcaption>${esc(t("ov_preview"))}</figcaption></figure>
       <section><h2>${esc(t("ov_text_title"))}</h2>
@@ -829,9 +879,9 @@
         ${nameColorsRow()}
       </section>
       <section><h2>${esc(t("ov_layout_title"))}</h2>
-        ${choiceRow("overlay_align", t("ov_align"), [["left", t("ov_align_left")], ["center", t("ov_align_center")], ["right", t("ov_align_right")]])}
-        ${choiceRow("overlay_grow", t("ov_grow"), [["up", t("ov_grow_up")], ["down", t("ov_grow_down")]])}
-        ${rangeRow("overlay_lines", t("ov_lines"), 0, 12, 1, RANGE_TEXT.overlay_lines)}
+        ${bar ? "" : choiceRow("overlay_align", t("ov_align"), [["left", t("ov_align_left")], ["center", t("ov_align_center")], ["right", t("ov_align_right")]])}
+        ${bar ? "" : choiceRow("overlay_grow", t("ov_grow"), [["up", t("ov_grow_up")], ["down", t("ov_grow_down")]])}
+        ${bar ? "" : rangeRow("overlay_lines", t("ov_lines"), 0, 12, 1, RANGE_TEXT.overlay_lines)}
         ${rangeRow("overlay_seconds", t("ov_seconds"), 0, 60, 1, RANGE_TEXT.overlay_seconds)}
         ${switchRow("overlay_original", t("ov_original"))}
         ${switchRow("overlay_mine", t("ov_mine"))}
@@ -1095,7 +1145,6 @@
     renderRail();
     if (view === "settings") { renderSettingsPage(); tabOpened(); }
     if (view === "wizard") renderWizard();
-    if (view === "subtitle") renderSubtitle();
     renderOverlay();
   }
 
@@ -1117,7 +1166,6 @@
     renderRecord();
     renderSources();
     renderMessages();
-    renderSubtitle();
     renderRail();
     if (S.view === "settings") renderSettingsPage();
     if (S.view === "wizard") renderWizard();
@@ -1222,7 +1270,7 @@
     },
     toggle: (el) => saveCfg({ [el.dataset.key]: !S.cfg[el.dataset.key] }),
     set: (el) => saveCfg({ [el.dataset.key]: el.dataset.value }),
-    "overlay-preset": async (el) => { const r = await post("/api/overlay", { preset: el.dataset.code }); if (r.ok && r.saved) flashSaved("preset-" + el.dataset.code); },
+    "overlay-preset": async (el) => { const r = await post("/api/overlay", { preset: el.dataset.code }); if (r.ok && r.saved) flashSaved("preset-" + el.dataset.code); loadScreens(); },
     "overlay-look-reset": async () => { const r = await post("/api/overlay", { reset_look: true }); if (r.ok && r.saved) flashSaved("overlay_look"); },
     "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
     "find-dismiss": () => { S.ui.find = null; renderMicViews(); },
@@ -1270,9 +1318,13 @@
       await post("/api/config", { overlay: on });
       if (on) { toast(t("n_overlay_on"), 5000); post("/api/overlay", { test: true }); }
     },
+    "display-mode": (el) => saveCfg(el.dataset.code === "window" ? { overlay: false } : { overlay: true, overlay_form: el.dataset.code }, "#display-mode").then(loadScreens),
+    "map-monitor": async (el) => { const r = await post("/api/overlay", { monitor: Number(el.dataset.code) }); if (r && r.ok && r.saved) flashSaved("overlay_map"); loadScreens(); },
+    "layout-apply": async (el) => { const r = await post("/api/overlay", { layout: Number(el.dataset.code) }); if (r && r.ok && r.saved) flashSaved("#layout-" + el.dataset.code); loadScreens(); },
+    "layout-remove": async (el) => { const r = await post("/api/overlay", { layout_remove: Number(el.dataset.code) }); if (r && r.ok && r.saved) flashSaved("#layouts-section"); },
     "overlay-edit": () => post("/api/overlay", { edit: !S.overlay.editing }),
     "overlay-test": () => post("/api/overlay", { test: true }),
-    "overlay-reset": () => post("/api/overlay", { reset: true }),
+    "overlay-reset": () => post("/api/overlay", { reset: true }).then(loadScreens),
     download: () => post("/api/download"),
     retry: () => post("/api/retry")
   };
@@ -1324,6 +1376,47 @@
   });
   document.addEventListener("pointerup", () => { if (S.ui.live) setTimeout(() => { S.ui.live = null; }, 300); });
 
+  // 螢幕圖上的方框：拖著移動，拖右下角改大小；方向鍵移動，Shift + 方向鍵改大小
+  function mapClamp(r) {
+    const sc = S.ui.screens, b = mapBounds(), min = sc.min || [240, 110];
+    const w = Math.max(min[0], Math.min(Math.round(r[2]), b.w)), h = Math.max(min[1], Math.min(Math.round(r[3]), b.h));
+    return [Math.max(b.x, Math.min(Math.round(r[0]), b.x + b.w - w)), Math.max(b.y, Math.min(Math.round(r[1]), b.y + b.h - h)), w, h];
+  }
+  document.addEventListener("pointerdown", (e) => {
+    const box = e.target.closest && e.target.closest("#map-box");
+    if (!box || box.classList.contains("bar") || !S.ui.screens) return;
+    e.preventDefault();
+    box.focus();
+    const map = $("screen-map"), b = mapBounds(), k = b.w / map.clientWidth;      // 圖上一個像素等於螢幕上幾個像素
+    const start = S.ui.screens.rect.slice(), sx = e.clientX, sy = e.clientY, resize = !!e.target.closest(".grip");
+    S.ui.mapDrag = true;
+    box.setPointerCapture(e.pointerId);
+    const at = (ev) => {
+      const dx = (ev.clientX - sx) * k, dy = (ev.clientY - sy) * k;
+      return mapClamp(resize ? [start[0], start[1], start[2] + dx, start[3] + dy] : [start[0] + dx, start[1] + dy, start[2], start[3]]);
+    };
+    const move = (ev) => mapPlace(at(ev), false);
+    const up = (ev) => {
+      box.removeEventListener("pointermove", move); box.removeEventListener("pointerup", up); box.removeEventListener("pointercancel", up);
+      S.ui.mapDrag = false;
+      mapPlace(at(ev), true);
+    };
+    box.addEventListener("pointermove", move); box.addEventListener("pointerup", up); box.addEventListener("pointercancel", up);
+  });
+  let mapKeyTimer = null;
+  document.addEventListener("keydown", (e) => {
+    if (!e.target || e.target.id !== "map-box" || !S.ui.screens) return;
+    const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const r = S.ui.screens.rect, d = 20;
+    const next = mapClamp(e.shiftKey ? [r[0], r[1], r[2] + step[0] * d, r[3] + step[1] * d] : [r[0] + step[0] * d, r[1] + step[1] * d, r[2], r[3]]);
+    S.ui.mapDrag = true;      // 連按的時候先不要重畫整頁，不然焦點會跑掉
+    mapPlace(next, false);
+    clearTimeout(mapKeyTimer);
+    mapKeyTimer = setTimeout(() => { S.ui.mapDrag = false; mapPlace(S.ui.screens.rect, true); }, 500);
+  });
+
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -1334,6 +1427,16 @@
       if (S.phase !== "ready") { toast(t("n_not_ready"), 4200, "warn"); return; }
       input.value = "";
       post("/api/send", { text });
+    } else if (form.id === "layout-form") {
+      const name = form.elements.name.value.trim();
+      if (!name) { toast(t("lay_need_name"), 4200, "warn"); form.elements.name.focus(); return; }
+      const r = await post("/api/overlay", { layout_save: name });
+      if (r && r.ok && r.saved) {      // 存好時頁面已經重畫過，要清的是現在畫面上的那個輸入框
+        const input = $("layout-name"); if (input) input.value = "";
+        flashSaved("#layout-" + r.index);
+      }
+      else if (r && r.error === "full") toast(t("lay_full", { max: 5 }), 7000, "warn");
+      else toast(t("n_save_failed", { error: "" }), 8000, "error");
     } else if (form.id === "gloss-form") {
       const src = form.elements.src.value.trim(), dst = form.elements.dst.value.trim();
       if (!src || !dst) { (src ? form.elements.dst : form.elements.src).focus(); return; }
@@ -1379,7 +1482,6 @@
       if (S.ui.tryId === "next" && m.via === "typed") S.ui.tryId = m.id;
       upsertMessage(m);
       if (S.messages.length === 1) renderSources();
-      renderSubtitle();
       if (S.view === "wizard" && S.ui.wz === 3 && m.id === S.ui.tryId) {
         const slot = document.querySelector(".wz-result");
         if (slot) slot.innerHTML = `<div class="msg me" style="max-width:100%;align-items:flex-start"><div class="bubble">${bubbleHTML(m).replace(/<div class="actions">.*?<\/div>/, "")}</div></div>`;
@@ -1389,7 +1491,6 @@
       S.messages = S.messages.filter((x) => x.id !== d.id);
       const el = $("m-" + d.id); if (el) el.remove();
       if (!S.messages.length) renderMessages();
-      renderSubtitle();
     },
     record: (d) => {
       const was = S.record.on;
@@ -1398,7 +1499,7 @@
       renderRecord();
       if (was !== d.on && S.view === "settings" && S.ui.tab === "general") renderSettingsPage();
     },
-    cleared: () => { S.messages = []; renderMessages(); renderSources(); renderSubtitle(); },
+    cleared: () => { S.messages = []; renderMessages(); renderSources(); },
     config: (cfg) => {
       const before = S.cfg;
       S.cfg = cfg;
@@ -1408,7 +1509,8 @@
       if (before.show_pronunciation !== cfg.show_pronunciation || before.back_translate !== cfg.back_translate) renderMessages();
       if (S.view === "settings" && S.ui.tab === "overlay"
           && Object.keys(cfg).some((k) => (k.startsWith("overlay") || k.endsWith("_lang")) && JSON.stringify(before[k]) !== JSON.stringify(cfg[k]))) refreshPreview();
-      if (S.view === "settings" && !S.ui.live) renderSettingsPage();
+      if (S.view === "settings" && !S.ui.live && !S.ui.mapDrag) renderSettingsPage();
+      if (S.view === "settings" && S.ui.tab === "overlay" && ["overlay", "overlay_form", "overlay_monitor", "overlay_font"].some((k) => before[k] !== cfg[k])) loadScreens();
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
@@ -1433,9 +1535,14 @@
     },
     notice: (d) => toast(t("n_" + d.code, d.lang ? { ...d, lang: langName(d.lang) } : d), 7000, /failed|small/.test(d.code) ? "warn" : "info"),
     overlay: (d) => {
+      const before = S.overlay || {};
       S.overlay = d;
       renderOverlayState();
-      if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage();
+      if (d.rect && S.ui.screens && !S.ui.mapDrag) { S.ui.screens.rect = d.rect; paintMapBox(); }      // 在真的螢幕上拖：螢幕圖跟著動
+      if (S.view === "settings" && S.ui.tab === "overlay" && (before.editing !== d.editing || before.running !== d.running)) {
+        renderSettingsPage();
+        if (before.running !== d.running) loadScreens();
+      }
     },
     saved: (d) => flashSaved(d.what === "region" && d.id ? "#region-" + d.id : d.what),
     screen_stats: (d) => {      // 讀螢幕的統計：直接換那一行字，不重畫整頁（免得正在打的名字被打斷）

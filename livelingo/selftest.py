@@ -342,9 +342,9 @@ def run(out: Path, window: bool = True) -> int:
                 info["has_window_ctl"] = service.window is not None
                 if service.window:
                     info["size_before"] = service.window.geometry()
-                    service.set_view("subtitle")
+                    service.set_view("main")
                     time.sleep(1.0)
-                    info["size_subtitle"] = service.window.geometry()
+                    info["size_main"] = service.window.geometry()
                     service.set_view("wizard")
                     time.sleep(1.0)
                     info["size_after"] = service.window.geometry()

@@ -16,11 +16,11 @@ from collections import deque
 from pathlib import Path
 
 from . import __version__, apps, assets, chatpaint, gpu, oswin, updater
-from .config import ACCENTS, DEFAULTS, EDITABLE, MAX_REGIONS, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
+from .config import ACCENTS, DEFAULTS, EDITABLE, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language, similarity
-from .overlay import Overlay
+from .overlay import BAR_LOOK, Overlay
 from .paths import self_command
 from .terms import PACKS, TermPack
 from .transcript import Transcript
@@ -229,7 +229,10 @@ class Service:
         import io
 
         out = io.BytesIO()
-        chatpaint.preview(self.cfg.snapshot()).save(out, "PNG")
+        cfg = self.cfg.snapshot()
+        if cfg["overlay_form"] == "bar":      # 字幕條固定置中、最多兩句，預覽也要長那樣
+            cfg.update(BAR_LOOK)
+        chatpaint.preview(cfg).save(out, "PNG")
         return out.getvalue()
 
     def stored(self, what: str, ok: bool = True) -> None:
@@ -748,6 +751,13 @@ class Service:
         for key, allowed in (("overlay_family", chatpaint.FAMILIES), ("overlay_align", chatpaint.ALIGNS), ("overlay_grow", chatpaint.GROWS)):
             if key in changes and changes[key] not in allowed:
                 changes.pop(key)
+        if "overlay_form" in changes and changes["overlay_form"] not in OVERLAY_FORMS:
+            changes.pop("overlay_form")
+        if "overlay_monitor" in changes:
+            try:
+                changes["overlay_monitor"] = max(0, min(15, int(changes["overlay_monitor"])))
+            except (TypeError, ValueError):
+                changes.pop("overlay_monitor")
         if "overlay_color" in changes:
             color = str(changes["overlay_color"]).upper()
             if re.fullmatch(r"#[0-9A-F]{6}", color):
@@ -805,7 +815,7 @@ class Service:
             self._terms_changed()
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
-        if changed("overlay", *OVERLAY_LOOK, "ui_lang", "my_lang", "their_lang"):
+        if changed("overlay", "overlay_form", "overlay_monitor", *OVERLAY_LOOK, "ui_lang", "my_lang", "their_lang"):
             self.overlay.apply()
             if changed("overlay"):
                 self.hub.publish("overlay", self.overlay.state())
@@ -1485,8 +1495,8 @@ class Service:
         return bool(self.window and self.window.set_chrome(*self.chrome))
 
     def set_view(self, view: str) -> None:
-        """main（主畫面）/ settings（設定）/ subtitle（字幕列）/ wizard（第一次設定）。"""
-        if view not in ("main", "settings", "subtitle", "wizard"):
+        """main（主畫面）/ settings（設定）/ wizard（第一次設定）。"""
+        if view not in ("main", "settings", "wizard"):
             return
         previous, self.view = self.view, view
         if self.window:

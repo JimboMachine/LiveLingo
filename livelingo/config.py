@@ -52,6 +52,9 @@ DEFAULTS = {
     "layout": 2,                 # 2 = 左邊有固定導覽的版面（2.3.0 起）；舊設定檔沒有這個值
     "overlay": True,             # 浮動留言：翻譯像實況聊天室一樣直接顯示在遊戲畫面上
     "overlay_rect": None,        # 浮動留言的位置和大小 [x, y, 寬, 高]，None = 預設位置
+    "overlay_form": "float",     # 顯示在畫面上的樣子：float 浮動留言（位置自己擺）/ bar 底部字幕條（位置自動）
+    "overlay_monitor": 0,        # 顯示在第幾個螢幕（oswin.monitors() 的順序，0 = 主螢幕）
+    "overlay_layouts": [],       # 自己存的版面：[{"name","look":{外觀},"rect","form","monitor"}]，最多 MAX_LAYOUTS 組
     "overlay_font": 24,          # 字體大小
     "overlay_seconds": 15,       # 一則留言停留幾秒，0 = 不會自己消失
     "overlay_backdrop": 0,       # 字後面的深色底有多不透明（0 到 80），0 = 只有描邊
@@ -78,13 +81,16 @@ DEFAULTS = {
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
-            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
+            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
 MAX_REGIONS = 6
-OVERLAY_LOOK = tuple(k for k in DEFAULTS if k.startswith("overlay_") and k != "overlay_rect")      # 「恢復預設外觀」會還原的項目
+MAX_LAYOUTS = 5
+OVERLAY_FORMS = ("float", "bar")
+OVERLAY_LOOK = tuple(k for k in DEFAULTS if k.startswith("overlay_")
+                     and k not in ("overlay_rect", "overlay_form", "overlay_monitor", "overlay_layouts"))      # 「恢復預設外觀」會還原的項目
 
 
 def system_ui_lang() -> str:

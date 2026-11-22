@@ -159,6 +159,51 @@ def work_area() -> tuple[int, int, int, int]:
     return 0, 0, 1920, 1040
 
 
+def monitors() -> list[dict]:
+    """
+    接著的每一個螢幕：[{"left","top","width","height","work":[左,上,寬,高]（扣掉工作列）,"primary"}]，
+    主螢幕排第一個，其他的由左到右。測試用：LIVELINGO_FAKE_MONITORS="0,0,1920,1080;1920,0,2560,1440"。
+    """
+    import os
+
+    fake = os.environ.get("LIVELINGO_FAKE_MONITORS")
+    found: list[dict] = []
+    if fake is not None:
+        for n, part in enumerate(p for p in fake.split(";") if p.strip()):
+            left, top, width, height = (int(v) for v in part.split(","))
+            found.append({"left": left, "top": top, "width": width, "height": height,
+                          "work": [left, top, width, height - 40], "primary": n == 0})
+    elif IS_WIN:
+        import ctypes
+        from ctypes import wintypes
+
+        class Info(ctypes.Structure):
+            _fields_ = [("size", wintypes.DWORD), ("monitor", wintypes.RECT), ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
+
+        u32 = ctypes.windll.user32
+        u32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(Info)]
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
+        def each(handle, _dc, _rect, _lparam):
+            info = Info()
+            info.size = ctypes.sizeof(Info)
+            if u32.GetMonitorInfoW(handle, ctypes.byref(info)):
+                m, w = info.monitor, info.work
+                found.append({"left": m.left, "top": m.top, "width": m.right - m.left, "height": m.bottom - m.top,
+                              "work": [w.left, w.top, w.right - w.left, w.bottom - w.top], "primary": bool(info.flags & 1)})
+            return True
+
+        try:
+            u32.EnumDisplayMonitors(None, None, each, 0)
+        except Exception:  # noqa: BLE001
+            found = []
+    if not found:
+        left, top, width, height = work_area()
+        found = [{"left": 0, "top": 0, "width": max(width, 640), "height": max(height + 40, 480),
+                  "work": [left, top, width, height], "primary": True}]
+    return sorted(found, key=lambda m: (not m["primary"], m["left"], m["top"]))
+
+
 def has_webview2() -> bool:
     """這台電腦有沒有 WebView2（Windows 11 內建，Windows 10 幾乎都有）。沒有的話改用 Edge 開介面。"""
     if not IS_WIN:

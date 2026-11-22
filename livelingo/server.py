@@ -99,6 +99,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.apps_state())
+                if url.path == "/api/screens":      # 接著哪些螢幕、留言現在在哪（設定頁的縮小螢幕圖）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.overlay.screens())
                 if url.path == "/api/overlay_preview":      # 設定畫面上的浮動留言預覽（照現在的設定畫的一張圖）
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -237,6 +241,17 @@ class Server:
                         if body.get("reset_look"):      # 恢復預設外觀（位置不動）
                             result = service.update_config({k: DEFAULTS[k] for k in OVERLAY_LOOK})
                             return self._json({"ok": True, **result, **service.overlay.state()})
+                        if "rect" in body:      # 設定頁的螢幕圖上拖方框（final：放開了，這才存）
+                            return self._json({**service.overlay.place(body.get("rect"), bool(body.get("final", True))),
+                                               **{k: v for k, v in service.overlay.state().items() if k != "rect"}})
+                        if "monitor" in body:      # 換一個螢幕顯示
+                            return self._json({**service.overlay.choose_monitor(body.get("monitor")), "editing": service.overlay.editing})
+                        if "layout_save" in body:      # 自己存的版面：存、套用、刪
+                            return self._json(service.overlay.save_layout(body.get("layout_save")))
+                        if "layout" in body:
+                            return self._json(service.overlay.apply_layout(body.get("layout")))
+                        if "layout_remove" in body:
+                            return self._json(service.overlay.remove_layout(body.get("layout_remove")))
                         if body.get("test"):
                             threading.Thread(target=service.overlay.test, daemon=True).start()
                         return self._json({"ok": True, **service.overlay.state()})

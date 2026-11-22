@@ -1905,3 +1905,139 @@ def test_child_processes_get_all_three_handles():
             if "stdin" not in given or not ("capture_output" in given or {"stdout", "stderr"} <= given):
                 missing.append(f"{path.relative_to(root)}:{node.lineno}")
     assert not missing, missing
+
+
+def test_display_mode_screens_and_saved_layouts(tmp_path, monkeypatch):
+    """
+    顯示方式三選一（浮在畫面上、底部字幕條、只在視窗裡）共用同一組外觀；可以選螢幕；螢幕配置變了、
+    留言跑到看不見的地方會自動拉回來；設定頁的螢幕圖可以直接擺位置；現在的樣子可以存成自己的版面。
+    """
+    from pathlib import Path
+
+    from livelingo import chatpaint, overlay, oswin
+    from livelingo.config import DEFAULTS, EDITABLE, MAX_LAYOUTS, OVERLAY_LOOK
+    from livelingo.service import Service
+
+    two = "0,0,1920,1080;1920,0,2560,1440"
+    monkeypatch.setenv("LIVELINGO_FAKE_MONITORS", two)
+    screens = oswin.monitors()
+    assert [(m["left"], m["width"], m["primary"]) for m in screens] == [(0, 1920, True), (1920, 2560, False)]
+    assert screens[0]["work"] == [0, 0, 1920, 1040]
+
+    # ---- 位置的計算
+    assert overlay.fit_rect([100, 100, 400, 200], screens) == [100, 100, 400, 200]            # 看得到：不動
+    assert overlay.fit_rect([1800, 100, 400, 200], screens) == [1800, 100, 400, 200]          # 跨兩個螢幕也算看得到
+    assert overlay.fit_rect([5000, 100, 400, 200], screens) == [1520, 100, 400, 200]          # 完全在外面：回主螢幕靠近的那一邊
+    assert overlay.fit_rect([4400, 1300, 400, 300], screens) == [4080, 1100, 400, 300]        # 大半在外面：推回那個螢幕裡
+    assert overlay.fit_rect([-3000, -3000, 9000, 9000], screens[:1]) == [0, 0, 1920, 1040]    # 比螢幕還大：縮到放得下
+    assert overlay.monitor_of([2000, 50, 300, 200], screens) == 1 and overlay.monitor_of([9000, 9000, 10, 10], screens) == 0
+    moved = overlay.move_to_monitor([960, 520, 400, 200], screens[0], screens[1])
+    assert moved == [1920 + 1280, 700, 400, 200]                                               # 同樣的相對位置（正中間偏下）
+    bar = overlay.bar_rect(screens[1], 30)
+    assert abs((bar[0] + bar[2] / 2) - (1920 + 1280)) <= 1 and bar[1] + bar[3] <= 1400 and bar[1] > 1000
+    assert overlay.monitor_at(7, screens) is screens[0] and overlay.monitor_at("x", screens) is screens[0]
+    assert not {"overlay_rect", "overlay_form", "overlay_monitor", "overlay_layouts"} & set(OVERLAY_LOOK)
+    assert {"overlay_form", "overlay_monitor"} <= EDITABLE and "overlay_layouts" not in EDITABLE
+
+    service = Service(tmp_path)
+    notices, events = [], []
+    service.notice = lambda code, **kw: notices.append(code)
+    service.hub.publish = lambda name, data=None: events.append((name, data))
+    ov = service.overlay
+    ov.window_class = overlay.MemoryWindow
+    service.cfg.set(overlay=True, overlay_rect=[2500, 300, 500, 260], overlay_monitor=1)
+    ov.apply()
+    try:
+        assert ov.running and ov.rect == [2500, 300, 500, 260]
+        assert ov.screens()["monitor"] == 1 and len(ov.screens()["monitors"]) == 2 and ov.screens()["form"] == "float"
+
+        # ---- 第二個螢幕拔掉了：拉回主螢幕、存起來、通知一次
+        assert ov.check_screens() is False                                                     # 第一次只是記下現在的配置
+        monkeypatch.setenv("LIVELINGO_FAKE_MONITORS", "0,0,1920,1080")
+        assert ov.check_screens() is True
+        assert ov.rect == [1420, 300, 500, 260] and service.cfg["overlay_rect"] == ov.rect and service.cfg["overlay_monitor"] == 0
+        assert notices == ["overlay_pulled_back"]
+        assert ov.check_screens() is False and notices == ["overlay_pulled_back"]              # 沒再變就不會一直通知
+        monkeypatch.setenv("LIVELINGO_FAKE_MONITORS", two)
+        assert ov.check_screens() is False and ov.rect == [1420, 300, 500, 260]                # 螢幕接回來：位置本來就看得到，不動
+
+        # ---- 設定頁的螢幕圖：拖的時候直接搬，放開才存
+        events.clear()
+        result = ov.place([2100, 200, 600, 300], final=False)
+        assert result["ok"] and not result["saved"] and ov.rect == [2100, 200, 600, 300]
+        assert service.cfg["overlay_rect"] == [1420, 300, 500, 260] and not events
+        result = ov.place([2200, 250, 10, 10], final=True)                                     # 太小的會放大到最小尺寸
+        assert result["saved"] and ov.rect == [2200, 250, *overlay.MIN_SIZE] == service.cfg["overlay_rect"]
+        assert service.cfg["overlay_monitor"] == 1 and ("saved", {"what": "overlay_map"}) in events
+        assert ov.place([9999, 9999, 400, 200])["rect"] == [1520, 840, 400, 200]               # 拖到螢幕外：推回來
+        assert ov.place("junk") == {"ok": False} and ov.place([1, 2, 3]) == {"ok": False}
+        assert Config(tmp_path)["overlay_rect"] == [1520, 840, 400, 200]
+
+        # ---- 換螢幕：浮動留言搬到另一個螢幕上同樣的相對位置
+        ov.place([960, 520, 400, 200])
+        result = ov.choose_monitor(1)
+        assert result["saved"] and ov.rect == [1920 + 1280, 700, 400, 200] and service.cfg["overlay_monitor"] == 1
+        assert ov.choose_monitor(5) == {"ok": False}
+
+        # ---- 底部字幕條：位置自動、置中兩句、不能拖；外觀照同一組設定
+        seen = {}
+        compose = chatpaint.compose
+        monkeypatch.setattr(chatpaint, "compose", lambda tiles, size, **kw: (seen.update(kw, size=size), compose(tiles, size, **kw))[1])
+        service.update_config({"overlay_color": "#FFAA00", "overlay_align": "right", "overlay_lines": 6})
+        result = service.update_config({"overlay_form": "bar"})
+        assert result["saved"] and ov.bar and ov.rect == overlay.bar_rect(screens[1], service.cfg["overlay_font"])
+        ov.push("heard", "你好")
+        ov._last = None
+        assert ov.frame()[0] is not None
+        assert seen["grow"] == "up" and seen["lines"] == 2 and seen["size"] == (ov.rect[2], ov.rect[3])
+        assert service.cfg["overlay_align"] == "right" and service.cfg["overlay_lines"] == 6      # 自己的設定沒有被改掉
+        ov.set_edit(True)
+        assert not ov.editing
+        assert ov.place([10, 10, 400, 200])["ok"] is False                                      # 字幕條不能擺
+        ov.choose_monitor(0)
+        assert ov.rect == overlay.bar_rect(screens[0], service.cfg["overlay_font"])
+        service.update_config({"overlay_font": 40})                                             # 字變大，字幕條跟著變高
+        assert ov.rect == overlay.bar_rect(screens[0], 40) and ov.rect[3] > overlay.bar_rect(screens[0], 24)[3]
+        assert service.update_config({"overlay_form": "sideways", "overlay_monitor": "x"})["changed"] == []
+        assert service.update_config({"overlay_monitor": 99})["saved"] and service.cfg["overlay_monitor"] == 15
+
+        # ---- 自己存的版面：存、蓋掉同名的、套用、最多幾組、刪
+        service.update_config({"overlay_monitor": 0})
+        assert ov.save_layout("  ") == {"ok": False, "error": "name"}
+        assert ov.save_layout(" 看  影片 ")["index"] == 0 and service.cfg["overlay_layouts"][0]["name"] == "看 影片"
+        service.update_config({"overlay_form": "float", "overlay_color": "#00FF00", "overlay_font": 20})
+        ov.place([300, 400, 500, 250])
+        assert ov.save_layout("打遊戲")["index"] == 1
+        result = ov.apply_layout(0)
+        assert result["saved"] and (service.cfg["overlay_form"], service.cfg["overlay_color"], service.cfg["overlay_font"]) == ("bar", "#FFAA00", 40)
+        assert ov.rect == overlay.bar_rect(screens[0], 40)
+        ov.apply_layout(1)
+        assert (service.cfg["overlay_form"], service.cfg["overlay_color"], service.cfg["overlay_font"]) == ("float", "#00FF00", 20)
+        assert ov.rect == [300, 400, 500, 250] == service.cfg["overlay_rect"]
+        service.update_config({"overlay_color": "#123456"})
+        assert ov.save_layout("打遊戲")["index"] == 1 and len(service.cfg["overlay_layouts"]) == 2      # 同名：蓋掉
+        assert service.cfg["overlay_layouts"][1]["look"]["overlay_color"] == "#123456"
+        for n in range(MAX_LAYOUTS - 2):
+            assert ov.save_layout(f"第 {n} 組")["ok"]
+        assert ov.save_layout("再一組") == {"ok": False, "error": "full"}
+        assert ov.remove_layout(0)["saved"] and service.cfg["overlay_layouts"][0]["name"] == "打遊戲"
+        assert ov.remove_layout(40) == {"ok": False} and ov.apply_layout("x") == {"ok": False}
+        assert len(Config(tmp_path)["overlay_layouts"]) == MAX_LAYOUTS - 1
+
+        # ---- 只在視窗裡：畫面上的東西收掉；一鍵版面一律回到浮動留言
+        service.update_config({"overlay": False})
+        assert not ov.running
+        service.update_config({"overlay": True, "overlay_form": "bar"})
+        assert ov.running and ov.bar
+        ov.apply_preset("quiet")
+        assert service.cfg["overlay_form"] == "float" and ov.rect == service.cfg["overlay_rect"] == overlay.preset_rect("quiet", screens[0])
+    finally:
+        ov.stop()
+
+    # ---- 舊的「字幕列」畫面拿掉了（併進顯示方式），不會留下進得去的入口
+    service.set_view("subtitle")
+    assert service.view != "subtitle"
+    ui = Path(__file__).resolve().parents[1] / "livelingo" / "ui"
+    for name in ("index.html", "app.js", "style.css"):
+        assert "view-subtitle" not in (ui / name).read_text(encoding="utf-8"), name
+    assert DEFAULTS["overlay_form"] == "float" and DEFAULTS["overlay_layouts"] == []

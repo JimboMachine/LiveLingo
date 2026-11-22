@@ -14,7 +14,6 @@ from . import oswin
 
 MAIN_MIN = (380, 150)
 SETTINGS_SIZE = (900, 800)
-SUBTITLE_SIZE = (900, 150)
 NORMAL_VIEWS = ("main", "settings")      # 這兩個畫面共用同一個視窗大小
 
 
@@ -27,7 +26,6 @@ class WindowCtl:
         self.win = win
         self.service = service
         self.main_geom = None       # 離開主畫面時記住的大小和位置
-        self.subtitle_pos = None
 
     def _safe(self, fn, *args):
         try:
@@ -57,7 +55,7 @@ class WindowCtl:
     def focus(self) -> None:
         self.restore()
         self._safe(self.win.show)
-        if not self.service.cfg["on_top"] and self.service.view != "subtitle":
+        if not self.service.cfg["on_top"]:
             self.set_on_top(True)       # 先置頂再取消，視窗才會真的跑到最前面
             self.set_on_top(False)
 
@@ -71,29 +69,18 @@ class WindowCtl:
             return 0, 0, 1920, 1080
 
     def apply_view(self, view: str, previous: str) -> None:
-        """對話和設定用同一個視窗大小，切換時不動；只有字幕列和第一次設定會改大小。"""
+        """對話和設定用同一個視窗大小，切換時不動；只有第一次設定會改大小。"""
         geom = self.geometry()
         if previous in NORMAL_VIEWS and view not in NORMAL_VIEWS and geom:
             self.main_geom = geom
-        if previous == "subtitle" and geom:
-            self.subtitle_pos = (geom[2], geom[3])
         sx, sy, sw, sh = self._screen()
-        if view == "subtitle":
-            w, h = min(SUBTITLE_SIZE[0], sw - 80), SUBTITLE_SIZE[1]
-            x, y = self.subtitle_pos or (sx + (sw - w) // 2, sy + sh - h - 110)
-            self._safe(self.win.resize, w, h)
-            self._safe(self.win.move, x, y)
-            self.set_on_top(True)
-            return
-        if previous == "subtitle":
-            self.set_on_top(self.service.cfg["on_top"])
         if view == "wizard":
             w, h = min(SETTINGS_SIZE[0], sw - 40), min(SETTINGS_SIZE[1], sh - 80)
             self._safe(self.win.resize, w, h)
             if geom:      # 變寬之後如果超出螢幕，往左移回來
                 x = min(geom[2], sx + sw - w - 10)
                 y = min(geom[3], sy + sh - h - 50)
-                if (x, y) != (geom[2], geom[3]) or previous == "subtitle":
+                if (x, y) != (geom[2], geom[3]):
                     self._safe(self.win.move, max(sx, x), max(sy, y))
         elif previous not in NORMAL_VIEWS and self.main_geom:
             w, h, x, y = self.main_geom
