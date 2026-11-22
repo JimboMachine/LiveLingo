@@ -605,6 +605,7 @@
       <section><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
       <section><h2>${esc(t("window_title"))}</h2>
         ${S.canWindow ? switchRow("on_top", t("on_top")) : ""}
+        ${S.canWindow ? switchRow("close_to_tray", t("close_to_tray"), t("close_to_tray_desc")) : ""}
         ${switchRow("show_pronunciation", t("show_pron"))}
         ${switchRow("copy_spoken", t("copy_spoken"))}
       </section>

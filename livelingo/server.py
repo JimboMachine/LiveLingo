@@ -199,6 +199,10 @@ class Server:
                             threading.Thread(target=service.choose_transcript_dir, daemon=True).start()
                             return self._json({"ok": True})
                         return self._json({"ok": True, **service.record_state()})
+                    if route == "/api/exit":
+                        self._json({"ok": True})
+                        threading.Thread(target=service.on_quit, daemon=True).start()
+                        return None
                     if route == "/api/chrome":
                         return self._json({"ok": service.set_chrome(str(body.get("caption")), str(body.get("text")), bool(body.get("dark")))})
                     if route == "/api/view":

@@ -24,6 +24,7 @@ from .overlay import Overlay
 from .paths import self_command
 from .terms import TermPack
 from .transcript import Transcript
+from .tray import Tray
 
 VOICE_KIND = {"listen": "loopback", "mic": "mic"}
 SOURCE_OF = {"loopback": "listen", "mic": "mic"}
@@ -135,6 +136,7 @@ class Service:
         self.closing = threading.Event()
         self._ids = itertools.count(1)
         self.transcript = Transcript()
+        self.tray = Tray(self)
         self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
         self._lock = threading.RLock()
         self._download_cancel = threading.Event()
@@ -574,7 +576,7 @@ class Service:
                     changes[key] = max(low, min(high, int(changes[key])))
                 except (TypeError, ValueError):
                     changes.pop(key)
-        for key in ("overlay", "overlay_original", "overlay_mine", "their_auto", "transcript_original"):
+        for key in ("overlay", "overlay_original", "overlay_mine", "their_auto", "transcript_original", "close_to_tray"):
             if key in changes:
                 changes[key] = bool(changes[key])
         before = self.cfg.snapshot()
@@ -1041,6 +1043,7 @@ class Service:
     def shutdown(self) -> None:
         if self.closing.is_set():
             return
+        self.tray.stop()
         if self.transcript.on:      # 記錄到一半就關程式：先存起來，不要弄丟
             try:
                 self.transcript.stop(self.transcript_dir(), self.cfg["ui_lang"], bool(self.cfg["transcript_original"]))

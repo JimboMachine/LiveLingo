@@ -15,6 +15,8 @@ DEFAULTS = {
     "their_auto": False,         # 自動偵測對方用的語言
     "transcript_dir": "",        # 字幕記錄存在哪個資料夾（空的：文件\\LiveLingo）
     "transcript_original": True, # 字幕記錄裡同時留原文
+    "close_to_tray": True,       # 關掉視窗時收到系統匣，不結束程式
+    "tray_hint_shown": False,    # 第一次收到系統匣時提醒過了沒
     "tone": "casual",            # casual = 朋友語氣（韓文半語）；polite = 有禮貌
     "quality": "auto",           # auto = 照顯示卡自動決定；standard；high
     "game_terms": True,          # 內建的遊戲用語表（英雄聯盟，韓文和中文之間）
@@ -51,7 +53,7 @@ DEFAULTS = {
 # 介面可以改的設定（其他的只能直接改檔案）
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
-EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "tone", "quality", "game_terms", "speaker_device", "speaker_name",
+EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine"}
 

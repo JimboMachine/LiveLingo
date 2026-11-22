@@ -17,7 +17,7 @@ from pathlib import Path
 
 def run(out: Path, window: bool = True) -> int:
     results: dict = {}
-    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
+    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
 
     def check(name, fn):
         started = time.time()
@@ -263,6 +263,16 @@ def run(out: Path, window: bool = True) -> int:
     check("mic_capture", mic_capture)
     check("screen_grab", screen_grab)
     check("floating_chat", floating_chat)
+
+    def tray():
+        if sys.platform != "win32":
+            return
+        ok = state["service"].tray.start()
+        assert ok, state["service"].tray.error
+        time.sleep(1.0)
+        assert state["service"].tray.running
+
+    check("tray", tray)
     check("gpu", gpu_detect)
     if "--online" in sys.argv:
         check("engine_online", engine_online)

@@ -166,6 +166,16 @@ def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event 
 
         def closing():
             ctl.save_geometry()
+            # 關閉視窗時收到系統匣（可以在設定關掉）；真的要結束（系統匣的「結束」、更新、另一個地方要求離開）就照常關
+            if service.cfg["close_to_tray"] and service.tray.running and not quit_event.is_set():
+                try:
+                    win.hide()
+                except Exception as ex:  # noqa: BLE001
+                    service.log(f"hide to tray failed: {ex!r}")
+                    return None
+                service.tray.notify_hidden()
+                return False
+            return None
 
         def watch():
             # 程式需要自己結束時（更新、另一個地方要求離開），把視窗關掉
