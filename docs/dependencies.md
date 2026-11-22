@@ -71,11 +71,11 @@
 
 ### 改浮動留言的長相
 
-1. `config.py`：浮動留言的設定
-2. `service.py`：改了之後馬上重畫
+1. `config.py`：浮動留言的設定（overlay_…）
+2. `service.py`、`server.py`：檢查允許的值、改了之後馬上重畫、預覽圖
 3. `chatpaint.py`：字型、顏色、描邊、換行
 4. `overlay.py`：位置、大小、淡出
-5. `app.js`、`i18n.js`：設定畫面和預覽
+5. `app.js`、`i18n.js`、`style.css`：設定畫面的控制項和預覽
 6. `selftest.py`、`build.yml`：截圖
 
 自動把關：測試會把留言畫出來比大小。真的蓋在畫面上的樣子要看自動打包附的截圖。
@@ -203,7 +203,7 @@
 | 視窗 | `livelingo/window.py` | `__main__.py`：開視窗（改壞會報錯） |
 | 系統匣 | `livelingo/tray.py` | `window.py`：系統匣有沒有開起來（改壞不會報錯）<br>`service.py`：系統匣（改壞會報錯） |
 | 浮動留言 | `livelingo/overlay.py` | `service.py`：浮動留言（改壞會報錯） |
-| 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES）（改壞會報錯） |
+| 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯） |
 | 框選聊天區 | `livelingo/region.py` | `__main__.py`：框選模式（改壞會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
 | 字幕記錄 | `livelingo/transcript.py` | `service.py`：字幕記錄（改壞會報錯） |
 
@@ -214,7 +214,7 @@
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
 | 主體 | `livelingo/service.py` | `app.js`：事件名稱、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯） |
-| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：浮動留言的設定（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
+| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：浮動留言的設定（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
 

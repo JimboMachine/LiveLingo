@@ -930,3 +930,57 @@ def test_settings_really_save(tmp_path):
     events.clear()
     service.overlay.reset_position()
     assert ("saved", {"what": "overlay_rect"}) in events
+
+
+def test_floating_chat_look(tmp_path):
+    """浮動留言的外觀設定：不合法的值進不來、每一項真的會改變畫出來的圖、可以一次恢復預設。"""
+    import io
+
+    from PIL import Image
+
+    from livelingo import chatpaint
+    from livelingo.config import DEFAULTS, OVERLAY_LOOK
+    from livelingo.service import Service
+
+    service = Service(tmp_path)
+    service.hub.publish = lambda name, data: None
+    assert chatpaint.style_of(service.cfg) == chatpaint.DEFAULT_STYLE      # 兩邊的預設值是同一套
+
+    result = service.update_config({"overlay_family": "comic", "overlay_align": "middle", "overlay_grow": "sideways",
+                                    "overlay_color": "red", "overlay_outline": 99, "overlay_opacity": 5, "overlay_lines": -3,
+                                    "overlay_name_colors": {"heard": "#ff0000", "nobody": "#00ff00", "me": "blue"}})
+    assert result["changed"] == ["overlay_name_colors", "overlay_opacity", "overlay_outline"]
+    cfg = service.cfg
+    assert (cfg["overlay_family"], cfg["overlay_align"], cfg["overlay_grow"], cfg["overlay_color"]) == ("sans", "left", "up", "#FFFFFF")
+    assert (cfg["overlay_outline"], cfg["overlay_opacity"], cfg["overlay_lines"]) == (4, 30, 0)
+    assert cfg["overlay_name_colors"] == {"heard": "#FF0000", "screen": "#FFC45C", "me": "#5CDEFF"}      # 只改送來而且合法的那一個
+    assert Config(tmp_path)["overlay_name_colors"]["heard"] == "#FF0000"
+
+    def tile(**style):
+        return chatpaint.paint_message("heard", "對方", "打野來一下下路 OK", 420, 26, style=style)
+
+    plain = tile()
+    assert plain.tobytes() == chatpaint.paint_message("heard", "對方", "打野來一下下路 OK", 420, 26).tobytes()
+    for change in ({"color": "#FFE98A"}, {"outline": 0}, {"outline": 4}, {"names": False}, {"align": "right"}, {"align": "center"},
+                   {"name_colors": {"heard": "#FF0000"}}):
+        assert tile(**change).tobytes() != plain.tobytes(), change
+    assert tile(names=False).getbbox()[2] < plain.getbbox()[2]                     # 不顯示名字就短一截
+    assert tile(align="right").getbbox()[0] > plain.getbbox()[0] + 100             # 靠右真的在右邊
+    assert tile(color="nonsense", family="comic", outline="x").size == plain.size   # 亂七八糟的值不會讓畫面壞掉
+
+    tall = Image.new("RGBA", (200, 40), (255, 255, 255, 255))
+    up = chatpaint.compose([(tall, 1.0)], (200, 200))
+    down = chatpaint.compose([(tall, 1.0)], (200, 200), grow="down")
+    assert up.getbbox() == (0, 160, 200, 200) and down.getbbox() == (0, 0, 200, 40)
+    assert chatpaint.compose([(tall, 1.0)] * 5, (200, 400), lines=2).getbbox() == (0, 320, 200, 400)
+    assert chatpaint.compose([(tall, 1.0)] * 9, (200, 100), grow="down").getbbox() == (0, 0, 200, 80)      # 放不下：舊的讓位
+    assert chatpaint.compose([(tall, 1.0)], (200, 200), opacity=50).getpixel((10, 180))[3] in range(120, 135)
+
+    service.update_config({"overlay_family": "serif", "overlay_align": "right", "overlay_grow": "down", "overlay_color": "#ffe98a"})
+    assert service.cfg["overlay_color"] == "#FFE98A"
+    before = service.overlay_preview()
+    picture = Image.open(io.BytesIO(before))
+    assert picture.format == "PNG" and picture.size == (640, 230)
+    service.update_config({k: DEFAULTS[k] for k in OVERLAY_LOOK})                  # 「恢復預設外觀」送的就是這個
+    assert chatpaint.style_of(service.cfg) == chatpaint.DEFAULT_STYLE and service.cfg["overlay_font"] == DEFAULTS["overlay_font"]
+    assert service.overlay_preview() != before

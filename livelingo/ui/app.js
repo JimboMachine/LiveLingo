@@ -58,7 +58,8 @@
     ui_lang: '[data-act="ui-lang"][aria-pressed="true"]', tone: '[data-act="tone"][aria-pressed="true"]',
     quality: '[data-act="quality"][aria-pressed="true"]', my_lang: "#sel-my", their_lang: "#sel-their", their_auto: "#sel-their",
     speaker_device: '[data-act="device"][data-key="speaker"]', mic_device: '[data-act="device"][data-key="mic"]',
-    transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]'
+    transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]',
+    overlay_look: '[data-act="overlay-look-reset"]'
   };
   let savedTimer = null;
   function placeSaved() {      // 設定頁重畫之後也會再叫一次，回饋不會因為重畫就不見
@@ -66,8 +67,9 @@
     document.querySelectorAll(".just-saved").forEach((el) => el.classList.remove("just-saved"));
     if (!mark || Date.now() > mark.until) { chip.hidden = true; return; }
     const page = $("settings-page");
-    const el = S.view === "settings" && page.querySelector(SAVE_TARGET[mark.key] || `[data-key="${mark.key}"], [data-change="${mark.key}"]`);
-    const row = el && el.closest(".setting-row, .range-row, .field, .btn-row, .pills, .swatches");
+    const el = S.view === "settings" && (page.querySelector(mark.key[0] === "#" ? mark.key : SAVE_TARGET[mark.key] || `[data-key="${mark.key}"][aria-pressed="true"]`)
+      || page.querySelector(`[data-key="${mark.key}"], [data-change="${mark.key}"]`));
+    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches"));
     if (row) row.classList.add("just-saved");
     chip.hidden = false;
     if (el) {
@@ -585,8 +587,28 @@
   const RANGE_TEXT = {
     overlay_font: (v) => String(v),
     overlay_seconds: (v) => (v > 0 ? t("ov_seconds_value", { n: v }) : t("ov_forever")),
-    overlay_backdrop: (v) => (v > 0 ? v + "%" : t("ov_backdrop_none"))
+    overlay_backdrop: (v) => (v > 0 ? v + "%" : t("ov_backdrop_none")),
+    overlay_outline: (v) => (v > 0 ? String(v) : t("ov_outline_none")),
+    overlay_opacity: (v) => v + "%",
+    overlay_lines: (v) => (v > 0 ? t("ov_lines_value", { n: v }) : t("ov_lines_all"))
   };
+
+  const OV_COLORS = ["#FFFFFF", "#FFE98A", "#9FF5C9", "#9AD8FF", "#FFB3C7"];
+  function choiceRow(key, label, options) {      // 一列選項，一次只能選一個
+    return `<div class="setting-row choice"><div>${esc(label)}</div><div class="pills">${options.map(([value, text]) =>
+      `<button class="pill" data-act="set" data-key="${key}" data-value="${value}" aria-pressed="${String(S.cfg[key]) === value}">${esc(text)}</button>`).join("")}</div></div>`;
+  }
+  function colorRow() {
+    const now = String(S.cfg.overlay_color || "#FFFFFF").toUpperCase();
+    return `<div class="setting-row choice"><div>${esc(t("ov_color"))}</div><div class="swatches small">
+      ${OV_COLORS.map((c) => `<button class="swatch" data-act="set" data-key="overlay_color" data-value="${c}" style="--sw:${c}" aria-pressed="${now === c}" aria-label="${esc(t("ov_color"))} ${c}"></button>`).join("")}
+      <label class="color-pick" title="${esc(t("ov_color_custom"))}"><input type="color" id="col-overlay_color" data-change="overlay_color" data-live="overlay_color" value="${esc(now)}" aria-label="${esc(t("ov_color_custom"))}"></label></div></div>`;
+  }
+  function nameColorsRow() {
+    const colors = S.cfg.overlay_name_colors || {};
+    return `<div class="setting-row choice"><div>${esc(t("ov_name_colors"))}</div><div class="name-colors">
+      ${["heard", "screen", "me"].map((who) => `<label class="color-pick"><input type="color" id="col-name-${who}" data-change="overlay_name_colors" data-sub="${who}" data-live="overlay_name_colors" value="${esc(colors[who] || "#FFFFFF")}"><span>${esc(t("ov_name_" + who))}</span></label>`).join("")}</div></div>`;
+  }
 
   function overlayPage() {
     const on = !!S.cfg.overlay;
@@ -602,13 +624,44 @@
         </div>
         <div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>
       </section>
-      <section><h2>${esc(t("ov_look"))}</h2>
+      <figure class="ov-preview"><img id="ov-preview" alt="${esc(t("ov_preview"))}" ${S.ui.preview ? `src="${S.ui.preview}"` : ""}>
+        <figcaption>${esc(t("ov_preview"))}</figcaption></figure>
+      <section><h2>${esc(t("ov_text_title"))}</h2>
         ${rangeRow("overlay_font", t("ov_font"), 14, 60, 1, RANGE_TEXT.overlay_font)}
-        ${rangeRow("overlay_seconds", t("ov_seconds"), 0, 60, 1, RANGE_TEXT.overlay_seconds)}
+        ${choiceRow("overlay_family", t("ov_family"), [["sans", t("ov_family_sans")], ["serif", t("ov_family_serif")], ["kai", t("ov_family_kai")]])}
+        ${switchRow("overlay_bold", t("ov_bold"))}
+        ${colorRow()}
+        ${rangeRow("overlay_outline", t("ov_outline"), 0, 4, 1, RANGE_TEXT.overlay_outline)}
         ${rangeRow("overlay_backdrop", t("ov_backdrop"), 0, 80, 5, RANGE_TEXT.overlay_backdrop)}
+        ${rangeRow("overlay_opacity", t("ov_opacity"), 30, 100, 5, RANGE_TEXT.overlay_opacity)}
+      </section>
+      <section><h2>${esc(t("ov_names_title"))}</h2>
+        ${switchRow("overlay_names", t("ov_names"))}
+        ${nameColorsRow()}
+      </section>
+      <section><h2>${esc(t("ov_layout_title"))}</h2>
+        ${choiceRow("overlay_align", t("ov_align"), [["left", t("ov_align_left")], ["center", t("ov_align_center")], ["right", t("ov_align_right")]])}
+        ${choiceRow("overlay_grow", t("ov_grow"), [["up", t("ov_grow_up")], ["down", t("ov_grow_down")]])}
+        ${rangeRow("overlay_lines", t("ov_lines"), 0, 12, 1, RANGE_TEXT.overlay_lines)}
+        ${rangeRow("overlay_seconds", t("ov_seconds"), 0, 60, 1, RANGE_TEXT.overlay_seconds)}
         ${switchRow("overlay_original", t("ov_original"))}
         ${switchRow("overlay_mine", t("ov_mine"))}
-      </section>`;
+      </section>
+      <section><div class="btn-row"><button class="ghost" data-act="overlay-look-reset">${esc(t("ov_look_reset"))}</button></div></section>`;
+  }
+
+  let previewTurn = 0;
+  async function refreshPreview() {      // 浮動留言的預覽圖：照現在的設定重畫一張，載好了才換上去，不會閃
+    const turn = ++previewTurn;
+    try {
+      const r = await fetch("/api/overlay_preview", { headers: { "X-LiveLingo-Token": TOKEN } });
+      if (!r.ok || turn !== previewTurn) return;
+      const url = URL.createObjectURL(await r.blob());
+      if (S.ui.preview) URL.revokeObjectURL(S.ui.preview);
+      S.ui.preview = url;
+      const img = $("ov-preview");
+      if (img) img.src = url;
+    } catch (e) { /* 預覽只是輔助，載不到就維持上一張 */ }
   }
 
   function renderOverlayState() {
@@ -673,7 +726,7 @@
     const scroll = page.scrollTop;
     const active = page.contains(document.activeElement) ? document.activeElement : null;
     const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
-      ? `[data-act="${active.dataset.act}"]` + ["key", "code", "q", "tone", "id"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
+      ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "audio") page.innerHTML = devicesHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
@@ -688,6 +741,7 @@
     if (again && !again.disabled) again.focus({ preventScroll: true });
     paintLevels();
     placeSaved();
+    if (S.ui.tab === "overlay" && !S.ui.preview) refreshPreview();
   }
 
   function renderSettings() { renderRail(); renderSettingsPage(); }
@@ -700,6 +754,7 @@
     page.scrollTop = 0;
     page.classList.remove("in"); void page.offsetWidth; page.classList.add("in");      // 換頁的淡入
     if (tab === "audio") openDevices();
+    if (tab === "overlay") refreshPreview();
     else if (wasAudio) post("/api/meters", { on: false });
   }
 
@@ -946,6 +1001,8 @@
     quality: (el) => saveCfg({ quality: el.dataset.q }),
     tone: (el) => saveCfg({ tone: el.dataset.tone }),
     toggle: (el) => saveCfg({ [el.dataset.key]: !S.cfg[el.dataset.key] }),
+    set: (el) => saveCfg({ [el.dataset.key]: el.dataset.value }),
+    "overlay-look-reset": async () => { const r = await post("/api/overlay", { reset_look: true }); if (r.ok && r.saved) flashSaved("overlay_look"); },
     "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
     "find-dismiss": () => { S.ui.find = null; renderMicViews(); },
     record: () => { if (!S.record.saving) post("/api/record", { on: !S.record.on }); },
@@ -1006,22 +1063,27 @@
   });
 
   let liveTimer = null, livePatch = null;
+  function patchOf(el) {      // 一個控制項現在的值，寫成要送去存的樣子
+    const value = el.type === "range" ? Number(el.value) : el.value;
+    return { [el.dataset.change]: el.dataset.sub ? { [el.dataset.sub]: value } : value };
+  }
   document.addEventListener("input", (e) => {
     const key = e.target.dataset && e.target.dataset.range;
     const out = key && $("out-" + key);
     if (out) out.textContent = RANGE_TEXT[key](Number(e.target.value));
-    if (!key) return;
-    S.ui.live = key;      // 拖滑桿的時候就即時套用（浮動留言跟著變），這段期間設定頁不重畫，不然滑桿會被換掉
-    livePatch = { [key]: Number(e.target.value) };
+    const live = key || (e.target.dataset && e.target.dataset.live);
+    if (!live) return;
+    S.ui.live = live;      // 拖滑桿、挑顏色的時候就即時套用（浮動留言和預覽跟著變），這段期間設定頁不重畫，不然控制項會被換掉
+    livePatch = patchOf(e.target);
     if (!liveTimer) liveTimer = setTimeout(() => { liveTimer = null; if (livePatch) post("/api/config", livePatch); livePatch = null; }, 90);
   });
 
   document.addEventListener("change", (e) => {
     const key = e.target.dataset && e.target.dataset.change;
     if (!key) return;
-    if (e.target.dataset.range) {      // 放開滑桿：這才算存好
+    if (e.target.dataset.range || e.target.dataset.live) {      // 放開滑桿、選好顏色：這才算存好
       clearTimeout(liveTimer); liveTimer = null; livePatch = null; S.ui.live = null;
-      saveCfg({ [key]: Number(e.target.value) }, key);
+      saveCfg(patchOf(e.target), e.target.id ? "#" + e.target.id : key);
     } else if (key === "their_lang") saveCfg(e.target.value === "auto" ? { their_auto: true } : { their_lang: e.target.value, their_auto: false }, key);
     else saveCfg({ [key]: e.target.value }, key);
   });
@@ -1109,6 +1171,8 @@
       if (before.ui_lang !== cfg.ui_lang) { renderAll(); return; }
       renderLangs(); renderSources(); renderOverlayState();
       if (before.show_pronunciation !== cfg.show_pronunciation) renderMessages();
+      if (S.view === "settings" && S.ui.tab === "overlay"
+          && Object.keys(cfg).some((k) => (k.startsWith("overlay") || k.endsWith("_lang")) && JSON.stringify(before[k]) !== JSON.stringify(cfg[k]))) refreshPreview();
       if (S.view === "settings" && !S.ui.live) renderSettingsPage();
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },

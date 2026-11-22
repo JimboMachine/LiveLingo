@@ -516,15 +516,16 @@ class Overlay:
         return min(1.0, left / FADE_OUT)
 
     def _tile(self, item: dict, width: int, size: int, cfg: dict):
+        style = chatpaint.style_of(cfg)
         key = (item["key"], item["version"], width, size, cfg["overlay_original"], cfg["overlay_backdrop"],
-               cfg["ui_lang"], cfg["my_lang"], cfg["their_lang"])
+               cfg["ui_lang"], cfg["my_lang"], cfg["their_lang"], chatpaint.style_key(style))
         tile = self._tiles.get(key)
         if tile is None:
             names = chatpaint.NAMES.get(cfg["ui_lang"] or "en", chatpaint.NAMES["en"])
             original = item["original"] if cfg["overlay_original"] and item["original"] != item["text"] else ""
             tile = chatpaint.paint_message(item["kind"], names[item["kind"]], item["text"], width, size,
                                            original=original, backdrop=int(cfg["overlay_backdrop"]),
-                                           han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]))
+                                           han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]), style=style)
             if len(self._tiles) > 120:
                 self._tiles.clear()
             self._tiles[key] = tile
@@ -553,12 +554,14 @@ class Overlay:
         if life > 0 and items and not moving:
             wait = max(0.04, min(1.0, min(life - FADE_OUT - (now - i["at"]) for i in items)))
         signature = (tuple((i["key"], i["version"], round(a, 2)) for i, a in zip(items, alphas)), tuple(self.rect),
-                     size, self.editing, cfg["overlay_original"], cfg["overlay_backdrop"], cfg["ui_lang"])
+                     size, self.editing, cfg["overlay_original"], cfg["overlay_backdrop"], cfg["ui_lang"],
+                     chatpaint.style_key(chatpaint.style_of(cfg)))
         if signature == self._last:
             return None, wait
         self._last = signature
         tiles = [(self._tile(i, width, size, cfg), a) for i, a in zip(items, alphas)]
-        image = chatpaint.compose(tiles, (width, height))
+        image = chatpaint.compose(tiles, (width, height), grow=cfg["overlay_grow"], opacity=int(cfg["overlay_opacity"]),
+                                  lines=int(cfg["overlay_lines"]))
         if self.editing:
             image = chatpaint.edit_frame(image, cfg["ui_lang"] or "en", size)
         return image, wait

@@ -151,6 +151,17 @@ def run(out: Path, window: bool = True) -> int:
         frame = chatpaint.compose([(tile, 1.0)], (520, 160))
         assert tile.getchannel("A").getextrema()[1] == 255
         info = {"tile": list(tile.size), "fonts": {k: bool(chatpaint._font_path(k)) for k in ("cjk", "ko", "latin")}}
+        # 三種字型在這台電腦上真的畫出來的樣子（明體、楷體只有 Windows 有，存成圖讓人看得到）
+        from .config import DEFAULTS
+
+        info["families"] = {}
+        for family in chatpaint.FAMILIES:
+            look = dict(DEFAULTS, ui_lang="zh-TW", overlay_family=family, overlay_backdrop=0 if family == "sans" else 30)
+            info["families"][family] = Path(chatpaint._font_path("cjk", family, False) or "").name
+            try:
+                chatpaint.preview(look).save(out.with_name(f"floating-chat-look-{family}.png"))
+            except OSError:
+                pass
         if overlay.LayeredWindow is None:
             return info
         import ctypes

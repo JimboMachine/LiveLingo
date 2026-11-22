@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .config import DEFAULTS, OVERLAY_LOOK
 from .paths import resource_dir
 from .service import Service
 
@@ -94,6 +95,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.devices())
+                if url.path == "/api/overlay_preview":      # 設定畫面上的浮動留言預覽（照現在的設定畫的一張圖）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._send(200, service.overlay_preview(), "image/png")
                 if url.path == "/api/events":
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -213,6 +218,9 @@ class Server:
                             service.overlay.set_edit(bool(body.get("edit")))
                         if body.get("reset"):
                             service.overlay.reset_position()
+                        if body.get("reset_look"):      # 恢復預設外觀（位置不動）
+                            result = service.update_config({k: DEFAULTS[k] for k in OVERLAY_LOOK})
+                            return self._json({"ok": True, **result, **service.overlay.state()})
                         if body.get("test"):
                             threading.Thread(target=service.overlay.test, daemon=True).start()
                         return self._json({"ok": True, **service.overlay.state()})

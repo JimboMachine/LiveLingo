@@ -15,8 +15,8 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, assets, gpu, oswin, updater
-from .config import ACCENTS, DEFAULTS, EDITABLE, THEMES, UI_LANGS, Config, Glossary, Lessons
+from . import __version__, assets, chatpaint, gpu, oswin, updater
+from .config import ACCENTS, DEFAULTS, EDITABLE, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language
@@ -191,6 +191,14 @@ class Service:
     def notice(self, code: str, **params) -> None:
         """在介面上跳一則短訊息（代碼由介面翻成使用者選的語言）。"""
         self.hub.publish("notice", {"code": code, **params})
+
+    def overlay_preview(self) -> bytes:
+        """浮動留言照現在的設定會長什麼樣子（PNG）。"""
+        import io
+
+        out = io.BytesIO()
+        chatpaint.preview(self.cfg.snapshot()).save(out, "PNG")
+        return out.getvalue()
 
     def stored(self, what: str, ok: bool = True) -> None:
         """不是在設定畫面上直接改的東西（框選的範圍、浮動留言的位置、字幕資料夾）存好了：讓介面顯示「已儲存」。"""
@@ -577,7 +585,24 @@ class Service:
             changes.pop("tone")
         if changes.get("quality") not in (None, "auto", "standard", "high"):
             changes.pop("quality")
-        for key, low, high in (("overlay_font", 14, 60), ("overlay_seconds", 0, 120), ("overlay_backdrop", 0, 80)):
+        for key, allowed in (("overlay_family", chatpaint.FAMILIES), ("overlay_align", chatpaint.ALIGNS), ("overlay_grow", chatpaint.GROWS)):
+            if key in changes and changes[key] not in allowed:
+                changes.pop(key)
+        if "overlay_color" in changes:
+            color = str(changes["overlay_color"]).upper()
+            if re.fullmatch(r"#[0-9A-F]{6}", color):
+                changes["overlay_color"] = color
+            else:
+                changes.pop("overlay_color")
+        if "overlay_name_colors" in changes:      # 可以只送其中一個名字的顏色，其他的不動
+            sent = changes.pop("overlay_name_colors")
+            colors = dict(self.cfg["overlay_name_colors"])
+            for who, color in (sent.items() if isinstance(sent, dict) else ()):
+                if who in DEFAULTS["overlay_name_colors"] and re.fullmatch(r"#[0-9a-fA-F]{6}", str(color)):
+                    colors[who] = str(color).upper()
+            changes["overlay_name_colors"] = colors
+        for key, low, high in (("overlay_font", 14, 60), ("overlay_seconds", 0, 120), ("overlay_backdrop", 0, 80),
+                               ("overlay_outline", 0, 4), ("overlay_opacity", 30, 100), ("overlay_lines", 0, 12)):
             if key in changes:
                 try:
                     changes[key] = max(low, min(high, int(changes[key])))
@@ -602,8 +627,7 @@ class Service:
             self.translator.clear_cache()
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
-        if changed("overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
-                   "ui_lang", "my_lang", "their_lang"):
+        if changed("overlay", *OVERLAY_LOOK, "ui_lang", "my_lang", "their_lang"):
             self.overlay.apply()
             if changed("overlay"):
                 self.hub.publish("overlay", self.overlay.state())

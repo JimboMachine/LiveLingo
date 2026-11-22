@@ -43,6 +43,16 @@ DEFAULTS = {
     "overlay_backdrop": 0,       # 字後面的深色底有多不透明（0 到 80），0 = 只有描邊
     "overlay_original": False,   # 翻譯下面用小字顯示原文
     "overlay_mine": True,        # 我自己說的、打的也顯示
+    "overlay_family": "sans",    # 字型：sans 黑體 / serif 明體 / kai 楷體
+    "overlay_bold": True,        # 粗體
+    "overlay_color": "#FFFFFF",  # 字的顏色
+    "overlay_outline": 2,        # 描邊粗細，0（沒有）到 4
+    "overlay_names": True,       # 每則前面顯示是誰說的（對方／聊天／我）
+    "overlay_name_colors": {"heard": "#C494FF", "screen": "#FFC45C", "me": "#5CDEFF"},
+    "overlay_opacity": 100,      # 整體不透明度，30 到 100
+    "overlay_align": "left",     # 靠左 left / 置中 center / 靠右 right
+    "overlay_grow": "up",        # up = 最新的在最下面、舊的往上推；down = 從上面往下排
+    "overlay_lines": 0,          # 最多同時顯示幾則，0 = 放得下就顯示
     # ---- 進階，介面上沒有 ----
     "interval": 0.7,             # 每隔幾秒看一次螢幕
     "ocr_scale": 1.5,            # 辨識前先把畫面放大，小字比較準
@@ -56,7 +66,10 @@ THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
-            "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine"}
+            "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
+            "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
+            "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
+OVERLAY_LOOK = tuple(k for k in DEFAULTS if k.startswith("overlay_") and k != "overlay_rect")      # 「恢復預設外觀」會還原的項目
 
 
 def system_ui_lang() -> str:
