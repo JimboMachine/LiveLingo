@@ -99,6 +99,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.apps_state())
+                if url.path == "/api/health":      # 健康檢查：每一項一個燈
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.health())
                 if url.path == "/api/history":      # 對話歷史：q 搜尋的字、offset 從第幾則開始、limit 幾則（最新的在前）
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)

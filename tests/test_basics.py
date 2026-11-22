@@ -1775,22 +1775,25 @@ def test_several_named_screen_regions(tmp_path, monkeypatch):
             time.sleep(0.02)
         assert test()
 
+    # 框選是在背景做的；等到它整個做完（最後會送 region_done）再檢查，不然會剛好卡在「存了但還沒通知」中間
+    finished = lambda: sum(1 for name, _data in events if name == "region_done")      # noqa: E731
+
     # ---- 框第一個、再新增一個、重框指定的那一個
     frame(10, 20, 400, 200)
     service.select_region(then_enable=False)
-    wait(lambda: len(service.cfg["regions"]) == 1 and not service._selecting)
+    wait(lambda: len(service.cfg["regions"]) == 1 and not service._selecting and finished() == 1)
     frame(500, 20, 300, 200)
     service.select_region(then_enable=False, new=True)
-    wait(lambda: len(service.cfg["regions"]) == 2 and not service._selecting)
+    wait(lambda: len(service.cfg["regions"]) == 2 and not service._selecting and finished() == 2)
     assert [r["id"] for r in service.cfg["regions"]] == ["r1", "r2"] and all(r["on"] for r in service.cfg["regions"])
     assert ("saved", {"what": "region", "id": "r2"}) in events
     frame(520, 40, 320, 220)
     service.select_region(then_enable=False, rid="r2")
-    wait(lambda: service.cfg["regions"][1]["left"] == 520 and not service._selecting)
+    wait(lambda: service.cfg["regions"][1]["left"] == 520 and not service._selecting and finished() == 3)
     assert service.cfg["regions"][0]["left"] == 10 and len(service.cfg["regions"]) == 2
     frame(1, 1, 10, 10)                                   # 太小的框不收
     service.select_region(then_enable=False, new=True)
-    wait(lambda: "region_small" in notices and not service._selecting)
+    wait(lambda: "region_small" in notices and not service._selecting and finished() == 4)
     assert len(service.cfg["regions"]) == 2
 
     # ---- 介面只能改名字、開關、跟著哪個程式、刪除；位置大小改不了，亂送的會被擋掉
@@ -2334,3 +2337,147 @@ def test_monitor_list_is_safe_from_several_threads(monkeypatch):
         assert oswin._monitor_api() is oswin._monitor_api()
     source = open(oswin.__file__, encoding="utf-8").read()
     assert "ctypes.windll.user32.GetMonitorInfoW" not in source and "u32.GetMonitorInfoW.argtypes" not in source
+
+
+def test_health_check_lights(tmp_path, monkeypatch):
+    """
+    健康檢查：翻譯引擎、顯示卡、麥克風、耳機、聊天區、快速鍵、設定存檔各一個燈（綠 ok／黃 warn／紅 bad／灰 off），
+    每一種狀況在五種語言裡都有一句話，而且檢查本身不會打開麥克風、不會改設定。
+    """
+    import re
+    from pathlib import Path
+
+    from livelingo import hotkeys, oswin
+    from livelingo.config import UI_LANGS
+    from livelingo.service import Service
+
+    class Audio:
+        def __init__(self):
+            self.found = {"speakers": [{"id": "spk", "name": "耳機 (HyperX)", "default": True}],
+                          "microphones": [{"id": "mic1", "name": "麥克風 (HyperX)", "default": True},
+                                          {"id": "mic2", "name": "Webcam", "default": False}]}
+            self.opened = []
+
+        def devices(self):
+            if self.found is None:
+                raise RuntimeError("audio service is not running")
+            return self.found
+
+        def capture(self, *a, **kw):
+            self.opened.append(a)
+            raise AssertionError("the health check must not open a device")
+
+    monkeypatch.setattr(oswin, "mic_privacy_blocked", lambda: False)
+    audio = Audio()
+    service = Service(tmp_path, audio=audio)
+    service.hotkeys.backend = hotkeys.FakeBackend()
+    service.start_hotkeys()
+    before = service.cfg.snapshot()
+    light = lambda name: next(i for i in service.health()["items"] if i["id"] == name)      # noqa: E731
+    try:
+        first = service.health()
+        assert [i["id"] for i in first["items"]] == ["engine", "gpu", "mic", "listen", "screen", "hotkeys", "saving"]
+        assert all(i["state"] in ("ok", "warn", "bad", "off") and i["tab"] for i in first["items"])
+        # 剛開、引擎還沒好：黃燈；沒有顯示卡：黃燈；裝置找得到但沒在聽：綠燈（找到了）；沒框聊天區：灰燈
+        assert (light("engine")["state"], light("engine")["code"]) == ("warn", "engine_busy")
+        assert (light("gpu")["state"], light("gpu")["code"]) == ("warn", "gpu_none")
+        assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "麥克風 (HyperX)")
+        assert (light("listen")["code"], light("listen")["name"]) == ("listen_found", "耳機 (HyperX)")
+        assert (light("screen")["state"], light("screen")["code"]) == ("off", "screen_none")
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 4)
+        assert (light("saving")["state"], light("saving")["folder"]) == ("ok", str(tmp_path))
+        assert first["worst"] == "warn"
+
+        # 引擎
+        service.phase, service.mode = "ready", {"model": "12b", "engine": "gpu", "quality": "high"}
+        assert (light("engine")["state"], light("engine")["quality"], light("engine")["engine"]) == ("ok", "high", "gpu")
+        service.fallback = True
+        assert (light("engine")["state"], light("engine")["code"]) == ("warn", "engine_fallback")
+        service.fallback = False
+        service.phase, service.detail = "need_download", {"total_mb": 3100}
+        assert (light("engine")["state"], light("engine")["mb"]) == ("bad", 3100)
+        service.phase, service.detail = "error", {"message": "llama-server exited"}
+        assert (light("engine")["state"], light("engine")["error"]) == ("bad", "llama-server exited")
+        assert service.health()["worst"] == "bad"
+        service.phase = "ready"
+        # 顯示卡
+        service.gpu = {"name": "RTX 4070", "vram_mb": 12288, "tier": "high"}
+        assert (light("gpu")["state"], light("gpu")["gb"]) == ("ok", 12.0)
+        service.gpu = {"name": "GTX 1650", "vram_mb": 4096, "tier": "fast"}
+        assert (light("gpu")["state"], light("gpu")["code"]) == ("warn", "gpu_small")
+
+        # 麥克風
+        service.sources["mic"].update(on=True, device="麥克風 (HyperX)")
+        assert (light("mic")["state"], light("mic")["code"]) == ("ok", "mic_ok")
+        service.sources["mic"].update(quiet="silent")
+        assert (light("mic")["state"], light("mic")["code"]) == ("warn", "mic_silent")
+        service.sources["mic"].update(quiet="blocked")
+        assert (light("mic")["state"], light("mic")["code"]) == ("bad", "mic_blocked")
+        service.sources["mic"].update(quiet="", on=False, device="", error="device is busy")
+        assert (light("mic")["state"], light("mic")["error"]) == ("bad", "device is busy")
+        service.sources["mic"].update(error="")
+        service.cfg.set(mic_device="gone")
+        assert (light("mic")["state"], light("mic")["code"], light("mic")["name"]) == ("warn", "mic_missing", "麥克風 (HyperX)")
+        service.cfg.set(mic_device="mic2")
+        assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "Webcam")
+        monkeypatch.setattr(oswin, "mic_privacy_blocked", lambda: True)
+        assert light("mic")["code"] == "mic_blocked" and light("listen")["state"] == "ok"
+        monkeypatch.setattr(oswin, "mic_privacy_blocked", lambda: False)
+        audio.found = {"speakers": audio.found["speakers"], "microphones": []}
+        assert (light("mic")["state"], light("mic")["code"]) == ("bad", "mic_none")
+        # 耳機
+        service.cfg.set(listen_apps=["Discord.exe"])
+        service._apps_audio_off = True
+        assert (light("listen")["state"], light("listen")["code"]) == ("warn", "listen_apps_off")
+        service._apps_audio_off = False
+        audio.found = None
+        assert (light("mic")["code"], light("listen")["code"], light("listen")["state"]) == ("audio_error", "audio_error", "bad")
+        audio.found = {"speakers": [], "microphones": []}
+        assert light("listen")["code"] == "listen_none"
+        audio.found = Audio().found
+
+        # 聊天區
+        region = {"id": "r1", "name": "隊伍", "left": 0, "top": 0, "width": 300, "height": 200, "on": True, "app": "", "anchor": None}
+        service.cfg.set(regions=[region])
+        assert (light("screen")["state"], light("screen")["code"], light("screen")["n"]) == ("off", "screen_off", 1)
+        service.sources["screen"].update(on=True)
+        assert (light("screen")["state"], light("screen")["code"]) == ("ok", "screen_ok")
+        monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Discord.exe|Discord")      # 開著但沒有視窗位置 = 縮到最小
+        service.cfg.set(regions=[dict(region, app="League.exe", anchor=[0, 0])])
+        assert (light("screen")["state"], light("screen")["code"], light("screen")["name"]) == ("warn", "screen_closed", "League")
+        service.sources["screen"].update(error="screen capture failed")
+        assert light("screen")["state"] == "bad"
+        service.sources["screen"].update(error="", on=False)
+
+        # 快速鍵
+        service.hotkeys.backend.taken = {hotkeys.parse("Ctrl+Alt+C")}
+        service.hotkeys.set(service.cfg["hotkeys"])
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("warn", 1)
+        service.update_config({"hotkeys": {name: "" for name in hotkeys.ACTIONS}})
+        assert (light("hotkeys")["state"], light("hotkeys")["code"]) == ("off", "hotkeys_off")
+        # 設定存檔
+        service.cfg.error = "disk is full"
+        assert (light("saving")["state"], light("saving")["error"]) == ("bad", "disk is full")
+        service.cfg.error = ""
+        service.history.error = "access denied"
+        assert (light("saving")["state"], light("saving")["tab"]) == ("warn", "history")
+        service.history.error = ""
+        assert not audio.opened
+    finally:
+        service.shutdown()
+    assert before["sources"] == service.cfg["sources"]
+
+    # 每一個燈的名字、每一種狀態、每一個代碼，五種語言都有一句話
+    root = Path(__file__).resolve().parent.parent / "livelingo"
+    source = (root / "service.py").read_text(encoding="utf-8")
+    body = source[source.index("    def health(self)"):source.index("    # ------------------------------------------------------------------ 對話歷史")]
+    codes = set(re.findall(r'"((?:engine|gpu|mic|listen|screen|hotkeys|saving|audio)_[a-z_]+)"', body))
+    codes -= {"listen_apps", "mic_device", "speaker_device"}      # 這幾個是設定的名字，不是代碼
+    for kind in ("mic", "listen"):
+        codes |= {f"{kind}_{tail}" for tail in re.findall(r'f"\{name\}_([a-z]+)"', body)}
+    assert {"mic_none", "listen_error", "mic_ok", "listen_found", "engine_busy", "saving_history", "screen_closed"} <= codes
+    i18n = (root / "ui" / "i18n.js").read_text(encoding="utf-8")
+    keys = ([f"h_{c}" for c in sorted(codes)] + [f"h_n_{n}" for n in ("engine", "gpu", "mic", "listen", "screen", "hotkeys", "saving")]
+            + [f"h_s_{s}" for s in ("ok", "warn", "bad", "off")] + ["h_q_high", "h_q_standard", "h_e_gpu", "h_e_cpu"])
+    for key in keys:
+        assert len(re.findall(rf"\b{key}: ", i18n)) == len(UI_LANGS), key

@@ -726,6 +726,98 @@ class Service:
             msg = next((m for m in self.messages if m["id"] == msg_id), None)
         return bool(msg and msg.get("translated") and oswin.copy_text(msg["translated"]))
 
+    # ------------------------------------------------------------------ 健康檢查
+
+    def health(self) -> dict:
+        """
+        健康檢查：翻譯引擎、顯示卡、麥克風、耳機（電腦播放的聲音）、聊天區、快速鍵、設定存檔，各一個燈。
+        state：ok 綠 / warn 黃（能用，但有該知道的事）/ bad 紅（現在不能用）/ off 灰（沒在用）。
+        code 由介面翻成文字（h_代碼），其他欄位是那句話裡要填的東西；tab 是可以去哪一頁處理。
+        只看現有的狀態和裝置清單，不會打開麥克風，也不會動到任何設定。
+        """
+        items: list[dict] = []
+
+        def add(light: str, state: str, code: str, tab: str, **more) -> None:
+            items.append({"id": light, "state": state, "code": code, "tab": tab, **more})
+
+        # 翻譯引擎
+        if self.phase == "ready":
+            add("engine", "warn" if self.fallback else "ok", "engine_fallback" if self.fallback else "engine_ok", "quality",
+                quality=self.mode.get("quality", "standard"), engine=self.mode.get("engine", "cpu"))
+        elif self.phase == "need_download":
+            add("engine", "bad", "engine_download", "quality", mb=self.detail.get("total_mb", 0))
+        elif self.phase == "error":
+            add("engine", "bad", "engine_error", "quality", error=str(self.detail.get("message", ""))[:200])
+        else:
+            add("engine", "warn", "engine_busy", "quality")
+
+        # 顯示卡
+        if not self.gpu.get("name"):
+            add("gpu", "warn", "gpu_none", "quality")
+        else:
+            add("gpu", "ok" if self.gpu.get("tier") == "high" else "warn", "gpu_ok" if self.gpu.get("tier") == "high" else "gpu_small",
+                "quality", name=self.gpu["name"], gb=round(self.gpu.get("vram_mb", 0) / 1024, 1))
+
+        # 麥克風、耳機
+        found = self.devices()
+        for name, source, group, chosen_key in (("mic", "mic", "microphones", "mic_device"), ("listen", "listen", "speakers", "speaker_device")):
+            src, rows, chosen = self.sources[source], found.get(group) or [], self.cfg[chosen_key]
+            using = next((d for d in rows if d["id"] == chosen), None) or next((d for d in rows if d.get("default")), None)
+            label = src.get("device") or (using or {}).get("name", "")
+            if not found.get("ok"):
+                add(name, "bad", "audio_error", "audio", error=str(found.get("error", ""))[:200])
+            elif not rows:
+                add(name, "bad", f"{name}_none", "audio")
+            elif src.get("error"):
+                add(name, "bad", f"{name}_error", "audio", error=str(src["error"])[:200])
+            elif name == "mic" and (src.get("quiet") == "blocked" or oswin.mic_privacy_blocked()):
+                add(name, "bad", "mic_blocked", "audio")
+            elif name == "mic" and src.get("quiet") == "silent":
+                add(name, "warn", "mic_silent", "audio", name=label)
+            elif chosen and not any(d["id"] == chosen for d in rows):
+                add(name, "warn", f"{name}_missing", "audio", name=label)
+            elif name == "listen" and self.cfg["listen_apps"] and self._apps_audio_off:
+                add(name, "warn", "listen_apps_off", "audio", name=label)
+            else:
+                add(name, "ok", f"{name}_ok" if src.get("on") else f"{name}_found", "audio", name=label)
+
+        # 聊天區
+        regions, on = list(self.cfg["regions"]), self._regions_on()
+        closed = [r for r in on if r.get("app") and self._locate(r) is None]
+        if self.sources["screen"].get("error"):
+            add("screen", "bad", "screen_error", "screen", error=str(self.sources["screen"]["error"])[:200])
+        elif not regions:
+            add("screen", "off", "screen_none", "screen")
+        elif not on or not self.sources["screen"]["on"]:
+            add("screen", "off", "screen_off", "screen", n=len(regions))
+        elif closed:
+            add("screen", "warn", "screen_closed", "screen", name=apps.display_name(closed[0]["app"]))
+        else:
+            stats = self.watcher.stats() if self.watcher else {}
+            add("screen", "ok", "screen_ok", "screen", n=len(on), lines=sum(int(v.get("lines", 0)) for v in stats.values()))
+
+        # 快速鍵
+        hk = self.hotkeys_state()
+        taken = [name for name, state in hk["states"].items() if state == "taken"]
+        if not hk["available"] or not any(self.cfg["hotkeys"].values()):
+            add("hotkeys", "off", "hotkeys_off" if hk["available"] else "hotkeys_none", "general")
+        elif taken:
+            add("hotkeys", "warn", "hotkeys_taken", "general", n=len(taken))
+        else:
+            add("hotkeys", "ok", "hotkeys_ok", "general", n=sum(1 for s in hk["states"].values() if s == "ok"))
+
+        # 設定存檔
+        if self.cfg.error:
+            add("saving", "bad", "saving_error", "general", error=str(self.cfg.error)[:200])
+        elif self.history.error:
+            add("saving", "warn", "saving_history", "history", error=str(self.history.error)[:200])
+        else:
+            add("saving", "ok", "saving_ok", "general", folder=str(self.data))
+
+        order = ("bad", "warn", "ok", "off")
+        worst = min((i["state"] for i in items), key=order.index)
+        return {"ok": True, "worst": worst, "items": items, "at": time.time()}
+
     # ------------------------------------------------------------------ 對話歷史
 
     def history_export(self, q: str = "") -> dict:

@@ -480,3 +480,18 @@ input::placeholder { color: var(--faint); }
 .hist-none { padding: 22px 14px; border-radius: 12px; border: 1px dashed var(--line-2); color: var(--dim); font-size: 13px; text-align: center; }
 .note > button.danger { border: 1px solid var(--danger); color: var(--danger); background: transparent; margin-left: auto; }
 .note > button.danger + button { margin-left: 0; }
+
+/* 健康檢查 */
+.health-row { justify-content: flex-start; align-items: flex-start; padding-top: 12px; padding-bottom: 12px; }
+.health-row .health-text { flex: 1; min-width: 0; }
+.health-row .desc { overflow-wrap: anywhere; }
+.health-row > button { flex: none; align-self: center; height: 36px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+.lamp { flex: none; width: 12px; height: 12px; margin-top: 5px; border-radius: 50%; background: var(--faint); box-shadow: 0 0 0 4px color-mix(in srgb, var(--faint) 18%, transparent); }
+.health-row[data-state="ok"] .lamp { background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
+.health-row[data-state="warn"] .lamp { background: var(--me); box-shadow: 0 0 0 4px color-mix(in srgb, var(--me) 20%, transparent); }
+.health-row[data-state="bad"] .lamp { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 22%, transparent); }
+.health-state { margin-left: 6px; font-size: 12px; color: var(--dim); }
+.health-row[data-state="ok"] .health-state { color: var(--accent); }
+.health-row[data-state="warn"] .health-state { color: var(--me); }
+.health-row[data-state="bad"] .health-state { color: var(--danger); }
+#health-summary small { color: var(--dim); }

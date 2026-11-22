@@ -573,6 +573,7 @@
     if (S.ui.tab === "screen") loadApps();
     if (S.ui.tab === "overlay") loadScreens();
     if (S.ui.tab === "history") { S.ui.hist = null; loadHistory(); }
+    if (S.ui.tab === "health") loadHealth();
   }
 
   async function loadApps() {
@@ -587,7 +588,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["about", "nav_about", "info"]];
+  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["health", "nav_health", "shield"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
@@ -936,6 +937,42 @@
     }).join("")}</div>`;
   }
 
+  // 健康檢查：每一項一個燈，旁邊可以直接去那一頁處理
+  function healthText(it) {
+    const p = Object.assign({}, it);
+    if (it.quality) p.quality = t("h_q_" + it.quality);
+    if (it.engine) p.engine = t("h_e_" + it.engine);
+    return t("h_" + it.code, p);
+  }
+  function healthPage() {
+    const h = S.ui.health;
+    if (!h) return `<section><div><h2>${esc(t("h_title"))}</h2><div class="sub">${esc(t("h_hint"))}</div></div><div class="hist-none">…</div></section>`;
+    const bad = h.items.filter((i) => i.state === "bad").length, warn = h.items.filter((i) => i.state === "warn").length;
+    const summary = bad ? t("h_some_bad", { n: bad }) : warn ? t("h_some_warn", { n: warn }) : t("h_all_ok");
+    const rows = h.items.map((it) => `<div class="setting-row health-row" data-state="${it.state}" id="health-${it.id}">
+        <span class="lamp" role="img" aria-label="${esc(t("h_s_" + it.state))}"></span>
+        <div class="health-text"><div>${esc(t("h_n_" + it.id))} <span class="health-state">${esc(t("h_s_" + it.state))}</span></div><div class="desc">${esc(healthText(it))}</div></div>
+        ${it.state === "ok" ? "" : `<button class="ghost" data-act="nav" data-to="${it.tab}">${esc(t("h_go"))}</button>`}</div>`).join("");
+    return `
+      <section><div><h2>${esc(t("h_title"))}</h2><div class="sub">${esc(t("h_hint"))}</div></div>
+        <div class="note ${bad ? "error" : warn ? "warn" : ""}" id="health-summary" aria-live="polite">${ICON.shield}<span>${esc(summary)}<br><small>${esc(t("h_checked", { time: new Date(h.at * 1000).toLocaleTimeString(S.cfg.ui_lang) }))}</small></span>
+          <button class="ghost" data-act="health-again">${esc(t("h_again"))}</button></div>
+        ${rows}
+      </section>`;
+  }
+  let healthTimer = null;
+  async function loadHealth() {
+    const r = await get("/api/health");
+    if (!r || r.error) return;
+    S.ui.health = r;
+    if (S.view === "settings" && S.ui.tab === "health") renderSettingsPage();
+  }
+  function healthSoon() {      // 狀態變了（引擎好了、來源開關了）：正在看這一頁就等一下重查
+    if (S.view !== "settings" || S.ui.tab !== "health") return;
+    clearTimeout(healthTimer);
+    healthTimer = setTimeout(loadHealth, 700);
+  }
+
   // 對話歷史：存在這台電腦上的句子。搜尋和「載入更多」只換清單那一塊，不重畫整頁（正在打的字不會被打斷）
   function sizeText(bytes) {
     const b = Number(bytes) || 0;
@@ -1073,13 +1110,14 @@
       ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack", "exe"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "history") page.innerHTML = historyPage();
+    else if (S.ui.tab === "health") page.innerHTML = healthPage();
     else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + voiceTuningHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
     else if (S.ui.tab === "about") page.innerHTML = aboutPage();
     else page.innerHTML = generalPage();
-    if (S.ui.tab !== "about") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
+    if (S.ui.tab !== "about" && S.ui.tab !== "health") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
     typed.forEach(([id, value]) => { const el = $(id); if (el && value && !el.value) el.value = value; });
     page.scrollTop = scroll;
     const again = focus && page.querySelector(focus);
@@ -1410,6 +1448,7 @@
     accent: (el) => saveCfg({ accent: el.dataset.code }),
     swap: () => saveCfg({ my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang, their_auto: false }),
     "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
+    "health-again": async () => { await loadHealth(); const b = document.querySelector('[data-act="health-again"]'); if (b) b.focus(); },
     "hist-more": () => loadHistory(true),
     "hist-export": async () => {
       const r = await post("/api/history", { export: true, q: (S.ui.hist && S.ui.hist.q) || "" });
@@ -1622,11 +1661,13 @@
       renderStatus(); renderOverlay();
       if (S.view === "wizard") { if (before !== S.phase) renderWizard(); else renderWizardStrip(); }
       if (S.view === "settings" && S.ui.tab === "quality" && before !== S.phase) renderSettingsPage();
+      if (before !== S.phase) healthSoon();
     },
     source: (d) => {
       const before = S.sources[d.key] || {};
       S.sources[d.key] = d;
       renderSources();
+      if (before.on !== d.on || before.error !== d.error || before.quiet !== d.quiet) healthSoon();
       if (d.key === "mic" && (d.quiet || "") !== (before.quiet || "") && S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
       if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000, "error");
     },
@@ -1704,7 +1745,7 @@
       clearTimeout(histTimer);
       histTimer = setTimeout(() => loadHistory(), 600);
     },
-    hotkeys: (d) => { S.hotkeys = d; if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage(); },
+    hotkeys: (d) => { healthSoon(); S.hotkeys = d; if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage(); },
     saved: (d) => flashSaved(d.what === "region" && d.id ? "#region-" + d.id : d.what),
     screen_stats: (d) => {      // 讀螢幕的統計：直接換那一行字，不重畫整頁（免得正在打的名字被打斷）
       S.screenStats = d;
