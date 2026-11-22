@@ -43,7 +43,7 @@ TEXT = {
     "en": {
         "title": "LiveLingo problem report",
         "intro": ["This report is only on your computer. It has not been sent to anyone. Whether to send it, and to whom, is up to you.",
-                  "It does not contain your conversations, history, word list, taught sentences, audio or screen images.",
+                  "It does not contain your conversations, history, glossary, taught sentences, audio or screen images.",
                   "It contains: the version, your computer's specs, the check results, settings, device and program names, and recent log lines. Your account name and personal folder have been replaced."],
         "note": "What happened", "app": "LiveLingo", "computer": "This computer", "health": "Health check", "sources": "Audio and screen",
         "storage": "Storage", "usage": "Usage numbers (counts only, no content)", "settings": "Settings", "log": "Recent log", "engine_log": "Translation engine log",
@@ -61,9 +61,9 @@ TEXT = {
     "ja": {
         "title": "LiveLingo 問題レポート",
         "intro": ["このレポートはこのパソコンの中にだけあり、まだ誰にも送られていません。送るかどうか、誰に送るかは自分で決められます。",
-                  "会話の内容、会話の履歴、単語リスト、教えた文、音声、画面は入っていません。",
+                  "会話の内容、会話の履歴、用語集、教えた文、音声、画面は入っていません。",
                   "入っているもの：バージョン、パソコンの性能、各チェックの結果、設定、デバイスとアプリの名前、最近のログ。アカウント名と個人フォルダーは置き換えてあります。"],
-        "note": "何が起きたか", "app": "LiveLingo", "computer": "このパソコン", "health": "ヘルスチェック", "sources": "音声と画面",
+        "note": "何が起きたか", "app": "LiveLingo", "computer": "このパソコン", "health": "状態チェック", "sources": "音声と画面",
         "storage": "ストレージ", "usage": "利用状況の数字（回数だけ、内容なし）", "settings": "設定", "log": "最近のログ", "engine_log": "翻訳エンジンのログ",
         "dropped": "会話に出てきた文が含まれていたため、{n} 行を除きました。", "none": "（なし）",
     },

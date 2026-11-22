@@ -6,7 +6,7 @@
       "可以自動判斷對方說的是哪一種語言。",
       "浮動留言可以改成字幕列、選要放在哪個螢幕、把版面存起來；新增全域快速鍵和遊戲中的快速輸入框。",
       "字幕可以記錄成 txt 檔；對話歷史會留在這台電腦上，可以搜尋、匯出、一鍵清除。",
-      "新增健康檢查頁和儲存空間頁：可以把模型搬到別的磁碟，或刪掉沒在用的模型。",
+      "新增健康檢查、儲存空間和說明頁：可以把模型搬到別的磁碟，出問題時可以做一份報告，先看過內容再決定要不要傳；更新之後可以一鍵回上一版。",
       "設定改了馬上生效並顯示「已儲存」；可以匯出、匯入、恢復預設。",
       "只用鍵盤也能操作每一個功能，文字對比更清楚。"
     ],
@@ -16,7 +16,7 @@
       "可以自动判断对方说的是哪一种语言。",
       "浮动留言可以改成字幕条、选要放在哪个屏幕、把布局存起来；新增全局快捷键和游戏中的快速输入框。",
       "字幕可以记录成 txt 文件；对话历史会留在这台电脑上，可以搜索、导出、一键清除。",
-      "新增健康检查页和存储空间页：可以把模型搬到别的磁盘，或删掉没在用的模型。",
+      "新增健康检查、存储空间和说明页：可以把模型移到别的磁盘，出问题时可以生成一份报告，先看过内容再决定要不要发；更新之后可以一键回到上一版。",
       "设置改了马上生效并显示“已保存”；可以导出、导入、恢复默认。",
       "只用键盘也能操作每一个功能，文字对比更清楚。"
     ],
@@ -26,7 +26,7 @@
       "The other person's language can be detected automatically.",
       "The floating chat can become a subtitle bar, go on the screen you pick and be saved as a layout; global hotkeys and an in-game quick input box are new.",
       "Subtitles can be recorded to a txt file; conversation history stays on this PC and can be searched, exported and cleared in one click.",
-      "New health check and storage pages: move the models to another drive or delete the ones you are not using.",
+      "New Health check, Storage and Help pages: move models to another drive, make a problem report that you read before deciding whether to send it, and go back to the previous version after an update.",
       "Settings apply at once and show “Saved”; they can be exported, imported and reset to defaults.",
       "Every feature works with the keyboard alone, and text contrast is clearer."
     ],
@@ -36,7 +36,7 @@
       "상대방이 쓰는 언어를 자동으로 판별할 수 있습니다.",
       "떠 있는 채팅을 자막 바로 바꾸고, 표시할 모니터를 고르고, 배치를 저장할 수 있습니다. 전역 단축키와 게임 중 빠른 입력창이 생겼습니다.",
       "자막을 txt 파일로 기록할 수 있습니다. 대화 기록은 이 PC에만 남고 검색, 내보내기, 한 번에 지우기가 됩니다.",
-      "상태 점검 페이지와 저장 공간 페이지가 생겼습니다: 모델을 다른 드라이브로 옮기거나 쓰지 않는 모델을 지울 수 있습니다.",
+      "상태 점검, 저장 공간, 도움말 페이지 추가: 모델을 다른 드라이브로 옮기고, 문제 보고서를 만들어 내용을 먼저 확인한 뒤 보낼지 정하고, 업데이트 후 이전 버전으로 되돌릴 수 있습니다.",
       "설정은 바꾸는 즉시 적용되고 “저장됨”이 표시됩니다. 내보내기, 가져오기, 기본값 복원이 됩니다.",
       "모든 기능을 키보드만으로 쓸 수 있고, 글자 대비가 더 선명해졌습니다."
     ],
@@ -46,7 +46,7 @@
       "相手の言語を自動で判別できます。",
       "フローティングチャットを字幕バーに変更、表示するモニターの選択、レイアウトの保存ができます。グローバルホットキーとゲーム中のクイック入力ボックスを追加しました。",
       "字幕を txt ファイルに記録できます。会話の履歴はこの PC に残り、検索・書き出し・ワンクリック消去ができます。",
-      "ヘルスチェックとストレージのページを追加：モデルを別のドライブへ移動したり、使っていないモデルを削除したりできます。",
+      "状態チェック、ストレージ、ヘルプのページを追加：モデルを別のドライブに移せます。問題レポートは内容を確認してから送るかどうかを決められ、アップデート後は前のバージョンに戻せます。",
       "設定は変更するとすぐ反映され「保存しました」と表示されます。書き出し・読み込み・初期設定に戻すこともできます。",
       "すべての機能をキーボードだけで操作でき、文字のコントラストも見やすくなりました。"
     ]

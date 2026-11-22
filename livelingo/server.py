@@ -103,6 +103,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.health())
+                if url.path == "/api/help":      # 說明頁的內容（現在的介面語言、現在的快速鍵）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.help_state())
                 if url.path == "/api/usage":      # 使用數字：今天、最近 7 天、30 天各幾句、失敗幾次、平均等多久
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -262,6 +266,8 @@ class Server:
                         if body.get("open"):
                             return self._json(service.storage_open())
                         return self._json({"ok": False})
+                    if route == "/api/help":      # 把給朋友的快速上手存成一個檔案
+                        return self._json(service.help_friend(str(body.get("friend") or "")))
                     if route == "/api/usage":
                         return self._json(service.usage_clear() if body.get("clear") else {"ok": False})
                     if route == "/api/history":

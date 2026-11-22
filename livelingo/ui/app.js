@@ -117,6 +117,7 @@
     check: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" style="stroke-width:3"><path d="M5 12l5 5 9-10"/></svg>',
     back: '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M20 5v7a4 4 0 0 1-4 4H5m4-4l-4 4 4 4"/></svg>',
     info: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+    help: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8M12 16.6h.01"/></svg>',
     back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     clock: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
@@ -576,6 +577,7 @@
     if (S.ui.tab === "history") { S.ui.hist = null; loadHistory(); }
     if (S.ui.tab === "health") { S.ui.useAsk = false; loadHealth(); loadUsage(); }
     if (S.ui.tab === "storage") { S.ui.storeAsk = ""; loadStorage(); }
+    if (S.ui.tab === "help") { S.ui.friendSaved = null; loadHelp(); }
   }
 
   async function loadApps() {
@@ -590,7 +592,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["about", "nav_about", "info"]];
+  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["help", "nav_help", "help"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
@@ -603,8 +605,9 @@
       ${item("main", "nav_chat", "bubble")}
       ${item("history", "nav_history", "clock")}
       <div class="rail-title">${esc(t("settings"))}</div>
-      ${TABS.filter(([id]) => id !== "about" && id !== "history").map(([id, key, icon]) => item(id, key, icon)).join("")}
+      ${TABS.filter(([id]) => id !== "about" && id !== "help" && id !== "history").map(([id, key, icon]) => item(id, key, icon)).join("")}
       <div class="grow"></div>
+      ${item("help", "nav_help", "help")}
       ${item("about", "nav_about", "info")}`;
   }
 
@@ -964,6 +967,29 @@
       ${usageHTML()}
       ${reportHTML()}`;
   }
+  // 說明：內容從後端拿（data/help.json，五種語言同一個結構），[[鍵]] 畫成按鍵的樣子；最下面可以存一頁給朋友的快速上手
+  const KEY_MARK = /\[\[(.+?)\]\]/g;      // 先跳脫，再把 [[鍵]] 換成按鍵的樣子
+  function helpPage() {
+    const h = S.ui.help;
+    if (!h) return `<section><div><h2>${esc(t("nav_help"))}</h2></div><div class="hist-none">…</div></section>`;
+    const lang = S.ui.friendLang || h.friend_lang;
+    const sections = h.sections.map((sec) => `<section class="help-sec" id="help-${sec.id}"><div><h2>${esc(sec.title)}</h2></div>
+      <${sec.id === "start" ? "ol" : "ul"} class="help-list">${sec.items.map((i) => `<li>${esc(i).replace(KEY_MARK, "<kbd>$1</kbd>")}</li>`).join("")}</${sec.id === "start" ? "ol" : "ul"}></section>`).join("");
+    const saved = S.ui.friendSaved;
+    return `<section><div><h2>${esc(h.title)}</h2><div class="sub">${esc(h.intro)}</div></div></section>
+      ${sections}
+      <section id="help-friend"><div><h2>${esc(t("help_friend_title"))}</h2><div class="sub">${esc(t("help_friend_hint"))}</div></div>
+        <div class="setting-row choice"><div>${esc(t("help_friend_lang"))}</div>
+          <div class="pills" role="group" aria-label="${esc(t("help_friend_lang"))}">${h.langs.map((code) => `<button class="pill" data-act="friend-lang" data-code="${code}" aria-pressed="${code === lang}">${esc(langName(code))}</button>`).join("")}</div></div>
+        <div class="btn-row"><button class="primary" data-act="friend-save">${esc(t("help_friend_save"))}</button></div>
+        ${saved ? `<div class="note" id="help-saved" role="status">${ICON.info}<span>${esc(t("help_friend_saved", { name: saved.name }))}<br><small class="path">${esc(saved.folder)}</small></span></div>` : ""}</section>`;
+  }
+  async function loadHelp() {
+    const r = await get("/api/help");
+    if (!r || r.error) return;
+    S.ui.help = r;
+    if (S.view === "settings" && S.ui.tab === "help") renderSettingsPage();
+  }
   // 使用數字：今天、最近 7 天、30 天各幾句、失敗幾次、平均等多久；下面是最近 14 天每天幾句的小圖
   function usageHTML() {
     const u = S.ui.usage;
@@ -1288,8 +1314,9 @@
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
     else if (S.ui.tab === "about") page.innerHTML = aboutPage();
+    else if (S.ui.tab === "help") page.innerHTML = helpPage();
     else page.innerHTML = generalPage();
-    if (S.ui.tab !== "about" && S.ui.tab !== "health" && S.ui.tab !== "storage") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
+    if (S.ui.tab !== "about" && S.ui.tab !== "help" && S.ui.tab !== "health" && S.ui.tab !== "storage") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
     typed.forEach(([id, value]) => { const el = $(id); if (el && value && !el.value) el.value = value; });
     page.scrollTop = scroll;
     const again = focus && page.querySelector(focus);
@@ -1697,6 +1724,15 @@
       const r = await post("/api/report", { copy: true });
       toast(t(r && r.ok ? "rep_copied" : "n_report_none"), 5000, r && r.ok ? "info" : "warn");
     },
+    "friend-lang": (el) => { S.ui.friendLang = el.dataset.code; S.ui.friendSaved = null; renderSettingsPage(); },
+    "friend-save": async () => {
+      const r = await post("/api/help", { friend: S.ui.friendLang || (S.ui.help || {}).friend_lang || S.cfg.ui_lang });
+      if (!r || !r.ok) { toast(t("n_help_failed", { error: (r && r.detail) || "" }), 8000, "warn"); return; }
+      S.ui.friendSaved = r;
+      renderSettingsPage();
+      const note = $("help-saved");
+      if (note) note.scrollIntoView({ block: "nearest" });
+    },
     "use-clear": () => { S.ui.useAsk = true; renderSettingsPage(); const b = document.querySelector('[data-act="use-clear-no"]'); if (b) b.focus(); },
     "use-clear-no": () => { S.ui.useAsk = false; renderSettingsPage(); const b = document.querySelector('[data-act="use-clear"]'); if (b) b.focus(); },
     "use-clear-yes": async () => {
@@ -1836,6 +1872,11 @@
   document.addEventListener("keydown", (e) => {
     if (S.ui.hotkeyRec) return;
     const items = [...document.querySelectorAll("#rail .rail-item")].filter(canFocus);
+    if (e.key === "F1" && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {      // F1：說明
+      const help = items.find((el) => el.dataset.to === "help");
+      if (help) { e.preventDefault(); help.focus(); help.click(); }
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && /^[1-9]$/.test(e.key) && items[Number(e.key) - 1]) {
       e.preventDefault();
       items[Number(e.key) - 1].focus();
@@ -2074,6 +2115,10 @@
       const before = S.cfg;
       S.cfg = cfg;
       if (before.theme !== cfg.theme || before.accent !== cfg.accent) applyTheme();
+      if (S.ui.help && (before.ui_lang !== cfg.ui_lang || before.ptt_key !== cfg.ptt_key || JSON.stringify(before.hotkeys) !== JSON.stringify(cfg.hotkeys))) {
+        S.ui.help = null;      // 說明裡寫著快速鍵，而且是照介面語言給的：改了就要重拿
+        if (S.view === "settings" && S.ui.tab === "help") loadHelp();
+      }
       if (before.ui_lang !== cfg.ui_lang) { renderAll(); return; }
       renderLangs(); renderSources(); renderOverlayState();
       if (before.show_pronunciation !== cfg.show_pronunciation || before.back_translate !== cfg.back_translate) renderMessages();

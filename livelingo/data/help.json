@@ -1,0 +1,517 @@
+{
+ "zh-TW": {
+  "title": "說明",
+  "unset": "（沒設定）",
+  "intro": "LiveLingo 把對方說的話、螢幕上的聊天即時翻譯給你看，也把你說的、打的翻給對方。全部在你的電腦上完成。",
+  "sections": [
+   {
+    "id": "start",
+    "title": "三步開始用",
+    "items": [
+     "到「語言與一般」選你的語言和對方的語言。不確定對方用什麼語言，可以打開自動偵測。",
+     "回到「對話」，打開你要的來源：「讀螢幕」「聽對方說話」「聽我說話」，可以同時開。",
+     "翻譯會出現在對話頁，也會像字幕一樣浮在遊戲畫面上。"
+    ]
+   },
+   {
+    "id": "sources",
+    "title": "三種來源",
+    "items": [
+     "「讀螢幕」：框出遊戲或聊天軟體的聊天區，新的訊息會自動翻譯。最多可以框 6 個區域，也可以讓區域跟著某個程式的視窗移動。",
+     "「聽對方說話」：翻譯電腦播放出來的聲音。在「聲音裝置」可以選只聽某幾個程式（例如只聽 Discord），遊戲音效就不會混進來。",
+     "「聽我說話」：翻譯你對麥克風說的話。怕收到雜音可以打開「按住才說話」，按著 [[{ptt}]] 的時候才收音。"
+    ]
+   },
+   {
+    "id": "typing",
+    "title": "打字給對方",
+    "items": [
+     "在對話頁最下面打字，按 [[Enter]]。翻譯好會自動複製，到遊戲或聊天軟體按 [[Ctrl+V]] 貼上就可以送出。",
+     "遊戲中不想切視窗：按 [[{quick}]] 叫出快速輸入框，打完按 [[Enter]]，翻譯一樣會自動複製。",
+     "LiveLingo 不會替你在別的程式裡打字或送出訊息，貼上和送出都由你自己按。",
+     "你說的、打的句子下面會有一行翻回你的語言的意思，可以確認有沒有翻錯。"
+    ]
+   },
+   {
+    "id": "overlay",
+    "title": "畫面上的字幕",
+    "items": [
+     "在「顯示與字幕」可以選浮動留言（位置自己擺）或底部字幕條，也可以選顯示在哪一個螢幕。",
+     "字體大小、顏色、停留幾秒、透明度都可以調，改了馬上看得到。",
+     "遊戲要用「無邊框」或「視窗」模式。選「全螢幕」的話，字幕會被遊戲蓋住。",
+     "按 [[{overlay}]] 可以隨時開關字幕。"
+    ]
+   },
+   {
+    "id": "keys",
+    "title": "快速鍵和鍵盤",
+    "items": [
+     "[[{overlay}]] 開關字幕，[[{mic}]] 開關麥克風，[[{copy}]] 複製我上一句的翻譯，[[{quick}]] 快速輸入框。在任何程式裡都有用，可以在「語言與一般」裡改。",
+     "在 LiveLingo 視窗裡：[[Ctrl+1]] 到 [[Ctrl+9]] 切換左邊的頁面，[[↑]] [[↓]] 在左邊的清單移動，[[Esc]] 關掉詢問，[[F1]] 打開這一頁說明。",
+     "框選聊天區時：用滑鼠拖，或用方向鍵移動、[[Shift]] 加方向鍵調整大小，[[Enter]] 確定，[[Esc]] 取消。"
+    ]
+   },
+   {
+    "id": "fix",
+    "title": "翻得不對的時候",
+    "items": [
+     "聽錯或看錯：可以改那一句的原文，改好會重新翻譯。",
+     "翻法不喜歡：可以教它整句應該怎麼翻，之後同一句都會照你教的翻。",
+     "遊戲用語、朋友的暱稱：加進「我的詞彙表」，翻譯時會固定用你指定的說法。",
+     "在「翻譯品質」可以選語氣（朋友之間或有禮貌）和翻譯品質。"
+    ]
+   },
+   {
+    "id": "records",
+    "title": "記錄和歷史",
+    "items": [
+     "「記錄字幕」：自己決定什麼時候開始、什麼時候結束，結束時存成文字檔。",
+     "「歷史」頁可以搜尋以前翻過的句子、匯出成文字檔、一鍵清除，也可以整個關掉不保存。"
+    ]
+   },
+   {
+    "id": "privacy",
+    "title": "隱私",
+    "items": [
+     "翻譯、語音辨識、文字辨識都在你的電腦上完成，對話內容不會傳到網路上。",
+     "會連網路的只有兩件事：檢查和下載新版本，以及第一次下載翻譯需要的檔案。",
+     "歷史、使用數字、設定都只存在這台電腦上，卸載時會一起刪掉。你存到資料夾裡的字幕記錄和匯出的檔案會留著。"
+    ]
+   },
+   {
+    "id": "trouble",
+    "title": "出問題的時候",
+    "items": [
+     "先看「健康檢查」：翻譯引擎、顯示卡、麥克風、耳機、聊天區、快速鍵各有一個燈，有問題的那一項旁邊有按鈕帶你去處理。",
+     "還是不行：在健康檢查頁最下面的「回報問題」會做出一個文字檔，你先看過內容，再自己決定要不要傳給幫你看問題的人。",
+     "更新之後變得不好用：更新過一次之後，「關於」頁會有回到上一版的按鈕。",
+     "硬碟空間不夠：到「儲存空間」可以把大檔案搬到別的磁碟，或刪掉沒在用的模型。"
+    ]
+   }
+  ],
+  "friend": {
+   "title": "LiveLingo 快速上手",
+   "lead": "LiveLingo 是在 Windows 上即時翻譯的程式：把對方說的話和螢幕上的聊天翻譯給你看，也把你說的、打的翻給對方。全部在你的電腦上完成，不用註冊帳號。",
+   "install_title": "安裝",
+   "install": [
+    "需要 Windows 10 或 11（64 位元）。有 NVIDIA 顯示卡會比較快，沒有也可以用。",
+    "到 {download} 下載 LiveLingo-Setup.exe，打開它，照著畫面安裝。",
+    "Windows 可能會跳出「Windows 已保護您的電腦」的藍色視窗，因為安裝檔還沒有數位簽章：按「其他資訊」，再按「仍要執行」。如果 Windows 11 的「智慧型應用程式控制」開著，目前裝不起來。",
+    "第一次開啟會下載翻譯需要的檔案（大約 4 GB 起），只要下載這一次。之後照著畫面的三個步驟設定就可以用了。"
+   ],
+   "footer": "這一頁由 LiveLingo {version} 產生，快速鍵是預設值。程式裡的「說明」頁有完整的內容。"
+  }
+ },
+ "zh-CN": {
+  "title": "说明",
+  "unset": "（未设置）",
+  "intro": "LiveLingo 把对方说的话、屏幕上的聊天实时翻译给你看，也把你说的、打的翻给对方。全部在你的电脑上完成。",
+  "sections": [
+   {
+    "id": "start",
+    "title": "三步开始用",
+    "items": [
+     "到“语言与常规”选你的语言和对方的语言。不确定对方用什么语言，可以打开自动检测。",
+     "回到“对话”，打开你要的来源：“读屏幕”“听对方说话”“听我说话”，可以同时开。",
+     "翻译会出现在对话页，也会像字幕一样浮在游戏画面上。"
+    ]
+   },
+   {
+    "id": "sources",
+    "title": "三种来源",
+    "items": [
+     "“读屏幕”：框出游戏或聊天软件的聊天区，新的消息会自动翻译。最多可以框 6 个区域，也可以让区域跟着某个程序的窗口移动。",
+     "“听对方说话”：翻译电脑播放出来的声音。在“声音设备”可以选只听某几个程序（例如只听 Discord），游戏音效就不会混进来。",
+     "“听我说话”：翻译你对麦克风说的话。怕收到杂音可以打开“按住才说话”，按着 [[{ptt}]] 的时候才收音。"
+    ]
+   },
+   {
+    "id": "typing",
+    "title": "打字给对方",
+    "items": [
+     "在对话页最下面打字，按 [[Enter]]。翻译好会自动复制，到游戏或聊天软件按 [[Ctrl+V]] 粘贴就可以发送。",
+     "游戏中不想切窗口：按 [[{quick}]] 叫出快速输入框，打完按 [[Enter]]，翻译一样会自动复制。",
+     "LiveLingo 不会替你在别的程序里打字或发送消息，粘贴和发送都由你自己按。",
+     "你说的、打的句子下面会有一行翻回你的语言的意思，可以确认有没有翻错。"
+    ]
+   },
+   {
+    "id": "overlay",
+    "title": "画面上的字幕",
+    "items": [
+     "在“显示与字幕”可以选浮动留言（位置自己摆）或底部字幕条，也可以选显示在哪一个屏幕。",
+     "字体大小、颜色、停留几秒、透明度都可以调，改了马上看得到。",
+     "游戏要用“无边框”或“窗口”模式。选“全屏”的话，字幕会被游戏盖住。",
+     "按 [[{overlay}]] 可以随时开关字幕。"
+    ]
+   },
+   {
+    "id": "keys",
+    "title": "快捷键和键盘",
+    "items": [
+     "[[{overlay}]] 开关字幕，[[{mic}]] 开关麦克风，[[{copy}]] 复制我上一句的翻译，[[{quick}]] 快速输入框。在任何程序里都有用，可以在“语言与常规”里改。",
+     "在 LiveLingo 窗口里：[[Ctrl+1]] 到 [[Ctrl+9]] 切换左边的页面，[[↑]] [[↓]] 在左边的列表移动，[[Esc]] 关掉询问，[[F1]] 打开这一页说明。",
+     "框选聊天区时：用鼠标拖，或用方向键移动、[[Shift]] 加方向键调整大小，[[Enter]] 确定，[[Esc]] 取消。"
+    ]
+   },
+   {
+    "id": "fix",
+    "title": "翻得不对的时候",
+    "items": [
+     "听错或看错：可以改那一句的原文，改好会重新翻译。",
+     "翻法不喜欢：可以教它整句应该怎么翻，之后同一句都会照你教的翻。",
+     "游戏用语、朋友的昵称：加进“我的词汇表”，翻译时会固定用你指定的说法。",
+     "在“翻译质量”可以选语气（朋友之间或有礼貌）和翻译质量。"
+    ]
+   },
+   {
+    "id": "records",
+    "title": "记录和历史",
+    "items": [
+     "“记录字幕”：自己决定什么时候开始、什么时候结束，结束时保存为文本文件。",
+     "“历史”页可以搜索以前翻过的句子、导出为文本文件、一键清除，也可以整个关掉不保存。"
+    ]
+   },
+   {
+    "id": "privacy",
+    "title": "隐私",
+    "items": [
+     "翻译、语音识别、文字识别都在你的电脑上完成，对话内容不会传到网络上。",
+     "会联网的只有两件事：检查和下载新版本，以及第一次下载翻译需要的文件。",
+     "历史、使用数字、设置都只保存在这台电脑上，卸载时会一起删除。你保存到文件夹里的字幕记录和导出的文件会留着。"
+    ]
+   },
+   {
+    "id": "trouble",
+    "title": "出问题的时候",
+    "items": [
+     "先看“健康检查”：翻译引擎、显卡、麦克风、耳机、聊天区、快捷键各有一个灯，有问题的那一项旁边有按钮带你去处理。",
+     "还是不行：在健康检查页最下面的“反馈问题”会生成一个文本文件，你先看过内容，再自己决定要不要发给帮你看问题的人。",
+     "更新之后变得不好用：更新过一次之后，“关于”页会有回到上一版的按钮。",
+     "硬盘空间不够：到“存储空间”可以把大文件移到别的磁盘，或删掉没在用的模型。"
+    ]
+   }
+  ],
+  "friend": {
+   "title": "LiveLingo 快速上手",
+   "lead": "LiveLingo 是在 Windows 上实时翻译的程序：把对方说的话和屏幕上的聊天翻译给你看，也把你说的、打的翻给对方。全部在你的电脑上完成，不用注册账号。",
+   "install_title": "安装",
+   "install": [
+    "需要 Windows 10 或 11（64 位）。有 NVIDIA 显卡会比较快，没有也可以用。",
+    "到 {download} 下载 LiveLingo-Setup.exe，打开它，按照画面安装。",
+    "Windows 可能会弹出“Windows 已保护你的电脑”的蓝色窗口，因为安装文件还没有数字签名：点“更多信息”，再点“仍要运行”。如果 Windows 11 的“智能应用控制”开着，目前装不上。",
+    "第一次打开会下载翻译需要的文件（大约 4 GB 起），只需要下载这一次。之后按照画面的三个步骤设置就可以用了。"
+   ],
+   "footer": "这一页由 LiveLingo {version} 生成，快捷键是默认值。程序里的“说明”页有完整的内容。"
+  }
+ },
+ "en": {
+  "title": "Help",
+  "unset": "(not set)",
+  "intro": "LiveLingo translates what the other person says and the chat on your screen for you, and translates what you say and type for them. Everything runs on your own computer.",
+  "sections": [
+   {
+    "id": "start",
+    "title": "Start in three steps",
+    "items": [
+     "In “Language & general”, choose your language and the other person’s language. If you are not sure what they speak, turn on auto-detect.",
+     "Back on “Chat”, turn on the sources you want: “Read screen”, “Hear them”, “Hear me”. They can all be on together.",
+     "Translations appear on the Chat page and float over your game like subtitles."
+    ]
+   },
+   {
+    "id": "sources",
+    "title": "The three sources",
+    "items": [
+     "“Read screen”: frame the chat area of your game or chat app and new messages are translated automatically. You can frame up to 6 areas, and an area can follow a program’s window.",
+     "“Hear them”: translates the sound your computer plays. In “Audio devices” you can listen to chosen programs only (for example only Discord), so game sound stays out.",
+     "“Hear me”: translates what you say into the microphone. To keep noise out, turn on “Push to talk”; the microphone then listens only while you hold [[{ptt}]]."
+    ]
+   },
+   {
+    "id": "typing",
+    "title": "Typing to them",
+    "items": [
+     "Type at the bottom of the Chat page and press [[Enter]]. The translation is copied automatically; press [[Ctrl+V]] in your game or chat app to paste and send it.",
+     "Without leaving the game: press [[{quick}]] for the quick input box, type, press [[Enter]], and the translation is copied the same way.",
+     "LiveLingo never types or sends messages in other programs for you. Pasting and sending stay in your hands.",
+     "Under what you say or type there is a line that translates it back into your language, so you can check the meaning."
+    ]
+   },
+   {
+    "id": "overlay",
+    "title": "Subtitles on screen",
+    "items": [
+     "In “Display” choose floating chat (place it yourself) or a subtitle bar at the bottom, and which screen it appears on.",
+     "Font size, colour, how long a line stays, and opacity can all be changed, and you see the change at once.",
+     "Run the game in “Borderless” or “Windowed” mode. In exclusive “Fullscreen” the game covers the subtitles.",
+     "Press [[{overlay}]] to show or hide the subtitles at any time."
+    ]
+   },
+   {
+    "id": "keys",
+    "title": "Hotkeys and keyboard",
+    "items": [
+     "[[{overlay}]] shows or hides subtitles, [[{mic}]] turns the microphone on or off, [[{copy}]] copies your last translation, [[{quick}]] opens the quick input box. They work in any program and can be changed in “Language & general”.",
+     "Inside the LiveLingo window: [[Ctrl+1]] to [[Ctrl+9]] switch pages, [[↑]] [[↓]] move through the list on the left, [[Esc]] closes a question, [[F1]] opens this Help page.",
+     "While framing a chat area: drag with the mouse, or move with the arrow keys, resize with [[Shift]] plus the arrow keys, [[Enter]] to confirm, [[Esc]] to cancel."
+    ]
+   },
+   {
+    "id": "fix",
+    "title": "When a translation is wrong",
+    "items": [
+     "Misheard or misread: edit the original text of that line and it is translated again.",
+     "You prefer another wording: teach it how the whole sentence should be translated, and that sentence is translated your way from then on.",
+     "Game terms and friends’ nicknames: add them to “My glossary” and they are always translated the way you set.",
+     "In “Translation quality” you can choose the tone (casual or polite) and the quality."
+    ]
+   },
+   {
+    "id": "records",
+    "title": "Records and history",
+    "items": [
+     "“Record subtitles”: you decide when it starts and when it ends, and it is saved as a text file when you stop.",
+     "On the “History” page you can search past sentences, export them as a text file, clear everything, or turn saving off."
+    ]
+   },
+   {
+    "id": "privacy",
+    "title": "Privacy",
+    "items": [
+     "Translation, speech recognition and screen reading all run on your computer. Your conversations are not sent over the internet.",
+     "The app goes online for two things only: checking for and downloading new versions, and downloading the translation files the first time.",
+     "History, usage numbers and settings are kept on this computer only and are removed when you uninstall. Subtitle records and files you exported to a folder stay."
+    ]
+   },
+   {
+    "id": "trouble",
+    "title": "When something goes wrong",
+    "items": [
+     "Look at “Health check” first: the translation engine, graphics card, microphone, headset, chat areas and hotkeys each have a light, and a button next to a problem takes you to the fix.",
+     "Still stuck: “Report a problem” at the bottom of the Health check page makes one text file. You read it first, then decide whether to send it to whoever is helping you.",
+     "An update made things worse: after you have updated once, the “About” page has a button to go back to the previous version.",
+     "Low on disk space: in “Storage” you can move the large files to another drive or delete models that are not in use."
+    ]
+   }
+  ],
+  "friend": {
+   "title": "LiveLingo quick start",
+   "lead": "LiveLingo is a live translator for Windows. It translates what the other person says and the chat on your screen for you, and what you say and type for them. Everything runs on your own computer and there is no account to create.",
+   "install_title": "Install",
+   "install": [
+    "You need Windows 10 or 11 (64-bit). An NVIDIA graphics card makes it faster, but it works without one.",
+    "Download LiveLingo-Setup.exe from {download}, open it and follow the steps.",
+    "Windows may show a blue “Windows protected your PC” window because the installer is not signed yet: choose “More info”, then “Run anyway”. If Smart App Control is on in Windows 11, the app cannot be installed for now.",
+    "The first start downloads the translation files (about 4 GB or more), once only. Then follow the three setup steps on screen."
+   ],
+   "footer": "This page was made by LiveLingo {version}; the hotkeys shown are the defaults. The Help page inside the app has the full guide."
+  }
+ },
+ "ko": {
+  "title": "도움말",
+  "unset": "(설정 안 함)",
+  "intro": "LiveLingo는 상대방이 하는 말과 화면의 채팅을 바로 번역해서 보여 주고, 내가 말하거나 입력한 내용을 상대방 언어로 번역합니다. 모든 처리는 내 컴퓨터 안에서 이루어집니다.",
+  "sections": [
+   {
+    "id": "start",
+    "title": "세 단계로 시작하기",
+    "items": [
+     "‘언어 및 일반’에서 내 언어와 상대방 언어를 고릅니다. 상대방 언어를 잘 모르면 자동 감지를 켜세요.",
+     "‘대화’로 돌아와 원하는 입력을 켭니다: ‘화면 읽기’, ‘상대방 음성 듣기’, ‘내 음성 듣기’. 동시에 켤 수 있습니다.",
+     "번역은 대화 페이지에 나타나고, 게임 화면 위에도 자막처럼 떠 있습니다."
+    ]
+   },
+   {
+    "id": "sources",
+    "title": "세 가지 입력",
+    "items": [
+     "‘화면 읽기’: 게임이나 채팅 프로그램의 채팅 영역을 지정하면 새 메시지를 자동으로 번역합니다. 영역은 6개까지 지정할 수 있고, 특정 프로그램 창을 따라다니게 할 수도 있습니다.",
+     "‘상대방 음성 듣기’: 컴퓨터에서 나오는 소리를 번역합니다. ‘오디오 장치’에서 고른 프로그램의 소리만 듣게 할 수 있어서(예: Discord만) 게임 효과음이 섞이지 않습니다.",
+     "‘내 음성 듣기’: 마이크에 대고 한 말을 번역합니다. 잡음이 걱정되면 ‘눌러서 말하기’를 켜세요. [[{ptt}]] 키를 누르고 있는 동안에만 마이크가 듣습니다."
+    ]
+   },
+   {
+    "id": "typing",
+    "title": "상대방에게 입력하기",
+    "items": [
+     "대화 페이지 맨 아래에 입력하고 [[Enter]]를 누릅니다. 번역이 끝나면 자동으로 복사되니, 게임이나 채팅 프로그램에서 [[Ctrl+V]]로 붙여 넣어 보내면 됩니다.",
+     "게임 중에 창을 바꾸기 싫을 때: [[{quick}]]를 눌러 빠른 입력 상자를 열고, 입력한 뒤 [[Enter]]를 누르면 번역이 똑같이 복사됩니다.",
+     "LiveLingo는 다른 프로그램에 대신 입력하거나 메시지를 보내지 않습니다. 붙여 넣기와 보내기는 직접 합니다.",
+     "내가 말하거나 입력한 문장 아래에는 내 언어로 다시 번역한 줄이 나와서 뜻이 맞는지 확인할 수 있습니다."
+    ]
+   },
+   {
+    "id": "overlay",
+    "title": "화면 위 자막",
+    "items": [
+     "‘표시와 자막’에서 떠 있는 채팅(위치는 직접 정함)이나 아래쪽 자막 바를 고르고, 어느 모니터에 표시할지도 정할 수 있습니다.",
+     "글자 크기, 색, 표시 시간, 투명도를 바꿀 수 있고, 바꾸면 바로 반영됩니다.",
+     "게임은 ‘테두리 없는 창’이나 ‘창 모드’로 실행하세요. ‘전체 화면’에서는 자막이 게임에 가려집니다.",
+     "[[{overlay}]]를 누르면 언제든지 자막을 켜고 끌 수 있습니다."
+    ]
+   },
+   {
+    "id": "keys",
+    "title": "단축키와 키보드",
+    "items": [
+     "[[{overlay}]] 자막 켜기/끄기, [[{mic}]] 마이크 켜기/끄기, [[{copy}]] 내 마지막 번역 복사, [[{quick}]] 빠른 입력 상자. 어떤 프로그램에서도 동작하며 ‘언어 및 일반’에서 바꿀 수 있습니다.",
+     "LiveLingo 창 안에서: [[Ctrl+1]]부터 [[Ctrl+9]]까지 페이지 전환, [[↑]] [[↓]]로 왼쪽 목록 이동, [[Esc]]로 확인 창 닫기, [[F1]]로 이 도움말 열기.",
+     "채팅 영역을 지정할 때: 마우스로 끌거나, 방향키로 이동하고 [[Shift]]와 방향키로 크기를 조절합니다. [[Enter]]로 확정, [[Esc]]로 취소."
+    ]
+   },
+   {
+    "id": "fix",
+    "title": "번역이 틀렸을 때",
+    "items": [
+     "잘못 듣거나 잘못 읽은 경우: 그 줄의 원문을 고치면 다시 번역합니다.",
+     "번역 표현이 마음에 들지 않을 때: 문장 전체를 어떻게 번역할지 가르치면, 그 문장은 앞으로 가르친 대로 번역합니다.",
+     "게임 용어나 친구 별명: ‘내 단어장’에 추가하면 항상 정해 둔 표현으로 번역합니다.",
+     "‘번역 품질’에서 말투(친구 사이 또는 공손하게)와 번역 품질을 고를 수 있습니다."
+    ]
+   },
+   {
+    "id": "records",
+    "title": "기록과 대화 기록",
+    "items": [
+     "‘자막 기록’: 시작과 끝을 직접 정하고, 끝내면 텍스트 파일로 저장됩니다.",
+     "‘기록’ 페이지에서 이전에 번역한 문장을 검색하고, 텍스트 파일로 내보내고, 한 번에 지울 수 있으며, 저장 자체를 끌 수도 있습니다."
+    ]
+   },
+   {
+    "id": "privacy",
+    "title": "개인 정보",
+    "items": [
+     "번역, 음성 인식, 화면 글자 인식은 모두 내 컴퓨터에서 이루어지며, 대화 내용은 인터넷으로 전송되지 않습니다.",
+     "인터넷에 연결하는 경우는 두 가지뿐입니다: 새 버전 확인과 다운로드, 그리고 처음 한 번 번역에 필요한 파일 다운로드.",
+     "대화 기록, 사용 숫자, 설정은 이 컴퓨터에만 저장되고 프로그램을 제거하면 함께 삭제됩니다. 폴더에 저장한 자막 기록과 내보낸 파일은 남습니다."
+    ]
+   },
+   {
+    "id": "trouble",
+    "title": "문제가 생겼을 때",
+    "items": [
+     "먼저 ‘상태 점검’을 보세요. 번역 엔진, 그래픽 카드, 마이크, 헤드셋, 채팅 영역, 단축키마다 표시등이 있고, 문제가 있는 항목 옆의 버튼을 누르면 해결하는 곳으로 이동합니다.",
+     "그래도 안 될 때: 상태 점검 페이지 맨 아래의 ‘문제 알리기’가 텍스트 파일 하나를 만듭니다. 먼저 내용을 확인한 다음, 도와주는 사람에게 보낼지 직접 정합니다.",
+     "업데이트 후 더 불편해졌을 때: 한 번 업데이트한 뒤에는 ‘정보’ 페이지에 이전 버전으로 되돌리는 버튼이 생깁니다.",
+     "디스크 공간이 부족할 때: ‘저장 공간’에서 큰 파일을 다른 드라이브로 옮기거나 쓰지 않는 모델을 지울 수 있습니다."
+    ]
+   }
+  ],
+  "friend": {
+   "title": "LiveLingo 빠른 시작",
+   "lead": "LiveLingo는 Windows용 실시간 번역 프로그램입니다. 상대방이 하는 말과 화면의 채팅을 번역해서 보여 주고, 내가 말하거나 입력한 내용을 상대방 언어로 번역합니다. 모든 처리는 내 컴퓨터 안에서 이루어지고, 계정을 만들 필요가 없습니다.",
+   "install_title": "설치",
+   "install": [
+    "Windows 10 또는 11(64비트)이 필요합니다. NVIDIA 그래픽 카드가 있으면 더 빠르지만 없어도 쓸 수 있습니다.",
+    "{download} 에서 LiveLingo-Setup.exe를 내려받아 실행하고 화면 안내대로 설치합니다.",
+    "설치 파일에 아직 디지털 서명이 없어서 ‘Windows의 PC 보호’라는 파란 창이 뜰 수 있습니다. ‘추가 정보’를 누른 다음 ‘실행’을 누르세요. Windows 11의 ‘스마트 앱 컨트롤’이 켜져 있으면 지금은 설치할 수 없습니다.",
+    "처음 실행하면 번역에 필요한 파일(약 4GB 이상)을 한 번만 내려받습니다. 그다음 화면에 나오는 세 단계를 따라 설정하면 됩니다."
+   ],
+   "footer": "이 페이지는 LiveLingo {version}에서 만들었으며, 단축키는 기본값입니다. 프로그램 안의 ‘도움말’ 페이지에 전체 설명이 있습니다."
+  }
+ },
+ "ja": {
+  "title": "ヘルプ",
+  "unset": "（未設定）",
+  "intro": "LiveLingo は、相手の話し声や画面のチャットをその場で翻訳して見せ、自分が話したり入力したりした内容を相手の言語に翻訳します。すべて自分のパソコンの中で処理します。",
+  "sections": [
+   {
+    "id": "start",
+    "title": "3 ステップで始める",
+    "items": [
+     "「言語と一般」で自分の言語と相手の言語を選びます。相手の言語がわからないときは自動検出をオンにします。",
+     "「会話」に戻り、使いたい入力をオンにします：「画面を読む」「相手の声を聞く」「自分の声を聞く」。同時にオンにできます。",
+     "翻訳は会話ページに表示され、ゲーム画面の上にも字幕のように表示されます。"
+    ]
+   },
+   {
+    "id": "sources",
+    "title": "3 つの入力",
+    "items": [
+     "「画面を読む」：ゲームやチャットアプリのチャット欄を範囲指定すると、新しいメッセージを自動で翻訳します。範囲は 6 つまで指定でき、特定のアプリのウィンドウに追従させることもできます。",
+     "「相手の声を聞く」：パソコンから出る音を翻訳します。「オーディオ機器」で選んだアプリの音だけ（例：Discord だけ）を聞くようにでき、ゲームの効果音が混ざりません。",
+     "「自分の声を聞く」：マイクに向かって話した内容を翻訳します。雑音が気になるときは「プッシュトゥトーク」をオンにすると、[[{ptt}]] を押している間だけマイクが音を拾います。"
+    ]
+   },
+   {
+    "id": "typing",
+    "title": "相手に文字で伝える",
+    "items": [
+     "会話ページのいちばん下に入力して [[Enter]] を押します。翻訳が終わると自動でコピーされるので、ゲームやチャットアプリで [[Ctrl+V]] で貼り付けて送信します。",
+     "ゲーム中にウィンドウを切り替えたくないとき：[[{quick}]] でクイック入力ボックスを開き、入力して [[Enter]] を押すと、同じように翻訳がコピーされます。",
+     "LiveLingo がほかのアプリに代わりに入力したり送信したりすることはありません。貼り付けと送信は自分で行います。",
+     "自分が話した文や入力した文の下には、自分の言語に訳し戻した 1 行が表示され、意味が合っているか確認できます。"
+    ]
+   },
+   {
+    "id": "overlay",
+    "title": "画面上の字幕",
+    "items": [
+     "「表示と字幕」で、フローティングチャット（位置は自分で決める）か下部の字幕バーを選べます。どの画面に表示するかも選べます。",
+     "文字の大きさ、色、表示時間、不透明度を変えられ、変更はすぐに反映されます。",
+     "ゲームは「ボーダーレス」か「ウィンドウ」モードで実行してください。「フルスクリーン」では字幕がゲームに隠れます。",
+     "[[{overlay}]] でいつでも字幕の表示と非表示を切り替えられます。"
+    ]
+   },
+   {
+    "id": "keys",
+    "title": "ホットキーとキーボード",
+    "items": [
+     "[[{overlay}]] 字幕の表示／非表示、[[{mic}]] マイクのオン／オフ、[[{copy}]] 自分の直前の翻訳をコピー、[[{quick}]] クイック入力ボックス。どのアプリを使っていても動作し、「言語と一般」で変更できます。",
+     "LiveLingo のウィンドウ内：[[Ctrl+1]] から [[Ctrl+9]] でページ切り替え、[[↑]] [[↓]] で左の一覧を移動、[[Esc]] で確認を閉じ、[[F1]] でこのヘルプを開きます。",
+     "チャット欄を範囲指定するとき：マウスでドラッグするか、矢印キーで移動、[[Shift]] と矢印キーで大きさを調整し、[[Enter]] で確定、[[Esc]] でキャンセルします。"
+    ]
+   },
+   {
+    "id": "fix",
+    "title": "翻訳が違うとき",
+    "items": [
+     "聞き間違いや読み間違い：その行の原文を直すと、もう一度翻訳します。",
+     "訳し方が気に入らないとき：文全体をどう訳すか教えると、その文は以後、教えたとおりに訳されます。",
+     "ゲーム用語や友だちのあだ名：「自分の用語集」に追加すると、いつも決めた言い方で訳されます。",
+     "「翻訳の品質」で口調（友だち同士か丁寧か）と翻訳の品質を選べます。"
+    ]
+   },
+   {
+    "id": "records",
+    "title": "記録と履歴",
+    "items": [
+     "「字幕を記録」：始めるときと終えるときを自分で決め、終えるとテキストファイルに保存されます。",
+     "「履歴」ページでは、以前に翻訳した文の検索、テキストファイルへの書き出し、一括消去ができ、保存そのものをオフにすることもできます。"
+    ]
+   },
+   {
+    "id": "privacy",
+    "title": "プライバシー",
+    "items": [
+     "翻訳、音声認識、画面の文字認識はすべて自分のパソコンで行われ、会話の内容がインターネットに送られることはありません。",
+     "インターネットに接続するのは 2 つの場合だけです：新しいバージョンの確認とダウンロード、そして最初の 1 回だけ行う翻訳用ファイルのダウンロード。",
+     "履歴、利用状況の数字、設定はこのパソコンの中にだけ保存され、アンインストールすると一緒に削除されます。フォルダーに保存した字幕の記録や書き出したファイルは残ります。"
+    ]
+   },
+   {
+    "id": "trouble",
+    "title": "うまくいかないとき",
+    "items": [
+     "まず「状態チェック」を見てください。翻訳エンジン、グラフィックカード、マイク、ヘッドセット、チャット領域、ホットキーにそれぞれランプがあり、問題のある項目の横のボタンから対処する場所に移動できます。",
+     "それでも直らないとき：状態チェックページのいちばん下の「問題を報告」がテキストファイルを 1 つ作ります。先に内容を確認してから、手伝ってくれる人に送るかどうかを自分で決めます。",
+     "アップデート後に使いにくくなったとき：一度アップデートした後は、「このアプリについて」ページに前のバージョンに戻すボタンが表示されます。",
+     "ディスクの空きが足りないとき：「ストレージ」で大きなファイルを別のドライブに移すか、使っていないモデルを削除できます。"
+    ]
+   }
+  ],
+  "friend": {
+   "title": "LiveLingo クイックスタート",
+   "lead": "LiveLingo は Windows 用のリアルタイム翻訳アプリです。相手の話し声や画面のチャットを翻訳して見せ、自分が話したり入力したりした内容を相手の言語に翻訳します。すべて自分のパソコンの中で処理し、アカウント登録は不要です。",
+   "install_title": "インストール",
+   "install": [
+    "Windows 10 または 11（64 ビット）が必要です。NVIDIA のグラフィックカードがあると速くなりますが、なくても使えます。",
+    "{download} から LiveLingo-Setup.exe をダウンロードして開き、画面の案内に従ってインストールします。",
+    "インストーラーにまだデジタル署名がないため、「Windows によって PC が保護されました」という青い画面が出ることがあります。「詳細情報」を押してから「実行」を押してください。Windows 11 の「スマート アプリ コントロール」がオンの場合、現時点ではインストールできません。",
+    "初回起動時に翻訳用のファイル（約 4 GB 以上）を 1 回だけダウンロードします。そのあと、画面に表示される 3 つのステップに沿って設定すれば使えます。"
+   ],
+   "footer": "このページは LiveLingo {version} が作成しました。ホットキーは初期設定のものです。アプリ内の「ヘルプ」ページに詳しい説明があります。"
+  }
+ }
+}

@@ -15,7 +15,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, oswin, paths, report, storage, updater
+from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, updater
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -1082,6 +1082,28 @@ class Service:
         order = ("bad", "warn", "ok", "off")
         worst = min((i["state"] for i in items), key=order.index)
         return {"ok": True, "worst": worst, "items": items, "at": time.time()}
+
+    # ------------------------------------------------------------------ 說明
+
+    def help_state(self) -> dict:
+        """說明頁的內容（現在的介面語言、現在設定的快速鍵）。friend_lang：給朋友的那一頁預設用對方的語言。"""
+        values = {**self.cfg["hotkeys"], "ptt": self.cfg["ptt_key"], "version": __version__, "download": guide.DOWNLOAD}
+        return {"ok": True, **guide.page(self.cfg["ui_lang"], values), "langs": list(UI_LANGS),
+                "friend_lang": self.cfg["their_lang"] if self.cfg["their_lang"] in UI_LANGS else self.cfg["ui_lang"]}
+
+    def help_friend(self, lang: str) -> dict:
+        """把給朋友的快速上手存成一個 HTML 檔（放在字幕記錄的資料夾），存好把資料夾打開。只是存檔，不會傳給任何人。"""
+        if lang not in UI_LANGS:
+            return {"ok": False, "error": "help_failed", "detail": ""}
+        folder = self.transcript_dir()
+        values = {**DEFAULTS["hotkeys"], "ptt": DEFAULTS["ptt_key"], "version": __version__, "download": guide.DOWNLOAD}      # 朋友是新裝的：預設快速鍵
+        try:
+            path = guide.save_friend(folder, lang, values)
+        except OSError as ex:
+            self.log(f"quick start page could not be saved: {ex!r}")
+            return {"ok": False, "error": "help_failed", "detail": str(ex)}
+        oswin.open_path(folder)
+        return {"ok": True, "path": str(path), "name": path.name, "folder": str(folder), "lang": lang}
 
     # ------------------------------------------------------------------ 問題報告
 

@@ -542,3 +542,9 @@ input::placeholder { color: var(--faint); }
 .use-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-top: 4px; }
 .use-chart figcaption { font-size: 12px; color: var(--dim); margin-top: 6px; }
 @media (max-width: 720px) { .stat-row { grid-template-columns: 1fr; } }
+
+/* 說明頁 */
+.help-list { margin: 0; padding: 4px 14px 4px 34px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.help-list li { margin: 8px 0; font-size: 14px; line-height: 1.7; color: var(--text); overflow-wrap: anywhere; }
+.help-list li::marker { color: var(--dim); }
+.help-list kbd { display: inline-block; padding: 0 6px; margin: 0 1px; border-radius: 6px; border: 1px solid var(--line-2); border-bottom-width: 2px; background: var(--surface-2); color: var(--text); font: 600 12px/1.7 ui-monospace, Consolas, "Cascadia Mono", monospace; white-space: nowrap; }

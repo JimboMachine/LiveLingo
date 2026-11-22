@@ -3412,3 +3412,75 @@ def test_usage_numbers_are_local_counts_only(tmp_path, monkeypatch):
         assert piece in js, piece
     for key in ("use_title", "use_day", "use_split", "use_clear_ask"):
         assert len(re.findall(rf"\b{key}: ", i18n)) == len(UI_LANGS), key
+
+
+def test_help_page_and_the_page_for_a_friend(tmp_path, monkeypatch):
+    """第 49 項：程式裡的說明頁，和一頁可以傳給朋友的快速上手。五種語言同一個結構；寫的快速鍵是真的；給朋友的那一頁是獨立的檔案，不連外部的東西。"""
+    import re
+    from pathlib import Path
+
+    from livelingo import guide
+    from livelingo.config import DEFAULTS, UI_LANGS
+    from livelingo.service import Service
+
+    data = guide.load()
+    assert set(data) == set(UI_LANGS)
+    base = data["zh-TW"]
+    marks = lambda text: (sorted(re.findall(r"\{(\w+)\}", text)), len(re.findall(r"\[\[.+?\]\]", text)), sorted(re.findall(r"\[\[([A-Za-z0-9+↑↓]+)\]\]", text)))  # noqa: E731
+    for lang, text in data.items():
+        assert set(text) == {"title", "unset", "intro", "sections", "friend"}, lang
+        assert [s["id"] for s in text["sections"]] == [s["id"] for s in base["sections"]], lang
+        for mine, theirs in zip(text["sections"], base["sections"]):
+            assert len(mine["items"]) == len(theirs["items"]) and mine["title"].strip(), (lang, mine["id"])
+            for a, b in zip(mine["items"], theirs["items"]):
+                assert marks(a) == marks(b), (lang, mine["id"], a)      # 每種語言提到的快速鍵、按鍵都一樣
+        assert set(text["friend"]) == {"title", "lead", "install_title", "install", "footer"} and len(text["friend"]["install"]) == len(base["friend"]["install"]), lang
+        assert sum("{download}" in i for i in text["friend"]["install"]) == 1 and "{version}" in text["friend"]["footer"], lang
+        used = set(re.findall(r"\{(\w+)\}", str(text)))
+        assert used <= set(guide.VALUES), (lang, used - set(guide.VALUES))
+    assert {"start", "typing", "keys", "privacy", "trouble"} <= {s["id"] for s in base["sections"]} and set(guide.FRIEND_SECTIONS) <= {s["id"] for s in base["sections"]}
+    keys = next(s for s in base["sections"] if s["id"] == "keys")
+    assert {"overlay", "mic", "copy", "quick"} <= set(re.findall(r"\{(\w+)\}", keys["items"][0])) == set(DEFAULTS["hotkeys"])      # 四個全域快速鍵都有寫
+    js = (Path(guide.__file__).parent / "ui" / "app.js").read_text(encoding="utf-8")
+    for key in ("Ctrl+1", "Ctrl+9", "Esc", "F1"):      # 說明裡寫的視窗內按鍵，程式裡真的有
+        assert f"[[{key}]]" in keys["items"][1], key
+    assert 'e.key === "F1"' in js and "/^[1-9]$/.test(e.key)" in js and 'e.key === "Escape"' in js
+
+    # 沒設定的快速鍵：寫「沒設定」，不畫成按鍵
+    assert guide.fill("按 [[{quick}]] 或 [[{mic}]]，版本 {version}", {"quick": "Ctrl+Alt+T", "mic": "", "version": "2.3.0"}, "（沒設定）") == "按 [[Ctrl+Alt+T]] 或 （沒設定），版本 2.3.0"
+    assert guide.page("xx", {})["title"] == data["en"]["title"]      # 沒有的語言用英文
+
+    opened = []
+    monkeypatch.setattr("livelingo.service.oswin.open_path", lambda p: opened.append(Path(p)))
+    service = Service(tmp_path / "data")
+    service.cfg.set(ui_lang="zh-TW", their_lang="ko", transcript_dir=str(tmp_path / "out"), ptt_key="F9",
+                    hotkeys={"overlay": "Ctrl+Alt+S", "mic": "", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Shift+F2"})
+    page = service.help_state()
+    text = "\n".join(item for section in page["sections"] for item in section["items"])
+    assert page["ok"] and page["title"] == "說明" and page["friend_lang"] == "ko" and set(page["langs"]) == set(UI_LANGS)
+    assert "[[Ctrl+Shift+F2]]" in text and "[[F9]]" in text and "（沒設定） 開關麥克風" in text and "{" not in text      # 現在設定的快速鍵
+    service.cfg.set(their_lang="vi" if "vi" not in UI_LANGS else "ko")
+    assert service.help_state()["friend_lang"] in ("zh-TW", "ko")
+
+    assert service.help_friend("xx")["ok"] is False and not opened
+    saved = service.help_friend("ko")
+    path = Path(saved["path"])
+    assert saved["ok"] and saved["name"] == "LiveLingo-quick-start-ko.html" and path.parent == tmp_path / "out" and opened == [tmp_path / "out"]
+    html = path.read_text(encoding="utf-8")
+    assert html.startswith("<!doctype html>") and '<html lang="ko">' in html and "<kbd>Ctrl+Alt+T</kbd>" in html and "<kbd>Ctrl+Alt+M</kbd>" in html      # 朋友是新裝的：預設快速鍵
+    assert "Ctrl+Shift+F2" not in html and f'<a href="{guide.DOWNLOAD}">' in html and f"LiveLingo {service.state()['version']}" in html
+    assert html.count("<section>") == 1 + len(guide.FRIEND_SECTIONS) and "<svg" in html and "{" not in re.sub(r"<style>.*?</style>", "", html, flags=re.S)
+    for banned in ("<script", "src=", "<link", "@import", "url(h", "url('", 'url("'):      # 獨立的一頁：不載入任何外部的東西（url(#…) 是標誌自己的漸層）
+        assert banned not in html, banned
+    assert set(re.findall(r'https?://[^\s"<]+', html)) == {guide.DOWNLOAD}
+    assert "[[" not in html
+    assert "<b>x</b>" not in guide._rich("<b>x</b> [[Esc]]") and "<kbd>Esc</kbd>" in guide._rich("<b>x</b> [[Esc]]")      # 內容會先跳脫
+
+    root = Path(guide.__file__).parent
+    server = (root / "server.py").read_text(encoding="utf-8")
+    assert 'url.path == "/api/help"' in server and "service.help_friend(" in server
+    i18n = (root / "ui" / "i18n.js").read_text(encoding="utf-8")
+    for piece in ('get("/api/help")', 'post("/api/help", { friend:', '["help", "nav_help", "help"]', 'data-act="friend-save"'):
+        assert piece in js, piece
+    for key in ("nav_help", "help_friend_title", "help_friend_saved", "n_help_failed"):
+        assert len(re.findall(rf"\b{key}: ", i18n)) == len(UI_LANGS), key
