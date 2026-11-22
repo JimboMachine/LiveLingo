@@ -43,6 +43,7 @@ VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也�
 
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
 VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
+RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔幾秒再試一次；全部試完（大約兩分鐘）還不行才放棄
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
@@ -164,8 +165,9 @@ class Service:
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
         # quiet：麥克風開著卻完全沒聲音時是 "silent"，Windows 的隱私權設定擋住時是 "blocked"
+        # lost：收音裝置用到一半斷線（耳機拔掉、藍牙斷了），正在自動重新連接
         self.sources = {k: {"on": False, "busy": False, "error": "", "device": "", "speaking": False, "quiet": "",
-                            "apps": False}
+                            "apps": False, "lost": False}
                         for k in ("screen", "listen", "mic")}
         self._vu = {"listen": 0.0, "mic": 0.0}
         self._vu_sent = 0.0
@@ -208,6 +210,8 @@ class Service:
         self.speech_gpu = {"state": "off", "percent": 0, "error": "", "mb": assets.CUDNN_MB, "active": False}
         self._speech_gpu_cancel = threading.Event()
         self._apps_audio_off = False      # 「只聽指定程式」這次試過不行，先改聽整台電腦（換選擇或重開程式會再試）
+        self._voice_open: dict[str, bool] = {}      # 這個來源的收音裝置這一次有沒有成功打開過
+        self._voice_tries: dict[str, int] = {}      # 斷線之後已經重試了幾次
         self._black_regions: set[str] = set()      # 抓到的畫面是全黑的聊天區（遊戲用全螢幕時會這樣）
         self._lock = threading.RLock()
         self.started = time.time()
@@ -1191,6 +1195,8 @@ class Service:
                 add(name, "bad", f"{name}_none", "audio")
             elif src.get("error"):
                 add(name, "bad", f"{name}_error", "audio", error=str(src["error"])[:200])
+            elif src.get("lost"):
+                add(name, "warn", f"{name}_lost", "audio")
             elif name == "mic" and (src.get("quiet") == "blocked" or oswin.mic_privacy_blocked()):
                 add(name, "bad", "mic_blocked", "audio")
             elif name == "mic" and src.get("quiet") == "silent":
@@ -2063,8 +2069,10 @@ class Service:
             if self.sources["mic"]["on"]:
                 self._restart_voice("mic")
 
-    def _start_voice(self, key: str) -> None:
+    def _start_voice(self, key: str, again: bool = False) -> None:
+        """again：斷線之後自動重新連接的那幾次（失敗了不顯示錯誤，接著等下一次）。"""
         kind = VOICE_KIND[key]
+        self._voice_open.pop(key, None)
         self._source(key, busy=True, error="")
         try:
             from .core.speech import Recognizer, SpeechPipeline
@@ -2102,6 +2110,9 @@ class Service:
             from .core.audio import describe
 
             self.log(traceback.format_exc())
+            if again:
+                self._source(key, busy=False)
+                return self._voice_error(kind, ex)
             self._source(key, on=False, busy=False, error=describe(ex))
 
     def _stop_voice(self, key: str) -> None:
@@ -2113,7 +2124,12 @@ class Service:
 
     def _voice_opened(self, kind: str, name: str) -> None:
         self.log(f"{kind} capture opened: {name}")
-        self._source(SOURCE_OF[kind], device=name)
+        key = SOURCE_OF[kind]
+        self._voice_open[key] = True
+        back = bool(self._voice_tries.pop(key, 0))
+        self._source(key, device=name, lost=False)
+        if back:
+            self.notice("device_back", name=name)
 
     def _on_level(self, kind: str, level: float, silent_for: float) -> None:
         """收音管線每收到一批聲音就回報一次：畫音量條，並且注意麥克風是不是一直完全沒聲音。"""
@@ -2286,8 +2302,26 @@ class Service:
     def _voice_error(self, kind: str, ex: Exception) -> None:
         key = SOURCE_OF[kind]
         self.log(f"{kind} capture failed: {ex!r}")
+        tries = self._voice_tries.get(key, 0)
+        # 本來收得好好的、用到一半才斷（耳機拔掉、藍牙斷線、Windows 換了預設裝置）：自己重新連接，不要等使用者發現沒字幕了才去按
+        running = self._voice_open.pop(key, False) or tries > 0
         self._stop_voice(key)
-        self._source(key, on=False, busy=False, speaking=False, quiet="", error=str(ex) or type(ex).__name__)
+        if running and tries < len(RECONNECT_WAITS) and self.cfg["sources"].get(key) and not self.closing.is_set():
+            self._voice_tries[key] = tries + 1
+            self._source(key, on=True, busy=False, speaking=False, quiet="", error="", lost=True)
+            if not tries:
+                self.notice("device_lost")
+            timer = threading.Timer(RECONNECT_WAITS[tries], self._voice_retry, args=(key,))
+            timer.daemon = True
+            timer.start()
+            return
+        self._voice_tries.pop(key, None)
+        self._source(key, on=False, busy=False, speaking=False, quiet="", lost=False, error=str(ex) or type(ex).__name__)
+
+    def _voice_retry(self, key: str) -> None:
+        if self.closing.is_set() or not self.sources[key]["lost"] or not self.sources[key]["on"]:
+            return      # 等的時候使用者自己關掉了
+        self._start_voice(key, again=True)
 
     # ------------------------------------------------------------------ 來源：開關
 
@@ -2318,8 +2352,10 @@ class Service:
         elif on:
             threading.Thread(target=self._start_voice, args=(key,), daemon=True).start()
         else:
+            self._voice_tries.pop(key, None)
+            self._voice_open.pop(key, None)
             self._stop_voice(key)
-            self._source(key, on=False, speaking=False, error="", quiet="")
+            self._source(key, on=False, speaking=False, error="", quiet="", lost=False)
 
     # ------------------------------------------------------------------ 聲音裝置
 

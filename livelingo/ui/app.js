@@ -208,6 +208,7 @@
   function sourceHint(key) {
     const s = S.sources[key] || {};
     const names = shortNames();
+    if (s.lost) return t("src_lost");
     if (s.busy) return t("src_busy");
     if (s.error && !s.on) return t("src_error");
     if (key === "screen") return s.on ? t("screen_on") : t("screen_off");
@@ -2088,7 +2089,7 @@
       const before = S.sources[d.key] || {};
       S.sources[d.key] = d;
       renderSources();
-      if (before.on !== d.on || before.error !== d.error || before.quiet !== d.quiet) healthSoon();
+      if (before.on !== d.on || before.error !== d.error || before.quiet !== d.quiet || before.lost !== d.lost) healthSoon();
       if (d.key === "mic" && (d.quiet || "") !== (before.quiet || "") && S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
       if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000, "error");
     },

@@ -4253,3 +4253,100 @@ def test_failed_translation_says_why_and_can_be_retried(tmp_path):
     assert i18n.count("err_keeps_stopping: ") == len(UI_LANGS) and 'd.code ? t("err_" + d.code) : (d.message || "")' in app
     lost._engine_lost(RuntimeError("boom"))
     assert lost.detail["code"] == "" and lost.detail["message"] == "boom" and lost.detail["log"].endswith("engine.log")
+
+
+def test_lost_audio_device_is_reconnected(tmp_path, monkeypatch):
+    """收音裝置用到一半斷線：自己重新連接（隔幾秒試一次），連上了說一聲；一開始就打不開的照舊馬上顯示錯誤；
+    等的時候使用者關掉就不再試；試完還是不行才顯示錯誤。"""
+    import queue
+    from pathlib import Path
+
+    from livelingo import service as service_mod
+    from livelingo.service import Service
+
+    monkeypatch.setattr(service_mod, "RECONNECT_WAITS", (0.05, 0.05, 0.05))
+    made = []
+
+    class FakeCapture:
+        def __init__(self, kind, on_error, on_open):
+            self.kind, self.on_error, self.on_open, self.q, self.alive = kind, on_error, on_open, queue.Queue(), True
+            made.append(self)
+
+        def start(self):
+            pass
+
+        def stop(self):
+            self.alive = False
+
+        def is_alive(self):
+            return self.alive
+
+    class FakeAudio:
+        def capture(self, kind, device, on_error=None, on_open=None):
+            return FakeCapture(kind, on_error, on_open)
+
+    class FakeRecognizer:
+        beam = 1
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    service = Service(tmp_path)
+    service.audio, service.recognizer, service.phase = FakeAudio(), FakeRecognizer(), "ready"
+    notices = []
+    service.notice = lambda code, **more: notices.append(code)
+    mic = service.sources["mic"]
+    try:
+        # 一開始就打不開：不重試，馬上顯示錯誤
+        service.cfg.set(sources={"screen": False, "listen": False, "mic": True})
+        service._start_voice("mic")
+        made[-1].on_error("mic", RuntimeError("no microphone found"))
+        assert mic["on"] is False and mic["error"] == "no microphone found" and not mic["lost"] and len(made) == 1 and notices == []
+
+        # 開起來之後才斷：自己重新連接
+        service._start_voice("mic")
+        made[-1].on_open("mic", "USB Headset")
+        assert mic["on"] and mic["device"] == "USB Headset"
+        made[-1].on_error("mic", RuntimeError("device unplugged"))
+        assert mic["on"] and mic["lost"] and mic["error"] == "" and notices == ["device_lost"]
+        light = lambda: next(i for i in service.health()["items"] if i["id"] == "mic")
+        wait(lambda: len(made) == 3)                          # 等了一下，再開一次
+        made[-1].on_error("mic", RuntimeError("audio device not found"))      # 還沒接回去
+        assert mic["lost"] and notices == ["device_lost"]     # 只說一次
+        wait(lambda: len(made) == 4)
+        made[-1].on_open("mic", "Laptop Microphone")          # 連上了（換成另一支也算）
+        assert mic["on"] and not mic["lost"] and mic["device"] == "Laptop Microphone"
+        assert notices == ["device_lost", "device_back"] and service._voice_tries == {}
+
+        # 等的時候使用者自己關掉：不再試
+        made[-1].on_error("mic", RuntimeError("device unplugged"))
+        assert mic["lost"]
+        service.set_source("mic", False)
+        assert not mic["on"] and not mic["lost"]
+        count = len(made)
+        time.sleep(0.3)
+        assert len(made) == count
+
+        # 試完全部還是不行：顯示錯誤
+        service.set_source("mic", True)
+        wait(lambda: len(made) == count + 1 and mic["on"])
+        made[-1].on_open("mic", "USB Headset")
+        made[-1].on_error("mic", RuntimeError("device unplugged"))
+        for n in range(3):
+            wait(lambda: len(made) == count + 2 + n)
+            wait(lambda: not mic["busy"])
+            made[-1].on_error("mic", RuntimeError("audio device not found"))
+        assert not mic["on"] and not mic["lost"] and mic["error"] == "audio device not found"
+    finally:
+        service.closing.set()
+        for capture in made:
+            capture.alive = False
+
+    source = (Path(service_mod.__file__).parent / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'if (s.lost) return t("src_lost");' in source
+    i18n = (Path(service_mod.__file__).parent / "ui" / "i18n.js").read_text(encoding="utf-8")
+    for key in ("src_lost", "n_device_lost", "n_device_back", "h_mic_lost", "h_listen_lost"):
+        assert i18n.count(f"{key}: ") == len(UI_LANGS), key
