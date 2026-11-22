@@ -3,6 +3,7 @@
 import json
 import re
 import threading
+import unicodedata
 import urllib.request
 
 from opencc import OpenCC
@@ -281,6 +282,92 @@ def tidy(out: str, target: str) -> str:
     return out.strip()
 
 
+_DIGITS = re.compile(r"\d+")
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
+# 寫成數字但其實不是數量的網路用語：翻出來本來就不會有數字
+_NUMBER_SLANG = {
+    "zh": re.compile(r"(?<!\d)(?:6{2,}|5{3,}|23{2,}|88|886|520|1314|3Q|3q)(?!\d)"),
+    "ko": re.compile(r"(?<!\d)(?:8282|1004)(?!\d)"),
+    "ja": re.compile(r"(?<!\d)8{3,}(?!\d)"),
+    "en": re.compile(r"\b(?:gr8|m8|l8r?|b4|w8|2day|2nite|2moro|4ever|n1)\b", re.I),
+}
+_HAN = "零一二三四五六七八九"
+_KO_SINO = "영일이삼사오육칠팔구"
+_KO_NATIVE = {1: ("하나", "한", "첫"), 2: ("둘", "두"), 3: ("셋", "세", "석"), 4: ("넷", "네", "넉"), 5: ("다섯",), 6: ("여섯",),
+              7: ("일곱",), 8: ("여덟",), 9: ("아홉",), 10: ("열",), 20: ("스물", "스무")}
+_EN = {0: ("zero", "no"), 1: ("one", "first", "a", "an", "once"), 2: ("two", "second", "twice", "both", "double"),
+       3: ("three", "third", "triple"), 4: ("four", "fourth"), 5: ("five", "fifth"), 6: ("six", "sixth"), 7: ("seven", "seventh"),
+       8: ("eight", "eighth"), 9: ("nine", "ninth"), 10: ("ten", "tenth"), 11: ("eleven",), 12: ("twelve",), 20: ("twenty",)}
+
+
+def numbers(text: str, source: str | None = None) -> list[str]:
+    """文字裡用阿拉伯數字寫的數（全形算半形、1,000 算 1000、06 算 6）。「666」「gr8」這種用語不算。"""
+    text = unicodedata.normalize("NFKC", text)
+    if source in _NUMBER_SLANG:
+        text = _NUMBER_SLANG[source].sub(" ", text)
+    return [str(int(n)) for n in _DIGITS.findall(_THOUSANDS.sub("", text))]
+
+
+def _spelled(n: int, target: str) -> list[str]:
+    """這個數在譯文裡不用阿拉伯數字時可能的寫法（只處理常見的小數字和整千、整萬）。"""
+    family, out = LANGS[target]["family"], []
+    if family in ("zh", "ja"):
+        if n < 10:
+            out.append(_HAN[n])
+        elif n < 100:
+            out.append(("" if n < 20 else _HAN[n // 10]) + "十" + (_HAN[n % 10] if n % 10 else ""))
+        out += {0: ["〇", "沒", "没", "無", "无", "ゼロ"], 2: ["兩", "两", "雙", "双", "ふた"], 1: ["ひと", "首"], 30: ["半小時", "半小时", "半"],
+                100: ["百"]}.get(n, [])
+        if n >= 1000 and n % 1000 == 0:
+            out += [f"{n // 1000}千", "千"] if n < 10000 else []
+        if n >= 10000 and n % 10000 == 0:
+            out += [f"{n // 10000}萬", f"{n // 10000}万"]
+    elif family == "ko":
+        if n < 10:
+            out.append(_KO_SINO[n])
+        elif n < 100:
+            out.append(("" if n < 20 else _KO_SINO[n // 10]) + "십" + (_KO_SINO[n % 10] if n % 10 else ""))
+        out += _KO_NATIVE.get(n, ())
+        if 10 < n < 30 and n % 10 in _KO_NATIVE:
+            out += [("열" if n < 20 else "스물") + w for w in _KO_NATIVE[n % 10]]
+        out += {0: ["공", "없"], 30: ["반"], 100: ["백"]}.get(n, [])
+        if n >= 1000 and n % 1000 == 0 and n < 10000:
+            out += [f"{n // 1000}천", "천"]
+        if n >= 10000 and n % 10000 == 0:
+            out.append(f"{n // 10000}만")
+    else:
+        out += _EN.get(n, ())
+        out += {30: ["half"], 100: ["hundred"], 1000: ["thousand"]}.get(n, [])
+    if n >= 1000 and n % 1000 == 0:
+        out.append(f"{n // 1000}k")
+    return out
+
+
+def numbers_lost(original: str, out: str, target: str, source: str | None = None) -> list[str]:
+    """
+    原文裡用數字寫的數，譯文裡找不到的（譯文寫成「三」「세」「three」也算有）。
+    時間、人數、金額翻錯一個數字意思就差很多，而且看譯文看不出來，所以翻完核對一次。
+    只查「原文有、譯文沒有」：譯文把「세 명」寫成「3 個人」是對的，不算錯。
+    """
+    source = source or detect_language(original)
+    if not out or source == LANGS[target]["family"]:
+        return []
+    if source is None:      # 整句只有數字和符號，看不出語言：只要是哪一種語言的用語就不查
+        original = unicodedata.normalize("NFKC", original)
+        for slang in _NUMBER_SLANG.values():
+            original = slang.sub(" ", original)
+    have = numbers(out)
+    text = unicodedata.normalize("NFKC", out)
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    lost = []
+    for n in numbers(original, source):
+        if n in have:
+            have.remove(n)
+        elif not any((w in words) if w.isascii() and w.isalpha() else (w.lower() in text.lower()) for w in _spelled(int(n), target)):
+            lost.append(n)
+    return lost
+
+
 class Translator:
     def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None):
         """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
@@ -389,6 +476,14 @@ class Translator:
                 again = self._ask(sent, source, target, hints, examples, "short")
                 if "?" not in again and "？" not in again and not _leftover(again, source, target):
                     out = again
+            if numbers_lost(sent, out, target, source):
+                # 原文的數字在譯文裡不見了或變了：換寫法再翻，哪一次數字都在就用哪一次。都不行就照舊，由畫面提醒使用者核對
+                for style in ("short", "plain"):
+                    again = self._ask(sent, source, target, hints if style == "short" else [], examples if style == "short" else [], style)
+                    again = self._clean(again, sent, source, target, [], []) if _leftover(again, source, target) else again
+                    if not numbers_lost(sent, again, target, source) and not _leftover(again, source, target):
+                        out = again
+                        break
         out = to_script(out, target)
         out = tidy(out, target)
         if len(self._cache) > 500:

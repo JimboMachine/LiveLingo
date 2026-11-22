@@ -21,7 +21,7 @@ from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVER
                      Glossary, Lessons)
 from .core.engine import Engine
 from .core.romanize import romanize
-from .core.translate import LANGS, Translator, detect_language, similarity
+from .core.translate import LANGS, Translator, detect_language, numbers_lost, similarity
 from .history import DAYS as HISTORY_DAYS
 from .jobs import Jobs
 from .history import History
@@ -806,6 +806,7 @@ class Service:
             if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
                 return
             msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
+                       lost=numbers_lost(msg["original"], out, target, msg["lang"]),      # 原文有、譯文找不到的數字：畫面會提醒核對
                        pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
             self._count(msg)
             if msg["who"] == "me" and target != self.cfg["my_lang"] and not msg.get("copied"):

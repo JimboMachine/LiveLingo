@@ -3991,3 +3991,57 @@ def test_every_package_is_pinned():
     assert len(installs) == 2 and all("-c constraints.txt" in line for line in installs)
     assert build.count("python packaging/check_pins.py") == 2
     assert "-c constraints.txt" in root.joinpath("README.md").read_text(encoding="utf-8")
+
+
+def test_numbers_are_checked_after_translating(tmp_path):
+    """原文的數字翻完要還在：不見了就換寫法重翻，還是不行就在那一則下面提醒使用者核對。"""
+    from pathlib import Path
+
+    from livelingo.core.translate import numbers, numbers_lost
+    from livelingo.service import Service
+
+    assert numbers("０６:５１ 1,000 gold 3.5") == ["6", "51", "1000", "3", "5"]      # 全形、千分位、開頭的 0
+    assert numbers("666 太強了 88", "zh") == [] and numbers("gr8 m8 see u in 5", "en") == ["5"]      # 網路用語不是數量
+    same = [("3分鐘後到", "3분 후에 도착해", "ko"), ("15分開龍", "십오 분에 용 잡자", "ko"), ("2명 더 와", "再來兩個人", "zh-TW"),
+            ("10시에 봐", "十點見", "zh-TW"), ("10000골드", "1萬金", "zh-TW"), ("meet at 7:30", "7點半見", "zh-TW"),
+            ("我有2個", "I have two", "en"), ("1등 했어", "拿第一名了", "zh-TW"), ("25분", "二十五分鐘", "zh-TW"), ("666", "대박", "ko"),
+            ("세 명 왔어", "來了 3 個人", "zh-TW"), ("第3波", "第3波", "zh-CN")]
+    for original, out, target in same:
+        assert numbers_lost(original, out, target) == [], original
+    assert numbers_lost("3分鐘後到", "5분 후에 도착해", "ko") == ["3"]
+    assert numbers_lost("10시에 봐", "九點見", "zh-TW") == ["10"]
+    assert numbers_lost("meet at 7:30", "8點見", "zh-TW") == ["7", "30"]
+    assert numbers_lost("25분 남았어", "還剩二十分鐘", "zh-TW") == ["25"]
+    assert numbers_lost("3 3 3", "3 3", "ko", "en") == ["3"]                      # 同一個數出現三次，譯文只有兩次
+
+    tr = _FakeModel({"full": "5분 후에 도착해.", "short": "3분 후에 도착해."})
+    assert tr.translate("3分鐘後到", "ko", "zh") == "3분 후에 도착해." and [a[1] for a in tr.asked] == ["full", "short"]
+    tr = _FakeModel({"full": "5분 후에 도착해.", "short": "곧 도착해.", "plain": "삼 분 후에 도착해."})
+    assert tr.translate("3分鐘後到", "ko", "zh") == "삼 분 후에 도착해." and [a[1] for a in tr.asked] == ["full", "short", "plain"]
+    tr = _FakeModel("곧 도착해.")                                                   # 怎麼翻都沒有：留第一次的
+    assert tr.translate("3分鐘後到", "ko", "zh") == "곧 도착해." and len(tr.asked) == 3
+    tr = _FakeModel("3분 후에 도착해.")
+    assert tr.translate("3分鐘後到", "ko", "zh") == "3분 후에 도착해." and len(tr.asked) == 1      # 數字都在就不多翻
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", friend_lang="ko")
+    service.translator = _FakeModel(lambda text, style, context: "곧 도착해." if "3" in text else "20분 뒤에 봐.")
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        service.submit("typed", "3分鐘後到", "zh")
+        service.submit("typed", "20分鐘後見", "zh")
+        end = time.time() + 5
+        while time.time() < end and len([m for m in service.messages if not m.get("pending")]) < 2:
+            time.sleep(0.02)
+        done = {m["original"]: m for m in service.messages}
+        assert done["3分鐘後到"]["lost"] == ["3"] and done["3分鐘後到"]["translated"] == "곧 도착해."
+        assert done["20分鐘後見"]["lost"] == []
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    assert 't("numbers_lost", { numbers: m.lost.join(' in ui.joinpath("app.js").read_text(encoding="utf-8")
+    assert ".msg .lost {" in ui.joinpath("style.css").read_text(encoding="utf-8")
+    assert ui.joinpath("i18n.js").read_text(encoding="utf-8").count("numbers_lost: ") == 5

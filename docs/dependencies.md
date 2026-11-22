@@ -228,14 +228,15 @@
 
 ### 改翻譯的做法
 
-1. `translate.py`：提示、整理輸出、補救
+1. `translate.py`：提示、整理輸出、補救；數字核對（numbers_lost）認得的寫法：新增語言時要補那個語言的數字寫法和數字用語
 2. `terms.py`：遊戲用語
 3. `config.py`：詞彙表、學過的句子
-4. `service.py`：翻成哪種語言、重試
-5. `romanize.py`：韓文唸法
-6. `test_basics.py`：固定句子的檢查
+4. `service.py`：翻成哪種語言、重試；留言的 lost 欄位（譯文裡找不到的數字）
+5. `app.js`、`style.css`、`i18n.js`：留言下面的提醒（numbers_lost）
+6. `romanize.py`：韓文唸法
+7. `test_basics.py`：固定句子的檢查
 
-自動把關：測試有固定的句子在把關，例如陳述句不能變成問句。
+自動把關：測試有固定的句子在把關，例如陳述句不能變成問句、原文的數字翻完要還在。
 
 ### 改顏色、字的大小，或加新的畫面、新的按鈕
 
@@ -354,7 +355,7 @@
 | 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
-| 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文）、語言清單（LANGS）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
+| 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文）、語言清單（LANGS）、翻完核對數字（numbers_lost）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
 | 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）；每次啟動把新的網址和金鑰交給翻譯（改壞會報錯）<br>`translate.py`：引擎每次啟動的金鑰（環境變數 LLAMA_API_KEY；請求要帶 Authorization: Bearer）（改壞不會報錯） |
 | 用語包（可多選） | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json`<br>`livelingo/data/terms_chat.json` | `service.py`：遊戲用語（改壞會報錯） |
 | 韓文唸法 | `livelingo/core/romanize.py` | `service.py`：韓文唸法（改壞會報錯） |

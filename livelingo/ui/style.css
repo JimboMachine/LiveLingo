@@ -244,6 +244,8 @@ input::placeholder { color: var(--faint); }
 .pack[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .pack[aria-pressed="true"] .name svg { opacity: 1; color: var(--accent); }
 .msg .unsure { display: inline-flex; align-items: center; gap: 5px; margin: 2px 0 4px; padding: 2px 8px 2px 6px; border: 1px solid var(--me-line); border-radius: 10px; background: var(--me-bg); color: var(--me); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.msg .lost { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--me); }
+.msg .lost svg { flex: none; width: 13px; height: 13px; margin-top: 2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .msg .unsure svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .msg .back svg { flex: none; margin-top: 3px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .msg .copied { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 2px; }
