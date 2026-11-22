@@ -4,7 +4,8 @@
   2. 裝好的程式自我檢查通過（視窗開得起來）
   3. 更新：假裝 GitHub 上有 99.0.0，程式會先問（問的時候帶著這一版改了什麼、要下載多大）；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
   3c. 回上一版：用留著的安裝檔退一次（核對雜湊、自己關掉、安靜地裝、再打開）
-  4. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
+  4a. 卸載時選擇留下設定（/KEEPDATA=1）：程式、捷徑、模型、引擎都刪掉，設定和詞彙表留著，之後再裝一次
+  4b. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
 """
 
@@ -302,8 +303,49 @@ print("reopened after roll back, pid", pids, "phase", api(run, "/api/state")["ph
 api(run, "/api/quit", {})
 wait_for("the app to quit after the roll back check", lambda: not running(), 60)
 
-# ---------------------------------------------------------------- 4. 卸載
-step("uninstall")
+# ---------------------------------------------------------------- 4a. 卸載，但把自己的設定留下來
+step("uninstall, keeping settings and history")
+DATA.mkdir(parents=True, exist_ok=True)
+for name in ("models", "engine", "update", "webview"):
+    (DATA / name).mkdir(exist_ok=True)
+    (DATA / name / "big-file.bin").write_bytes(b"x" * 1000)
+(DATA / "glossary-kept-by-test.json").write_text("{}", encoding="utf-8")
+KEPT_OTHER = Path(tempfile.mkdtemp(prefix="ll-other-drive-"))
+KEPT_MOVED = KEPT_OTHER / "LiveLingo"
+(KEPT_MOVED / "models").mkdir(parents=True)
+(KEPT_MOVED / "models" / "moved-model.bin").write_bytes(b"x" * 1000)
+(KEPT_MOVED / ".livelingo-files").write_text("LiveLingo\n", encoding="utf-8")
+saved = json.loads((DATA / "config.json").read_text(encoding="utf-8")) if (DATA / "config.json").exists() else {}
+saved.update(store_dir=str(KEPT_MOVED), my_lang="zh-TW")
+(DATA / "config.json").write_text(json.dumps(saved), encoding="utf-8")
+code = subprocess.run([str(APP_DIR / "unins000.exe"), *SILENT, "/KEEPDATA=1"], timeout=600).returncode
+print("uninstaller exit code", code)
+wait_for("the program folder to be removed", lambda: not APP.exists() and not (APP_DIR / "_internal").exists(), 180)
+for path in (DESKTOP, START, KEPT_MOVED, DATA / "models", DATA / "engine", DATA / "update", DATA / "webview"):
+    print(f"{path}: {'still there' if path.exists() else 'removed'}")
+    if path.exists():
+        fail(f"{path} was left behind after uninstalling")
+for path in (DATA / "config.json", DATA / "glossary-kept-by-test.json"):
+    print(f"{path}: {'kept' if path.exists() else 'GONE'}")
+    if not path.exists():
+        fail(f"{path} was removed although the user asked to keep their data")
+kept = json.loads((DATA / "config.json").read_text(encoding="utf-8"))
+if kept.get("my_lang") != "zh-TW" or kept.get("store_dir"):
+    fail(f"the kept settings are wrong: my_lang={kept.get('my_lang')!r} store_dir={kept.get('store_dir')!r}")
+if registered():
+    fail("the uninstall entry is still in the registry")
+print("program and large files removed; settings kept and no longer pointing at the removed folder")
+
+step("install again over the kept settings")
+code = subprocess.run([str(SETUP), *SILENT, f"/LOG={log}"], timeout=900).returncode
+if code != 0 or not APP.exists() or not registered():
+    print(log.read_text(errors="replace")[-4000:] if log.exists() else "(no log)")
+    fail(f"installing again failed (exit code {code})")
+if running():
+    fail("the app was started by a plain silent install")
+
+# ---------------------------------------------------------------- 4b. 卸載，全部刪掉
+step("uninstall, removing everything")
 DATA.mkdir(parents=True, exist_ok=True)
 (DATA / "models").mkdir(exist_ok=True)
 (DATA / "models" / "fake-model.bin").write_bytes(b"x" * 1000)

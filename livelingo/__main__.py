@@ -39,7 +39,13 @@ def main() -> int:
             saved = json.loads((data / "config.json").read_text(encoding="utf-8")).get("store_dir") or ""
         except (OSError, ValueError):
             saved = ""
-        storage.remove_moved(data, str(saved))
+        if storage.remove_moved(data, str(saved)):
+            try:      # 使用者選擇留下設定的話，下次安裝不要還指著已經刪掉的資料夾
+                kept = json.loads((data / "config.json").read_text(encoding="utf-8"))
+                kept.pop("store_dir", None)
+                (data / "config.json").write_text(json.dumps(kept, ensure_ascii=False, indent=2), encoding="utf-8")
+            except (OSError, ValueError):
+                pass
         return 0
     if "--selftest" in sys.argv:
         from .selftest import run as selftest

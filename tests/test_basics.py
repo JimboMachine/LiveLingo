@@ -2946,7 +2946,9 @@ def test_storage_sizes_move_and_remove_unused(tmp_path, monkeypatch):
     assert '"--remove-store" in sys.argv' in main_src and "storage.remove_moved(data, str(saved))" in main_src
     iss = (Path(storage.__file__).parents[1] / "packaging" / "installer.iss").read_text(encoding="utf-8")
     assert 'Parameters: "--remove-store"' in iss and "[UninstallRun]" in iss
-    assert iss.index("[UninstallRun]") < iss.index("[UninstallDelete]")
+    # 順序：先叫程式刪搬走的大檔案（那時候程式還在），整個卸載完才刪資料夾
+    assert "[UninstallDelete]" not in iss and "CurUninstallStep <> usPostUninstall" in iss
+    assert iss.startswith("\ufeff")      # 檔案裡有中文、韓文、日文的訊息：要有 BOM，安裝程式的編譯器才會當成 UTF-8
     ci = (Path(storage.__file__).parents[1] / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
     assert storage.MARK in ci and "not-ours.txt" in ci      # 真的安裝、卸載的那個檢查也看這件事
     # 服務裡找模型、引擎一律用 self.store；每一個會回給介面的原因代碼都有五種語言的句子
@@ -4095,3 +4097,28 @@ def test_long_sentences_stay_longer_on_the_overlay():
     assert life({"text": long_ko * 20}, 0) == 0                              # 設成不會消失：不變
     assert life({"text": long_ko * 20, "life": 3.0}, 15) == 3.0              # 程式自己的短提示：照它自己的
     assert life({"text": "a few short words"}, 8) == 8
+
+
+def test_uninstall_asks_before_removing_personal_data():
+    """卸載：自己累積的設定、詞彙表、歷史要先問要不要留；模型和引擎一律刪。安靜模式照舊全部刪，自動測試兩種都走一次。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    iss = root.joinpath("packaging", "installer.iss").read_text(encoding="utf-8")
+    code = iss[iss.index("[Code]"):]
+    assert "SuppressibleMsgBox(CustomMessage('KeepData'), mbConfirmation, MB_YESNO, IDNO) = IDYES" in code
+    assert "{param:KEEPDATA|0}" in code and "not UninstallSilent" in code
+    keep = code[code.index("if KeepData then"):code.index("DelTree(data, True, True, True)")]
+    assert [name for name in ("models", "engine", "update", "webview") if f"data + '\\{name}'" in keep] == ["models", "engine", "update", "webview"]
+    assert "config" not in keep and "history" not in keep                       # 留下來的那一邊不能碰到設定和歷史
+    messages = iss[iss.index("[CustomMessages]"):iss.index("[Tasks]")]
+    assert messages.count("KeepData=") == 5                                    # 預設（英文）加四種語言
+    for lang, flag in (("zhtw", "HasZhTW"), ("zhcn", "HasZhCN"), ("ko", "HasKo"), ("ja", "HasJa")):
+        assert f"#ifdef {flag}\n{lang}.KeepData=" in messages and iss.count(f"#define {flag}") >= 1, lang
+    ci = root.joinpath("packaging", "ci_install_test.py").read_text(encoding="utf-8")
+    assert '"/KEEPDATA=1"' in ci and "glossary-kept-by-test.json" in ci and ci.count("unins000.exe\"), *SILENT") == 2
+    main_src = root.joinpath("livelingo", "__main__.py").read_text(encoding="utf-8")
+    assert 'kept.pop("store_dir", None)' in main_src                           # 留下來的設定不能還指著刪掉的資料夾
+    assert "會全部刪除" not in root.joinpath("README.md").read_text(encoding="utf-8")
+    help_text = root.joinpath("livelingo", "data", "help.json").read_text(encoding="utf-8")
+    assert "卸載時會一起刪掉" not in help_text and "removed when you uninstall" not in help_text
