@@ -3,6 +3,7 @@
   1. 安靜安裝後程式在、桌面和開始功能表捷徑在、「新增或移除程式」裡有登記
   2. 裝好的程式自我檢查通過（視窗開得起來）
   3. 更新：假裝 GitHub 上有 99.0.0，程式會先問（問的時候帶著這一版改了什麼、要下載多大）；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
+  3c. 回上一版：用留著的安裝檔退一次（核對雜湊、自己關掉、安靜地裝、再打開）
   4. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
 """
@@ -11,6 +12,7 @@ import ctypes
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -253,6 +255,52 @@ urllib.request.urlopen(req, timeout=20)
 wait_for("the app to quit when asked", lambda: not running(), 60)
 print("app log:\n" + ((data / "app.log").read_text(encoding="utf-8", errors="replace")[-2000:] if (data / "app.log").exists() else "(empty)"))
 httpd.shutdown()
+
+# 3c. 回上一版：用留著的安裝檔，裝好自己重新開啟。這裡留著的其實是同一版的安裝檔（手上只有這一個），
+#     看的是整條路走不走得通：核對雜湊、程式自己關掉、安靜地裝、再打開、記下不要再問的版本
+step("roll back with the kept installer")
+kept = data / "update" / "LiveLingo-Setup-0.9.0.exe"
+kept.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(SETUP, kept)
+(data / "update.json").write_text(json.dumps({"version": state["version"], "at": time.time(), "from": "0.9.0",
+                                              "from_sha256": digest, "told": True}), encoding="utf-8")
+(data / "run.json").unlink(missing_ok=True)
+env_back = {k: v for k, v in env.items() if k != "LIVELINGO_UPDATE_API"}
+env_back.update(LIVELINGO_NO_UPDATE="1", LIVELINGO_ROLLBACK_FLOOR="0.0.1")
+third = subprocess.Popen([str(APP)], env=env_back)
+print("started pid", third.pid)
+
+
+def settled():
+    run = run_info_of(data)
+    try:
+        return run if run and api(run, "/api/state")["phase"] not in ("starting", "updating", "loading") else None
+    except (OSError, ValueError):
+        return None
+
+
+run = wait_for("the app to be ready for rolling back", settled, 240)
+offered = api(run, "/api/state")["update"]
+print("roll back offered:", offered)
+if not offered.get("previous") or offered["previous"].get("version") != "0.9.0" or not offered["previous"].get("kept"):
+    fail("the kept installer of the previous version was not recognised")
+answer = api(run, "/api/update", {"rollback": True})
+print("roll back answer:", answer)
+if not answer.get("ok"):
+    fail("the app refused to roll back")
+wait_for("the app to exit so the previous installer can run", lambda: third.poll() is not None, 300)
+if third.returncode != 0:
+    fail("the app did not close by itself for the roll back (it was killed)")
+record = json.loads((data / "update.json").read_text(encoding="utf-8"))
+print("roll back record:", record)
+if record.get("version") != "0.9.0" or record.get("skip") != state["version"] or record.get("rollback") is not True:
+    fail("the roll back was not recorded")
+(data / "run.json").unlink(missing_ok=True)
+pids = wait_for("the installer to reopen the app after rolling back", lambda: [p for p in running() if p != third.pid], 600)
+run = wait_for("the reopened app to answer", settled, 240)
+print("reopened after roll back, pid", pids, "phase", api(run, "/api/state")["phase"])
+api(run, "/api/quit", {})
+wait_for("the app to quit after the roll back check", lambda: not running(), 60)
 
 # ---------------------------------------------------------------- 4. 卸載
 step("uninstall")

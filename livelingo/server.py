@@ -312,6 +312,10 @@ class Server:
                         service.focus()
                         return self._json({"ok": True})
                     if route == "/api/update":
+                        if body.get("rollback"):      # 回上一版
+                            return self._json(service.rollback())
+                        if body.get("unskip"):      # 退回之後不再問的那一版：恢復提示
+                            return self._json(service.update_unskip())
                         service.update_choice(str(body.get("choice") or ""))
                         return self._json({"ok": True})
                     if route == "/api/retry":

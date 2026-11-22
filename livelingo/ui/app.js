@@ -1175,6 +1175,25 @@
         ${older.length ? `<details class="changes-older"><summary>${esc(t("about_changes_older"))}</summary><div class="changes">${changesHTML(older, true)}</div></details>` : ""}</section>`;
   }
 
+  // 回上一版：更新之後覺得新版有問題，可以退回去；退回之後不再問要不要更新到那一版
+  function rollbackHTML() {
+    const u = S.update || {}, p = u.previous;
+    let html = "";
+    if (u.skipped) {
+      html += `<div class="note" id="up-skipped">${ICON.info}<span>${esc(t("up_skipped", { version: u.skipped }))}</span>
+        <button class="ghost" data-act="update-unskip">${esc(t("up_unskip"))}</button></div>`;
+    }
+    if (p && S.ui.backAsk) {
+      html += `<div class="note warn" id="up-back-ask">${ICON.info}<span>${esc(t("up_back_ask", { version: p.version, current: S.version }))}</span>
+        <button data-act="rollback-yes">${esc(t("up_back_yes"))}</button><button class="ghost" data-act="rollback-no">${esc(t("cancel"))}</button></div>`;
+    } else if (p) {
+      html += `<div class="setting-row store-row" id="up-back"><div class="health-text"><div>${esc(t("up_back_row", { version: p.version }))}</div>
+        <div class="desc">${esc(t(p.kept ? "up_back_kept" : "up_back_fetch"))}</div></div>
+        <button class="ghost" data-act="rollback">${esc(t("up_back", { version: p.version }))}</button></div>`;
+    }
+    return html ? `<section id="about-update">${html}</section>` : "";
+  }
+
   function aboutPage() {
     const fact = (icon, title, text) => `<div class="fact">${ICON[icon]}<div><b>${esc(title)}</b><span>${esc(text)}</span></div></div>`;
     return `
@@ -1187,6 +1206,7 @@
         ${fact("quality", t("about_engine_title"), t("about_engine"))}
         ${fact("info", t("about_update_title"), t("about_update"))}
       </section>
+      ${rollbackHTML()}
       ${aboutChangesHTML()}`;
   }
 
@@ -1356,7 +1376,9 @@
           <div class="btn-row center"><button class="primary" data-act="update-now">${esc(t("up_now"))}</button>
           <button class="ghost" data-act="update-later">${esc(t("up_later"))}</button></div>`;
       } else {
-        html = `<div class="spinner"></div><h2>${esc(t("st_updating"))}</h2><p>${esc(text)}</p>` +
+        const title = d.back ? t("up_back_title") : t("st_updating");
+        const line = !d.back ? text : d.step === "downloading" ? t("up_back_downloading", { version: d.version, percent: d.percent || 0 }) : t("up_back_installing", { version: d.version });
+        html = `<div class="spinner"></div><h2>${esc(title)}</h2><p>${esc(line)}</p>` +
           (d.step === "downloading" ? `<div class="bar"><span style="width:${d.percent || 0}%"></span></div>
             <div class="btn-row center"><button class="ghost" data-act="update-cancel">${esc(t("cancel"))}</button></div>` : "");
       }
@@ -1571,6 +1593,17 @@
       if (r && r.ok) toast(t("sto_removed", { size: sizeText(r.freed) }), 6000);
       else storeAnswer(r);
       await loadStorage();
+    },
+    rollback: () => { S.ui.backAsk = true; renderSettingsPage(); const b = document.querySelector('[data-act="rollback-no"]'); if (b) b.focus(); },
+    "rollback-no": () => { S.ui.backAsk = false; renderSettingsPage(); const b = document.querySelector('[data-act="rollback"]'); if (b) b.focus(); },
+    "rollback-yes": async () => {
+      S.ui.backAsk = false;
+      const r = await post("/api/update", { rollback: true });
+      if (r && !r.ok) { toast(t("n_" + r.error, r), 9000, "warn"); renderSettingsPage(); }
+    },
+    "update-unskip": async () => {
+      const r = await post("/api/update", { unskip: true });
+      if (r && r.ok) { S.update = r; toast(t("up_unskipped"), 5000); renderSettingsPage(); }
     },
     "health-again": async () => { await loadHealth(); const b = document.querySelector('[data-act="health-again"]'); if (b) b.focus(); },
     "hist-more": () => loadHistory(true),
@@ -1885,6 +1918,7 @@
     if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();      // 還在問「確定嗎」：Esc 就是不要
     if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();
     if (S.ui.storeAsk && S.view === "settings") actions["store-remove-no"]({ dataset: { id: S.ui.storeAsk } });
+    if (S.ui.backAsk && S.view === "settings") actions["rollback-no"]();
   });
 
   // ---------------------------------------------------------------- 背景送來的事件
@@ -2019,7 +2053,11 @@
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
     S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
-    if (st.updated_from) { toast(t("up_done", { version: st.version }), 12000); post("/api/seen", { update: true }); }      // 剛自動更新完：說一次
+    S.update = st.update || {};
+    if (st.updated_from) {      // 剛自動更新（或退回）完第一次開：說一次
+      toast(t(S.update.skipped === st.updated_from ? "up_back_done" : "up_done", { version: st.version }), 12000);
+      post("/api/seen", { update: true });
+    }
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
     S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history; S.settingsBackup = st.settings_backup || null;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";

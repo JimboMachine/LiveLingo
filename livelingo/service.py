@@ -237,7 +237,8 @@ class Service:
             "history": self.history.state(),
             "settings_backup": self.settings_backup(),
             "changes": self.changes,                 # 每一版改了什麼（關於頁）
-            "updated_from": self.updated_from,       # 剛自動更新完第一次開：舊的版本號（只說一次）
+            "updated_from": self.updated_from,       # 剛自動更新（或退回）完第一次開：之前的版本號（只說一次）
+            "update": self.update_state(),
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -310,6 +311,9 @@ class Service:
         if not info:
             return False
         attempts = updater.Attempts(self.data)
+        if info["version"] == updater.skipped(self.data):      # 使用者從這一版退回來的：不再問，等更新的版本
+            self.log(f"update to {info['version']} is skipped (rolled back from it)")
+            return False
         if attempts.recently_tried(info["version"]):
             self.log(f"update to {info['version']} was just tried; not retrying yet")
             self.notice("update_failed", version=info["version"])
@@ -340,7 +344,8 @@ class Service:
             if self._update_stop.is_set():
                 raise assets.DownloadError("cancelled")
             self.set_phase("updating", step="installing", version=info["version"])
-            attempts.record(info["version"])
+            kept = updater.installer_path(self.data / "update", __version__)      # 現在這一版的安裝檔（有的話）：留著，之後可以直接退回來
+            attempts.record(info["version"], **({"from_sha256": updater.sha256_of(kept)} if kept.is_file() else {}))
             updater.launch_installer(path)
         except Exception as ex:  # noqa: BLE001
             if self._update_stop.is_set():
@@ -354,6 +359,72 @@ class Service:
         time.sleep(0.5)
         self.exit_now()
         return True
+
+    def update_state(self) -> dict:
+        """關於頁用：previous 可以退回去的上一版（沒有就是 None）；skipped 退回之後不再問的那一版。"""
+        return {"previous": updater.previous(self.data), "skipped": updater.skipped(self.data), "version": __version__}
+
+    def update_unskip(self) -> dict:
+        updater.unskip(self.data)
+        return {"ok": True, **self.update_state()}
+
+    def rollback(self) -> dict:
+        """回上一版：用留著的安裝檔（沒留著就先下載），裝好自動重開。之後不會再問要不要更新到剛退掉的這一版。"""
+        prev = updater.previous(self.data)
+        if not prev:
+            return {"ok": False, "error": "rollback_none"}
+        if self._move or self.phase in ("updating", "downloading", "loading", "starting"):
+            return {"ok": False, "error": "store_busy"}
+        self._update_stop.clear()
+        threading.Thread(target=self._rollback_work, args=(prev,), daemon=True, name="rollback").start()
+        return {"ok": True, "version": prev["version"]}
+
+    def _rollback_work(self, prev: dict) -> None:
+        version, before = prev["version"], (self.phase, dict(self.detail))
+        try:
+            path = updater.kept_installer(self.data, version)
+            if not path:      # 沒留著（第一次是自己下載安裝的），或檔案跟當初的不一樣：重新下載
+                self.set_phase("updating", step="downloading", version=version, percent=0, back=True)
+                last = [0.0]
+
+                def progress(done, total):
+                    if time.time() - last[0] > 0.4 and total:
+                        last[0] = time.time()
+                        self.set_phase("updating", step="downloading", version=version, percent=int(done * 100 / total), back=True)
+
+                info = updater.release_of(version)
+                if not info:
+                    raise assets.DownloadError(f"version {version} was not found")
+                updater.installer_path(self.data / "update", version).unlink(missing_ok=True)      # 跟當初不一樣的那個檔不能用：丟掉重新下載
+                path = updater.download(info, self.data / "update", progress, cancel=self._update_stop.is_set)
+                if self._update_stop.is_set():
+                    raise assets.DownloadError("cancelled")
+            self.set_phase("updating", step="installing", version=version, back=True)
+            self._settings_copy()
+            updater.Attempts(self.data).record(version, skip=__version__, rollback=True)
+            updater.launch_installer(path)
+        except Exception as ex:  # noqa: BLE001
+            self.set_phase(before[0], **before[1])      # 沒退成：回到原本的畫面，照常使用
+            if self._update_stop.is_set():
+                self.log(f"rollback to {version} cancelled by the user during download")
+                return
+            self.log(f"rollback to {version} failed: {ex!r}")
+            self.notice("rollback_failed", version=version)
+            return
+        self.log(f"rolling back to {version}; closing")
+        time.sleep(0.5)
+        self.exit_now()
+
+    def _settings_copy(self) -> None:
+        """退回舊版之前把現在的設定另外存一份：舊版不認得的新設定，舊版存檔時會丟掉；之後再更新回來可以用「匯入設定」拿回來。"""
+        try:
+            folder = self.transcript_dir()
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / f"LiveLingo-settings-{__version__}-before-rollback.json").write_text(json.dumps(
+                {"app": "LiveLingo", "kind": SETTINGS_KIND, "version": 1, "app_version": __version__, "config": self._settings_now()},
+                ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as ex:
+            self.log(f"could not keep a copy of the settings before rolling back: {ex!r}")
 
     def _prepare(self) -> None:
         """決定模式、確認檔案都在、啟動翻譯引擎。"""
