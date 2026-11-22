@@ -17,7 +17,7 @@ from pathlib import Path
 
 def run(out: Path, window: bool = True) -> int:
     results: dict = {}
-    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
+    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray", "app_audio"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
 
     def check(name, fn):
         started = time.time()
@@ -132,6 +132,23 @@ def run(out: Path, window: bool = True) -> int:
         if errors:
             raise RuntimeError(errors[0])
         return {"device": cap.device_name, "way": cap.backend, "blocks": cap.q.qsize()}
+
+    def app_audio():
+        """只收單一程式的聲音：另外開一個程序試收自己的聲音，記下 Windows 給不給、收到多少。"""
+        import subprocess
+
+        from .core import procaudio
+
+        if not procaudio.available():
+            return {"available": False}
+        result = tmp / "app-audio.json"
+        head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        done = subprocess.run([*head, "--probe-app-audio", str(result)], timeout=60, stdin=subprocess.DEVNULL,
+                              creationflags=subprocess.CREATE_NO_WINDOW)
+        info = json.loads(result.read_text(encoding="utf-8")) if result.exists() else {}
+        info["exit"] = done.returncode
+        assert done.returncode == 0 and info.get("opened") and not info.get("error"), info
+        return info
 
     def screen_grab():
         import mss
@@ -272,6 +289,7 @@ def run(out: Path, window: bool = True) -> int:
     check("audio_devices", audio_devices)
     check("second_mic_way", second_mic_way)
     check("mic_capture", mic_capture)
+    check("app_audio", app_audio)
     check("screen_grab", screen_grab)
     check("floating_chat", floating_chat)
 

@@ -69,7 +69,7 @@
     const page = $("settings-page");
     const el = S.view === "settings" && (page.querySelector(mark.key[0] === "#" ? mark.key : mark.key.startsWith("preset-") ? `[data-act="overlay-preset"][data-code="${mark.key.slice(7)}"]` : SAVE_TARGET[mark.key] || `[data-key="${mark.key}"][aria-pressed="true"]`)
       || page.querySelector(`[data-key="${mark.key}"], [data-change="${mark.key}"]`));
-    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches, .packs"));
+    const row = el && (el.closest(".setting-row, .range-row, .field") || el.closest(".btn-row, .pills, .swatches, .packs, .device.app"));
     if (row) row.classList.add("just-saved");
     chip.hidden = false;
     if (el) {
@@ -207,6 +207,9 @@
     if (s.error && !s.on) return t("src_error");
     if (key === "screen") return s.on ? t("screen_on") : t("screen_off");
     const device = s.device || (key === "listen" ? S.cfg.speaker_name : S.cfg.mic_name) || t("default_device");
+    if (key === "listen" && s.on && s.apps && !s.speaking) {      // 只聽指定的程式：說現在聽到哪幾個，都還沒開就說在等
+      return s.device ? t("listen_apps_on", { apps: s.device }) : t("listen_apps_wait", { apps: (S.cfg.listen_apps || []).map(appName).join("、") });
+    }
     if (key === "listen") return s.on ? (s.speaking ? t("listen_speaking") : t("listen_on", { device })) : t("listen_off");
     if (s.on && S.cfg.ptt && !s.speaking) return t("mic_ptt", { key: keyName(S.cfg.ptt_key) });
     return s.on ? (s.speaking ? t("mic_speaking") : t("mic_on", { device })) : t("mic_off", names);
@@ -491,6 +494,29 @@
       : t("delay_none");
   }
 
+  function appName(exe) { return /\.exe$/i.test(exe) ? exe.slice(0, -4) : exe; }
+
+  // 只聽指定程式的聲音：列出現在開著的程式，可以勾好幾個；一個都不勾就是聽整台電腦
+  function appsHTML() {
+    const a = S.ui.apps;
+    if (!a) return "";
+    const chosen = S.cfg.listen_apps || [];
+    let body;
+    if (!a.available) body = `<div class="note">${ICON.info}<span>${esc(t("apps_unavailable"))}</span></div>`;
+    else {
+      const rows = a.apps.map((p, i) => `<button class="device app" id="app-${i}" data-act="app" data-exe="${esc(p.exe)}" aria-pressed="${chosen.some((c) => c.toLowerCase() === p.exe.toLowerCase())}">
+          <span class="box">${ICON.check}</span>
+          <span class="info"><span class="name">${esc(p.name)}</span><span class="dnote">${esc(p.running ? p.title : t("apps_closed"))}</span></span>
+        </button>`).join("");
+      body = `${rows || `<div class="none">${esc(t("apps_none"))}</div>`}
+        <div class="btn-row"><button class="ghost" data-act="apps-refresh">${esc(t("apps_refresh"))}</button>
+          ${chosen.length ? `<button class="ghost" data-act="apps-clear">${esc(t("apps_clear"))}</button>` : ""}
+          ${a.off && chosen.length ? "" : `<span class="dim small">${esc(chosen.length ? t("apps_now", { apps: chosen.map(appName).join("、") }) : t("apps_all"))}</span>`}</div>
+        ${a.off && chosen.length ? `<div class="note warn">${ICON.info}<span>${esc(t("n_apps_audio_failed"))}</span></div>` : ""}`;
+    }
+    return `<section id="apps-section"><div><h2>${esc(t("apps_title"))}</h2><div class="sub">${esc(t("apps_hint"))}</div></div>${body}</section>`;
+  }
+
   // 語音辨識用顯示卡（有 NVIDIA 顯示卡才出現）：選了之後照狀態顯示「要下載／下載中／已啟用／不行，已改回處理器」
   function speechGpuHTML() {
     const g = S.speechGpu || {};
@@ -510,7 +536,7 @@
   // 聲音設定頁下半：辨識要快還是準、多小聲算說話、停多久算說完、回音、按住才說話（第一次設定的精靈不放這些）
   function voiceTuningHTML() {
     if (!S.ui.devices || !S.ui.devices.ok) return "";
-    return `
+    return `${appsHTML()}
       <section><div><h2>${esc(t("tune_title"))}</h2><div class="sub">${esc(t("tune_hint"))}</div></div>
         ${choiceRow("speech_mode", t("speech_mode"), [["fast", t("speech_fast")], ["accurate", t("speech_accurate")]])}
         ${speechGpuHTML()}
@@ -546,7 +572,13 @@
     refreshDevicePanels();
     S.ui.devices = await get("/api/devices") || { ok: false, error: "no response", speakers: [], microphones: [] };
     refreshDevicePanels();
+    loadApps();
     post("/api/meters", { on: true });
+  }
+
+  async function loadApps() {
+    S.ui.apps = await get("/api/apps") || null;
+    if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
   }
 
   function refreshDevicePanels() {
@@ -824,7 +856,7 @@
     const scroll = page.scrollTop;
     const active = page.contains(document.activeElement) ? document.activeElement : null;
     const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
-      ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
+      ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack", "exe"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + voiceTuningHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
@@ -1107,6 +1139,13 @@
     },
     quality: (el) => saveCfg({ quality: el.dataset.q }),
     tone: (el) => saveCfg({ tone: el.dataset.tone }),
+    app: (el) => {      // 勾或取消一個程式
+      const exe = el.dataset.exe, now = (S.cfg.listen_apps || []).slice();
+      const has = now.some((c) => c.toLowerCase() === exe.toLowerCase());
+      saveCfg({ listen_apps: has ? now.filter((c) => c.toLowerCase() !== exe.toLowerCase()) : now.concat(exe) }, "#" + el.id).then(loadApps);
+    },
+    "apps-clear": () => saveCfg({ listen_apps: [] }, "#apps-section").then(loadApps),
+    "apps-refresh": () => loadApps(),
     "sgpu-download": () => post("/api/speech_gpu", { download: true }),
     "sgpu-cancel": () => post("/api/speech_gpu", { cancel: true }),
     "lib-export": async () => {

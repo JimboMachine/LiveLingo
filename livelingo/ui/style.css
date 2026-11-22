@@ -289,6 +289,11 @@ input::placeholder { color: var(--faint); }
 .page .sub { font-size: 13px; color: var(--dim); line-height: 1.5; margin-top: 4px; }
 .device { min-height: 60px; width: 100%; padding: 10px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); text-align: left; display: flex; align-items: center; gap: 12px; }
 .device[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.device .box { width: 18px; height: 18px; flex: none; border-radius: 5px; border: 2px solid var(--faint); display: flex; align-items: center; justify-content: center; }
+.device .box svg { width: 14px; height: 14px; opacity: 0; color: var(--accent-ink); }
+.device[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); }
+.device[aria-pressed="true"] .box svg { opacity: 1; }
+.device.app { min-height: 52px; }
 .device .radio { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2px solid var(--faint); display: flex; align-items: center; justify-content: center; }
 .device .radio span { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
 .device[aria-pressed="true"] .radio { border-color: var(--accent); }

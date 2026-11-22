@@ -95,6 +95,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.devices())
+                if url.path == "/api/apps":      # 現在開著哪些程式（「只聽這幾個程式」的清單）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.apps_state())
                 if url.path == "/api/overlay_preview":      # 設定畫面上的浮動留言預覽（照現在的設定畫的一張圖）
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)

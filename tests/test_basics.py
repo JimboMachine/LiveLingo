@@ -1567,3 +1567,167 @@ def test_speech_on_the_graphics_card(tmp_path, monkeypatch):
     assert rec.transcribe(None, ["ko"]) == ("지금 갈게요", "ko", False)
     assert loads == [("cpu", "int8")] and len(fell) == 1 and rec.device == "cpu"
 
+
+def test_listen_to_chosen_programs_only(tmp_path, monkeypatch):
+    """只聽指定程式的聲音：找得到程式的最上層程序、好幾個程式混成一路、程式晚開或關掉都跟得上、
+    Windows 不給聲音時退回整台電腦並通知。"""
+    import ctypes
+
+    import numpy as np
+
+    from livelingo import apps
+    from livelingo.core import procaudio
+    from livelingo.core.audio import BLOCK, SR
+    from livelingo.service import Service
+
+    # ---- 給 Windows 的資料長得對不對（差一個位元組就整個不能用）
+    assert ctypes.sizeof(procaudio.WaveFormat) == 18 and ctypes.sizeof(procaudio.ActivationParams) == 12
+    assert ctypes.sizeof(procaudio.GUID) == 16 and ctypes.sizeof(procaudio.PropVariant) == (24 if ctypes.sizeof(ctypes.c_void_p) == 8 else 16)
+    assert bytes(procaudio.IID_AUDIO_CLIENT)[:4] == bytes.fromhex("4CADB91C")          # 前四個位元組是反過來放的
+    assert procaudio.IID_AGILE.same(procaudio.GUID("94ea2b94-e9cc-49e0-c0ff-ee64ca8f5b90"))
+    fmt = procaudio.pcm_format(48000)
+    assert (fmt.tag, fmt.channels, fmt.rate, fmt.block_align, fmt.bytes_per_sec, fmt.bits) == (1, 2, 48000, 4, 192000, 16)
+
+    # ---- 聲音格式：雙聲道 16 位元 → 單聲道；48000 / 44100 → 16000，一段一段餵也接得起來
+    stereo = np.array([[32767, -32768], [16384, 16384]], dtype=np.int16).tobytes()
+    assert np.allclose(procaudio.to_mono(stereo, 2), [-0.5 / 32768, 0.5], atol=1e-4)
+    for rate in (48000, 44100):
+        tone = np.sin(2 * np.pi * 440 * np.arange(rate) / rate).astype(np.float32)
+        whole = procaudio.Resampler(rate).feed(tone)
+        pieces = procaudio.Resampler(rate)
+        joined = np.concatenate([pieces.feed(tone[i:i + 479]) for i in range(0, len(tone), 479)])
+        assert abs(len(whole) - SR) <= 1 and abs(len(joined) - SR) <= 1, (rate, len(whole), len(joined))
+        n = min(len(whole), len(joined))
+        assert np.allclose(whole[:n], joined[:n], atol=1e-3)
+        crossings = int(np.sum(np.diff(np.sign(whole[200:])) != 0))
+        assert 860 <= crossings <= 880                                               # 還是 440 Hz
+        assert 0.9 < float(np.abs(whole[200:]).max()) < 1.05
+    high = np.sin(2 * np.pi * 12000 * np.arange(48000) / 48000).astype(np.float32)
+    assert float(np.abs(procaudio.Resampler(48000).feed(high)[200:]).max()) < 0.05   # 太高的聲音要先濾掉
+
+    # ---- 程式清單
+    table = [(4, 0, "System"), (100, 4, "explorer.exe"), (200, 100, "Discord.exe"), (201, 200, "Discord.exe"),
+             (202, 200, "Discord.exe"), (300, 100, "League of Legends.exe"), (400, 100, "discord.exe"), (500, 100, "chrome.exe")]
+    assert apps.roots(table, ["Discord.exe", "League of Legends.exe", "NotRunning.exe"]) == {
+        "Discord.exe": [200, 400], "League of Legends.exe": [300]}
+    assert apps.display_name("Discord.exe") == "Discord" and apps.display_name("steam") == "steam"
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Discord.exe|Discord - 一般;League of Legends.exe|League of Legends (TM) Client")
+    assert [a["name"] for a in apps.running()] == ["Discord", "League of Legends"]
+    assert apps.pids_of(["discord.exe", "Nope.exe"]) == {"Discord.exe": [1000]}
+
+    # ---- 混音
+    class FakeStream:
+        made = []
+
+        def __init__(self, pid, on_audio, on_end):
+            self.pid, self.on_audio, self.on_end, self.stopped, self.started = pid, on_audio, on_end, False, False
+            FakeStream.made.append(self)
+
+        def start(self):
+            self.started = True
+
+        def stop(self):
+            self.stopped = True
+            self.on_end(self, None)
+
+    running = {"Discord.exe": [200], "Game.exe": [300]}
+    opened, errors = [], []
+    cap = procaudio.AppCapture(["Discord.exe", "Game.exe", "Later.exe"], lambda exes: {k: v for k, v in running.items() if k in exes},
+                               on_error=lambda kind, ex: errors.append(str(ex)), on_open=lambda kind, name: opened.append(name),
+                               make_stream=FakeStream, rescan=0.05)
+    assert cap.kind == "loopback"
+    cap._scan()
+    assert sorted(st.pid for st in FakeStream.made) == [200, 300] and all(st.started for st in FakeStream.made)
+    assert opened == ["Discord、Game"]
+    a, b = FakeStream.made
+    a.on_audio(a, np.full(BLOCK, 0.25, dtype=np.float32))
+    b.on_audio(b, np.full(BLOCK // 2, 0.5, dtype=np.float32))
+    mixed = cap._mix()
+    assert len(mixed) == BLOCK and abs(mixed[0] - 0.75) < 1e-6 and abs(mixed[-1] - 0.25) < 1e-6      # 兩路加起來，短的那路後面當安靜
+    assert float(np.abs(cap._mix()).max()) == 0.0
+    a.on_audio(a, np.full(BLOCK, 0.9, dtype=np.float32))
+    b.on_audio(b, np.full(BLOCK, 0.9, dtype=np.float32))
+    assert float(cap._mix().max()) == 1.0                                                              # 不會爆音
+    a.on_audio(a, np.zeros(SR * 3, dtype=np.float32))
+    assert len(cap._buffers[200]) == SR                                                                # 最多積一秒
+
+    running["Later.exe"] = [900]                                                                       # 晚一點才開的程式
+    del running["Game.exe"]                                                                            # 關掉的程式
+    cap._scan()
+    assert b.stopped and 300 not in cap.streams and sorted(cap.streams) == [200, 900] and opened[-1] == "Discord、Later"
+
+    cap.start()                                                                                        # 真的跑起來：固定每 0.1 秒送一段
+    try:
+        block = cap.q.get(timeout=2)
+        assert len(block) == BLOCK and block.dtype == np.float32
+        for st in list(cap.streams.values()):                                                          # 每一路都被 Windows 拒絕
+            st.on_end(st, OSError("activating the program's sound failed (0x88890008)"))
+        end = time.time() + 3
+        while time.time() < end and not errors:
+            time.sleep(0.02)
+        assert errors and "0x88890008" in errors[0]
+    finally:
+        cap.stop()
+        cap.join(2)
+
+    # ---- 程式主體：有選程式就用這條路，不行就退回整台電腦並通知
+    class Audio:
+        def __init__(self):
+            self.calls = []
+            self.can = True
+
+        def apps_available(self):
+            return self.can
+
+        def capture_apps(self, exes, on_error=None, on_open=None):
+            self.calls.append(("apps", list(exes)))
+            self.on_error = on_error
+            return type("C", (), {"start": lambda s: None, "stop": lambda s: None, "is_alive": lambda s: True,
+                                  "kind": "loopback", "q": __import__("queue").Queue()})() if self.can else None
+
+        def capture(self, kind, device, on_error=None, on_open=None):
+            self.calls.append(("all", kind))
+            return type("C", (), {"start": lambda s: None, "stop": lambda s: None, "is_alive": lambda s: True,
+                                  "kind": kind, "q": __import__("queue").Queue()})()
+
+    audio = Audio()
+    service = Service(tmp_path, audio=audio)
+    notices = []
+    service.notice = lambda code, **kw: notices.append(code)
+    result = service.update_config({"listen_apps": ["Discord.exe", "discord.exe", "", 5, "  Game.exe  "]})
+    assert result["saved"] and service.cfg["listen_apps"] == ["discord.exe", "Game.exe"] or service.cfg["listen_apps"] == ["Discord.exe", "Game.exe"]
+    state = service.apps_state()
+    assert state["available"] and [(a["name"], a["chosen"], a["running"]) for a in state["apps"]] == [
+        ("Discord", True, True), ("League of Legends", False, True), ("Game", True, False)]
+
+    import livelingo.core.speech as speech_mod
+
+    class Pipe:
+        def __init__(self, capture, *a, **kw):
+            self.capture = capture
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(speech_mod, "SpeechPipeline", Pipe)
+    service.recognizer = type("R", (), {"beam": 1})()
+    service._restart_voice = lambda key: service._start_voice(key)
+    service._start_voice("listen")
+    assert audio.calls[-1][0] == "apps" and service.sources["listen"]["apps"] is True and service.sources["listen"]["on"]
+    service._start_voice("mic")
+    assert audio.calls[-1] == ("all", "mic") and service.sources["mic"]["apps"] is False            # 麥克風不受影響
+
+    audio.on_error("loopback", OSError("0x88890008"))                                                # Windows 不給
+    assert notices == ["apps_audio_failed"] and audio.calls[-1] == ("all", "loopback")
+    assert service.sources["listen"]["apps"] is False and service.apps_state()["off"] is True
+    service.update_config({"listen_apps": ["Discord.exe"]})                                          # 重新選一次：再試
+    assert service.apps_state()["off"] is False and audio.calls[-1][0] == "apps"
+    audio.can = False                                                                                # 舊的 Windows：沒有這個功能
+    service._start_voice("listen")
+    assert audio.calls[-1] == ("all", "loopback") and service.apps_state()["available"] is False
+    service.update_config({"listen_apps": "Discord.exe"})
+    assert service.cfg["listen_apps"] == []
+

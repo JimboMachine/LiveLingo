@@ -15,7 +15,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, assets, chatpaint, gpu, oswin, updater
+from . import __version__, apps, assets, chatpaint, gpu, oswin, updater
 from .config import ACCENTS, DEFAULTS, EDITABLE, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
@@ -98,6 +98,20 @@ class RealAudio:
 
         return Capture(kind, on_error=on_error, device=device, on_open=on_open)
 
+    def apps_available(self) -> bool:
+        from .core import procaudio
+
+        return procaudio.available()
+
+    def capture_apps(self, exes: list[str], on_error=None, on_open=None):
+        """只收這幾個程式的聲音。這台電腦沒有這個功能的話回傳 None。"""
+        from . import apps
+        from .core import procaudio
+
+        if not procaudio.available():
+            return None
+        return procaudio.AppCapture(exes, apps.pids_of, on_error=on_error, on_open=on_open)
+
 
 class Service:
     def __init__(self, data: Path, hub: EventHub | None = None, audio=None):
@@ -122,7 +136,8 @@ class Service:
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
         # quiet：麥克風開著卻完全沒聲音時是 "silent"，Windows 的隱私權設定擋住時是 "blocked"
-        self.sources = {k: {"on": False, "busy": False, "error": "", "device": "", "speaking": False, "quiet": ""}
+        self.sources = {k: {"on": False, "busy": False, "error": "", "device": "", "speaking": False, "quiet": "",
+                            "apps": False}
                         for k in ("screen", "listen", "mic")}
         self._vu = {"listen": 0.0, "mic": 0.0}
         self._vu_sent = 0.0
@@ -151,6 +166,7 @@ class Service:
         # 語音辨識用顯示卡：state = off（沒選）/ need（要先下載）/ downloading / ready / failed（試過不行，已改用處理器）
         self.speech_gpu = {"state": "off", "percent": 0, "error": "", "mb": assets.CUDNN_MB, "active": False}
         self._speech_gpu_cancel = threading.Event()
+        self._apps_audio_off = False      # 「只聽指定程式」這次試過不行，先改聽整台電腦（換選擇或重開程式會再試）
         self._lock = threading.RLock()
         self._download_cancel = threading.Event()
         self._selecting = False
@@ -714,6 +730,10 @@ class Service:
             changes.pop("tone")
         if changes.get("quality") not in (None, "auto", "standard", "high"):
             changes.pop("quality")
+        if "listen_apps" in changes:
+            picked = changes["listen_apps"] if isinstance(changes["listen_apps"], list) else []
+            names = [str(p).strip()[:120] for p in picked if isinstance(p, str) and str(p).strip()]
+            changes["listen_apps"] = list({n.lower(): n for n in names}.values())[:12]
         if "term_packs" in changes:
             picked = changes["term_packs"] if isinstance(changes["term_packs"], list) else []
             changes["term_packs"] = [name for name in PACKS if name in picked]
@@ -783,6 +803,10 @@ class Service:
                 self.hub.publish("overlay", self.overlay.state())
         if changed("their_auto"):
             self._their_guess = ""
+        if changed("listen_apps"):
+            self._apps_audio_off = False      # 換了選擇：再試一次
+            if self.sources["listen"]["on"]:
+                self._restart_voice("listen")
         if changed("speech_device"):
             threading.Thread(target=self._speech_device_changed, daemon=True).start()
         if changed("voice_sensitivity", "end_silence", "speech_mode"):      # 收音中直接換，不用重開
@@ -999,7 +1023,13 @@ class Service:
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]), device=device,
                                              compute_type=compute, on_fallback=self._speech_gpu_failed)
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
-            capture = self.audio.capture(kind, device, on_error=self._voice_error, on_open=self._voice_opened)
+            capture = None
+            if key == "listen" and self.cfg["listen_apps"] and not self._apps_audio_off and hasattr(self.audio, "capture_apps"):
+                capture = self.audio.capture_apps(list(self.cfg["listen_apps"]), on_error=self._apps_audio_error,
+                                                  on_open=self._voice_opened)
+            self._source(key, apps=bool(capture))      # 介面要知道現在是「只聽指定程式」還是整台電腦
+            if capture is None:
+                capture = self.audio.capture(kind, device, on_error=self._voice_error, on_open=self._voice_opened)
             self.recognizer.beam = BEAMS[self.cfg["speech_mode"]]
             pipe = SpeechPipeline(capture, self.recognizer, self._voice_langs(key),
                                   on_text=self._on_speech, on_state=self._on_speaking,
@@ -1126,6 +1156,33 @@ class Service:
 
         threading.Thread(target=work, daemon=True, name="cudnn").start()
         return True
+
+    # ---- 只聽指定程式的聲音
+
+    def apps_state(self) -> dict:
+        """給設定頁的清單：現在開著哪些程式、選了哪些（選了但現在沒開的也列出來）。"""
+        chosen = list(self.cfg["listen_apps"])
+        try:
+            rows = apps.running()
+        except Exception as ex:  # noqa: BLE001
+            self.log(f"listing programs failed: {ex!r}")
+            rows = []
+        seen = {r["exe"].lower() for r in rows}
+        low = {c.lower() for c in chosen}
+        out = [{"exe": r["exe"], "name": r["name"], "title": r["title"], "running": True, "chosen": r["exe"].lower() in low}
+               for r in rows]
+        out += [{"exe": c, "name": apps.display_name(c), "title": "", "running": False, "chosen": True}
+                for c in chosen if c.lower() not in seen]
+        available = bool(getattr(self.audio, "apps_available", lambda: False)())
+        return {"ok": True, "available": available, "off": self._apps_audio_off, "apps": out, "chosen": chosen}
+
+    def _apps_audio_error(self, kind: str, ex: Exception) -> None:
+        """指定的程式有開，但 Windows 不給它的聲音：這次先改聽整台電腦，並告訴使用者。"""
+        self.log(f"listening to chosen programs only failed, listening to the whole computer instead: {ex!r}")
+        self._apps_audio_off = True
+        self.notice("apps_audio_failed")
+        if self.sources["listen"]["on"] or self.sources["listen"]["busy"]:
+            self._restart_voice("listen")
 
     def _mic_gate(self) -> bool:
         """麥克風現在要不要收音：開了「按住才說話」就只有按著那個鍵的時候才收。"""

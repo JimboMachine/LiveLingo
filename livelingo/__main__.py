@@ -27,6 +27,10 @@ def main() -> int:
         from .selftest import run as selftest
 
         return selftest(Path(_arg("--selftest")), window="--no-window" not in sys.argv)
+    if "--probe-app-audio" in sys.argv:      # 健康檢查用：試收自己這個程序的聲音，結果寫到檔案
+        from .core.procaudio import probe
+
+        return probe(_arg("--probe-app-audio"))
     if "--version" in sys.argv:
         from . import __version__
 
