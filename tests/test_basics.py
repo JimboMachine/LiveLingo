@@ -4350,3 +4350,28 @@ def test_lost_audio_device_is_reconnected(tmp_path, monkeypatch):
     i18n = (Path(service_mod.__file__).parent / "ui" / "i18n.js").read_text(encoding="utf-8")
     for key in ("src_lost", "n_device_lost", "n_device_back", "h_mic_lost", "h_listen_lost"):
         assert i18n.count(f"{key}: ") == len(UI_LANGS), key
+
+
+def test_update_check_can_be_turned_off(tmp_path, monkeypatch):
+    """「開啟時檢查有沒有新版本」可以關：關了就不連網路去問，也不會出現更新的畫面。預設是開的。"""
+    from pathlib import Path
+
+    from livelingo.config import DEFAULTS, EDITABLE
+    from livelingo.service import Service
+
+    assert DEFAULTS["update_check"] is True and "update_check" in EDITABLE
+    asked = []
+    monkeypatch.setenv("LIVELINGO_UPDATE_API", "http://127.0.0.1:9/none")      # 讓「會自動更新」成立
+    monkeypatch.delenv("LIVELINGO_NO_UPDATE", raising=False)
+    monkeypatch.setattr(updater, "check", lambda: asked.append(1) or None)
+    service = Service(tmp_path)
+    phases = []
+    service.set_phase = lambda phase, **more: phases.append(phase)
+    assert service._update_if_needed() is False and asked == [1] and phases == ["updating"]      # 開著：會去問
+    assert service.update_config({"update_check": False})["changed"] == ["update_check"]
+    assert service._update_if_needed() is False and asked == [1] and phases == ["updating"]      # 關了：沒有再問
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    assert 'switchRow("update_check", t("update_check"), t("update_check_desc"))' in ui.joinpath("app.js").read_text(encoding="utf-8")
+    i18n = ui.joinpath("i18n.js").read_text(encoding="utf-8")
+    for key in ("update_check", "update_check_desc", "about_update_off"):
+        assert i18n.count(f"    {key}: ") + i18n.count(f", {key}: ") == len(UI_LANGS), key

@@ -1298,7 +1298,8 @@
       <section>
         ${fact("shield", t("about_local_title"), t("about_local"))}
         ${fact("quality", t("about_engine_title"), t("about_engine"))}
-        ${fact("info", t("about_update_title"), t("about_update"))}
+        ${fact("info", t("about_update_title"), t(S.cfg.update_check ? "about_update" : "about_update_off"))}
+        ${switchRow("update_check", t("update_check"), t("update_check_desc"))}
       </section>
       ${rollbackHTML()}
       ${aboutChangesHTML()}`;

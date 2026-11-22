@@ -341,6 +341,9 @@ class Service:
         選「這次先不要」或下載到一半按取消，就照常用現在的版本，下次開啟時會再問。"""
         if not updater.enabled():
             return False
+        if not self.cfg["update_check"]:      # 使用者關掉了：開啟時不連網路
+            self.log("update check is turned off in the settings")
+            return False
         self.set_phase("updating", step="checking")
         try:
             info = updater.check()
