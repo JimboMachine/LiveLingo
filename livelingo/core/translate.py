@@ -181,10 +181,17 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
     return pattern.sub(repl, text), list(dict.fromkeys(used))
 
 
+# 還沒說完的半句：實測沒有這一段的話，模型會把「이제 과학적」翻成一整句「現在要用科學的方式。」；有了就只翻聽到的
+UNFINISHED = ("The speaker is still talking, so the text may stop in the middle of a sentence. "
+              "Translate only the words that are there. Do not finish or guess the rest of the sentence.\n")
+
+
 def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual",
                  hints: list[tuple[str, str]] | None = None, examples: list[tuple[str, str]] | None = None,
-                 style: str = "full", context: list[str] | None = None, hint_intro: str | None = None) -> str:
+                 style: str = "full", context: list[str] | None = None, hint_intro: str | None = None,
+                 unfinished: bool = False) -> str:
     """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。
+    unfinished：這是還沒說完的半句（即時字幕）。跟模型說清楚，不然它會自己把句子編完。
     style：full = 平常用的；short = 語氣提示換成比較短的寫法（直述句被翻成問句時重翻用）；
     plain = 只有官方的提示（模型把原文原封不動吐回來時重翻用，意思最穩但語氣會比較正式）。"""
     s_name, s_code = SOURCES[source]
@@ -220,6 +227,8 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
         extra += EXAMPLES_INTRO + "".join(f"{a} => {b}\n" for a, b in examples)
     if context and style == "full":
         extra += CONTEXT_INTRO + "".join(f"- {line}\n" for line in context)
+    if unfinished:
+        extra += UNFINISHED
     body = (
         f"You are a professional {s_name} ({s_code}) to {t_name} ({target}) translator. "
         f"Your goal is to accurately convey the meaning and nuances of the original {s_name} text "
@@ -410,6 +419,37 @@ def why(ex: BaseException) -> str:
     return "other"
 
 
+class Stopped(Exception):
+    """翻到一半被叫停（on_part 回傳 False，或有人按了 Stop）。不是錯誤。"""
+
+
+class Stop:
+    """交給 translate(stop=…) 的「停」按鈕：呼叫 stop() 就馬上中斷那一次翻譯。
+    連線是直接關掉的，所以引擎還在讀原文、一個字都還沒吐出來的時候也停得下來（即時字幕：整句來了，半句就不用翻了）。
+    一個 Stop 只管一次翻譯，不會誤停到別的句子。"""
+
+    def __init__(self):
+        self.asked = False
+        self._conn = None
+        self._guard = threading.Lock()
+
+    def stop(self) -> None:
+        import socket
+
+        with self._guard:
+            self.asked, conn = True, self._conn
+        sock = getattr(conn, "sock", None)
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    def _use(self, conn) -> None:
+        with self._guard:
+            self._conn = conn
+
+
 class Translator:
     def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None):
         """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
@@ -436,11 +476,13 @@ class Translator:
             return False
 
     def _ask(self, text: str, source: str, target: str, hints: list, examples: list | None = None,
-             style: str = "full", context: list[str] | None = None, on_part=None) -> str:
-        """on_part(目前翻出來的字)：有給的話，模型每吐出幾個字就叫一次（畫面上譯文一個字一個字出來，不用等整句）。"""
+             style: str = "full", context: list[str] | None = None, on_part=None, unfinished: bool = False,
+             stop: Stop | None = None) -> str:
+        """on_part(目前翻出來的字)：有給的話，模型每吐出幾個字就叫一次（畫面上譯文一個字一個字出來，不用等整句）。
+        on_part 回傳 False 表示「不用翻完了」：馬上停，丟出 Stopped。stop：見 Stop。"""
         payload = {
             "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context,
-                                   self.hint_intro),
+                                   self.hint_intro, unfinished),
             "max_tokens": min(1024, 64 + 4 * len(text)),
             "temperature": 0,
             "repeat_penalty": 1.0,
@@ -451,14 +493,14 @@ class Translator:
             headers["Authorization"] = f"Bearer {self.key}"
         req = urllib.request.Request(
             f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"), headers=headers)
-        if on_part is None:
+        if on_part is None and stop is None:
             with urllib.request.urlopen(req, timeout=180) as r:
                 return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
         payload["stream"] = True
-        req.data = json.dumps(payload).encode("utf-8")
         out = ""
-        with urllib.request.urlopen(req, timeout=180) as r:
-            for raw in r:      # 一行一筆：「data: {…}」，最後一筆是「data: [DONE]」
+        try:
+            for raw in self._stream(json.dumps(payload).encode("utf-8"), headers, stop):
+                # 一行一筆：「data: {…}」，最後一筆是「data: [DONE]」
                 line = raw.decode("utf-8", errors="replace").strip()
                 if not line.startswith("data:") or line[5:].strip() == "[DONE]":
                     continue
@@ -466,10 +508,52 @@ class Translator:
                 if piece:
                     out += piece
                     try:
-                        on_part(out)
+                        keep = on_part(out) if on_part else None
                     except Exception:  # noqa: BLE001  畫面那邊出錯不能讓翻譯失敗
-                        pass
+                        keep = None
+                    if keep is False:      # 不用翻完了（這句話已經有更新的內容）：連線一關，引擎就會停下來
+                        raise Stopped()
+        except Stopped:
+            raise
+        except Exception:
+            if stop is not None and stop.asked:      # 連線是我們自己關的
+                raise Stopped() from None
+            raise
+        if stop is not None and stop.asked:
+            raise Stopped()
         return out.strip()
+
+    def _stream(self, body: bytes, headers: dict, stop: Stop | None = None):
+        """跟引擎要「一邊翻一邊回」，一行一行交出來。自己開連線（不用 urlopen），這樣 Stop 才能在等引擎的時候就把它關掉。"""
+        import http.client
+        import urllib.error
+        import urllib.parse
+
+        url = urllib.parse.urlsplit(f"{self.url.rstrip('/')}/v1/completions")
+        conn = http.client.HTTPConnection(url.hostname, url.port or 80, timeout=180)
+        try:
+            conn.connect()
+            if stop is not None:
+                stop._use(conn)
+                if stop.asked:
+                    raise Stopped()
+            conn.request("POST", url.path, body=body, headers=headers)
+            r = conn.getresponse()
+            if r.status != 200:
+                raise urllib.error.HTTPError(self.url, r.status, r.reason, r.headers, None)
+            while True:
+                line = r.readline()
+                if not line:
+                    return
+                yield line
+        finally:
+            if stop is not None:
+                stop._use(None)
+            conn.close()
+
+    def busy(self) -> bool:
+        """現在是不是正在翻。"""
+        return self._lock.locked()
 
     def taught(self, text: str, source: str, target: str) -> tuple[str | None, list[tuple[str, str]]]:
         """使用者教過的句子：一模一樣的直接回傳他要的翻法；很像的最多挑兩句當範例。"""
@@ -509,10 +593,13 @@ class Translator:
         return best
 
     def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None,
-                  on_part=None) -> str:
+                  on_part=None, unfinished: bool = False, stop: Stop | None = None) -> str:
         """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
         context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。
-        on_part(目前的譯文)：翻的時候一邊出字一邊叫（只是先給人看；最後回傳的才是整理過、核對過的譯文）。"""
+        on_part(目前的譯文)：翻的時候一邊出字一邊叫（只是先給人看；最後回傳的才是整理過、核對過的譯文）。
+        on_part 回傳 False 就停下來不翻了，丟出 Stopped（對方還在說、這半句已經過時的時候用）。
+        unfinished：還沒說完的半句（即時字幕）。只翻一次、不補句尾、不核對；結果另外記，不會被當成整句的譯文。
+        stop：一個 Stop；別的地方呼叫它的 stop() 就馬上中斷這一次（丟出 Stopped）。"""
         text = text.strip()[:MAX_TEXT]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
@@ -522,11 +609,11 @@ class Translator:
             parts, joiner, outs = split_long(text, self.max_chars), "" if LANGS[target]["family"] in ("zh", "ja") else " ", []
             for i, part in enumerate(parts):
                 done = joiner.join(outs)
-                outs.append(self.translate(part, target, source, context if i == 0 else None,
+                outs.append(self.translate(part, target, source, context if i == 0 else None, unfinished=unfinished, stop=stop,
                                            on_part=(lambda t, done=done: on_part((done + joiner if done else "") + t)) if on_part else None))
             return joiner.join(o for o in outs if o)
         context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
-        key = (text, target, *context)
+        key = (text, target, *context, *(["…"] if unfinished else []))
         if key in self._cache:
             return self._cache[key]
         exact, examples = self.taught(text, source, target)
@@ -534,10 +621,17 @@ class Translator:
             return exact
         hints = self.hints(text, source, target)
         kind = sentence_kind(text, source)
-        sent = with_end_mark(text, source, kind)
+        sent = text if unfinished else with_end_mark(text, source, kind)
         show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
         with self._lock:
-            out = self._ask(sent, source, target, hints, examples, context=context, **({"on_part": show} if show else {}))
+            if stop is not None and stop.asked:      # 排隊等引擎的時候就被叫停了
+                raise Stopped()
+            out = self._ask(sent, source, target, hints, examples, context=context, **({"on_part": show} if show else {}),
+                            **({"unfinished": True} if unfinished else {}), **({"stop": stop} if stop else {}))
+            if unfinished:
+                out = tidy(to_script(out, target), target)
+                self._cache[key] = out
+                return out
             if context and len(out) > 3 * len(sent) + 30:
                 # 模型把前面幾句也翻進來了（譯文長得不合理）：不給前文再翻一次
                 out = self._ask(sent, source, target, hints, examples)

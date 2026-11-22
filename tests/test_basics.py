@@ -205,8 +205,9 @@ class _FakeModel(Translator):
         super().__init__("http://127.0.0.1:9", **kw)
         self.answers, self.asked = answers, []
 
-    def _ask(self, text, source, target, hints, examples=None, style="full", context=None, on_part=None):
+    def _ask(self, text, source, target, hints, examples=None, style="full", context=None, on_part=None, unfinished=False, stop=None):
         self.asked.append((text, style, list(examples or [])))
+        self.unfinished = getattr(self, "unfinished", []) + [bool(unfinished)]
         self.contexts = getattr(self, "contexts", []) + [list(context or [])]
         if callable(self.answers):
             out = self.answers(text, style, context)
@@ -4397,36 +4398,80 @@ def test_update_check_can_be_turned_off(tmp_path, monkeypatch):
 
 def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
     """即時：譯文一邊翻一邊出現，不用等整句翻完。最後那一則才是整理過、核對過的。"""
-    import io
     import json as _json
     from pathlib import Path
+
+    import pytest
 
     import livelingo.service as service_mod
     from livelingo.core import translate as tr_mod
     from livelingo.service import Service
 
-    # 一、跟引擎要「一邊翻一邊回」，一行一筆地讀
-    seen = {}
+    # 一、跟引擎要「一邊翻一邊回」，一行一筆地讀（用一個真的本機小伺服器當引擎）
+    import http.server
 
-    def fake_open(req, timeout=0):
-        seen["body"] = _json.loads(req.data.decode("utf-8"))
-        lines = [b": keep-alive\n", b"\n"]
-        for piece in ("3", "분 후에", " 도착해.", ""):
-            lines += [("data: " + _json.dumps({"choices": [{"text": piece}]}, ensure_ascii=False) + "\n").encode("utf-8"), b"\n"]
-        lines += [b"data: [DONE]\n"]
-        return io.BytesIO(b"".join(lines))
+    seen = {"gone": threading.Event(), "wait": 0.0, "status": 200}
 
-    monkeypatch.setattr(tr_mod.urllib.request, "urlopen", fake_open)
-    tr = Translator("http://127.0.0.1:9")
-    parts = []
-    assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append) == "3분 후에 도착해."
-    assert seen["body"]["stream"] is True and parts == ["3", "3분 후에", "3분 후에 도착해."]
+    class FakeEngine(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
 
-    def boom(text):
-        raise RuntimeError("screen is gone")
+        def do_POST(self):
+            seen["body"] = _json.loads(self.rfile.read(int(self.headers["Content-Length"])).decode("utf-8"))
+            seen["auth"] = self.headers.get("Authorization")
+            time.sleep(seen["wait"])      # 像引擎在讀原文：還沒有任何回應
+            try:
+                self.send_response(seen["status"])
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(b": keep-alive\n\n")
+                for piece in ("3", "분 후에", " 도착해.", ""):
+                    self.wfile.write(("data: " + _json.dumps({"choices": [{"text": piece}]}, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                    self.wfile.flush()
+                    time.sleep(0.05)
+                self.wfile.write(b"data: [DONE]\n\n")
+            except OSError:
+                seen["gone"].set()
 
-    assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=boom) == "3분 후에 도착해."      # 畫面那邊出錯，翻譯照樣完成
-    monkeypatch.undo()
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FakeEngine)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        tr = Translator(f"http://127.0.0.1:{server.server_address[1]}")
+        tr.key = "k1"
+        parts = []
+        assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append) == "3분 후에 도착해."
+        assert seen["body"]["stream"] is True and seen["auth"] == "Bearer k1" and parts == ["3", "3분 후에", "3분 후에 도착해."]
+
+        def boom(text):
+            raise RuntimeError("screen is gone")
+
+        assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=boom) == "3분 후에 도착해."      # 畫面那邊出錯，翻譯照樣完成
+        with pytest.raises(tr_mod.Stopped):
+            tr._ask("3分鐘後到。", "zh", "ko", [], on_part=lambda text: False)                  # 畫面說不用翻完了
+        assert "do not finish" not in seen["body"]["prompt"].lower()      # 整句的問法裡沒有「還沒說完」那一段
+
+        # 「停」：引擎還在讀原文、一個字都還沒回的時候也要馬上停，不能等它
+        seen["wait"], stop, started = 3.0, tr_mod.Stop(), time.time()
+        threading.Timer(0.2, stop.stop).start()
+        with pytest.raises(tr_mod.Stopped):
+            tr.translate("3分鐘後到", "ko", "zh", on_part=parts.append, unfinished=True, stop=stop)
+        assert time.time() - started < 1.5 and not tr.busy()
+        with pytest.raises(tr_mod.Stopped):
+            tr.translate("5分鐘後到", "ko", "zh", unfinished=True, stop=stop)      # 已經按過停的：不會去問引擎
+        seen["wait"] = 0.0
+        assert tr.translate("3分鐘後到", "ko", "zh", unfinished=True, stop=tr_mod.Stop()) == "3분 후에 도착해."
+        assert "Do not finish or guess the rest" in seen["body"]["prompt"] and seen["body"]["prompt"].rstrip().endswith("3分鐘後到<end_of_turn>\n<start_of_turn>model")
+
+        seen["status"] = 401
+        with pytest.raises(Exception) as bad:
+            tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append)
+        assert tr_mod.why(bad.value) == "engine_key"      # 出錯的原因照樣分得出來
+    finally:
+        server.shutdown()
+        server.server_close()
+    with pytest.raises(Exception) as bad:
+        tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append)
+    assert tr_mod.why(bad.value) == "engine_down"
 
     # 二、translate() 把還沒翻完的字整理過再給畫面（簡轉繁）；沒有要即時的時候，問法跟以前一樣
     tr = _FakeModel("这个队伍很强。")
@@ -4476,3 +4521,191 @@ def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
     ui = Path("livelingo/ui")
     js, css = (ui / "app.js").read_text(encoding="utf-8"), (ui / "style.css").read_text(encoding="utf-8")
     assert "partial: (d)" in js and "part-${m.id}" in js and ".text.streaming" in css and "prefers-reduced-motion" in css
+
+
+def test_live_captions_while_the_other_person_is_still_talking(tmp_path, monkeypatch):
+    """即時字幕：對方還在說，就先辨識目前聽到的、先翻；說完由整句接手同一則。半句不進歷史、字幕檔、使用數字。"""
+    import queue
+
+    import numpy as np
+    import pytest
+
+    import livelingo.service as service_mod
+    from livelingo import jobs as jobs_mod
+    from livelingo.core.audio import SR
+    from livelingo.core.speech import LivePacer, SpeechPipeline
+    from livelingo.service import Service
+
+    # 一、節奏：說了一陣子才先辨識；多聽到一些才再做；辨識得慢的電腦自動做得少；辨識器在忙就不做
+    pacer = LivePacer(first=1.5, grow=0.6, rest=1.0)
+    assert not pacer.due(1.0, 100.0) and pacer.due(1.6, 100.0) and not pacer.due(1.6, 100.0, busy=True)
+    pacer.done(1.6, 101.5, spent=1.5)
+    assert not pacer.due(2.0, 101.6)                      # 才多聽到 0.4 秒
+    assert not pacer.due(2.6, 102.5) and pacer.due(2.6, 103.1)      # 上一次花了 1.5 秒：至少休息 1.5 秒
+    pacer.done(2.6, 103.2, spent=0.1)
+    assert pacer.due(3.3, 103.35)                         # 辨識很快（顯示卡）：多聽到一點就再做
+    pacer.reset()
+    assert pacer.due(1.5, 0.0)
+
+    # 二、管線：先顯示、說完前通知、整句接手；沒結果就收回
+    calls, state = [], {"interim": ("안녕하세", "ko", False), "final": ("안녕하세요 여러분", "ko", False), "live": True, "busy": False}
+
+    class Seg:
+        speaking, emit, audio = False, [], np.zeros(SR * 2, dtype=np.float32)
+
+        def feed(self, audio):
+            out, self.emit = self.emit, []
+            return out
+
+        def so_far(self):
+            return self.audio if self.speaking else None
+
+    class Rec:
+        asked = []
+
+        def busy(self):
+            return False
+
+        def transcribe(self, audio, langs, stay=1.0, quick=False):
+            self.asked.append(quick)
+            return state["interim"] if quick else state["final"]
+
+    pipe = SpeechPipeline.__new__(SpeechPipeline)
+    pipe.capture = type("C", (), {"kind": "loopback"})()
+    pipe.segmenter, pipe.recognizer, pipe.langs, pipe.stay = Seg(), Rec(), ["ko"], 1.0
+    pipe.on_text = lambda kind, text, lang, seconds, unsure: calls.append(("text", text))
+    pipe.on_partial = lambda kind, text, lang: calls.append(("part", text))
+    pipe.live, pipe.busy, pipe.pacer = (lambda: state["live"]), (lambda: state["busy"]), LivePacer(rest=0.0, grow=0.5)
+    block = np.zeros(1600, dtype=np.float32)
+    pipe._hear(block)
+    assert calls == []                                    # 沒有人在說話
+    pipe.segmenter.speaking = True
+    state["live"] = False
+    pipe._hear(block)
+    state["live"], state["busy"] = True, True
+    pipe._hear(block)
+    assert calls == []                                    # 設定關著、或電腦正在忙：不做
+    state["busy"] = False
+    pipe._hear(block)
+    assert calls == [("part", "안녕하세")] and Rec.asked == [True]      # 用快的算法
+    pipe.segmenter.audio = np.zeros(SR * 3, dtype=np.float32)
+    pipe._hear(block)
+    assert calls == [("part", "안녕하세")]                 # 聽到的字沒變：不重複送
+    pipe.segmenter.speaking, pipe.segmenter.emit = False, [np.zeros(SR * 3, dtype=np.float32)]
+    pipe._hear(block)
+    assert calls[1:] == [("part", ""), ("text", "안녕하세요 여러분")]      # 先說「說完了」，再給整句
+    calls.clear()
+    pipe.segmenter.speaking, pipe.segmenter.audio = True, np.zeros(SR * 2, dtype=np.float32)
+    pipe._hear(block)
+    state["final"] = None                                 # 這一句最後被當成雜音
+    pipe.segmenter.speaking, pipe.segmenter.emit = False, [np.zeros(SR * 2, dtype=np.float32)]
+    pipe._hear(block)
+    assert calls == [("part", "안녕하세"), ("part", ""), ("part", None)]      # 先顯示的要收回
+    plain = SpeechPipeline.__new__(SpeechPipeline)        # 沒有要即時字幕的（聽我說話）：完全不先辨識
+    plain.capture, plain.segmenter, plain.recognizer, plain.langs, plain.stay = pipe.capture, Seg(), Rec(), ["ko"], 1.0
+    plain.on_text = lambda *a: None
+    plain.segmenter.speaking, before = True, len(Rec.asked)
+    plain._hear(block)
+    assert len(Rec.asked) == before
+
+    # 三、排隊：半句排最後，每個來源只留最新的一份
+    q = jobs_mod.Jobs()
+    q.put_live({"via": "heard", "original": "a"})
+    q.put_live({"via": "heard", "original": "ab"})
+    q.put({"via": "screen", "original": "s"})
+    q.put({"back_of": 3})
+    assert q.waiting() == 2
+    assert [q.get(0.01)[0].get("original", "back") for _ in range(3)] == ["s", "back", "ab"]
+    with pytest.raises(queue.Empty):
+        q.get(0.01)
+    q.put_live({"via": "heard", "original": "abc"})
+    q.drop_live("heard")
+    with pytest.raises(queue.Empty):
+        q.get(0.01)                                       # 說完了：半句不翻了
+
+    # 四、服務：同一則訊息從半句變成整句
+    monkeypatch.setattr(service_mod, "PARTIAL_EVERY", 0.0)
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False)
+    assert service.cfg["live_captions"] is True
+    answers = {"용 잡으러": "去打龍", "용 잡으러 가자 지금": "現在去打龍吧", "용 잡으러 가자 지금 빨리": "現在快去打龍吧。"}
+    model = service.translator = _FakeModel(lambda text, style, context: answers.get(text.rstrip("."), "？"))
+    events, shown, kept = [], [], []
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, data=None: (events.append((kind, data)), old_publish(kind, data))[1])
+    monkeypatch.setattr(service.overlay, "push", lambda *a, **kw: shown.append((a, kw)))
+    monkeypatch.setattr(service.history, "add", lambda msg: kept.append(dict(msg)) or False)
+    counted = []
+    monkeypatch.setattr(service, "_count", lambda msg, failed=False: counted.append(msg["id"]))
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait_for(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    def live():
+        return [m for m in service.messages if m.get("live")]
+
+    try:
+        service._on_live("loopback", "용 잡으러", "ko")
+        wait_for(lambda: live() and live()[0].get("partial") == "去打龍")
+        first = live()[0]
+        assert first["pending"] and first["who"] == "them" and first["via"] == "heard" and first["original"] == "용 잡으러"
+        assert model.unfinished == [True] and model.asked[0][0] == "용 잡으러"      # 跟模型說這是半句，也不幫它補句號
+        service._on_live("loopback", "용 잡으러 가자 지금", "ko")
+        wait_for(lambda: live() and live()[0].get("partial") == "現在去打龍吧")
+        assert [m["id"] for m in service.messages] == [first["id"]]      # 還是同一則
+        texts = [d["text"] for k, d in events if k == "partial"]
+        assert "去打龍" in texts and texts[-1] == "現在去打龍吧"
+        assert [a[1] for a, kw in shown if kw.get("key") == first["id"]][-1] == "現在去打龍吧"      # 浮動字幕也跟著長
+        assert kept == [] and counted == [] and not service.transcript.on      # 半句不進歷史、不算使用次數
+        service._on_live("loopback", "", None)            # 說完了，整句正在辨識
+        assert live()[0]["closing"] and live()[0]["partial"] == "現在去打龍吧"
+        service._on_speech("loopback", "용 잡으러 가자 지금 빨리", "ko", 0.4)
+        wait_for(lambda: service.messages and not service.messages[0].get("pending"))
+        done = service.messages[0]
+        assert len(service.messages) == 1 and done["id"] == first["id"] and done["at"] == first["at"]
+        assert done["translated"] == "現在快去打龍吧。" and not done.get("live") and "partial" not in done
+        assert model.unfinished[-1] is False and model.asked[-1][0] == "용 잡으러 가자 지금 빨리."      # 整句照平常的方式翻
+        assert counted == [first["id"]] and kept and kept[-1]["translated"] == "現在快去打龍吧。" and not service._live
+        pending = [d for k, d in events if k == "message" and d["id"] == first["id"] and d.get("pending") and not d.get("live")]
+        assert pending and pending[0]["partial"] == "現在去打龍吧"      # 整句翻好之前，畫面上留著先翻的半句
+
+        # 最後沒有結果：收回；回音、關掉收音、清除對話也都不會留下半則
+        service._on_live("loopback", "아 진짜", "ko")
+        wait_for(lambda: bool(live()))
+        gone = live()[0]["id"]
+        service._on_live("loopback", None, None)
+        assert not live() and ("message_removed", {"id": gone}) in events
+        service._on_live("loopback", "아 진짜", "ko")
+        service._stop_voice("listen")
+        assert not live() and not service._live
+        service._on_live("loopback", "아 진짜", "ko")
+        service.clear_messages()
+        assert not service._live and list(service.messages) == []
+        service._on_live("loopback", "", None)
+        service._on_live("loopback", None, None)          # 沒有先顯示過的：什麼事都不會發生
+        assert list(service.messages) == []
+
+        # 翻譯和辨識都用處理器的電腦：正在翻的時候先不辨識半句（兩個一起跑會互搶，都慢好幾倍）
+        service.mode = {"model": "4b", "engine": "cpu", "quality": "standard"}
+        assert service._live_wait() is False
+        with model._lock:
+            assert service._live_wait() is True
+        service.jobs.put({"via": "screen", "original": "x", "id": 999, "lang": "ko", "who": "them"})
+        assert service._live_wait() is True
+        service.mode = {"model": "12b", "engine": "cuda", "quality": "high"}
+        assert service._live_wait() is False              # 翻譯用顯示卡：不用等
+    finally:
+        service.closing.set()
+
+    from pathlib import Path
+
+    ui = Path("livelingo/ui")
+    js, css = (ui / "app.js").read_text(encoding="utf-8"), (ui / "style.css").read_text(encoding="utf-8")
+    assert 'switchRow("live_captions"' in js and "m.live" in js and ".orig.hearing" in css
+    source = Path("livelingo/service.py").read_text(encoding="utf-8")
+    assert 'on_partial=self._on_live if key == "listen" else None' in source      # 只給對方說的話

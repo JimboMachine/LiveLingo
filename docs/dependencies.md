@@ -298,14 +298,20 @@
 
 ### 改「即時」：譯文邊翻邊出、對方還在說就先出字
 
-1. `translate.py`：_ask 有給 on_part 才跟引擎要 stream；給畫面的半句要先過繁簡轉換和整理；重翻（問句、數字）那幾次不出半句
-2. `service.py`：_translate 送 partial 事件，最快 PARTIAL_EVERY 秒一次；整句的 message 一定最後到，蓋掉半句
-3. `overlay.py`：on_partial 只給對方說的話；螢幕讀到的要翻完才知道要不要顯示
-4. `app.js`、`style.css`：還在翻的那一則用 #part-編號 直接換字，不整塊重畫；游標閃動在「減少動態」時要停
-5. `history.py`、`transcript.py`、`usage.py`：半句不進歷史、不進字幕檔、不算次數
-6. `test_basics.py`：test_translation_streams_out_while_it_is_made
+1. `translate.py`：_ask 有給 on_part 或 stop 才跟引擎要 stream（自己開連線，Stop 才關得掉）；給畫面的半句要先過繁簡轉換和整理；重翻（問句、數字）那幾次不出半句
+2. `translate.py`：半句（unfinished）：提示裡多一段「還沒說完，不要自己補完」、不補句號、不重翻、另外記，不能被當成整句的譯文
+3. `speech.py`：LivePacer 決定多久先辨識一次（辨識慢就做得少）；說完要先叫 on_partial(來源, "")，沒結果要叫 on_partial(來源, None)；只給「聽對方說話」
+4. `jobs.py`：半句排在所有東西後面，每個來源只留最新的一份；說完就丟掉
+5. `service.py`：_translate 送 partial 事件，最快 PARTIAL_EVERY 秒一次；整句的 message 一定最後到，蓋掉半句；新的半句開頭跟畫面上一樣就先不換
+6. `service.py`：整句用同一個編號接手（submit 的 live）；回音、關掉收音、清除對話、辨識出錯都要把半則收回（_end_live）
+7. `service.py`：翻譯和辨識都用處理器時不能同時跑（_live_wait）；整句一來，正在翻的半句要馬上停（Stop），不然整句的辨識會慢好幾秒
+8. `config.py`、`app.js`、`i18n.js`：開關 live_captions，五種語言
+9. `overlay.py`：on_partial 只給對方說的話；螢幕讀到的要翻完才知道要不要顯示
+10. `app.js`、`style.css`：還在翻的那一則用 #part-編號 直接換字，不整塊重畫；游標閃動在「減少動態」時要停；還在說的原文後面有「…」
+11. `history.py`、`transcript.py`、`usage.py`：半句不進歷史、不進字幕檔、不算次數
+12. `test_basics.py`：test_translation_streams_out_while_it_is_made、test_live_captions_while_the_other_person_is_still_talking
 
-自動把關：測試會擋：還沒翻完的字沒有送到畫面、整句不是最後才到、自己打的字先出半句、畫面沒有接 partial。真的快了多少，要用真的模型量。
+自動把關：測試會擋：還沒翻完的字沒有送到畫面、整句不是最後才到、自己打的字先出半句、半句進了歷史或被算次數、說完之後半句沒被整句接手或沒收回、停不下來。真的快了多少、整句有沒有因此變慢，要用真的模型和錄音量。
 
 ## 每個部分牽動誰
 
@@ -349,7 +355,7 @@
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字；留下設定時要刪的資料夾名字（models、engine）（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
 | 每一版改了什麼（五種語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
 | 問題報告：先給使用者看，不自己送出 | `livelingo/report.py` | `service.py`：把狀態、設定、紀錄排成一份文字；存檔、複製用的是剛才給使用者看過的那一份（改壞會報錯）<br>`app.js`：預覽的欄位（text、lines、bytes）和存好之後的檔名（改壞不會報錯） |
-| 翻譯的排隊：我自己的句子先翻，螢幕上排太久的略過 | `livelingo/jobs.py` | `service.py`：翻譯的排隊：誰先翻、螢幕上排太久的略過（略過時用 hotkeys.NOTES 的 skipped 和介面的 n_skipped 說一聲）（改壞會報錯） |
+| 翻譯的排隊：我自己的句子先翻，螢幕上排太久的略過 | `livelingo/jobs.py` | `service.py`：翻譯的排隊：誰先翻、還在說的半句排最後而且只留最新的（put_live）、螢幕上排太久的略過（略過時用 hotkeys.NOTES 的 skipped 和介面的 n_skipped 說一聲）（改壞會報錯） |
 | 使用數字：每天幾句、失敗幾次、平均等多久（只有數字） | `livelingo/usage.py` | `service.py`：翻好一句（或翻失敗）就記一次；關程式時把還沒寫的寫進檔案（改壞會報錯）<br>`app.js`：健康檢查頁的三個數字和 14 天小圖（today、week、month、days）（改壞不會報錯）<br>`report.py`：問題報告裡放使用數字（只有次數）（改壞不會報錯）<br>`storage.py`：usage.json 算在「設定和紀錄」那一項的大小裡（改壞不會報錯） |
 | 說明頁，和一頁給朋友的快速上手（五種語言） | `livelingo/guide.py`<br>`livelingo/data/help.json` | `service.py`：說明頁的內容（填進現在的快速鍵）；把給朋友的一頁存成檔案（改壞會報錯）<br>`app.js`：說明頁的欄位（sections、items）和 [[鍵]] 的寫法；F1 開說明（改壞不會報錯） |
 
@@ -369,7 +375,7 @@
 | 看螢幕 | `livelingo/core/watcher.py` | `service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
 | 文字辨識 | `livelingo/core/ocr.py` | `service.py`：文字辨識（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯） |
-| 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
+| 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
 | 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |

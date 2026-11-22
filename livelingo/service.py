@@ -21,7 +21,7 @@ from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVER
                      Glossary, Lessons)
 from .core.engine import Engine
 from .core.romanize import romanize
-from .core.translate import LANGS, MAX_TEXT, Translator, detect_language, numbers_lost, similarity, why
+from .core.translate import LANGS, MAX_TEXT, Stop, Stopped, Translator, detect_language, numbers_lost, similarity, why
 from .history import DAYS as HISTORY_DAYS
 from .jobs import Jobs
 from .history import History
@@ -213,6 +213,8 @@ class Service:
         self._apps_audio_off = False      # 「只聽指定程式」這次試過不行，先改聽整台電腦（換選擇或重開程式會再試）
         self._voice_open: dict[str, bool] = {}      # 這個來源的收音裝置這一次有沒有成功打開過
         self._voice_tries: dict[str, int] = {}      # 斷線之後已經重試了幾次
+        self._live: dict[str, dict] = {}      # 收音來源（loopback / mic）→ 還在說、先顯示出來的那一則（即時字幕）
+        self._live_stop: dict[str, Stop] = {}      # 收音來源 → 正在翻的那半句的「停」按鈕
         self._black_regions: set[str] = set()      # 抓到的畫面是全黑的聊天區（遊戲用全螢幕時會這樣）
         self._lock = threading.RLock()
         self.started = time.time()
@@ -745,12 +747,15 @@ class Service:
                 "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
 
     def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
-               place: str = "") -> int | None:
+               place: str = "", live: dict | None = None) -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
-        hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。回傳這則訊息的編號。"""
+        hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。
+        live：這一句還在說的時候已經先顯示出來的那一則（即時字幕）；整句接手同一則，不另外多一則。回傳這則訊息的編號。"""
         text = text.strip()[:MAX_TEXT]
         if not text:
+            if live:
+                self._drop(live["id"])
             return None
         lang = lang or detect_language(text) or "en"
         who = "them" if via in ("screen", "heard") else "me"
@@ -758,6 +763,8 @@ class Service:
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
                "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time(),
                "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30]}
+        if live:      # 同一則、同一個時間，先翻出來的半句留在畫面上，等整句翻好再換掉
+            msg.update(id=live["id"], time=live["time"], at=live["at"], partial=live.get("partial", ""))
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
             self._post(msg)
         self.jobs.put(msg)
@@ -808,11 +815,15 @@ class Service:
         if "back_of" in msg:
             self._back_translate(msg["back_of"])
             return
+        if msg.get("live"):
+            self._translate_live(msg)
+            return
         try:
             target = self._target_for(msg)
             started = time.time()
             out = self._translate(msg, target)
             spent = time.time() - started
+            msg = {k: v for k, v in msg.items() if k != "partial"}      # 先翻的半句用完了，不跟著整句存下去
             if msg["via"] in ("heard", "spoken") and not msg.get("edited") and not msg.get("took"):
                 self.delays.append((float(msg.get("hear") or 0.0), spent))      # 只算第一次翻的，重翻的不算
                 self.hub.publish("delay", self.delay())
@@ -848,17 +859,137 @@ class Service:
         fn = self.translator.translate
         if "on_part" not in inspect.signature(fn).parameters:
             return fn(msg["original"], target, msg["lang"], self._context_for(msg))
-        sent = [0.0]
+        sent, shown = [0.0], msg.get("partial") or ""
 
         def part(text: str) -> None:
             now = time.monotonic()
-            if now - sent[0] < PARTIAL_EVERY or not text.strip():
-                return
+            if now - sent[0] < PARTIAL_EVERY or not text.strip() or shown.startswith(text):
+                return      # 畫面上已經有先翻的半句，新的還跟它開頭一樣：不用換，字才不會縮回去又長出來
             sent[0] = now
             self.hub.publish("partial", {"id": msg["id"], "text": text})
             self.overlay.on_partial(msg, text)
 
         return fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part)
+
+    # ---- 即時字幕：對方還在說，就先把目前聽到的顯示出來、先翻
+
+    def _on_live(self, kind: str, text: str | None, lang: str | None) -> None:
+        """語音那邊在一句話還沒說完時叫的：text 是目前聽到的內容；None 表示那一句最後沒有結果，把先顯示的收回。"""
+        via = "heard" if kind == "loopback" else "spoken"
+        with self._lock:
+            old = self._live.get(kind)
+        if text is None:
+            self._end_live(kind)
+            return
+        if text == "":      # 說完了，整句正在辨識：半句不用再翻（畫面上先留著，等整句來接）
+            if old:
+                self._set_live(kind, dict(old, closing=True))
+                self.jobs.drop_live(via)
+                self._stop_live(kind)
+            return
+        text = self._voice_script(kind, text.strip()[:MAX_TEXT], lang)
+        if not text or (old and old["original"] == text):
+            return
+        if old:
+            msg = dict(old, original=text, lang=lang, closing=False)
+        else:
+            msg = {"id": next(self._ids), "who": "them" if via == "heard" else "me", "via": via, "original": text, "lang": lang,
+                   "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "", "unsure": False,
+                   "time": time.strftime("%H:%M"), "at": time.time(), "hear": 0.0, "took": 0.0, "place": "",
+                   "live": True, "partial": ""}
+        self._set_live(kind, msg)
+        self._stop_live(kind)      # 上一份半句如果還在翻：停，換翻新的
+        self.hub.publish("message", msg)
+        self.jobs.put_live(msg)
+
+    def _stop_live(self, kind: str) -> None:
+        stop = self._live_stop.pop(kind, None)
+        if stop:
+            stop.stop()
+
+    def _live_wait(self) -> bool:
+        """先不要做「還在說就先辨識」：翻譯引擎和語音辨識都用處理器的時候，兩個一起跑會互搶，兩邊都慢好幾倍。
+        所以那種電腦上，正在翻或有句子在等翻的時候就先不辨識半句。翻譯用顯示卡的電腦不用等。"""
+        if self.mode.get("engine") != "cpu":
+            return False
+        busy = getattr(self.translator, "busy", None)
+        return bool(busy and busy()) or self.jobs.waiting() > 0
+
+    def _set_live(self, kind: str, msg: dict) -> None:
+        """記下還在說的那一則（只放進目前的對話，不進歷史、字幕檔、使用數字：那些等整句）。"""
+        with self._lock:
+            self._live[kind] = msg
+            for i, old in enumerate(self.messages):
+                if old["id"] == msg["id"]:
+                    self.messages[i] = msg
+                    break
+            else:
+                self.messages.append(msg)
+
+    def _take_live(self, kind: str) -> dict | None:
+        """整句來了：把先顯示的那一則交出來（之後由整句接手）。"""
+        with self._lock:
+            live = self._live.pop(kind, None)
+        if live:
+            self.jobs.drop_live(live["via"])
+            self._stop_live(kind)
+        return live
+
+    def _end_live(self, kind: str) -> None:
+        live = self._take_live(kind)
+        if live:
+            self._drop(live["id"])
+
+    def _translate_live(self, job: dict) -> None:
+        """翻還在說的半句。聽到更多、或整句來了，這一次就不用翻完（馬上停，讓位給新的）。"""
+        kind = "loopback" if job["via"] == "heard" else "mic"
+
+        def current() -> dict | None:
+            with self._lock:
+                live = self._live.get(kind)
+            return live if live and live["id"] == job["id"] and live["original"] == job["original"] and not live.get("closing") else None
+
+        def show(text: str) -> None:
+            live = current()
+            if live and text.strip():
+                self._set_live(kind, dict(live, partial=text))
+                self.hub.publish("partial", {"id": job["id"], "text": text})
+                self.overlay.on_partial(job, text)
+
+        import inspect
+
+        fn = self.translator.translate
+        if not current() or not self._engine_ok.is_set():
+            return
+        sent, shown = [0.0], job.get("partial") or ""
+
+        def part(text: str) -> bool:
+            if not current():
+                return False
+            now = time.monotonic()
+            if now - sent[0] >= PARTIAL_EVERY and not shown.startswith(text):      # 跟畫面上的開頭一樣就先不換（見 _translate）
+                sent[0] = now
+                show(text)
+            return True
+
+        stop = self._live_stop[kind] = Stop()
+        try:
+            if not current():      # 剛好在這一瞬間說完了
+                return
+            if "on_part" in inspect.signature(fn).parameters:
+                out = fn(job["original"], self._target_for(job), job["lang"], self._context_for(job), on_part=part,
+                         unfinished=True, stop=stop)
+            else:
+                out = fn(job["original"], self._target_for(job), job["lang"], self._context_for(job))
+        except Stopped:
+            return
+        except Exception as ex:  # noqa: BLE001  半句翻不出來不算失敗：整句來的時候會照平常的方式處理
+            self.log(f"live caption not translated: {ex!r}")
+            return
+        finally:
+            if self._live_stop.get(kind) is stop:
+                self._live_stop.pop(kind, None)
+        show(out)
 
     def _tell_skipped(self, force: bool = False) -> None:
         """聊天刷得比翻譯快、有句子被略過時跟使用者說一聲（幾秒說一次，不要一則說一次）。"""
@@ -1656,6 +1787,7 @@ class Service:
     def clear_messages(self) -> None:
         with self._lock:
             self.messages.clear()
+            self._live.clear()
         self.hub.publish("cleared", {})
         self.overlay.clear()
 
@@ -2120,7 +2252,10 @@ class Service:
                                   on_text=self._on_speech, on_state=self._on_speaking,
                                   end_silence=float(self.cfg["end_silence"]), on_level=self._on_level,
                                   threshold=VAD_THRESHOLD[int(self.cfg["voice_sensitivity"])],
-                                  gate=self._mic_gate if key == "mic" else None)
+                                  gate=self._mic_gate if key == "mic" else None,
+                                  # 即時字幕只給「對方說的話」：自己說的反正要等整句才複製，先辨識只會拖慢對方那一邊
+                                  on_partial=self._on_live if key == "listen" else None,
+                                  live=lambda: bool(self.cfg["live_captions"]), busy=self._live_wait)
             if key == "listen" and self.cfg["their_auto"]:
                 pipe.stay = 1.5
             old = self.pipelines.pop(key, None)
@@ -2142,6 +2277,7 @@ class Service:
         pipe = self.pipelines.pop(key, None)
         if pipe:
             pipe.stop()
+        self._end_live("loopback" if key == "listen" else "mic")      # 說到一半就關掉：先顯示的那半句不會有整句來接，收回
         self._vu[key] = 0.0
         self.hub.publish("vu", dict(self._vu))
 
@@ -2303,21 +2439,28 @@ class Service:
     def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0, unsure: bool = False) -> None:
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
+            self._end_live(kind)
             return
         if self.cfg["drop_echo"] and self._is_echo(kind, text, lang):
+            self._end_live(kind)
             return
         if kind == "loopback" and self.cfg["their_auto"]:
             self._their_language_heard(lang, text)
-        if lang == "zh":
-            from .core.translate import to_script
-
-            # 語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一
-            speaker, other = ((self.cfg["their_lang"], self.cfg["my_lang"]) if kind == "loopback"
-                              else (self.cfg["my_lang"], self.cfg["their_lang"]))
-            text = to_script(text, speaker if LANGS[speaker]["family"] == "zh" else other)
+        text = self._voice_script(kind, text, lang)
         heard = text
-        msg_id = self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure, hear=seconds)
+        msg_id = self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure, hear=seconds,
+                             live=self._take_live(kind))
         self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
+
+    def _voice_script(self, kind: str, text: str, lang: str | None) -> str:
+        """語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一。"""
+        if lang != "zh":
+            return text
+        from .core.translate import to_script
+
+        speaker, other = ((self.cfg["their_lang"], self.cfg["my_lang"]) if kind == "loopback"
+                          else (self.cfg["my_lang"], self.cfg["their_lang"]))
+        return to_script(text, speaker if LANGS[speaker]["family"] == "zh" else other)
 
     def _on_speaking(self, kind: str, speaking: bool) -> None:
         self._source(SOURCE_OF[kind], speaking=speaking)

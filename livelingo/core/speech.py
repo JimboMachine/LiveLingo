@@ -50,7 +50,14 @@ class Segmenter:
         self.step = int(step * SR)
         self.buf = np.zeros(0, dtype=np.float32)
         self._since = 0
+        self._gain = 1.0
         self.speaking = False
+
+    def so_far(self) -> np.ndarray | None:
+        """還在說的那一句，到目前為止的聲音（已經照音量放大過）。沒有人在說話時是 None。"""
+        if not self.speaking or not len(self.buf):
+            return None
+        return self.buf.copy() if self._gain == 1.0 else np.clip(self.buf * self._gain, -1.0, 1.0)
 
     def tune(self, end_silence: float, threshold: float) -> None:
         """改「停頓多久算說完」和「多小聲算有人說話」。收音中也可以改，下一次判斷就用新的。"""
@@ -72,7 +79,8 @@ class Segmenter:
             self.speaking = False
             return []
         # 麥克風音量開得很小的時候，先放大再判斷，不然小聲說話會整句被當成沒聲音
-        loud = self.buf if peak >= 0.1 else np.clip(self.buf * min(MAX_GAIN, 0.1 / peak), -1.0, 1.0)
+        self._gain = 1.0 if peak >= 0.1 else min(MAX_GAIN, 0.1 / peak)
+        loud = self.buf if peak >= 0.1 else np.clip(self.buf * self._gain, -1.0, 1.0)
         ts = self._vad(loud, self._opts)
         if not ts:
             self.buf = self.buf[-SR // 2:]
@@ -94,6 +102,30 @@ class Segmenter:
         return [u for u in out if len(u) >= self.min_len]
 
 
+class LivePacer:
+    """
+    對方還在說的時候，什麼時候先辨識一次（即時字幕）。太常做會佔住辨識器，等他真的說完時整句反而更晚出來，所以：
+    至少說了 first 秒才做第一次（太短的半句翻出來常常是錯的）；之後每多聽到 grow 秒才再做；兩次之間至少休息「上一次花的時間 × rest」，
+    辨識得慢的電腦（只用處理器）就自動做得少，快的（顯示卡）就做得密。
+    """
+
+    def __init__(self, first: float = 1.5, grow: float = 0.6, rest: float = 1.0):
+        self.first, self.grow, self.rest = first, grow, rest
+        self.reset()
+
+    def reset(self) -> None:
+        self._length, self._ended, self._spent = 0.0, 0.0, 0.0
+
+    def due(self, length: float, now: float, busy: bool = False) -> bool:
+        """length：這一句到目前為止幾秒。busy：辨識器正在忙別的（另一條收音）。"""
+        if busy or length < self.first or length - self._length < self.grow:
+            return False
+        return now - self._ended >= self._spent * self.rest
+
+    def done(self, length: float, now: float, spent: float) -> None:
+        self._length, self._ended, self._spent = length, now, spent
+
+
 class Recognizer:
     def __init__(self, model_dir: Path, threads: int = 4, device: str = "cpu", compute_type: str = "int8",
                  window: int = 15, on_fallback=None):
@@ -111,6 +143,7 @@ class Recognizer:
             self.on_fallback(ex)
         self.window = window
         self.beam = 1          # 1 = 快；5 = 比較準、慢大約一倍（設定裡的「比較準」）
+        self._quick = False    # 這一次是「還在說就先辨識」：一律用快的
         self._lock = threading.Lock()
         # Whisper 預設每次都把聲音補到 30 秒再算。我們一句最長 12 秒，補到 15 秒就夠，
         # 實測準確度一樣、速度快一倍以上（4 核心 CPU：3.6 秒 → 1.6 秒）。
@@ -139,9 +172,13 @@ class Recognizer:
         allowed = [(l, p * (stay if l == langs[0] else 1.0)) for l, p in probs if l in langs]
         return max(allowed, key=lambda x: x[1])[0] if allowed else langs[0]
 
+    def busy(self) -> bool:
+        """現在是不是正在辨識（兩條收音共用一個辨識器）。"""
+        return self._lock.locked()
+
     def _decode(self, audio: np.ndarray, lang: str | None):
         return self.model.transcribe(
-            audio, language=lang, beam_size=self.beam, temperature=0.0, condition_on_previous_text=False,
+            audio, language=lang, beam_size=1 if self._quick else self.beam, temperature=0.0, condition_on_previous_text=False,
             without_timestamps=True, chunk_length=self.window,
             initial_prompt="以下是繁體中文的句子。" if lang == "zh" else None)
 
@@ -176,11 +213,13 @@ class Recognizer:
                 del m.encode
         return " ".join(p for p in parts if p).strip(), lang, unsure
 
-    def transcribe(self, audio: np.ndarray, langs: list[str], stay: float = 1.0) -> tuple[str, str, bool] | None:
+    def transcribe(self, audio: np.ndarray, langs: list[str], stay: float = 1.0, quick: bool = False) -> tuple[str, str, bool] | None:
         """audio：16 kHz 單聲道。langs：可能的語言（zh / ko / en / ja），多於一個時會自動判斷是哪個。
+        quick：話還沒說完、先看看目前聽到什麼（即時字幕）：用最快的算法，結果之後會被整句的取代。
         回傳（文字, 語言, 是不是沒把握）。"""
         langs = list(langs)      # 辨識到一半時清單可能被換掉（自動偵測換語言），先留一份
         with self._lock:
+            self._quick = bool(quick)
             self._fw.pad_or_trim = self._short_pad
             try:
                 try:
@@ -196,6 +235,7 @@ class Recognizer:
                         text, lang, unsure = self._run(audio, langs, share_encoder=False, stay=stay)
             finally:
                 self._fw.pad_or_trim = self._orig_pad
+                self._quick = False
         if not text or _HALLUCINATIONS.search(text):
             return None
         if len(re.sub(r"[\W_]+", "", text)) < 2:
@@ -207,13 +247,25 @@ class SpeechPipeline(threading.Thread):
     """
     一條收音來源一條管線：收音 → 切句 → 辨識 → 交給 on_text(來源, 文字, 語言, 辨識花的秒數, 是不是沒把握)。
     辨識器（Recognizer）是共用的，兩條管線不會同時搶 CPU。
+
+    即時字幕：有給 on_partial 而且 live() 是 True 的時候，話還沒說完就先辨識目前聽到的，交給
+    on_partial(來源, 文字, 語言)。說完了、要開始辨識整句的時候先叫 on_partial(來源, "", None)（半句不用再翻了）；
+    整句照樣走 on_text；那一句最後沒有結果（雜音、太短）就叫 on_partial(來源, None, None) 收回。
+    busy()：回傳 True 的時候先不要做（電腦正在忙別的重活）。
     """
 
     gate = None      # gate()：現在要不要收音（「按住才說話」沒按著的時候是 False）。None = 一直收
+    on_partial = None      # 沒給就不做即時字幕
+    _live_text = None
 
     def __init__(self, capture, recognizer: Recognizer, langs: list[str], on_text, on_state=None,
-                 end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None):
+                 end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None, on_partial=None, live=None, busy=None):
         super().__init__(daemon=True)
+        self.on_partial = on_partial
+        self.live = live or (lambda: True)
+        self.busy = busy or (lambda: False)
+        self.pacer = LivePacer()
+        self._live_text = None      # 這一句目前已經先顯示出來的字（None = 還沒顯示過）
         self.capture = capture
         self.recognizer = recognizer
         self.langs = langs
@@ -263,15 +315,45 @@ class SpeechPipeline(threading.Thread):
                 elif not gate_open:
                     self.segmenter.buf = np.zeros(0, dtype=np.float32)      # 剛按下：從這裡開始算
                 gate_open = open_now
-            for utter in self.segmenter.feed(audio):
-                t = time.time()
-                try:
-                    res = self.recognizer.transcribe(utter, self.langs, self.stay)
-                except Exception as ex:  # noqa: BLE001
-                    self.on_text(self.capture.kind, str(ex), "error", 0.0, False)
-                    continue
-                if res:
-                    self.on_text(self.capture.kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False)
+            self._hear(audio)
             if self.segmenter.speaking != was_speaking:
                 was_speaking = self.segmenter.speaking
                 self.on_state(self.capture.kind, was_speaking)
+
+    def _hear(self, audio: np.ndarray) -> None:
+        """把新進來的聲音交給切句的；說完的句子送去辨識，還在說的那一句看情況先辨識一次。"""
+        kind, given = self.capture.kind, False
+        for utter in self.segmenter.feed(audio):
+            if self._live_text is not None:
+                self.on_partial(kind, "", None)      # 說完了：半句不用再翻，把電腦讓給整句
+            t = time.time()
+            try:
+                res = self.recognizer.transcribe(utter, self.langs, self.stay)
+            except Exception as ex:  # noqa: BLE001
+                self.on_text(kind, str(ex), "error", 0.0, False)
+                continue
+            if res:
+                given = True
+                self.on_text(kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False)
+                self._live_text = None      # 先顯示的那一則已經被整句接手
+                self.pacer.reset()
+        if not self.on_partial:
+            return
+        if not self.segmenter.speaking:
+            if self._live_text is not None and not given:
+                self.on_partial(kind, None, None)      # 先顯示過了，但最後沒有結果：收回
+            self._live_text = None
+            self.pacer.reset()
+            return
+        so_far = self.segmenter.so_far() if self.live() else None
+        if so_far is None or not self.pacer.due(len(so_far) / SR, time.time(), self.recognizer.busy() or self.busy()):
+            return
+        t = time.time()
+        try:
+            res = self.recognizer.transcribe(so_far, self.langs, self.stay, quick=True)
+        except Exception:  # noqa: BLE001  先看一下而已，失敗就等整句
+            res = None
+        self.pacer.done(len(so_far) / SR, time.time(), time.time() - t)
+        if res and res[0] != self._live_text:
+            self._live_text = res[0]
+            self.on_partial(kind, res[0], res[1])

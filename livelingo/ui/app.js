@@ -357,7 +357,8 @@
   }
 
   function bubbleHTML(m) {
-    let body = `<div class="orig">${esc(m.original)}</div>`;
+    // 對方還在說、先顯示出來的那一則（即時字幕）：原文後面有「…」，說完會換成整句
+    let body = `<div class="orig${m.live ? " hearing" : ""}">${esc(m.original)}</div>`;
     // 辨識的時候沒什麼把握：標出來，按下去可以把原文改對再重翻
     const unsure = m.unsure && !m.pending
       ? `<button class="unsure" data-act="fix" data-id="${m.id}">${ICON.info}<span>${esc(t(m.via === "screen" ? "unsure_seen" : "unsure_heard"))}</span></button>` : "";
@@ -543,6 +544,7 @@
         ${rangeRow("end_silence", t("end_silence"), 0.3, 1.5, 0.1, RANGE_TEXT.end_silence)}
       </section>
       <section>
+        ${switchRow("live_captions", t("live_captions"), t("live_captions_desc"))}
         ${switchRow("drop_echo", t("drop_echo"), t("drop_echo_desc"))}
         ${switchRow("ptt", t("ptt"), t("ptt_desc"))}
         ${S.cfg.ptt ? choiceRow("ptt_key", t("ptt_key"), (S.pttKeys || []).map((k) => [k, keyName(k)])) : ""}
