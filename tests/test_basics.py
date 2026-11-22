@@ -4865,7 +4865,15 @@ def test_speakers_are_told_apart(tmp_path, monkeypatch):
     assert service._storage_used()["voice"] is True
 
     # 五、訊息帶著是誰說的；取名字；全部重來
-    service.translator = _FakeModel(lambda text, style, context: "你好")
+    hold, waiting = threading.Event(), threading.Event()      # hold 沒放開的時候，翻譯會停在半路
+    hold.set()
+
+    def answer(text, style, context):
+        waiting.set()
+        hold.wait(5)
+        return "你好"
+
+    service.translator = _FakeModel(answer)
     shown = []
     monkeypatch.setattr(service.overlay, "push", lambda *args, **kw: shown.append((args, kw)))
     worker = threading.Thread(target=service._translate_worker, daemon=True)
@@ -4910,6 +4918,18 @@ def test_speakers_are_told_apart(tmp_path, monkeypatch):
         assert not any(tmp_path.rglob("*.npy")) and secret.encode("utf-8") not in b"".join(
             p.read_bytes() for p in tmp_path.rglob("*") if p.is_file())
 
+        # 還在翻的時候改名字：翻好之後名字不能被送去翻譯時的那一份蓋回去（畫面、浮動字幕、字幕檔都一樣）
+        hold.clear()
+        service._on_speech("loopback", "기다려", "ko", 0.2, speaker=2)
+        wait_for(lambda: len(service.messages) == 6 and waiting.is_set())
+        assert service.messages[-1]["pending"] and service.speaker_rename(2, "小美")["ok"]
+        hold.set()
+        wait_for(lambda: not service.messages[-1].get("pending"))
+        assert service.messages[-1]["voice"] == "小美" and service.messages[-1]["translated"] == "你好"
+        assert [kw.get("who") for args, kw in shown if kw.get("key") == service.messages[-1]["id"]][-1] == (2, "小美")
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert "小美：기다려" in text and "小美：반가워" in text
+
         # 關掉功能：不再標；再打開，原來的還在
         service.cfg.set(tell_speakers=False)
         assert service.speaker_tag(service.messages[0]) is None and service._voices_now() is None
@@ -4921,7 +4941,19 @@ def test_speakers_are_told_apart(tmp_path, monkeypatch):
         assert service.speakers_state()["people"] == [] and service.speakers_state()["run"] == 2
         assert service.speaker_tag(service.messages[0]) is None and not service._speaker_names
         text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
-        assert secret not in text and "對方：안녕" in text
+        assert secret not in text and "小美" not in text and "對方：안녕" in text
+        # 還在翻的時候按了重新分辨：那一句翻好之後也不再標是誰（不然舊的 1 號會和新的 1 號混在一起）
+        waiting.clear()
+        hold.clear()
+        service.voices.speakers.who(a, 3.0)
+        service._on_speech("loopback", "잠깐", "ko", 0.2, speaker=1)
+        wait_for(lambda: len(service.messages) == 7 and waiting.is_set())
+        service.speakers_forget()
+        hold.set()
+        wait_for(lambda: not service.messages[-1].get("pending"))
+        assert service.speaker_tag(service.messages[-1]) is None and service.messages[-1]["voice"] == ""
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert "對方：잠깐" in text and "說話者" not in text
     finally:
         service.closing.set()
 

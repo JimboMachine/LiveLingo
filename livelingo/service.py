@@ -651,6 +651,9 @@ class Service:
         return romanize(text) if LANGS[target]["family"] == "ko" else ""
 
     def _post(self, msg: dict) -> dict:
+        if msg.get("speaker"):      # 翻譯的時候使用者可能剛幫這個人改了名字，或按了重新分辨：名字以現在的為準，不用送去翻譯時的那一份
+            current = msg.get("speaker_run") == self._speaker_run
+            msg = dict(msg, voice=self._speaker_names.get(int(msg["speaker"]), "") if current else "")
         with self._lock:
             for i, old in enumerate(self.messages):
                 if old["id"] == msg["id"]:
@@ -663,7 +666,8 @@ class Service:
         if self.history.add(msg):
             self.hub.publish("history", self.history.state())
         if self.transcript.on:
-            self.transcript.add(msg)
+            who = self.speaker_tag(msg)      # 字幕檔只寫現在還算數的說話者（重新分辨之前標的不寫）
+            self.transcript.add(dict(msg, speaker=who[0], voice=who[1]) if who else {k: v for k, v in msg.items() if k != "speaker"})
             self.hub.publish("record", self.record_state())
         return msg
 
