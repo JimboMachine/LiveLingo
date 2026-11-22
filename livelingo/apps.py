@@ -75,9 +75,10 @@ def windows() -> list[dict]:
     畫面上看得到、有標題的視窗：[{"hwnd", "pid", "exe", "title", "rect", "minimized"}]，照前後順序（最上面的在前）。
     rect 是 (左, 上, 寬, 高)，單位是螢幕上真正的像素。
     """
-    if not IS_WIN:
+    fake = _fake()
+    if fake is not None or not IS_WIN:      # 測試用的假清單在 Windows 上也要算數
         return [{"hwnd": a["hwnd"], "pid": a["pids"][0], "exe": a["exe"], "title": a["title"], "rect": a["rect"],
-                 "minimized": False} for a in _fake() or []]
+                 "minimized": False} for a in fake or []]
     import ctypes
     from ctypes import wintypes
 
