@@ -846,6 +846,14 @@ def test_dependencies_hold():
                   ("packaging", "livelingo.ico"), ("packaging", "livelingo.png")):
         assert root.joinpath(*parts).is_file(), parts
 
+    # 按住才說話的按鍵：介面上要換成當地說法的那幾個，都是 oswin.PTT_KEYS 裡有的，而且有文字
+    from livelingo import oswin
+
+    named = re.search(r'function keyName\(key\) \{ return \[([^\]]*)\]', app).group(1).replace('"', "").split(", ")
+    assert named and set(named) <= set(oswin.PTT_KEYS) and DEFAULTS["ptt_key"] in oswin.PTT_KEYS
+    for name in named:
+        assert f"key_{name.lower()}: " in i18n, name
+
     # 用語包：terms.PACKS 列的每一包都有資料檔、介面上有名字和說明，設定頁列的也是同一批
     from livelingo.terms import PACKS
 
@@ -1296,4 +1304,164 @@ def test_export_and_import_library(tmp_path):
                                              {"src": "a", "dst": "b", "lang": "zh", "target": "klingon"},
                                              {"src": "你好", "dst": "안녕", "lang": "zh", "target": "ko"}]}
     assert friend.import_library(odd)["sentences"] == 1
+
+
+def test_voice_tuning_delay_echo_and_push_to_talk(tmp_path):
+    """聲音設定：靈敏度、斷句、快／準收音中直接換；延遲有記；喇叭回音不算我說的；按住才說話只收按著的那一段。"""
+    import numpy as np
+
+    from livelingo import oswin
+    from livelingo.core.audio import SR
+    from livelingo.core.speech import SpeechPipeline
+    from livelingo.service import BEAMS, VAD_THRESHOLD, Service
+
+    class Echo:
+        tone = "casual"
+
+        def translate(self, text, target, source=None, context=None):
+            time.sleep(0.05)
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.translator = Echo()
+    service.cfg.set(back_translate=False)
+    assert service.state()["ptt_keys"] == list(oswin.PTT_KEYS) and service.cfg["ptt_key"] in oswin.PTT_KEYS
+
+    # ---- 設定：檢查範圍，收音中的管線直接換
+    tuned = []
+    pipe = type("P", (), {})()
+    pipe.segmenter = type("S", (), {"tune": lambda self, pause, threshold: tuned.append((pause, threshold))})()
+    service.pipelines["mic"] = pipe
+    service.recognizer = type("R", (), {"beam": 1})()
+    result = service.update_config({"voice_sensitivity": 9, "end_silence": "0.94", "speech_mode": "accurate",
+                                    "ptt_key": "Space", "ptt": 1, "drop_echo": 0})
+    assert result["saved"] and (service.cfg["voice_sensitivity"], service.cfg["end_silence"]) == (5, 0.9)
+    assert service.cfg["ptt_key"] == "F8" and service.cfg["ptt"] is True and service.cfg["drop_echo"] is False
+    assert tuned == [(0.9, VAD_THRESHOLD[5])] and service.recognizer.beam == BEAMS["accurate"] == 5
+    service.update_config({"end_silence": "x", "speech_mode": "turbo", "voice_sensitivity": None})      # 亂七八糟的值：不動
+    assert (service.cfg["end_silence"], service.cfg["speech_mode"], service.cfg["voice_sensitivity"]) == (0.9, "accurate", 5)
+    assert set(VAD_THRESHOLD) == {1, 2, 3, 4, 5} and VAD_THRESHOLD[1] > VAD_THRESHOLD[3] > VAD_THRESHOLD[5]
+    assert Config(tmp_path)["end_silence"] == 0.9
+    service.pipelines.clear()
+
+    # ---- 按住才說話：有開才看按鍵
+    held = {"down": False}
+    real_key_down = oswin.key_down
+    oswin.key_down = lambda name: held["down"]
+    try:
+        assert service._mic_gate() is False
+        held["down"] = True
+        assert service._mic_gate() is True
+        service.update_config({"ptt": False})
+        held["down"] = False
+        assert service._mic_gate() is True
+    finally:
+        oswin.key_down = real_key_down
+    assert oswin.key_down("Space") is False and (oswin.IS_WIN or oswin.key_down("F8") is False)
+
+    # ---- 延遲和回音
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        assert service.delay() == {"hear": 0.0, "translate": 0.0, "count": 0}
+        service._on_speech("loopback", "지금 바로 갈게 기다려", "ko", 1.2)
+        wait(lambda: service.messages[-1]["translated"])
+        first = service.messages[-1]
+        assert first["hear"] == 1.2 and first["took"] >= 1.2 and service.delay()["count"] == 1 and service.delay()["hear"] == 1.2
+        service.edit(first["id"], "지금 바로 갈게 기다려요")                      # 重翻的不算進延遲
+        wait(lambda: service.messages[-1]["translated"].endswith("요"))
+        assert service.delay()["count"] == 1
+
+        service.update_config({"drop_echo": True})
+        count = len(service.messages)
+        service._on_speech("mic", "지금 바로 갈게 기다려", "ko", 0.5)             # 喇叭的聲音被麥克風收到：不要
+        assert len(service.messages) == count
+        service._on_speech("mic", "我現在過去找你", "zh", 0.5)                    # 真的是我說的：照常
+        assert len(service.messages) == count + 1 and service.messages[-1]["via"] == "spoken"
+
+        service._on_speech("mic", "오늘 저녁에 뭐 먹을까", "ko", 0.5)             # 麥克風那句先到，對方那句後到：收回麥克風那句
+        early = service.messages[-1]["id"]
+        service._on_speech("loopback", "오늘 저녁에 뭐 먹을까", "ko", 0.5)
+        assert early not in [m["id"] for m in service.messages] and service.messages[-1]["via"] == "heard"
+
+        service.update_config({"drop_echo": False})
+        count = len(service.messages)
+        service._on_speech("mic", "오늘 저녁에 뭐 먹을까", "ko", 0.5)             # 關掉就不管
+        assert len(service.messages) == count + 1
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+    # ---- 管線：沒按著的聲音不進斷句，放開時補一段安靜把句子結束掉
+    class Cap:
+        kind = "mic"
+
+        def __init__(self, blocks):
+            import queue as q
+
+            self.q = q.Queue()
+            self.blocks = blocks
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def is_alive(self):
+            return True
+
+    fed, state = [], {"open": False}
+    cap = Cap([])
+    pipe = SpeechPipeline.__new__(SpeechPipeline)
+    threading.Thread.__init__(pipe, daemon=True)
+    pipe.capture, pipe.recognizer, pipe.langs, pipe.stay = cap, None, ["zh"], 1.0
+    pipe.on_text = pipe.on_state = lambda *a: None
+    pipe.on_level = lambda *a: None
+    pipe._halt = threading.Event()
+    pipe.segmenter = type("S", (), {"speaking": False, "buf": np.ones(5, dtype=np.float32),
+                                    "feed": lambda self, audio: fed.append((len(audio), float(np.abs(audio).max()))) or []})()
+    pipe.gate = lambda: state["open"]
+    pipe.start()
+    try:
+        loud = np.full(1600, 0.3, dtype=np.float32)
+        cap.q.put(loud)
+        time.sleep(0.3)
+        assert fed == []                                                        # 沒按著：不收
+        state["open"] = True
+        cap.q.put(loud)
+        wait(lambda: len(fed) == 1)
+        assert fed[0] == (1600, 0.3) or abs(fed[0][1] - 0.3) < 1e-6
+        assert len(pipe.segmenter.buf) == 0                                     # 剛按下：從這裡開始算
+        state["open"] = False
+        cap.q.put(loud)
+        wait(lambda: len(fed) == 2)
+        assert fed[1] == (SR, 0.0)                                              # 剛放開：補一秒安靜
+        cap.q.put(loud)
+        time.sleep(0.3)
+        assert len(fed) == 2
+    finally:
+        pipe._halt.set()
+
+
+def test_segmenter_tuning():
+    """斷句的兩個參數真的進到語音偵測的設定裡。"""
+    pytest = __import__("pytest")
+    pytest.importorskip("faster_whisper")
+    from livelingo.core.speech import Segmenter
+
+    seg = Segmenter(end_silence=0.6)
+    assert seg._opts.threshold == 0.5 and seg._opts.min_silence_duration_ms == 600
+    seg.tune(1.2, 0.3)
+    assert seg._opts.threshold == 0.3 and seg._opts.min_silence_duration_ms == 1200
 

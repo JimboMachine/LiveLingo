@@ -104,7 +104,7 @@
     {"from": "service", "to": "meters", "what": "音量條", "kind": "import"},
     {"from": "service", "to": "assets", "what": "缺哪些模型、下載", "kind": "import"},
     {"from": "service", "to": "gpu", "what": "選模式", "kind": "import"},
-    {"from": "service", "to": "oswin", "what": "剪貼簿、開資料夾", "kind": "import"},
+    {"from": "service", "to": "oswin", "what": "剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）", "kind": "import"},
     {"from": "service", "to": "upd", "what": "檢查更新", "kind": "import"},
     {"from": "service", "to": "paths", "what": "重新啟動自己的指令", "kind": "import"},
     {"from": "service", "to": "ver", "what": "版本號", "kind": "import"},

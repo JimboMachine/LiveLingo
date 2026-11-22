@@ -19,7 +19,7 @@ from . import __version__, assets, chatpaint, gpu, oswin, updater
 from .config import ACCENTS, DEFAULTS, EDITABLE, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
-from .core.translate import LANGS, Translator, detect_language
+from .core.translate import LANGS, Translator, detect_language, similarity
 from .overlay import Overlay
 from .paths import self_command
 from .terms import PACKS, TermPack
@@ -31,6 +31,9 @@ SOURCE_OF = {"loopback": "listen", "mic": "mic"}
 VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也翻得了的語言
 
 
+# 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
+VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
+BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
 
 
@@ -143,6 +146,8 @@ class Service:
         self.transcript = Transcript()
         self.tray = Tray(self)
         self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
+        self._recent_voice: deque[dict] = deque(maxlen=12)      # 最近聽到的句子（兩邊都記），用來認出麥克風收到的喇叭聲音
+        self.delays: deque[tuple[float, float]] = deque(maxlen=10)      # 最近幾句語音：（辨識秒數, 翻譯秒數）
         self._lock = threading.RLock()
         self._download_cancel = threading.Event()
         self._selecting = False
@@ -170,6 +175,8 @@ class Service:
             "detail": self.detail,
             "gpu": self.gpu,
             "mode": self.mode,
+            "delay": self.delay(),
+            "ptt_keys": list(oswin.PTT_KEYS),
             "fallback": self.fallback,
             "sources": self.sources,
             "messages": list(self.messages),
@@ -474,20 +481,31 @@ class Service:
         self.hub.publish("record", self.record_state())
         return True
 
-    def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False) -> None:
+    def delay(self) -> dict:
+        """最近幾句語音平均花了多久：{"hear": 辨識秒數, "translate": 翻譯秒數, "count": 幾句}。"""
+        rows = list(self.delays)
+        if not rows:
+            return {"hear": 0.0, "translate": 0.0, "count": 0}
+        return {"hear": round(sum(r[0] for r in rows) / len(rows), 1),
+                "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
+
+    def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0) -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
-        unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。"""
+        unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
+        hear：語音辨識花了幾秒。回傳這則訊息的編號。"""
         text = text.strip()
         if not text:
-            return
+            return None
         lang = lang or detect_language(text) or "en"
         who = "them" if via in ("screen", "heard") else "me"
         msg = {"id": next(self._ids), "who": who, "via": via, "original": text, "lang": lang,
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
-               "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time()}
+               "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time(),
+               "hear": round(float(hear), 1), "took": 0.0}
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
             self._post(msg)
         self.jobs.put(msg)
+        return msg["id"]
 
     def _target_for(self, msg: dict) -> str:
         my, their = self.cfg["my_lang"], self.cfg["their_lang"]
@@ -521,7 +539,13 @@ class Service:
                 continue
             try:
                 target = self._target_for(msg)
+                started = time.time()
                 out = self.translator.translate(msg["original"], target, msg["lang"], self._context_for(msg))
+                spent = time.time() - started
+                if msg["via"] in ("heard", "spoken") and not msg.get("edited") and not msg.get("took"):
+                    self.delays.append((float(msg.get("hear") or 0.0), spent))      # 只算第一次翻的，重翻的不算
+                    self.hub.publish("delay", self.delay())
+                    msg = dict(msg, took=round(float(msg.get("hear") or 0.0) + spent, 1))
                 if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
                     continue
                 msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
@@ -704,6 +728,20 @@ class Service:
                 if who in DEFAULTS["overlay_name_colors"] and re.fullmatch(r"#[0-9a-fA-F]{6}", str(color)):
                     colors[who] = str(color).upper()
             changes["overlay_name_colors"] = colors
+        if changes.get("speech_mode") not in (None, *BEAMS):
+            changes.pop("speech_mode")
+        if changes.get("ptt_key") not in (None, *oswin.PTT_KEYS):
+            changes.pop("ptt_key")
+        if "end_silence" in changes:
+            try:
+                changes["end_silence"] = round(max(0.3, min(1.5, float(changes["end_silence"]))), 1)
+            except (TypeError, ValueError):
+                changes.pop("end_silence")
+        if "voice_sensitivity" in changes:
+            try:
+                changes["voice_sensitivity"] = max(1, min(5, int(changes["voice_sensitivity"])))
+            except (TypeError, ValueError):
+                changes.pop("voice_sensitivity")
         for key, low, high in (("overlay_font", 14, 60), ("overlay_seconds", 0, 120), ("overlay_backdrop", 0, 80),
                                ("overlay_outline", 0, 4), ("overlay_opacity", 30, 100), ("overlay_lines", 0, 12)):
             if key in changes:
@@ -738,6 +776,12 @@ class Service:
                 self.hub.publish("overlay", self.overlay.state())
         if changed("their_auto"):
             self._their_guess = ""
+        if changed("voice_sensitivity", "end_silence", "speech_mode"):      # 收音中直接換，不用重開
+            with self._lock:
+                for pipe in self.pipelines.values():
+                    pipe.segmenter.tune(float(after["end_silence"]), VAD_THRESHOLD[int(after["voice_sensitivity"])])
+                if self.recognizer is not None:
+                    self.recognizer.beam = BEAMS[after["speech_mode"]]
         if changed("my_lang", "their_lang", "their_auto", "also_english"):
             threading.Thread(target=self._languages_changed, daemon=True).start()
         if changed("speaker_device") and self.sources["listen"]["on"]:
@@ -945,9 +989,12 @@ class Service:
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]))
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
             capture = self.audio.capture(kind, device, on_error=self._voice_error, on_open=self._voice_opened)
+            self.recognizer.beam = BEAMS[self.cfg["speech_mode"]]
             pipe = SpeechPipeline(capture, self.recognizer, self._voice_langs(key),
                                   on_text=self._on_speech, on_state=self._on_speaking,
-                                  end_silence=float(self.cfg["end_silence"]), on_level=self._on_level)
+                                  end_silence=float(self.cfg["end_silence"]), on_level=self._on_level,
+                                  threshold=VAD_THRESHOLD[int(self.cfg["voice_sensitivity"])],
+                                  gate=self._mic_gate if key == "mic" else None)
             if key == "listen" and self.cfg["their_auto"]:
                 pipe.stay = 1.5
             old = self.pipelines.pop(key, None)
@@ -995,9 +1042,34 @@ class Service:
         self._stop_voice(key)
         threading.Thread(target=self._start_voice, args=(key,), daemon=True).start()
 
+    def _mic_gate(self) -> bool:
+        """麥克風現在要不要收音：開了「按住才說話」就只有按著那個鍵的時候才收。"""
+        return not self.cfg["ptt"] or oswin.key_down(self.cfg["ptt_key"])
+
+    def _is_echo(self, kind: str, text: str, lang: str) -> bool:
+        """
+        麥克風收到喇叭播出來的對方聲音（沒戴耳機的時候）：同一句話會從兩邊各進來一次。
+        幾秒內兩邊聽到幾乎一樣的句子，就只留「對方」那一句。回傳 True 表示這句（麥克風的）不要了。
+        """
+        now = time.time()
+        other = "mic" if kind == "loopback" else "loopback"
+        twin = next((r for r in self._recent_voice if r["kind"] == other and now - r["at"] <= 6 and r["lang"] == lang
+                     and similarity(r["text"], text) >= 0.6), None)
+        if kind == "mic":
+            if twin:
+                self.log("mic sentence dropped: it is the other side's voice coming out of the speakers")
+            return bool(twin)
+        if twin and twin.get("id"):      # 麥克風那句先到了：把它收回來
+            self.log("mic sentence removed: the same sentence just came from the other side")
+            self._drop(twin["id"])
+            self._recent_voice.remove(twin)
+        return False
+
     def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0, unsure: bool = False) -> None:
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
+            return
+        if self.cfg["drop_echo"] and self._is_echo(kind, text, lang):
             return
         if kind == "loopback" and self.cfg["their_auto"]:
             self._their_language_heard(lang, text)
@@ -1008,7 +1080,9 @@ class Service:
             speaker, other = ((self.cfg["their_lang"], self.cfg["my_lang"]) if kind == "loopback"
                               else (self.cfg["my_lang"], self.cfg["their_lang"]))
             text = to_script(text, speaker if LANGS[speaker]["family"] == "zh" else other)
-        self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure)
+        heard = text
+        msg_id = self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure, hear=seconds)
+        self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
 
     def _on_speaking(self, kind: str, speaking: bool) -> None:
         self._source(SOURCE_OF[kind], speaking=speaking)

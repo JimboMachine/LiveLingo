@@ -227,6 +227,7 @@ input::placeholder { color: var(--faint); }
 .empty .ghost { height: 40px; }
 .msg { display: flex; flex-direction: column; gap: 4px; max-width: 88%; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dim); }
+.msg .meta .took { color: var(--faint); }
 .msg .meta svg { width: 13px; height: 13px; }
 .msg .bubble { background: var(--surface-2); border-radius: 4px 14px 14px 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
 .msg .orig { font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }

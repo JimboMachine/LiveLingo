@@ -39,18 +39,25 @@ def level_of(block: np.ndarray) -> float:
 class Segmenter:
     """把連續的聲音切成一句一句。用 Silero VAD 判斷哪裡有人說話，所以遊戲音效、音樂不太會被當成說話。"""
 
-    def __init__(self, end_silence: float = 0.6, max_len: float = 12.0, min_len: float = 0.4, step: float = 0.3):
-        from faster_whisper.vad import VadOptions, get_speech_timestamps
+    def __init__(self, end_silence: float = 0.6, max_len: float = 12.0, min_len: float = 0.4, step: float = 0.3,
+                 threshold: float = 0.5):
+        from faster_whisper.vad import get_speech_timestamps
 
         self._vad = get_speech_timestamps
-        self._opts = VadOptions(threshold=0.5, min_speech_duration_ms=250,
-                                min_silence_duration_ms=int(end_silence * 1000), speech_pad_ms=200)
+        self.tune(end_silence, threshold)
         self.max_len = int(max_len * SR)
         self.min_len = int(min_len * SR)
         self.step = int(step * SR)
         self.buf = np.zeros(0, dtype=np.float32)
         self._since = 0
         self.speaking = False
+
+    def tune(self, end_silence: float, threshold: float) -> None:
+        """改「停頓多久算說完」和「多小聲算有人說話」。收音中也可以改，下一次判斷就用新的。"""
+        from faster_whisper.vad import VadOptions
+
+        self._opts = VadOptions(threshold=threshold, min_speech_duration_ms=250,
+                                min_silence_duration_ms=int(end_silence * 1000), speech_pad_ms=200)
 
     def feed(self, block: np.ndarray) -> list[np.ndarray]:
         """餵進一小段聲音，回傳「已經說完」的句子（通常是空的或一句）。"""
@@ -96,6 +103,7 @@ class Recognizer:
         self.model = WhisperModel(str(model_dir), device=device, compute_type=compute_type, cpu_threads=threads,
                                   local_files_only=True)
         self.window = window
+        self.beam = 1          # 1 = 快；5 = 比較準、慢大約一倍（設定裡的「比較準」）
         self._lock = threading.Lock()
         # Whisper 預設每次都把聲音補到 30 秒再算。我們一句最長 12 秒，補到 15 秒就夠，
         # 實測準確度一樣、速度快一倍以上（4 核心 CPU：3.6 秒 → 1.6 秒）。
@@ -119,7 +127,7 @@ class Recognizer:
 
     def _decode(self, audio: np.ndarray, lang: str | None):
         return self.model.transcribe(
-            audio, language=lang, beam_size=1, temperature=0.0, condition_on_previous_text=False,
+            audio, language=lang, beam_size=self.beam, temperature=0.0, condition_on_previous_text=False,
             without_timestamps=True, chunk_length=self.window,
             initial_prompt="以下是繁體中文的句子。" if lang == "zh" else None)
 
@@ -181,8 +189,10 @@ class SpeechPipeline(threading.Thread):
     辨識器（Recognizer）是共用的，兩條管線不會同時搶 CPU。
     """
 
+    gate = None      # gate()：現在要不要收音（「按住才說話」沒按著的時候是 False）。None = 一直收
+
     def __init__(self, capture, recognizer: Recognizer, langs: list[str], on_text, on_state=None,
-                 end_silence: float = 0.6, on_level=None):
+                 end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None):
         super().__init__(daemon=True)
         self.capture = capture
         self.recognizer = recognizer
@@ -192,7 +202,8 @@ class SpeechPipeline(threading.Thread):
         self.on_state = on_state or (lambda kind, speaking: None)
         # on_level(來源, 現在的音量 0~1, 已經連續幾秒完全沒聲音)：給介面畫音量條、提醒「麥克風沒聲音」
         self.on_level = on_level or (lambda kind, level, silent_for: None)
-        self.segmenter = Segmenter(end_silence=end_silence)
+        self.segmenter = Segmenter(end_silence=end_silence, threshold=threshold)
+        self.gate = gate
         self._halt = threading.Event()
 
     def stop(self):
@@ -202,6 +213,7 @@ class SpeechPipeline(threading.Thread):
     def run(self):
         self.capture.start()
         was_speaking = False
+        gate_open = self.gate is None      # 有「按住才說話」的閘門時，一開始當作沒按著
         last_sound = time.time()
         while not self._halt.is_set():
             try:
@@ -222,6 +234,15 @@ class SpeechPipeline(threading.Thread):
             if len(audio) and float(np.abs(audio).max()) >= QUIET:
                 last_sound = now
             self.on_level(self.capture.kind, level_of(audio[-SR // 5:]), now - last_sound)
+            if self.gate is not None:
+                open_now = bool(self.gate())
+                if not open_now and not gate_open:
+                    continue                                      # 沒按著：這段聲音不要
+                if not open_now:
+                    audio = np.zeros(SR, dtype=np.float32)        # 剛放開：補一秒安靜，讓剛剛那句馬上結束送去辨識
+                elif not gate_open:
+                    self.segmenter.buf = np.zeros(0, dtype=np.float32)      # 剛按下：從這裡開始算
+                gate_open = open_now
             for utter in self.segmenter.feed(audio):
                 t = time.time()
                 try:

@@ -208,6 +208,7 @@
     if (key === "screen") return s.on ? t("screen_on") : t("screen_off");
     const device = s.device || (key === "listen" ? S.cfg.speaker_name : S.cfg.mic_name) || t("default_device");
     if (key === "listen") return s.on ? (s.speaking ? t("listen_speaking") : t("listen_on", { device })) : t("listen_off");
+    if (s.on && S.cfg.ptt && !s.speaking) return t("mic_ptt", { key: keyName(S.cfg.ptt_key) });
     return s.on ? (s.speaking ? t("mic_speaking") : t("mic_on", { device })) : t("mic_off", names);
   }
 
@@ -367,7 +368,9 @@
 
   function metaHTML(m) {
     const icon = m.via === "screen" ? ICON.screen : (m.via === "heard" ? ICON.listen : (m.via === "spoken" ? ICON.mic : ""));
-    return `${icon}<span>${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}</span>`;
+    // 語音的句子：後面標從說完到翻好花了幾秒
+    const took = m.took > 0 && !m.pending ? ` · <span class="took" title="${esc(t("took_hint"))}">${esc(t("took", { s: Number(m.took).toFixed(1) }))}</span>` : "";
+    return `${icon}<span>${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}${took}</span>`;
   }
 
   function fixHTML(m) {
@@ -478,6 +481,31 @@
         ${micNoticeHTML() || `<div class="btn-row"><button class="ghost" data-act="find-mic">${esc(t("find_btn"))}</button>
           <span class="dim small">${esc(t("find_hint"))}</span></div>`}</section>
       <div class="note">${ICON.info}<span>${esc(t("dev_note"))}</span></div>`;
+  }
+
+  function keyName(key) { return ["Mouse4", "Mouse5", "RightCtrl", "RightAlt"].indexOf(key) >= 0 ? t("key_" + key.toLowerCase()) : key; }
+
+  function delayText() {
+    const d = S.delay || {};
+    return d.count ? t("delay_now", { n: d.count, hear: Number(d.hear).toFixed(1), translate: Number(d.translate).toFixed(1), total: (Number(d.hear) + Number(d.translate)).toFixed(1) })
+      : t("delay_none");
+  }
+
+  // 聲音設定頁下半：辨識要快還是準、多小聲算說話、停多久算說完、回音、按住才說話（第一次設定的精靈不放這些）
+  function voiceTuningHTML() {
+    if (!S.ui.devices || !S.ui.devices.ok) return "";
+    return `
+      <section><div><h2>${esc(t("tune_title"))}</h2><div class="sub">${esc(t("tune_hint"))}</div></div>
+        ${choiceRow("speech_mode", t("speech_mode"), [["fast", t("speech_fast")], ["accurate", t("speech_accurate")]])}
+        <div class="note" id="delay-note">${ICON.info}<span>${esc(delayText())}</span></div>
+        ${rangeRow("voice_sensitivity", t("sensitivity"), 1, 5, 1, RANGE_TEXT.voice_sensitivity)}
+        ${rangeRow("end_silence", t("end_silence"), 0.3, 1.5, 0.1, RANGE_TEXT.end_silence)}
+      </section>
+      <section>
+        ${switchRow("drop_echo", t("drop_echo"), t("drop_echo_desc"))}
+        ${switchRow("ptt", t("ptt"), t("ptt_desc"))}
+        ${S.cfg.ptt ? choiceRow("ptt_key", t("ptt_key"), (S.pttKeys || []).map((k) => [k, keyName(k)])) : ""}
+      </section>`;
   }
 
   function paintLevels() {
@@ -637,7 +665,9 @@
     overlay_backdrop: (v) => (v > 0 ? v + "%" : t("ov_backdrop_none")),
     overlay_outline: (v) => (v > 0 ? String(v) : t("ov_outline_none")),
     overlay_opacity: (v) => v + "%",
-    overlay_lines: (v) => (v > 0 ? t("ov_lines_value", { n: v }) : t("ov_lines_all"))
+    overlay_lines: (v) => (v > 0 ? t("ov_lines_value", { n: v }) : t("ov_lines_all")),
+    voice_sensitivity: (v) => (v <= 1 ? t("sens_low") : v >= 5 ? t("sens_high") : v === 3 ? t("sens_mid") : String(v)),
+    end_silence: (v) => t("pause_value", { s: Number(v).toFixed(1) })
   };
 
   const OV_COLORS = ["#FFFFFF", "#FFE98A", "#9FF5C9", "#9AD8FF", "#FFB3C7"];
@@ -779,7 +809,7 @@
     const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
       ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
-    if (S.ui.tab === "audio") page.innerHTML = devicesHTML();
+    if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + voiceTuningHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
@@ -1257,6 +1287,7 @@
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
+    delay: (d) => { S.delay = d; const note = $("delay-note"); if (note) note.querySelector("span").textContent = delayText(); },
     vu: (d) => { S.vu = d; paintVu(); },
     find_mic: (d) => {
       if (d.state === "cancelled") S.ui.find = null;
@@ -1294,6 +1325,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
+    S.delay = st.delay || null; S.pttKeys = st.ptt_keys || [];
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;

@@ -216,6 +216,23 @@ def documents_dir() -> Path:
     return Path.home() / "Documents"
 
 
+# 「按住才說話」可以選的按鍵（名字: Windows 的虛擬鍵碼）。挑的是遊戲裡比較少用到、按著也不會打出字的鍵
+PTT_KEYS = {"F8": 0x77, "F9": 0x78, "F10": 0x79, "CapsLock": 0x14, "RightCtrl": 0xA3, "RightAlt": 0xA5,
+            "Mouse4": 0x05, "Mouse5": 0x06}
+
+
+def key_down(name: str) -> bool:
+    """這個鍵現在是不是按著（不管焦點在哪個視窗，遊戲全螢幕時也讀得到）。"""
+    if not IS_WIN or name not in PTT_KEYS:
+        return False
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.user32.GetAsyncKeyState(PTT_KEYS[name]) & 0x8000)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def open_path(path) -> bool:
     """用 Windows 預設的程式打開檔案或資料夾。"""
     if not IS_WIN:
