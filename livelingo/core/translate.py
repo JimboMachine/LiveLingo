@@ -424,30 +424,15 @@ class Stopped(Exception):
 
 
 class Stop:
-    """交給 translate(stop=…) 的「停」按鈕：呼叫 stop() 就馬上中斷那一次翻譯。
-    連線是直接關掉的，所以引擎還在讀原文、一個字都還沒吐出來的時候也停得下來（即時字幕：整句來了，半句就不用翻了）。
+    """交給 translate(stop=…) 的「停」按鈕：呼叫 stop() 就馬上中斷那一次翻譯（丟出 Stopped）。
+    引擎還在讀原文、一個字都還沒吐出來的時候也停得下來（即時字幕：整句來了，半句就不用翻了）。
     一個 Stop 只管一次翻譯，不會誤停到別的句子。"""
 
     def __init__(self):
         self.asked = False
-        self._conn = None
-        self._guard = threading.Lock()
 
     def stop(self) -> None:
-        import socket
-
-        with self._guard:
-            self.asked, conn = True, self._conn
-        sock = getattr(conn, "sock", None)
-        if sock is not None:
-            try:
-                sock.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
-
-    def _use(self, conn) -> None:
-        with self._guard:
-            self._conn = conn
+        self.asked = True
 
 
 class Translator:
@@ -498,9 +483,9 @@ class Translator:
                 return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
         payload["stream"] = True
         out = ""
+        stream = self._stream(json.dumps(payload).encode("utf-8"), headers, stop)
         try:
-            for raw in self._stream(json.dumps(payload).encode("utf-8"), headers, stop):
-                # 一行一筆：「data: {…}」，最後一筆是「data: [DONE]」
+            for raw in stream:      # 一行一筆：「data: {…}」，最後一筆是「data: [DONE]」
                 line = raw.decode("utf-8", errors="replace").strip()
                 if not line.startswith("data:") or line[5:].strip() == "[DONE]":
                     continue
@@ -511,45 +496,84 @@ class Translator:
                         keep = on_part(out) if on_part else None
                     except Exception:  # noqa: BLE001  畫面那邊出錯不能讓翻譯失敗
                         keep = None
-                    if keep is False:      # 不用翻完了（這句話已經有更新的內容）：連線一關，引擎就會停下來
+                    if keep is False:      # 不用翻完了（這句話已經有更新的內容）
                         raise Stopped()
-        except Stopped:
-            raise
-        except Exception:
-            if stop is not None and stop.asked:      # 連線是我們自己關的
-                raise Stopped() from None
-            raise
+        finally:
+            stream.close()      # 連線一關，引擎就會停下來
         if stop is not None and stop.asked:
             raise Stopped()
         return out.strip()
 
     def _stream(self, body: bytes, headers: dict, stop: Stop | None = None):
-        """跟引擎要「一邊翻一邊回」，一行一行交出來。自己開連線（不用 urlopen），這樣 Stop 才能在等引擎的時候就把它關掉。"""
-        import http.client
+        """跟引擎要「一邊翻一邊回」，一行一行交出來。
+        自己開連線、自己讀：等引擎的時候每 0.1 秒看一次有沒有人按了停（用 urlopen 的話會一直卡到引擎回第一個字，
+        在 Windows 上從別的地方也叫不醒它）。連線一關，引擎就會停下那一次的工作。"""
+        import select
+        import socket
         import urllib.error
         import urllib.parse
 
         url = urllib.parse.urlsplit(f"{self.url.rstrip('/')}/v1/completions")
-        conn = http.client.HTTPConnection(url.hostname, url.port or 80, timeout=180)
-        try:
-            conn.connect()
-            if stop is not None:
-                stop._use(conn)
-                if stop.asked:
-                    raise Stopped()
-            conn.request("POST", url.path, body=body, headers=headers)
-            r = conn.getresponse()
-            if r.status != 200:
-                raise urllib.error.HTTPError(self.url, r.status, r.reason, r.headers, None)
+        port = url.port or 80
+        sock = socket.create_connection((url.hostname, port), timeout=30)
+
+        def more() -> bytes:
+            waited = 0.0
             while True:
-                line = r.readline()
-                if not line:
-                    return
-                yield line
+                if stop is not None and stop.asked:
+                    raise Stopped()
+                if select.select([sock], [], [], 0.1)[0]:
+                    return sock.recv(65536)
+                waited += 0.1
+                if waited >= 180:
+                    raise TimeoutError("timed out")
+
+        try:
+            head = [f"POST {url.path} HTTP/1.1", f"Host: {url.hostname}:{port}", "Connection: close", "Accept: text/event-stream",
+                    f"Content-Length: {len(body)}"] + [f"{k}: {v}" for k, v in headers.items()]
+            sock.sendall(("\r\n".join(head) + "\r\n\r\n").encode("latin-1") + body)
+            buf = b""
+            while b"\r\n\r\n" not in buf:
+                data = more()
+                if not data:
+                    raise ConnectionError("the engine closed the connection")
+                buf += data
+            head_bytes, buf = buf.split(b"\r\n\r\n", 1)
+            lines = head_bytes.decode("latin-1").split("\r\n")
+            status = int(lines[0].split()[1])
+            if status != 200:
+                raise urllib.error.HTTPError(self.url, status, lines[0], None, None)
+            chunked = any(line.lower().replace(" ", "") == "transfer-encoding:chunked" for line in lines[1:])
+            text, done = b"", False
+            while True:
+                if chunked:      # 一塊一塊來的：「長度（十六進位）\r\n 內容 \r\n」，長度 0 是結束
+                    while True:
+                        cut = buf.find(b"\r\n")
+                        if cut < 0:
+                            break
+                        size = int(buf[:cut].split(b";")[0] or b"0", 16)
+                        if size == 0:
+                            done = True
+                            break
+                        if len(buf) < cut + 2 + size + 2:
+                            break
+                        text += buf[cut + 2:cut + 2 + size]
+                        buf = buf[cut + 2 + size + 2:]
+                else:
+                    text, buf = text + buf, b""
+                while b"\n" in text:
+                    line, text = text.split(b"\n", 1)
+                    yield line
+                if done:
+                    break
+                data = more()
+                if not data:
+                    break
+                buf += data
+            if text:
+                yield text
         finally:
-            if stop is not None:
-                stop._use(None)
-            conn.close()
+            sock.close()
 
     def busy(self) -> bool:
         """現在是不是正在翻。"""

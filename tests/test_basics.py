@@ -4410,7 +4410,7 @@ def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
     # 一、跟引擎要「一邊翻一邊回」，一行一筆地讀（用一個真的本機小伺服器當引擎）
     import http.server
 
-    seen = {"gone": threading.Event(), "wait": 0.0, "status": 200}
+    seen = {"gone": threading.Event(), "wait": 0.0, "status": 200, "chunked": False}
 
     class FakeEngine(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -4420,16 +4420,28 @@ def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
             seen["body"] = _json.loads(self.rfile.read(int(self.headers["Content-Length"])).decode("utf-8"))
             seen["auth"] = self.headers.get("Authorization")
             time.sleep(seen["wait"])      # 像引擎在讀原文：還沒有任何回應
+            def send(data: bytes) -> None:      # 真的引擎是一塊一塊送的（chunked），而且一塊不一定剛好是一行
+                if seen["chunked"]:
+                    for part in (data[:7], data[7:]):
+                        if part:
+                            self.wfile.write(f"{len(part):x}\r\n".encode() + part + b"\r\n")
+                else:
+                    self.wfile.write(data)
+                self.wfile.flush()
+
             try:
                 self.send_response(seen["status"])
                 self.send_header("Content-Type", "text/event-stream")
+                if seen["chunked"]:
+                    self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
-                self.wfile.write(b": keep-alive\n\n")
+                send(b": keep-alive\n\n")
                 for piece in ("3", "분 후에", " 도착해.", ""):
-                    self.wfile.write(("data: " + _json.dumps({"choices": [{"text": piece}]}, ensure_ascii=False) + "\n\n").encode("utf-8"))
-                    self.wfile.flush()
+                    send(("data: " + _json.dumps({"choices": [{"text": piece}]}, ensure_ascii=False) + "\n\n").encode("utf-8"))
                     time.sleep(0.05)
-                self.wfile.write(b"data: [DONE]\n\n")
+                send(b"data: [DONE]\n\n")
+                if seen["chunked"]:
+                    self.wfile.write(b"0\r\n\r\n")
             except OSError:
                 seen["gone"].set()
 
@@ -4441,6 +4453,11 @@ def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
         parts = []
         assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append) == "3분 후에 도착해."
         assert seen["body"]["stream"] is True and seen["auth"] == "Bearer k1" and parts == ["3", "3분 후에", "3분 후에 도착해."]
+
+        seen["chunked"] = True
+        parts.clear()
+        assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append) == "3분 후에 도착해." and parts == ["3", "3분 후에", "3분 후에 도착해."]
+        seen["chunked"] = False
 
         def boom(text):
             raise RuntimeError("screen is gone")
@@ -4456,6 +4473,7 @@ def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
         with pytest.raises(tr_mod.Stopped):
             tr.translate("3分鐘後到", "ko", "zh", on_part=parts.append, unfinished=True, stop=stop)
         assert time.time() - started < 1.5 and not tr.busy()
+        assert seen["gone"].wait(5)      # 引擎那邊看得到連線關了（真的引擎會因此停下那一次的工作）
         with pytest.raises(tr_mod.Stopped):
             tr.translate("5分鐘後到", "ko", "zh", unfinished=True, stop=stop)      # 已經按過停的：不會去問引擎
         seen["wait"] = 0.0
