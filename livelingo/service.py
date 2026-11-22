@@ -9,6 +9,7 @@ import os
 import queue
 import re
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -50,6 +51,10 @@ SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "region", 
 RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir")
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
+
+
+REVIVE_TIMES = 3            # 翻譯引擎自己停掉時，最多自動重開幾次……
+REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
 
 
 class EventHub:
@@ -172,6 +177,12 @@ class Service:
         self.jobs = Jobs()             # 翻譯的排隊：我自己的句子先翻，螢幕上讀到的排太久就略過（jobs.py）
         self._skipped = 0              # 略過了幾則還沒告訴使用者
         self._skip_told = 0.0
+        self._engine_ok = threading.Event()      # 沒亮 = 翻譯引擎掛了，正在自動重開（翻譯先等它）
+        self._engine_ok.set()
+        self._revive_lock = threading.Lock()
+        self._revivals: list[float] = []         # 最近幾次自動重開的時間
+        self._retries: dict[int, int] = {}       # 引擎掛掉時正在翻的句子：補翻過幾次
+        self._error_told = 0.0                   # 上一次在畫面上說「有一部分出了錯」的時間
         self.window = None             # 視窗控制（window.py 會放進來）
         self.can_window = False        # 視窗可以由程式調整大小、置頂（用瀏覽器開的時候不行）
         self.view = "main"
@@ -217,6 +228,20 @@ class Service:
                 f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + text + "\n")
         except OSError:
             pass
+
+    def watch_errors(self) -> None:
+        """沒有人接住的錯誤（不管在哪一條執行緒）：寫進紀錄檔，並在畫面上說一聲，不要無聲無息地壞掉。"""
+        def caught(kind, value, tb, where: str = "") -> None:
+            if issubclass(kind, (KeyboardInterrupt, SystemExit)):
+                return
+            self.log(f"unhandled error{where}:\n" + "".join(traceback.format_exception(kind, value, tb)).rstrip())
+            if time.time() - self._error_told > 60:      # 連續出錯的時候一分鐘說一次就好
+                self._error_told = time.time()
+                self.notice("part_failed")
+
+        sys.excepthook = caught
+        threading.excepthook = lambda args: caught(args.exc_type, args.exc_value, args.exc_traceback,
+                                                   f" in thread {args.thread.name if args.thread else '?'}")
 
     def state(self) -> dict:
         return {
@@ -282,6 +307,7 @@ class Service:
 
     def start(self) -> None:
         threading.Thread(target=self._translate_worker, daemon=True, name="translate").start()
+        threading.Thread(target=self._engine_guard, daemon=True, name="engine-guard").start()
         threading.Thread(target=self._boot, daemon=True, name="boot").start()
 
     def _boot(self) -> None:
@@ -474,11 +500,7 @@ class Service:
         if self.engine:
             self.engine.stop()
         gpu_mode = self.mode["engine"] == "cuda"
-        self.engine = Engine(
-            exe=assets.find_server(assets.engine_dir(self.store, self.mode["engine"])),
-            model=assets.model_path(self.store, self.mode["model"]),
-            log_path=self.data / "engine.log", threads=int(self.cfg["threads"]),
-            gpu_layers=99 if gpu_mode else 0)
+        self.engine = self._new_engine()
         self.translator.url = self.engine.url
         try:
             self.engine.start()
@@ -498,6 +520,83 @@ class Service:
         self.translator.clear_cache()
         self.set_phase("ready")
         self._resume_sources()
+
+    def _new_engine(self) -> Engine:
+        return Engine(
+            exe=assets.find_server(assets.engine_dir(self.store, self.mode["engine"])),
+            model=assets.model_path(self.store, self.mode["model"]),
+            log_path=self.data / "engine.log", threads=int(self.cfg["threads"]),
+            gpu_layers=99 if self.mode["engine"] == "cuda" else 0)
+
+    # ---- 翻譯引擎用到一半自己停了（記憶體被遊戲佔滿、被別的程式關掉…）：自動重開，沒翻成的句子補翻
+
+    def _say(self, code: str) -> None:
+        """程式自己發生的事：浮動留言上說一聲（人在遊戲裡），主視窗也跳一則。"""
+        table = HOTKEY_NOTES.get(self.cfg["ui_lang"], HOTKEY_NOTES["en"])
+        self.overlay.note(table[code])
+        self.notice(code)
+
+    def _engine_gone(self) -> bool:
+        engine = self.engine
+        return bool(self.phase == "ready" and engine and engine.proc is not None and engine.proc.poll() is not None)
+
+    def _engine_guard(self) -> None:
+        while not self.closing.wait(3):
+            try:
+                if self._engine_gone():
+                    self._revive_engine()
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+
+    def _revive_engine(self) -> bool:
+        """引擎停了就重開一個。十分鐘內重開過 REVIVE_TIMES 次還是停：不再試，照「引擎開不起來」處理。回傳有沒有重開成功。"""
+        with self._revive_lock:
+            if self.closing.is_set() or not self._engine_gone():
+                return True      # 別的執行緒已經處理好了
+            self._engine_ok.clear()
+            try:
+                now = time.time()
+                self._revivals = [t for t in self._revivals if now - t < REVIVE_WINDOW]
+                self.log(f"the translation engine stopped by itself (exit code {self.engine.proc.returncode}); "
+                         f"restart {len(self._revivals) + 1} of {REVIVE_TIMES}")
+                try:      # 重開會把 engine.log 蓋掉：先留一份，才看得到它為什麼停
+                    (self.data / "engine-stopped.log").write_bytes((self.data / "engine.log").read_bytes()[-200_000:])
+                except OSError:
+                    pass
+                if len(self._revivals) >= REVIVE_TIMES:
+                    return self._engine_lost(RuntimeError("the translation engine keeps stopping (see engine-stopped.log)"))
+                self._revivals.append(now)
+                self._say("engine_restarting")
+                self.engine.stop()
+                engine = self._new_engine()
+                try:
+                    engine.start()
+                    if not engine.wait_ready(180):
+                        raise RuntimeError("the translation engine did not become ready in time")
+                except Exception as ex:  # noqa: BLE001
+                    engine.stop()
+                    return self._engine_lost(ex)
+                if self.closing.is_set():
+                    engine.stop()
+                    return False
+                self.engine = engine
+                self.translator.url = engine.url
+                self.log("the translation engine is running again")
+                self._say("engine_back")
+                return True
+            finally:
+                self._engine_ok.set()
+
+    def _engine_lost(self, ex: Exception) -> bool:
+        self.log(f"the translation engine could not be restarted ({self.mode}): {ex!r}")
+        if self.mode["engine"] == "cuda" and not self.fallback:
+            # 顯示卡模式一直停（最常見：顯示記憶體被遊戲佔滿）：改用不需要顯示卡的標準模式
+            self.fallback = True
+            self.notice("gpu_fallback")
+            self._prepare()
+            return self.phase == "ready"
+        self.set_phase("error", message=str(ex), log=str(self.data / "engine.log"))
+        return False
 
     def _resume_sources(self) -> None:
         """上次關掉程式時開著的來源，這次自動再打開。"""
@@ -674,40 +773,58 @@ class Service:
     def _translate_worker(self) -> None:
         while not self.closing.is_set():
             try:
-                msg, late = self.jobs.get(timeout=0.5)
-            except queue.Empty:
-                self._tell_skipped(force=True)
-                continue
-            if late:      # 螢幕上讀到的、排了太久的：不翻了（還沒顯示過，所以畫面上不會留下半則）
-                self._skipped += 1
-                self._tell_skipped()
-                continue
-            if "back_of" in msg:
-                self._back_translate(msg["back_of"])
-                continue
-            try:
-                target = self._target_for(msg)
-                started = time.time()
-                out = self.translator.translate(msg["original"], target, msg["lang"], self._context_for(msg))
-                spent = time.time() - started
-                if msg["via"] in ("heard", "spoken") and not msg.get("edited") and not msg.get("took"):
-                    self.delays.append((float(msg.get("hear") or 0.0), spent))      # 只算第一次翻的，重翻的不算
-                    self.hub.publish("delay", self.delay())
-                    msg = dict(msg, took=round(float(msg.get("hear") or 0.0) + spent, 1))
-                if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
-                    continue
-                msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
-                           pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
-                self._count(msg)
-                if msg["who"] == "me" and target != self.cfg["my_lang"] and not msg.get("copied"):
-                    if msg["via"] == "typed" or self.cfg["copy_spoken"]:
-                        msg["copied"] = oswin.copy_text(out)
-                self._post(msg)
-                self._want_back(msg)
-            except Exception as ex:  # noqa: BLE001
+                self._translate_next()
+            except Exception:  # noqa: BLE001  這條線停了就再也沒有翻譯，所以不管出什麼錯都要繼續
                 self.log(traceback.format_exc())
-                self._count(msg, failed=True)
-                self._post(dict(msg, pending=False, error=str(ex)))
+                time.sleep(0.5)
+
+    def _translate_next(self) -> None:
+        """從排隊裡拿一句來翻（沒有就等半秒）。"""
+        try:
+            msg, late = self.jobs.get(timeout=0.5)
+        except queue.Empty:
+            self._tell_skipped(force=True)
+            return
+        if late:      # 螢幕上讀到的、排了太久的：不翻了（還沒顯示過，所以畫面上不會留下半則）
+            self._skipped += 1
+            self._tell_skipped()
+            return
+        if not self._engine_ok.is_set():
+            self._engine_ok.wait(300)      # 翻譯引擎正在自動重開：等它回來再翻，不要每一句都報失敗
+        if "back_of" in msg:
+            self._back_translate(msg["back_of"])
+            return
+        try:
+            target = self._target_for(msg)
+            started = time.time()
+            out = self.translator.translate(msg["original"], target, msg["lang"], self._context_for(msg))
+            spent = time.time() - started
+            if msg["via"] in ("heard", "spoken") and not msg.get("edited") and not msg.get("took"):
+                self.delays.append((float(msg.get("hear") or 0.0), spent))      # 只算第一次翻的，重翻的不算
+                self.hub.publish("delay", self.delay())
+                msg = dict(msg, took=round(float(msg.get("hear") or 0.0) + spent, 1))
+            if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
+                return
+            msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
+                       pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
+            self._count(msg)
+            if msg["who"] == "me" and target != self.cfg["my_lang"] and not msg.get("copied"):
+                if msg["via"] == "typed" or self.cfg["copy_spoken"]:
+                    msg["copied"] = oswin.copy_text(out)
+            self._post(msg)
+            self._want_back(msg)
+        except Exception as ex:  # noqa: BLE001
+            if not self._engine_gone():
+                time.sleep(0.5)      # 連線先斷、程式晚一點點才真的結束
+            if self._engine_gone() and self._retries.get(msg["id"], 0) < 2:
+                # 引擎剛好在翻這一句的時候停了：不算失敗，重開之後補翻（排最前面，也不會因為等太久被略過）
+                self._retries[msg["id"]] = self._retries.get(msg["id"], 0) + 1
+                self.jobs.put(msg, asked=True)
+                self._revive_engine()
+                return
+            self.log(traceback.format_exc())
+            self._count(msg, failed=True)
+            self._post(dict(msg, pending=False, error=str(ex)))
 
     def _tell_skipped(self, force: bool = False) -> None:
         """聊天刷得比翻譯快、有句子被略過時跟使用者說一聲（幾秒說一次，不要一則說一次）。"""
@@ -1189,6 +1306,11 @@ class Service:
             engine_rows, more = report.drop_said(report.tail(self.data / "engine.log", report.ENGINE_LINES), said)
             dropped += more
             sections += [("log", rows), ("engine_log", engine_rows)]
+            # 引擎用到一半自己停過：它停之前最後寫了什麼（自動重開時留下來的那一份）
+            stopped, more = report.drop_said(report.tail(self.data / "engine-stopped.log", report.ENGINE_LINES), said)
+            dropped += more
+            if stopped:
+                sections.append(("engine_stopped", stopped))
         return sections, dropped
 
     def report_make(self, note: str = "", settings: bool = True, log: bool = True) -> dict:

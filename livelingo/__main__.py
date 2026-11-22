@@ -80,6 +80,7 @@ def main() -> int:
         return 0
 
     service = Service(data)
+    service.watch_errors()      # 沒被接住的錯誤寫進紀錄檔，並在畫面上說一聲
 
     def exit_now():
         service.shutdown()

@@ -3641,3 +3641,176 @@ def test_wrapped_lines_are_joined_and_repeats_are_new(monkeypatch):
         watcher._look(slot, lambda place: frame)      # 第二次：停下來了，辨識
     assert got == ["안녕하세요 반갑습니다", "빨리 와", "빨리 와", "오늘 저녁에 같이 게임 할 사람 있으면 디스코드로 들어와", "지금 갈게 기다려"]
     assert slot.stats["sent"] == 5 and slot.stats["scans"] == 6
+
+
+def test_engine_that_stops_is_restarted(tmp_path):
+    """翻譯引擎用到一半自己停了：自動重開，剛好在翻的那一句補翻（不算失敗）；十分鐘內停太多次就不再試；
+    顯示卡模式一直停就改用標準模式。"""
+    from livelingo import hotkeys
+    from livelingo import service as service_mod
+    from livelingo.service import Service
+
+    class Proc:
+        def __init__(self):
+            self.returncode = None
+
+        def poll(self):
+            return self.returncode
+
+    made = []
+
+    class FakeEngine:
+        def __init__(self, ok=True):
+            self.proc, self.ok, self.url, self.stopped = Proc(), ok, f"http://engine/{len(made)}", False
+            made.append(self)
+
+        def start(self):
+            if not self.ok:
+                raise RuntimeError("cannot start")
+
+        def wait_ready(self, timeout):
+            return True
+
+        def stop(self):
+            self.stopped = True
+
+    class Model:
+        tone, url = "casual", ""
+
+        def translate(self, text, target, source=None, context=None):
+            if service.engine.proc.poll() is not None:
+                raise ConnectionError("connection refused")
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, ui_lang="zh-TW")
+    service.translator = Model()
+    service.phase = "ready"
+    service.engine = FakeEngine()
+    service._new_engine = lambda: FakeEngine()
+    (tmp_path / "engine.log").write_text("out of memory\n", encoding="utf-8")
+    notices, notes, phases = [], [], []
+    service.notice = lambda code, **more: notices.append(code)
+    service.overlay.note = notes.append
+    service.set_phase = lambda phase, **detail: (phases.append(phase), setattr(service, "phase", phase))
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 8
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        assert not service._engine_gone()
+        service.engine.proc.returncode = -9                       # 引擎被關掉了
+        assert service._engine_gone()
+        first = service.submit("typed", "我現在過去", "zh")
+        wait(lambda: any(m["id"] == first and m["translated"] for m in service.messages))
+        done = next(m for m in service.messages if m["id"] == first)
+        assert done["translated"] == "<ko>我現在過去" and not done["error"]          # 補翻成功，沒有顯示失敗
+        assert notices == ["engine_restarting", "engine_back"]
+        assert notes == [hotkeys.NOTES["zh-TW"]["engine_restarting"], hotkeys.NOTES["zh-TW"]["engine_back"]]
+        assert len(made) == 2 and made[0].stopped and service.engine is made[1] and service.translator.url == made[1].url
+        assert (tmp_path / "engine-stopped.log").read_text(encoding="utf-8") == "out of memory\n"      # 留一份，才看得到為什麼停
+        assert service._engine_ok.is_set() and service.phase == "ready" and service.usage.summary()["today"]["failed"] == 0
+        made_report = service.report_make()["text"]
+        assert "翻譯引擎上次自己停掉之前的紀錄" in made_report and "out of memory" in made_report      # 問題報告裡看得到它停之前寫了什麼
+
+        # 一直停：重開到上限就不再試，照「引擎開不起來」處理，之後的句子才顯示失敗
+        for _ in range(service_mod.REVIVE_TIMES - 1):
+            service.engine.proc.returncode = 1
+            assert service._revive_engine() is True
+        service.engine.proc.returncode = 1
+        assert service._revive_engine() is False and phases == ["error"] and not service._engine_gone()
+        second = service.submit("typed", "等我一下", "zh")
+        wait(lambda: any(m["id"] == second and m["error"] for m in service.messages))
+
+        # 重開的那一個開不起來：也是照「開不起來」處理
+        phases.clear()
+        service._revivals.clear()
+        service.phase, service.engine = "ready", FakeEngine()
+        service.engine.proc.returncode = 1
+        service._new_engine = lambda: FakeEngine(ok=False)
+        assert service._revive_engine() is False and phases == ["error"] and made[-1].stopped
+
+        # 顯示卡模式停到上限：改用標準模式重來（跟開程式時顯示卡開不起來一樣）
+        phases.clear()
+        notices.clear()
+        prepared = []
+        service._prepare = lambda: prepared.append(dict(fallback=service.fallback))
+        service.mode = {"model": "12b", "engine": "cuda", "quality": "high"}
+        service.phase, service.engine = "ready", FakeEngine()
+        service.engine.proc.returncode = 1
+        service._revive_engine()
+        assert prepared == [{"fallback": True}] and "gpu_fallback" in notices and phases == []
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+
+def test_unhandled_errors_are_logged_and_shown(tmp_path):
+    """沒有人接住的錯誤：寫進紀錄檔、畫面上說一聲（一分鐘最多一次）；翻譯那條線遇到意外的錯也不會停。"""
+    import sys
+
+    from livelingo.service import Service
+
+    service = Service(tmp_path)
+    notices = []
+    service.notice = lambda code, **more: notices.append(code)
+    old = sys.excepthook, threading.excepthook
+    try:
+        service.watch_errors()
+
+        def boom():
+            raise ValueError("it broke here")
+
+        for _ in range(2):
+            t = threading.Thread(target=boom, name="some-part")
+            t.start()
+            t.join()
+        log = (tmp_path / "app.log").read_text(encoding="utf-8")
+        assert log.count("unhandled error in thread some-part") == 2 and "ValueError: it broke here" in log
+        assert notices == ["part_failed"]      # 連續兩次只說一次
+        sys.excepthook(KeyboardInterrupt, KeyboardInterrupt(), None)      # 使用者自己中斷的不算
+        assert notices == ["part_failed"]
+    finally:
+        sys.excepthook, threading.excepthook = old
+
+    # 翻譯那條線：排隊那邊丟出意外的錯，寫進紀錄之後繼續翻下一句
+    class Echo:
+        tone = "casual"
+
+        def translate(self, text, target, source=None, context=None):
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service.translator = Echo()
+    service.cfg.set(back_translate=False)
+    real, calls = service.jobs.get, []
+
+    def flaky(timeout=0.5):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("queue hiccup")
+        return real(timeout)
+
+    service.jobs.get = flaky
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        mine = service.submit("typed", "我現在過去", "zh")
+        end = time.time() + 5
+        while time.time() < end and not any(m["id"] == mine and m["translated"] for m in service.messages):
+            time.sleep(0.02)
+        assert any(m["id"] == mine and m["translated"] == "<ko>我現在過去" for m in service.messages)
+        assert "queue hiccup" in (tmp_path / "app.log").read_text(encoding="utf-8") and worker.is_alive()
+    finally:
+        service.closing.set()
+        worker.join(2)

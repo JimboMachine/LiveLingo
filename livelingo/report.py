@@ -29,6 +29,7 @@ TEXT = {
                   "裡面有：版本、電腦規格、各項檢查的結果、設定、裝置和程式的名稱、最近的紀錄。帳號名稱和個人資料夾已經換掉。"],
         "note": "發生了什麼事", "app": "LiveLingo", "computer": "這台電腦", "health": "健康檢查", "sources": "收音和螢幕",
         "storage": "儲存空間", "usage": "使用數字（只算次數，沒有內容）", "settings": "設定", "log": "最近的紀錄", "engine_log": "翻譯引擎的紀錄",
+        "engine_stopped": "翻譯引擎上次自己停掉之前的紀錄",
         "dropped": "有 {n} 行因為含著對話裡的句子，沒有放進來。", "none": "（沒有）",
     },
     "zh-CN": {
@@ -38,6 +39,7 @@ TEXT = {
                   "里面有：版本、电脑配置、各项检查的结果、设置、设备和程序的名称、最近的日志。账号名称和个人文件夹已经替换掉。"],
         "note": "发生了什么事", "app": "LiveLingo", "computer": "这台电脑", "health": "健康检查", "sources": "收音和屏幕",
         "storage": "存储空间", "usage": "使用数字（只算次数，没有内容）", "settings": "设置", "log": "最近的日志", "engine_log": "翻译引擎的日志",
+        "engine_stopped": "翻译引擎上次自己停掉之前的日志",
         "dropped": "有 {n} 行因为含有对话里的句子，没有放进来。", "none": "（没有）",
     },
     "en": {
@@ -47,6 +49,7 @@ TEXT = {
                   "It contains: the version, your computer's specs, the check results, settings, device and program names, and recent log lines. Your account name and personal folder have been replaced."],
         "note": "What happened", "app": "LiveLingo", "computer": "This computer", "health": "Health check", "sources": "Audio and screen",
         "storage": "Storage", "usage": "Usage numbers (counts only, no content)", "settings": "Settings", "log": "Recent log", "engine_log": "Translation engine log",
+        "engine_stopped": "Translation engine log from before it last stopped by itself",
         "dropped": "{n} lines were left out because they contained a sentence from a conversation.", "none": "(none)",
     },
     "ko": {
@@ -56,6 +59,7 @@ TEXT = {
                   "들어 있는 것: 버전, 컴퓨터 사양, 점검 결과, 설정, 장치와 프로그램 이름, 최근 로그. 계정 이름과 개인 폴더는 다른 글자로 바꿨습니다."],
         "note": "무슨 일이 있었나요", "app": "LiveLingo", "computer": "이 컴퓨터", "health": "상태 점검", "sources": "소리와 화면",
         "storage": "저장 공간", "usage": "사용 숫자 (횟수만, 내용 없음)", "settings": "설정", "log": "최근 로그", "engine_log": "번역 엔진 로그",
+        "engine_stopped": "번역 엔진이 지난번에 스스로 멈추기 전의 로그",
         "dropped": "대화에 나온 문장이 들어 있어서 {n}줄을 뺐습니다.", "none": "(없음)",
     },
     "ja": {
@@ -65,6 +69,7 @@ TEXT = {
                   "入っているもの：バージョン、パソコンの性能、各チェックの結果、設定、デバイスとアプリの名前、最近のログ。アカウント名と個人フォルダーは置き換えてあります。"],
         "note": "何が起きたか", "app": "LiveLingo", "computer": "このパソコン", "health": "状態チェック", "sources": "音声と画面",
         "storage": "ストレージ", "usage": "利用状況の数字（回数だけ、内容なし）", "settings": "設定", "log": "最近のログ", "engine_log": "翻訳エンジンのログ",
+        "engine_stopped": "翻訳エンジンが前回ひとりでに止まる前のログ",
         "dropped": "会話に出てきた文が含まれていたため、{n} 行を除きました。", "none": "（なし）",
     },
 }
