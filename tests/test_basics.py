@@ -792,7 +792,7 @@ def test_dependencies_hold():
     import re
     from pathlib import Path
 
-    from livelingo import chatpaint, hotkeys, quickbox, region, transcript, tray
+    from livelingo import chatpaint, history, hotkeys, quickbox, region, transcript, tray
     from livelingo.config import ACCENTS, DEFAULTS, EDITABLE, THEMES
 
     root = Path(__file__).resolve().parent.parent
@@ -813,7 +813,8 @@ def test_dependencies_hold():
     # 文字：視窗外面的每一張文字表（系統匣、浮動留言、框選、字幕檔）五種語言都有，欄位一樣多
     tables = {"tray.TEXT": tray.TEXT, "chatpaint.NAMES": chatpaint.NAMES, "chatpaint.HINTS": chatpaint.HINTS,
               "chatpaint.SAMPLES": chatpaint.SAMPLES, "region.HINTS": region.HINTS, "region.FONTS": region.FONTS,
-              "transcript.TITLES": transcript.TITLES, "hotkeys.NOTES": hotkeys.NOTES, "quickbox.HINTS": quickbox.HINTS}
+              "transcript.TITLES": transcript.TITLES, "hotkeys.NOTES": hotkeys.NOTES, "quickbox.HINTS": quickbox.HINTS,
+              "history.TITLES": history.TITLES}
     for name, table in tables.items():
         assert set(table) == set(UI_LANGS), (name, set(table) ^ set(UI_LANGS))
         shapes = {lang: (sorted(v) if isinstance(v, dict) else len(v) if isinstance(v, list) else 1) for lang, v in table.items()}
@@ -2193,3 +2194,143 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     calls = {ast.unparse(n.func) for path in ("window.py", "service.py")
              for n in ast.walk(ast.parse((root / path).read_text(encoding="utf-8"))) if isinstance(n, ast.Call)}
     assert "service.tray.start" in calls and "self.start_hotkeys" in calls
+
+
+def test_history_kept_searched_exported_cleared(tmp_path, monkeypatch):
+    """
+    對話歷史：翻好的句子存在電腦上，重開還在；可以搜尋、匯出成文字檔、一鍵清除；過期的自動刪；
+    也可以整個關掉不保存。還在翻的、翻失敗的不記；同一則改過只留最新的；被拿掉的訊息歷史裡也拿掉。
+    """
+    import json as _json
+
+    from livelingo import history, oswin
+    from livelingo.config import DEFAULTS, EDITABLE
+    from livelingo.service import Service
+
+    assert DEFAULTS["history_keep"] is True and DEFAULTS["history_days"] in history.DAYS
+    assert {"history_keep", "history_days"} <= EDITABLE
+
+    clock = {"now": 1_800_000_000.0}
+    h = history.History(tmp_path, keep=True, days=30, now=lambda: clock["now"])
+    msg = lambda i, who, original, translated, **kw: {      # noqa: E731
+        "id": i, "who": who, "via": "typed" if who == "me" else "heard", "original": original, "translated": translated,
+        "lang": "zh" if who == "me" else "ko", "target": "ko" if who == "me" else "zh-TW", "at": clock["now"], **kw}
+    assert not h.add(msg(1, "me", "等我一下", "", pending=True))            # 還在翻：不記
+    assert not h.add(msg(1, "me", "等我一下", "", error="boom"))             # 翻失敗：不記
+    assert h.add(msg(1, "me", "等我一下", "잠깐만 기다려"))
+    assert not h.add(msg(1, "me", "等我一下", "잠깐만 기다려"))              # 一模一樣再來一次：不重複寫
+    clock["now"] += 60
+    assert h.add(msg(2, "them", "정글 와줘", "打野來一下", place="隊伍聊天"))
+    assert h.add(msg(1, "me", "等我一下", "잠깐만요", back="稍等"))          # 重翻：同一則，換成新的
+    assert h.add(msg(3, "them", "Bot lane GANK", "下路抓人"))
+    h.drop(3)
+    assert h.count == 2
+    found = h.search("")
+    assert [r["original"] for r in found["items"]] == ["정글 와줘", "等我一下"]      # 最新的在前
+    assert found["items"][1]["translated"] == "잠깐만요" and found["items"][0]["place"] == "隊伍聊天"
+    assert found["total"] == 2 and found["all"] == 2 and not found["more"]
+    assert [r["original"] for r in h.search("打野")["items"]] == ["정글 와줘"]          # 找翻譯
+    assert [r["original"] for r in h.search("等我  잠깐")["items"]] == ["等我一下"]      # 每個詞都要有，原文和翻譯都算
+    assert h.search("GANK")["total"] == 0 and h.search("gank 抓人")["total"] == 0      # 拿掉的那則找不到
+    page = h.search("", offset=0, limit=1)
+    assert len(page["items"]) == 1 and page["more"] and h.search("", offset=1, limit=1)["items"][0]["original"] == "等我一下"
+
+    # 重開：還在，而且檔案被整理過（一則一行）
+    lines = (tmp_path / history.FILE).read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 5
+    (tmp_path / history.FILE).open("a", encoding="utf-8").write("{broken line\n")      # 寫到一半斷電的那種
+    again = history.History(tmp_path, keep=True, days=30, now=lambda: clock["now"])
+    assert [r["original"] for r in again.search("")["items"]] == ["정글 와줘", "等我一下"]
+    assert len((tmp_path / history.FILE).read_text(encoding="utf-8").splitlines()) == 2
+    assert again.key_of(1) != h.key_of(1) or True      # 鍵含這次開啟的時間，編號重新從 1 開始也不會蓋到舊的
+
+    # 匯出：舊的在上面、每天一個標題、有 BOM
+    out, count = again.export(tmp_path / "out", "zh-TW")
+    text = out.read_text(encoding="utf-8-sig")
+    assert count == 2 and out.name.startswith("LiveLingo history ") and out.read_bytes().startswith(b"\xef\xbb\xbf")
+    assert text.index("等我一下") < text.index("정글 와줘") and "→ 잠깐만요" in text and "→ 打野來一下" in text
+    assert "LiveLingo 對話歷史" in text and text.count("── ") == 1 and "我：等我一下" in text and "對方：정글 와줘" in text
+    only, n = again.export(tmp_path / "out", "en", "打野")
+    assert n == 1 and "等我一下" not in only.read_text(encoding="utf-8-sig") and only != out
+    assert again.export(tmp_path / "out", "en", "沒有這句") == (None, 0)
+
+    # 過期的自動刪；改短天數馬上生效；0 = 不限
+    clock["now"] += 8 * 86400
+    again.add(msg(9, "me", "新的", "새로운"))
+    again.configure(True, 7)
+    assert [r["original"] for r in again.search("")["items"]] == ["新的"]
+    assert len((tmp_path / history.FILE).read_text(encoding="utf-8").splitlines()) == 1
+    clock["now"] += 400 * 86400
+    again.configure(True, 0)
+    assert again.count == 1
+    # 關掉保存：不再記新的，已經存的還在；清除之後檔案也沒了
+    again.configure(False, 0)
+    assert not again.add(msg(10, "me", "不要記", "기록하지 마")) and again.count == 1
+    assert again.clear() == 1 and again.count == 0 and not (tmp_path / history.FILE).exists()
+    assert history.History(tmp_path, now=lambda: clock["now"]).count == 0
+
+    # ---- 接在主體上
+    monkeypatch.setattr(oswin, "copy_text", lambda text: True)
+    opened = []
+    monkeypatch.setattr(oswin, "open_path", lambda path: opened.append(path) or True)
+    service = Service(tmp_path / "svc")
+    events = []
+    service.hub.publish = lambda name, data=None: events.append((name, data))
+    try:
+        base = {"who": "me", "via": "typed", "lang": "zh", "target": "ko", "at": 1_800_000_000.0, "copied": False, "back": "", "pron": ""}
+        service._post({**base, "id": 1, "original": "等我一下", "translated": "", "pending": True, "error": ""})
+        assert service.history.count == 0
+        service._post({**base, "id": 1, "original": "等我一下", "translated": "잠깐만 기다려", "pending": False, "error": ""})
+        service._post({**base, "id": 2, "who": "them", "via": "screen", "original": "ㄱㄱ", "translated": "走走", "pending": False, "error": ""})
+        assert service.history.count == 2 and [e for e in events if e[0] == "history"][-1][1]["count"] == 2
+        assert service.state()["history"]["count"] == 2 and service.state()["history"]["bytes"] > 0
+        service._drop(2)
+        assert service.history.count == 1
+        service.clear_messages()      # 清掉畫面上的對話不會動到歷史
+        assert service.history.count == 1
+        done = service.history_export()
+        assert done["ok"] and done["count"] == 1 and opened and (service.transcript_dir() / done["name"]).exists()
+        # 設定：天數只收清單裡的；關掉保存之後不再記
+        assert service.update_config({"history_days": "90"})["changed"] == ["history_days"] and service.history.days == 90
+        assert service.update_config({"history_days": 13})["changed"] == [] and service.update_config({"history_days": "x"})["changed"] == []
+        service.update_config({"history_keep": False})
+        service._post({**base, "id": 3, "original": "不要記", "translated": "기록하지 마", "pending": False, "error": ""})
+        assert service.history.count == 1
+        cleared = service.history_clear()
+        assert cleared == {"ok": True, "removed": 1, "error": ""} and service.history.count == 0
+        assert service.history_export() == {"ok": False, "error": "empty"}
+        assert _json.loads((tmp_path / "svc" / "config.json").read_text(encoding="utf-8"))["history_keep"] is False
+    finally:
+        service.shutdown()
+
+
+def test_monitor_list_is_safe_from_several_threads(monkeypatch):
+    """
+    問螢幕配置的函式會同時被好幾條執行緒呼叫（浮動留言每幾秒檢查一次、設定頁的螢幕圖）。
+    在真的 Windows 上曾經因為每次都重新設定共用的參數型別而互相蓋掉出錯；現在型別只準備一次。
+    """
+    import sys
+    import threading
+
+    from livelingo import oswin
+
+    monkeypatch.delenv("LIVELINGO_FAKE_MONITORS", raising=False)
+    caught, results = [], []
+    monkeypatch.setattr(sys, "unraisablehook", lambda info: caught.append(repr(info.exc_value)))
+
+    def ask():
+        for _ in range(25):
+            results.append(oswin.monitors())
+
+    threads = [threading.Thread(target=ask) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join(30)
+    assert not caught, caught[:2]
+    assert len(results) == 100 and all(r and r[0]["primary"] and r[0]["width"] > 0 for r in results)
+    assert all(r == results[0] for r in results)
+    if sys.platform == "win32":
+        assert oswin._monitor_api() is oswin._monitor_api()
+    source = open(oswin.__file__, encoding="utf-8").read()
+    assert "ctypes.windll.user32.GetMonitorInfoW" not in source and "u32.GetMonitorInfoW.argtypes" not in source

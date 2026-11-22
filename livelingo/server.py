@@ -99,6 +99,15 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.apps_state())
+                if url.path == "/api/history":      # 對話歷史：q 搜尋的字、offset 從第幾則開始、limit 幾則（最新的在前）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    one = lambda name, default: (query.get(name) or [default])[0]      # noqa: E731
+                    try:
+                        offset, limit = int(one("offset", "0")), int(one("limit", "50"))
+                    except ValueError:
+                        offset, limit = 0, 50
+                    return self._json({**service.history.search(one("q", ""), offset, limit), **service.history.state()})
                 if url.path == "/api/screens":      # 接著哪些螢幕、留言現在在哪（設定頁的縮小螢幕圖）
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -209,6 +218,12 @@ class Server:
                         return self._json(service.import_library(body.get("data")))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
+                    if route == "/api/history":
+                        if body.get("clear"):
+                            return self._json(service.history_clear())
+                        if body.get("export"):
+                            return self._json(service.history_export(str(body.get("q") or "")))
+                        return self._json({"ok": False})
                     if route == "/api/hotkeys":      # 設定頁在等使用者按新的組合：先停用，按完恢復
                         service.pause_hotkeys(bool(body.get("pause")))
                         return self._json({"ok": True, **service.hotkeys_state()})

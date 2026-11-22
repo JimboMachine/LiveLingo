@@ -464,3 +464,19 @@ input::placeholder { color: var(--faint); }
 .hk-state.ok { color: var(--accent); }
 .hk-state.taken { color: var(--me); }
 .hk-keys span.icon-btn { visibility: hidden; }
+
+/* 對話歷史 */
+.hist-q { width: 100%; }
+.hist-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.hist-count { flex: 1; min-width: 140px; font-size: 13px; color: var(--dim); }
+.hist-list { display: flex; flex-direction: column; gap: 6px; user-select: text; }
+.hist-day { margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--dim); }
+.hist-row { padding: 9px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line-2); }
+.hist-row.me { border-left-color: var(--me); }
+.hist-row.them { border-left-color: var(--accent); }
+.hist-meta { font-size: 12px; color: var(--dim); }
+.hist-original { margin-top: 3px; font-size: 13px; color: var(--dim); overflow-wrap: anywhere; }
+.hist-translated { margin-top: 2px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.hist-none { padding: 22px 14px; border-radius: 12px; border: 1px dashed var(--line-2); color: var(--dim); font-size: 13px; text-align: center; }
+.note > button.danger { border: 1px solid var(--danger); color: var(--danger); background: transparent; margin-left: auto; }
+.note > button.danger + button { margin-left: 0; }

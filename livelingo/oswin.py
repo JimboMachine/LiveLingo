@@ -171,6 +171,32 @@ def work_area() -> tuple[int, int, int, int]:
     return 0, 0, 1920, 1040
 
 
+_MONITOR_API = None
+
+
+def _monitor_api():
+    """
+    問螢幕配置要用的 Windows 函式和資料型別，只準備一次。用自己的一份 user32（不跟別的模組共用參數設定），
+    型別也固定同一個：之前每次呼叫都重新定義型別、設定在共用的那一份上，兩條執行緒同時問就會互相蓋掉而出錯。
+    """
+    global _MONITOR_API
+    if _MONITOR_API is None:
+        import ctypes
+        from ctypes import wintypes
+
+        class Info(ctypes.Structure):
+            _fields_ = [("size", wintypes.DWORD), ("monitor", wintypes.RECT), ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
+
+        dll = ctypes.WinDLL("user32")
+        callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
+        dll.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(Info)]
+        dll.GetMonitorInfoW.restype = wintypes.BOOL
+        dll.EnumDisplayMonitors.argtypes = [wintypes.HANDLE, ctypes.c_void_p, callback, wintypes.LPARAM]
+        dll.EnumDisplayMonitors.restype = wintypes.BOOL
+        _MONITOR_API = (dll, Info, callback)
+    return _MONITOR_API
+
+
 def monitors() -> list[dict]:
     """
     接著的每一個螢幕：[{"left","top","width","height","work":[左,上,寬,高]（扣掉工作列）,"primary"}]，
@@ -187,26 +213,20 @@ def monitors() -> list[dict]:
                           "work": [left, top, width, height - 40], "primary": n == 0})
     elif IS_WIN:
         import ctypes
-        from ctypes import wintypes
 
-        class Info(ctypes.Structure):
-            _fields_ = [("size", wintypes.DWORD), ("monitor", wintypes.RECT), ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
+        dll, info_type, callback_type = _monitor_api()
 
-        u32 = ctypes.windll.user32
-        u32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(Info)]
-
-        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
         def each(handle, _dc, _rect, _lparam):
-            info = Info()
-            info.size = ctypes.sizeof(Info)
-            if u32.GetMonitorInfoW(handle, ctypes.byref(info)):
+            info = info_type()
+            info.size = ctypes.sizeof(info_type)
+            if dll.GetMonitorInfoW(handle, ctypes.byref(info)):
                 m, w = info.monitor, info.work
                 found.append({"left": m.left, "top": m.top, "width": m.right - m.left, "height": m.bottom - m.top,
                               "work": [w.left, w.top, w.right - w.left, w.bottom - w.top], "primary": bool(info.flags & 1)})
             return True
 
         try:
-            u32.EnumDisplayMonitors(None, None, each, 0)
+            dll.EnumDisplayMonitors(None, None, callback_type(each), 0)
         except Exception:  # noqa: BLE001
             found = []
     if not found:

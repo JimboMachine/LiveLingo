@@ -11,6 +11,7 @@
     sources: {}, messages: [], glossary: [], lessons: [], canWindow: false, view: "main", overlay: { editing: false, running: false }, vu: {},
     record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
     hotkeys: { available: false, states: {}, defaults: {} },
+    history: { count: 0, bytes: 0 },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -118,6 +119,7 @@
     info: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
     back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    clock: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
     frame: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>',
     chat: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h3M10 7h10M4 12h3M10 12h7M4 17h3M10 17h9"/></svg>',
     swap: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>',
@@ -570,6 +572,7 @@
     if (S.ui.tab === "audio") openDevices();
     if (S.ui.tab === "screen") loadApps();
     if (S.ui.tab === "overlay") loadScreens();
+    if (S.ui.tab === "history") { S.ui.hist = null; loadHistory(); }
   }
 
   async function loadApps() {
@@ -584,7 +587,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["about", "nav_about", "info"]];
+  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
@@ -595,8 +598,9 @@
     $("rail").innerHTML = `
       <div class="rail-brand">${MARK}<div class="wordmark">${WORDMARK}</div></div>
       ${item("main", "nav_chat", "bubble")}
+      ${item("history", "nav_history", "clock")}
       <div class="rail-title">${esc(t("settings"))}</div>
-      ${TABS.filter(([id]) => id !== "about").map(([id, key, icon]) => item(id, key, icon)).join("")}
+      ${TABS.filter(([id]) => id !== "about" && id !== "history").map(([id, key, icon]) => item(id, key, icon)).join("")}
       <div class="grow"></div>
       ${item("about", "nav_about", "info")}`;
   }
@@ -932,6 +936,67 @@
     }).join("")}</div>`;
   }
 
+  // 對話歷史：存在這台電腦上的句子。搜尋和「載入更多」只換清單那一塊，不重畫整頁（正在打的字不會被打斷）
+  function sizeText(bytes) {
+    const b = Number(bytes) || 0;
+    return b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(b ? 1 : 0, Math.round(b / 1024)) + " KB";
+  }
+  function histListHTML() {
+    const h = S.ui.hist;
+    if (!h) return "";
+    if (!h.items.length) return `<div class="hist-none">${esc(t(h.q ? "hist_none" : S.cfg.history_keep ? "hist_empty" : "hist_off_empty"))}</div>`;
+    let day = "";
+    const rows = h.items.map((m) => {
+      const at = new Date(m.at * 1000), d = at.toLocaleDateString(S.cfg.ui_lang, { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+      const head = d !== day ? `<div class="hist-day">${esc(d)}</div>` : "";
+      day = d;
+      const same = !m.translated || m.translated === m.original;
+      return `${head}<div class="hist-row ${m.who === "me" ? "me" : "them"}">
+        <div class="hist-meta">${esc(at.toLocaleTimeString(S.cfg.ui_lang, { hour: "2-digit", minute: "2-digit" }))} · ${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}${m.place ? " · " + esc(m.place) : ""}</div>
+        <div class="hist-original">${esc(m.original)}</div>${same ? "" : `<div class="hist-translated">${esc(m.translated)}</div>`}</div>`;
+    }).join("");
+    return rows + (h.more ? `<div class="btn-row"><button class="ghost" data-act="hist-more">${esc(t("hist_more"))}</button></div>` : "");
+  }
+  function histToolsHTML() {
+    const h = S.ui.hist || { q: "", total: S.history.count, all: S.history.count };
+    const count = h.q ? t("hist_found", { n: h.total, all: h.all }) : t("hist_count", { n: S.history.count, size: sizeText(S.history.bytes) });
+    if (S.ui.histConfirm) {
+      return `<div class="note warn" id="hist-confirm">${ICON.info}<span>${esc(t("hist_clear_ask", { n: S.history.count }))}</span>
+        <button class="danger" data-act="hist-clear-yes">${esc(t("hist_clear_yes"))}</button><button class="ghost" data-act="hist-clear-no">${esc(t("cancel"))}</button></div>`;
+    }
+    return `<div class="hist-tools"><span class="hist-count" id="hist-count">${esc(count)}</span>
+      <button class="ghost" data-act="hist-export" ${h.total ? "" : "disabled"}>${esc(h.q ? t("hist_export_found", { n: h.total }) : t("hist_export"))}</button>
+      <button class="ghost" data-act="hist-clear" ${S.history.count ? "" : "disabled"}>${esc(t("hist_clear"))}</button></div>`;
+  }
+  function historyPage() {
+    return `
+      <section><div><h2>${esc(t("hist_title"))}</h2><div class="sub">${esc(t("hist_hint"))}</div></div>
+        ${switchRow("history_keep", t("hist_keep"), t("hist_keep_desc"))}
+        ${S.cfg.history_keep ? choiceRow("history_days", t("hist_days"), [["7", t("hist_d7")], ["30", t("hist_d30")], ["90", t("hist_d90")], ["0", t("hist_d0")]]) : ""}
+      </section>
+      <section>
+        <input type="text" id="hist-q" class="hist-q" maxlength="80" placeholder="${esc(t("hist_search"))}" aria-label="${esc(t("hist_search"))}" value="${esc((S.ui.hist && S.ui.hist.q) || "")}">
+        <div id="hist-tools">${histToolsHTML()}</div>
+        <div class="hist-list" id="hist-list" aria-live="polite">${histListHTML()}</div>
+      </section>`;
+  }
+  function paintHistory() {      // 只換工具列和清單
+    const tools = $("hist-tools"), list = $("hist-list");
+    if (tools) tools.innerHTML = histToolsHTML();
+    if (list) list.innerHTML = histListHTML();
+  }
+  let histSeq = 0;
+  async function loadHistory(more) {
+    const q = S.ui.hist ? S.ui.hist.q : "", seq = ++histSeq;
+    const offset = more && S.ui.hist ? S.ui.hist.items.length : 0;
+    const r = await get(`/api/history?q=${encodeURIComponent(q)}&offset=${offset}&limit=50`);
+    if (!r || r.error || seq !== histSeq) return;      // 打字打得快：只留最後一次查的結果
+    S.history = { count: r.count, bytes: r.bytes };
+    S.ui.hist = { q, items: more ? S.ui.hist.items.concat(r.items) : r.items, total: r.total, all: r.all, more: r.more };
+    if (S.view === "settings" && S.ui.tab === "history") paintHistory();
+  }
+  let histTimer = null;
+
   // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
   const HOTKEYS = ["overlay", "mic", "copy", "quick"];
   const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
@@ -1007,7 +1072,8 @@
     const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
       ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack", "exe"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
-    if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + voiceTuningHTML();
+    if (S.ui.tab === "history") page.innerHTML = historyPage();
+    else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + voiceTuningHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
@@ -1344,6 +1410,23 @@
     accent: (el) => saveCfg({ accent: el.dataset.code }),
     swap: () => saveCfg({ my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang, their_auto: false }),
     "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
+    "hist-more": () => loadHistory(true),
+    "hist-export": async () => {
+      const r = await post("/api/history", { export: true, q: (S.ui.hist && S.ui.hist.q) || "" });
+      if (r && r.ok) toast(t("hist_exported", { n: r.count, name: r.name }), 7000);
+      else toast(t("hist_export_failed", { error: (r && r.error) || "" }), 8000, "error");
+    },
+    "hist-clear": () => { S.ui.histConfirm = true; paintHistory(); const b = document.querySelector('[data-act="hist-clear-no"]'); if (b) b.focus(); },
+    "hist-clear-no": () => { S.ui.histConfirm = false; paintHistory(); const b = document.querySelector('[data-act="hist-clear"]'); if (b) b.focus(); },
+    "hist-clear-yes": async () => {
+      const r = await post("/api/history", { clear: true });
+      S.ui.histConfirm = false;
+      if (r && r.ok) toast(t("hist_cleared", { n: r.removed }), 5000);
+      else toast(t("hist_clear_failed", { error: (r && r.error) || "" }), 8000, "error");
+      if (S.ui.hist) S.ui.hist.q = "";
+      const input = $("hist-q"); if (input) input.value = "";
+      loadHistory();
+    },
     "hotkey-set": (el) => hotkeyRecord(S.ui.hotkeyRec === el.dataset.name ? null : el.dataset.name),
     "hotkey-clear": (el) => saveHotkey(el.dataset.name, ""),
     "hotkey-reset": () => saveCfg({ hotkeys: S.hotkeys.defaults || {} }),
@@ -1386,6 +1469,12 @@
     return { [el.dataset.change]: el.dataset.sub ? { [el.dataset.sub]: value } : value };
   }
   document.addEventListener("input", (e) => {
+    if (e.target.id === "hist-q") {      // 歷史的搜尋：邊打邊找，停一下才查
+      const q = e.target.value.trim();
+      clearTimeout(histTimer);
+      histTimer = setTimeout(() => { S.ui.hist = Object.assign(S.ui.hist || { items: [], total: 0, all: 0, more: false }, { q }); S.ui.histConfirm = false; loadHistory(); }, 220);
+      return;
+    }
     const key = e.target.dataset && e.target.dataset.range;
     const out = key && $("out-" + key);
     if (out) out.textContent = RANGE_TEXT[key](Number(e.target.value));
@@ -1609,6 +1698,12 @@
         if (before.running !== d.running) loadScreens();
       }
     },
+    history: (d) => {      // 有新的句子記下來了（或清掉了）：正在看歷史頁就更新，等一下再查，免得連續幾句一直閃
+      S.history = d;
+      if (S.view !== "settings" || S.ui.tab !== "history") return;
+      clearTimeout(histTimer);
+      histTimer = setTimeout(() => loadHistory(), 600);
+    },
     hotkeys: (d) => { S.hotkeys = d; if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage(); },
     saved: (d) => flashSaved(d.what === "region" && d.id ? "#region-" + d.id : d.what),
     screen_stats: (d) => {      // 讀螢幕的統計：直接換那一行字，不重畫整頁（免得正在打的名字被打斷）
@@ -1638,7 +1733,7 @@
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
     S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
-    S.hotkeys = st.hotkeys || S.hotkeys;
+    S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
     renderAll();

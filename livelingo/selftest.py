@@ -351,11 +351,11 @@ def run(out: Path, window: bool = True) -> int:
         time.sleep(1.0)
         assert state["service"].tray.running
 
-    check("tray", tray)
     check("gpu", gpu_detect)
     if "--online" in sys.argv:
         check("engine_online", engine_online)
     check("server", server)
+    check("tray", tray)      # 要等主體建好才有系統匣可以試
 
     if window and "service" in state:
         from . import window as window_mod
@@ -390,6 +390,7 @@ def run(out: Path, window: bool = True) -> int:
                 info["cards"] = win.evaluate_js("document.querySelectorAll('.ui-langs button').length")      # 介面語言的按鈕
                 time.sleep(0.5)
                 info["has_window_ctl"] = service.window is not None
+                info["tray_running"] = bool(service.tray.running)      # 視窗出現時應該已經把系統匣圖示開起來
                 if service.window:
                     info["size_before"] = service.window.geometry()
                     service.set_view("main")

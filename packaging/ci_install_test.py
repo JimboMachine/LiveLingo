@@ -22,6 +22,8 @@ from ctypes import wintypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+sys.stdout.reconfigure(errors="replace")      # 主控台是 cp1252：記錄檔裡的中文印不出來時用問號代替，不要整個中斷
+
 SETUP = Path(sys.argv[1]).resolve()
 LOCAL = Path(os.environ["LOCALAPPDATA"])
 APP_DIR = LOCAL / "Programs" / "LiveLingo"
@@ -90,7 +92,7 @@ def selftest(label: str) -> None:
     out = Path(tempfile.mkdtemp()) / "selftest.json"
     proc = subprocess.run([str(APP), "--selftest", str(out)], timeout=600)
     result = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {"ok": False, "failed": ["no output"]}
-    print(json.dumps(result, ensure_ascii=False, indent=2)[:6000])
+    print(json.dumps(result, ensure_ascii=True, indent=2)[:6000])      # 主控台是 cp1252，中文印不出來會整個中斷
     if proc.returncode != 0 or not result["ok"]:
         fail(f"{label}: selftest failed: {result.get('failed')}")
 

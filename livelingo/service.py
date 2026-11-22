@@ -20,6 +20,8 @@ from .config import ACCENTS, DEFAULTS, EDITABLE, MAX_REGIONS, OVERLAY_FORMS, OVE
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language, similarity
+from .history import DAYS as HISTORY_DAYS
+from .history import History
 from .hotkeys import ACTIONS as HOTKEY_ACTIONS
 from .hotkeys import NOTES as HOTKEY_NOTES
 from .hotkeys import Hotkeys
@@ -163,6 +165,7 @@ class Service:
         self.closing = threading.Event()
         self._ids = itertools.count(1)
         self.transcript = Transcript()
+        self.history = History(self.data, bool(self.cfg["history_keep"]), int(self.cfg["history_days"]))
         self.tray = Tray(self)
         self.hotkeys = Hotkeys(self._hotkey, on_state=lambda states: self.hub.publish("hotkeys", self.hotkeys_state()))
         self._quick = None             # 快速輸入框開著的時候是那個小程式
@@ -216,6 +219,7 @@ class Service:
             "overlay": self.overlay.state(),
             "record": self.record_state(),
             "hotkeys": self.hotkeys_state(),
+            "history": self.history.state(),
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -433,6 +437,8 @@ class Service:
                 self.messages.append(msg)
         self.hub.publish("message", msg)
         self.overlay.on_message(msg)
+        if self.history.add(msg):
+            self.hub.publish("history", self.history.state())
         if self.transcript.on:
             self.transcript.add(msg)
             self.hub.publish("record", self.record_state())
@@ -446,6 +452,7 @@ class Service:
         self.hub.publish("message_removed", {"id": msg_id})
         self.overlay.on_removed(msg_id)
         self.transcript.drop(msg_id)
+        self.history.drop(msg_id)
 
     # ------------------------------------------------------------------ 字幕記錄
 
@@ -719,6 +726,27 @@ class Service:
             msg = next((m for m in self.messages if m["id"] == msg_id), None)
         return bool(msg and msg.get("translated") and oswin.copy_text(msg["translated"]))
 
+    # ------------------------------------------------------------------ 對話歷史
+
+    def history_export(self, q: str = "") -> dict:
+        """把（符合搜尋的）歷史存成文字檔，放在字幕記錄的資料夾，存好把資料夾打開。"""
+        folder = self.transcript_dir()
+        try:
+            path, count = self.history.export(folder, self.cfg["ui_lang"], q)
+        except OSError as ex:
+            self.log(f"history export failed: {ex!r}")
+            return {"ok": False, "error": str(ex)}
+        if not path:
+            return {"ok": False, "error": "empty"}
+        oswin.open_path(folder)
+        return {"ok": True, "path": str(path), "name": path.name, "count": count}
+
+    def history_clear(self) -> dict:
+        removed = self.history.clear()
+        state = self.history.state()
+        self.hub.publish("history", state)
+        return {"ok": not state["error"], "removed": removed, "error": state["error"]}
+
     # ------------------------------------------------------------------ 全域快速鍵、快速輸入框
 
     def hotkeys_state(self) -> dict:
@@ -928,6 +956,14 @@ class Service:
                     changes[key] = max(low, min(high, int(changes[key])))
                 except (TypeError, ValueError):
                     changes.pop(key)
+        if "history_days" in changes:
+            try:
+                changes["history_days"] = int(changes["history_days"])
+            except (TypeError, ValueError):
+                changes.pop("history_days")
+            else:
+                if changes["history_days"] not in HISTORY_DAYS:
+                    changes.pop("history_days")
         if "hotkeys" in changes:      # 可以只送其中一個動作；空字串 = 不用；不能用的組合、跟別的動作撞到的都不收
             fixed = self._clean_hotkeys(changes["hotkeys"])
             if fixed is None:
@@ -963,6 +999,9 @@ class Service:
             self._their_guess = ""
         if changed("hotkeys"):
             self.hotkeys.set(after["hotkeys"])
+        if changed("history_keep", "history_days"):
+            self.history.configure(after["history_keep"], after["history_days"])
+            self.hub.publish("history", self.history.state())
         if changed("listen_apps"):
             self._apps_audio_off = False      # 換了選擇：再試一次
             if self.sources["listen"]["on"]:
