@@ -4045,3 +4045,37 @@ def test_numbers_are_checked_after_translating(tmp_path):
     assert 't("numbers_lost", { numbers: m.lost.join(' in ui.joinpath("app.js").read_text(encoding="utf-8")
     assert ".msg .lost {" in ui.joinpath("style.css").read_text(encoding="utf-8")
     assert ui.joinpath("i18n.js").read_text(encoding="utf-8").count("numbers_lost: ") == 5
+
+
+def test_long_text_is_split_not_cut():
+    """超過 500 個字的訊息以前只翻前 500 個字。現在切成幾段分開翻再接起來，一個字都不能少。"""
+    from pathlib import Path
+
+    from livelingo.core.translate import MAX_TEXT, split_long
+
+    assert split_long("短短的一句。", 500) == ["短短的一句。"]
+    text = "這是其中的一句，講的是今天打的那一場。" * 60                          # 一千多個字
+    parts = split_long(text, 500)
+    assert len(parts) == 3 and all(len(p) <= 500 for p in parts) and "".join(parts) == text
+    assert all(p.endswith("。") for p in parts)                                   # 切在句子結尾，不切在句子中間
+    english = " ".join(f"Sentence number {i} is about version 2.5 of the game." for i in range(40))
+    parts = split_long(english, 500)
+    assert all(len(p) <= 500 and p.endswith(".") for p in parts) and " ".join(parts) == english      # 2.5 的小數點不是句尾
+    assert split_long("字" * 1200, 500) == ["字" * 500, "字" * 500, "字" * 200]      # 完全沒有標點：只好硬切，但不丟字
+    comma = "，".join(["沒有句號只有逗號的一長串"] * 60)
+    assert all(len(p) <= 500 for p in split_long(comma, 500)) and "".join(split_long(comma, 500)) == comma
+
+    tr = _FakeModel(lambda sent, style, context: f"[{len(sent)}]")
+    out = tr.translate(text, "ko", "zh", context=["前一句"])
+    assert out == " ".join(f"[{len(p)}]" for p in split_long(text, 500))           # 每一段都翻了，照順序接起來
+    assert tr.contexts[0] == ["前一句"] and tr.contexts[1] == []                    # 前文只給第一段
+    assert sum(len(a[0]) for a in tr.asked) == len(text)
+    tr = _FakeModel("好")
+    assert tr.translate("Hello there. " * 100, "zh-TW", "en") == "好" * 3           # 翻成中文、日文時段落之間不加空白
+    tr = _FakeModel("가")
+    tr.translate("".join(chr(0x4E00 + i) for i in range(5000)), "ko", "zh")        # 五千個不一樣的字
+    assert sum(len(a[0].rstrip("。")) for a in tr.asked) == MAX_TEXT == 2000        # 再長就真的不收了（輸入框也只收這麼多）
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    assert f'id="say" autocomplete="off" maxlength="{MAX_TEXT}"' in ui.joinpath("index.html").read_text(encoding="utf-8")
+    assert f'class="edit-src" rows="2" maxlength="{MAX_TEXT}"' in ui.joinpath("app.js").read_text(encoding="utf-8")

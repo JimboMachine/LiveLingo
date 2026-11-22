@@ -393,7 +393,7 @@
     // 語音和螢幕上讀來的句子：可能是原文就辨識錯了，先讓他改原文
     const edit = m.via === "typed" ? "" : `
       <label class="dim small" for="edit-${m.id}">${esc(t(m.via === "screen" ? "edit_label_seen" : "edit_label_heard"))}</label>
-      <textarea id="edit-${m.id}" class="edit-src" rows="2" maxlength="500">${esc(m.original)}</textarea>
+      <textarea id="edit-${m.id}" class="edit-src" rows="2" maxlength="2000">${esc(m.original)}</textarea>
       <button class="primary" data-act="edit-save" data-id="${m.id}">${esc(t("edit_save"))}</button>`;
     return `<div class="fix" data-id="${m.id}">${edit}
       <label class="dim small ${edit ? "teach-label" : ""}" for="fix-src-${m.id}">${esc(t("fix_label"))}</label>

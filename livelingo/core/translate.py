@@ -282,6 +282,32 @@ def tidy(out: str, target: str) -> str:
     return out.strip()
 
 
+MAX_TEXT = 2000      # 一則訊息最長幾個字（介面的輸入框也是這個數）
+_SENTENCE_END = re.compile(r"(?<=[。．！？!?…~～\n])|(?<=[.])(?=\s)")
+_SOFT_BREAK = re.compile(r"(?<=[，、,;；:：\s])")
+
+
+def split_long(text: str, limit: int) -> list[str]:
+    """太長的文字切成幾段（每段不超過 limit 個字）：先在句子結尾切，一句就超過的再在逗號、空白切，真的沒地方切才硬切。"""
+    def pack(pieces: list[str]) -> list[str]:
+        out, now = [], ""
+        for piece in pieces:
+            if now and len(now) + len(piece) > limit:
+                out.append(now)
+                now = ""
+            now += piece
+        return out + ([now] if now else [])
+
+    parts = []
+    for sentence in pack([p for p in _SENTENCE_END.split(text) if p]):
+        if len(sentence) <= limit:
+            parts.append(sentence)
+            continue
+        for chunk in pack([p for p in _SOFT_BREAK.split(sentence) if p]):
+            parts += [chunk[i:i + limit] for i in range(0, len(chunk), limit)]
+    return [p.strip() for p in parts if p.strip()]
+
+
 _DIGITS = re.compile(r"\d+")
 _THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 # 寫成數字但其實不是數量的網路用語：翻出來本來就不會有數字
@@ -451,10 +477,15 @@ class Translator:
     def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None) -> str:
         """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
         context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。"""
-        text = text.strip()[: self.max_chars]
+        text = text.strip()[:MAX_TEXT]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
             return to_script(text, target)
+        if len(text) > self.max_chars:
+            # 太長：以前是悄悄只翻前 500 個字，後面的不見了也沒人知道。現在切成幾段分開翻，再接起來
+            parts = split_long(text, self.max_chars)
+            outs = [self.translate(part, target, source, context if i == 0 else None) for i, part in enumerate(parts)]
+            return ("" if LANGS[target]["family"] in ("zh", "ja") else " ").join(o for o in outs if o)
         context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
         key = (text, target, *context)
         if key in self._cache:

@@ -21,7 +21,7 @@ from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVER
                      Glossary, Lessons)
 from .core.engine import Engine
 from .core.romanize import romanize
-from .core.translate import LANGS, Translator, detect_language, numbers_lost, similarity
+from .core.translate import LANGS, MAX_TEXT, Translator, detect_language, numbers_lost, similarity
 from .history import DAYS as HISTORY_DAYS
 from .jobs import Jobs
 from .history import History
@@ -735,7 +735,7 @@ class Service:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
         hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。回傳這則訊息的編號。"""
-        text = text.strip()
+        text = text.strip()[:MAX_TEXT]
         if not text:
             return None
         lang = lang or detect_language(text) or "en"
@@ -896,7 +896,7 @@ class Service:
 
     def edit(self, msg_id: int, text: str) -> bool:
         """「聽錯了／看錯了」：把辨識出來的原文改成對的，重新翻這一則。"""
-        text = text.strip()[:500]
+        text = text.strip()[:MAX_TEXT]
         with self._lock:
             msg = next((m for m in self.messages if m["id"] == msg_id), None)
         if not msg or not text or msg.get("pending") or text == msg["original"]:
@@ -1598,7 +1598,7 @@ class Service:
                 if out.exists():
                     text = str(json.loads(out.read_text(encoding="utf-8")).get("text", ""))
                     out.unlink(missing_ok=True)
-                    self.submit("typed", text[:500])
+                    self.submit("typed", text[:MAX_TEXT])
             except Exception:  # noqa: BLE001
                 self.log(traceback.format_exc())
 
