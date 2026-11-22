@@ -19,15 +19,20 @@ KEYS = {**{chr(c): c for c in range(ord("A"), ord("Z") + 1)}, **{str(d): ord(str
 # 按了快速鍵之後顯示在浮動留言上的短提示（人在遊戲裡，看不到主視窗）
 NOTES = {
     "zh-TW": {"mic_on": "麥克風：開", "mic_off": "麥克風：關", "copied": "已複製上一句翻譯", "nothing": "還沒有可以複製的翻譯",
-              "not_ready": "翻譯引擎還沒準備好"},
+              "not_ready": "翻譯引擎還沒準備好",
+              "skipped": "聊天太快，有 {n} 則來不及翻，已略過"},
     "zh-CN": {"mic_on": "麦克风：开", "mic_off": "麦克风：关", "copied": "已复制上一句翻译", "nothing": "还没有可以复制的翻译",
-              "not_ready": "翻译引擎还没准备好"},
+              "not_ready": "翻译引擎还没准备好",
+              "skipped": "聊天太快，有 {n} 条来不及翻，已略过"},
     "en": {"mic_on": "Microphone on", "mic_off": "Microphone off", "copied": "Last translation copied",
-           "nothing": "Nothing to copy yet", "not_ready": "The translation engine is not ready yet"},
+           "nothing": "Nothing to copy yet", "not_ready": "The translation engine is not ready yet",
+           "skipped": "Chat is moving too fast: {n} lines were skipped"},
     "ko": {"mic_on": "마이크 켜짐", "mic_off": "마이크 꺼짐", "copied": "마지막 번역을 복사했습니다", "nothing": "아직 복사할 번역이 없습니다",
-           "not_ready": "번역 엔진이 아직 준비되지 않았습니다"},
+           "not_ready": "번역 엔진이 아직 준비되지 않았습니다",
+           "skipped": "채팅이 너무 빨라서 {n}줄을 건너뛰었습니다"},
     "ja": {"mic_on": "マイク：オン", "mic_off": "マイク：オフ", "copied": "直前の翻訳をコピーしました", "nothing": "コピーできる翻訳がまだありません",
-           "not_ready": "翻訳エンジンの準備がまだできていません"},
+           "not_ready": "翻訳エンジンの準備がまだできていません",
+           "skipped": "チャットの流れが速いため、{n} 件を飛ばしました"},
 }
 
 

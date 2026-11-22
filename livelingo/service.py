@@ -22,6 +22,7 @@ from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language, similarity
 from .history import DAYS as HISTORY_DAYS
+from .jobs import Jobs
 from .history import History
 from .hotkeys import ACTIONS as HOTKEY_ACTIONS
 from .hotkeys import NOTES as HOTKEY_NOTES
@@ -168,7 +169,9 @@ class Service:
         self._update_choices: queue.Queue = queue.Queue()      # 使用者對「有新版本」的回答
         self._update_stop = threading.Event()
         self.messages: deque[dict] = deque(maxlen=200)
-        self.jobs: queue.Queue = queue.Queue()
+        self.jobs = Jobs()             # 翻譯的排隊：我自己的句子先翻，螢幕上讀到的排太久就略過（jobs.py）
+        self._skipped = 0              # 略過了幾則還沒告訴使用者
+        self._skip_told = 0.0
         self.window = None             # 視窗控制（window.py 會放進來）
         self.can_window = False        # 視窗可以由程式調整大小、置頂（用瀏覽器開的時候不行）
         self.view = "main"
@@ -671,8 +674,13 @@ class Service:
     def _translate_worker(self) -> None:
         while not self.closing.is_set():
             try:
-                msg = self.jobs.get(timeout=0.5)
+                msg, late = self.jobs.get(timeout=0.5)
             except queue.Empty:
+                self._tell_skipped(force=True)
+                continue
+            if late:      # 螢幕上讀到的、排了太久的：不翻了（還沒顯示過，所以畫面上不會留下半則）
+                self._skipped += 1
+                self._tell_skipped()
                 continue
             if "back_of" in msg:
                 self._back_translate(msg["back_of"])
@@ -700,6 +708,19 @@ class Service:
                 self.log(traceback.format_exc())
                 self._count(msg, failed=True)
                 self._post(dict(msg, pending=False, error=str(ex)))
+
+    def _tell_skipped(self, force: bool = False) -> None:
+        """聊天刷得比翻譯快、有句子被略過時跟使用者說一聲（幾秒說一次，不要一則說一次）。"""
+        if not self._skipped:
+            return
+        self._skip_told = self._skip_told or time.time()      # 這一批第一則被略過的時間
+        if not force and time.time() - self._skip_told < 5:
+            return      # 先累積：隊伍排空了，或過了五秒，再一次講
+        n, self._skipped, self._skip_told = self._skipped, 0, 0.0
+        self.log(f"{n} screen lines were skipped: they had waited more than {self.jobs.stale:.0f}s for translation")
+        table = HOTKEY_NOTES.get(self.cfg["ui_lang"], HOTKEY_NOTES["en"])
+        self.overlay.note(table["skipped"].format(n=n))      # 人在遊戲裡：顯示在浮動留言上
+        self.notice("skipped", n=n)
 
     def _count(self, msg: dict, failed: bool = False) -> None:
         """算進使用數字：一句只算一次。等多久 = 辨識的秒數 + 從這句出現到翻好的秒數。"""
@@ -752,7 +773,7 @@ class Service:
         if msg:
             msg = dict(msg, pending=True, copied=False)
             self._post(msg)
-            self.jobs.put(msg)
+            self.jobs.put(msg, asked=True)
         return True
 
     def edit(self, msg_id: int, text: str) -> bool:
@@ -765,7 +786,7 @@ class Service:
         msg = dict(msg, original=text, lang=detect_language(text) or msg["lang"], unsure=False, edited=True,
                    pending=True, copied=False, taught=False, back="", error="")
         self._post(msg)
-        self.jobs.put(msg)
+        self.jobs.put(msg, asked=True)
         return True
 
     def teach(self, msg_id: int, dst: str) -> bool:

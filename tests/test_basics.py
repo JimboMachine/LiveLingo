@@ -3484,3 +3484,86 @@ def test_help_page_and_the_page_for_a_friend(tmp_path, monkeypatch):
         assert piece in js, piece
     for key in ("nav_help", "help_friend_title", "help_friend_saved", "n_help_failed"):
         assert len(re.findall(rf"\b{key}: ", i18n)) == len(UI_LANGS), key
+
+
+def test_my_own_sentences_are_translated_first(tmp_path):
+    """排隊：我打的、說的先翻，再來是對方說的，然後是螢幕上讀到的，回譯最後；螢幕上排太久的略過並說一聲；
+    使用者自己按重翻的不會被略過。"""
+    import queue
+
+    import pytest
+
+    from livelingo import hotkeys, jobs
+    from livelingo.service import Service
+
+    clock = [100.0]
+    q = jobs.Jobs(now=lambda: clock[0], stale=20)
+    q.put({"via": "screen", "n": 1})
+    q.put({"back_of": 9})
+    q.put({"via": "heard", "n": 2})
+    q.put({"via": "screen", "n": 3})
+    q.put({"via": "typed", "n": 4})
+    q.put({"via": "spoken", "n": 5})
+    order = [q.get(0)[0] for _ in range(6)]
+    assert [j.get("n") for j in order] == [4, 5, 2, 1, 3, None] and "back_of" in order[-1]
+    with pytest.raises(queue.Empty):
+        q.get(0.01)
+
+    q.put({"via": "screen", "n": 1})
+    q.put({"via": "heard", "n": 2})
+    q.put({"via": "screen", "n": 3}, asked=True)      # 使用者按了重翻
+    clock[0] += 21
+    q.put({"via": "screen", "n": 4})                  # 剛到的
+    got = [(job["n"], late) for job, late in (q.get(0) for _ in range(4))]
+    assert got == [(3, False), (2, False), (1, True), (4, False)]      # 只有排了 21 秒的那一則螢幕訊息要略過
+
+    class Slow:
+        tone = "casual"
+
+        def __init__(self):
+            self.calls, self.hold = [], threading.Event()
+
+        def translate(self, text, target, source=None, context=None):
+            self.calls.append(text)
+            if text == "첫 번째":
+                self.hold.wait(5)      # 第一句翻得很慢，後面的都在排隊
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, ui_lang="ko")
+    service.translator = Slow()
+    ticks = [0.0]
+    service.jobs = jobs.Jobs(now=lambda: ticks[0], stale=20)
+    notices, notes = [], []
+    service.notice = lambda code, **more: notices.append((code, more))
+    service.overlay.note = notes.append
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        service.submit("screen", "첫 번째", "ko")
+        wait(lambda: service.translator.calls == ["첫 번째"])
+        service.submit("screen", "두 번째", "ko")
+        service.submit("screen", "세 번째", "ko")
+        service.submit("heard", "들리는 말", "ko")
+        service.submit("typed", "我打的字", "zh")
+        ticks[0] = 30.0                                   # 排隊的時候過了 30 秒
+        service.submit("screen", "방금 온 것", "ko")
+        service.translator.hold.set()
+        wait(lambda: service.jobs.waiting() == 0 and len(service.translator.calls) == 4 and notices)
+        assert service.translator.calls == ["첫 번째", "我打的字", "들리는 말", "방금 온 것"]      # 我的先，舊的兩則螢幕訊息沒翻
+        assert notices == [("skipped", {"n": 2})]                                               # 兩則合起來只說一次
+        assert notes == [hotkeys.NOTES["ko"]["skipped"].format(n=2)]                             # 浮動留言上也說（人在遊戲裡）
+        assert not [m for m in service.messages if m["original"] in ("두 번째", "세 번째")]       # 畫面上沒有留下半則
+    finally:
+        service.closing.set()
+        worker.join(2)
