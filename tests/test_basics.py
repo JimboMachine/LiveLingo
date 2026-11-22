@@ -778,3 +778,115 @@ def test_tray_setting(tmp_path):
     tray.notify_hidden()                                          # 圖示沒開起來也不會出錯
     tray.stop()
     service.shutdown()
+
+
+def test_dependencies_hold():
+    """
+    docs/dependencies.md 那張相依圖裡「靠名字對上、改壞了也不會報錯」的地方，在這裡自動檢查：
+    設定名稱、五種語言的文字表、API 路徑、事件名稱、提醒代碼、介面檔案、圖示檔、安裝檔的名字。
+    新增一種這類的對應時，這裡和相依圖要一起補。
+    """
+    import re
+    from pathlib import Path
+
+    from livelingo import chatpaint, region, transcript, tray
+    from livelingo.config import ACCENTS, DEFAULTS, EDITABLE, THEMES
+
+    root = Path(__file__).resolve().parent.parent
+    read = lambda *parts: root.joinpath(*parts).read_text(encoding="utf-8")      # noqa: E731
+    app, i18n, css, html = (read("livelingo", "ui", n) for n in ("app.js", "i18n.js", "style.css", "index.html"))
+    server, service, selftest = (read("livelingo", n) for n in ("server.py", "service.py", "selftest.py"))
+    python = "".join(p.read_text(encoding="utf-8") for p in root.joinpath("livelingo").rglob("*.py"))
+
+    # 設定：介面能改的每一項都有預設值；介面用到的設定名稱都真的存在
+    assert EDITABLE <= set(DEFAULTS), EDITABLE - set(DEFAULTS)
+    used = set(re.findall(r"\bS\.cfg\.([a-z_]+)", app))
+    assert used <= set(DEFAULTS), used - set(DEFAULTS)
+    assert DEFAULTS["theme"] in THEMES and DEFAULTS["accent"] in ACCENTS
+    for accent in ACCENTS:
+        assert accent == "mint" or f'[data-accent="{accent}"]' in css, accent
+        assert f"{accent}:" in app, accent
+
+    # 文字：視窗外面的每一張文字表（系統匣、浮動留言、框選、字幕檔）五種語言都有，欄位一樣多
+    tables = {"tray.TEXT": tray.TEXT, "chatpaint.NAMES": chatpaint.NAMES, "chatpaint.HINTS": chatpaint.HINTS,
+              "chatpaint.SAMPLES": chatpaint.SAMPLES, "region.HINTS": region.HINTS, "region.FONTS": region.FONTS,
+              "transcript.TITLES": transcript.TITLES}
+    for name, table in tables.items():
+        assert set(table) == set(UI_LANGS), (name, set(table) ^ set(UI_LANGS))
+        shapes = {lang: (sorted(v) if isinstance(v, dict) else len(v) if isinstance(v, list) else 1) for lang, v in table.items()}
+        assert len({repr(s) for s in shapes.values()}) == 1, (name, shapes)
+
+    # API：介面呼叫的每一條路徑，本機伺服器都有接
+    called = set(re.findall(r'"(/api/[a-z_/]+)"', app))
+    served = set(re.findall(r'"(/api/[a-z_/]+)"', server))
+    assert called and called <= served, called - served
+
+    # 事件：背景送出的每一種事件，介面都有接；每一種提醒都有五種語言的文字
+    block = app[app.index("const handlers = {"):]
+    handled = set(re.findall(r"^    ([a-z_]+): ", block[:block.index("\n  };")], re.M))
+    published = set(re.findall(r'publish\("([a-z_]+)"', python))
+    assert published <= handled, published - handled
+    zh = i18n[i18n.index('"zh-TW": {'):i18n.index('"zh-CN": {')]
+    for code in set(re.findall(r'\.notice\("([a-z_]+)"', python)):
+        assert f"n_{code}:" in zh, code
+
+    # 介面檔案：畫面載入的檔案都在，而且自我檢查看的是同一批
+    loaded = set(re.findall(r'(?:src|href)="([a-z0-9_.]+\.(?:js|css))"', html))
+    assert loaded == {"brand.js", "i18n.js", "app.js", "style.css"}
+    for name in loaded:
+        assert root.joinpath("livelingo", "ui", name).is_file(), name
+        assert f'"{name}"' in selftest, name
+    assert html.index("brand.js") < html.index("i18n.js") < html.index("app.js")      # 後面的檔案會用到前面的
+
+    # 圖示和資料檔：程式和打包設定指到的檔案都在
+    for parts in (("livelingo", "data", "tray.png"), ("livelingo", "data", "terms_lol.json"),
+                  ("packaging", "livelingo.ico"), ("packaging", "livelingo.png")):
+        assert root.joinpath(*parts).is_file(), parts
+    spec, iss, build = read("packaging", "livelingo.spec"), read("packaging", "installer.iss"), read(".github", "workflows", "build.yml")
+    assert "livelingo.ico" in spec and "SetupIconFile=livelingo.ico" in iss
+
+    # 發佈：更新程式下載的檔名，就是安裝程式做出來、流程發佈上去的那一個
+    stem = updater.ASSET_NAME.removesuffix(".exe")
+    assert f"OutputBaseFilename={stem}" in iss and f"dist/{updater.ASSET_NAME}" in build
+    for line in read("requirements.txt").split():
+        package = re.split(r"[=<>]", line)[0]
+        if package in ("pystray", "pywebview", "soundcard", "sounddevice", "faster-whisper", "rapidocr", "onnxruntime"):
+            module = {"pywebview": "webview", "faster-whisper": "faster_whisper"}.get(package, package)
+            assert module in spec, package      # 會在執行時才載入的套件，打包設定要點名
+    assert "from .service import Service" in server and "publish" in service
+
+
+def test_dependency_map_is_current():
+    """相依圖（docs/dependencies.json）要跟程式一致：檔案都在、程式之間每一個載入都畫在圖上、好讀的那份是最新的。"""
+    import importlib.util
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    data = json.loads(root.joinpath("docs", "dependencies.json").read_text(encoding="utf-8"))
+    owner = {}
+    for node in data["nodes"]:
+        for file in node["files"]:
+            assert root.joinpath(file).is_file(), file
+            owner[file] = node["id"]
+    modules = sorted(p.relative_to(root).as_posix() for p in root.joinpath("livelingo").rglob("*.py") if p.stat().st_size)
+    assert set(modules) <= set(owner), set(modules) - set(owner)      # 新增了模組：要放進相依圖
+    drawn = {(e["from"], e["to"]) for e in data["edges"]}
+    for file in modules:
+        text, package = root.joinpath(file).read_text(encoding="utf-8"), Path(file).parent
+        for dots, module, names in re.findall(r"^\s*from (\.+)([\w.]*) import ([\w, ]+)", text, re.M):
+            base = package if len(dots) == 1 else package.parent
+            targets = [base.joinpath(*module.split(".")).as_posix() + ".py"] if module else []
+            targets += [(base.joinpath(*module.split(".")) if module else base).joinpath(n.strip().split(" ")[0]).as_posix() + ".py" for n in names.split(",")]
+            if not module and "__version__" in names:
+                targets.append("livelingo/__init__.py")
+            for target in targets:
+                if target in owner and owner[target] != owner[file]:
+                    assert (owner[file], owner[target]) in drawn, f"{file} 用到 {target}，相依圖上沒有這條線"
+    ids = {n["id"] for n in data["nodes"]}
+    for rule in data["rules"]:
+        assert all(set(step["nodes"]) <= ids for step in rule["steps"]), rule["id"]
+    spec = importlib.util.spec_from_file_location("make_dependencies", root / "docs" / "make_dependencies.py")
+    maker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(maker)
+    assert maker.render(data) == root.joinpath("docs", "dependencies.md").read_text(encoding="utf-8"), "先跑 python docs/make_dependencies.py"

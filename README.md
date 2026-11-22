@@ -79,6 +79,9 @@ python -m livelingo --selftest out.json --no-window
 | `livelingo/ui/brand.js` | 品牌標誌和名稱，介面裡每個地方都從這裡拿 |
 | `packaging/` | PyInstaller 設定、Inno Setup 安裝程式、圖示（`livelingo.ico`，由標誌的定稿檔做成）、安裝測試 |
 | `tests/devserver.py` | 不需要 Windows 和音效卡就能把介面跑起來（假的音訊裝置） |
+| `docs/dependencies.md` | 相依圖：每個部分牽動誰，改了哪裡要回去檢查哪裡（資料在 `dependencies.json`，有測試確認它跟程式一致） |
+
+改任何東西之後，先到 `docs/dependencies.md` 找到你改的那一項，把列出來的地方都檢查一遍。新增模組、文字表或共用的名稱時，`docs/dependencies.json` 要一起補，再跑 `python docs/make_dependencies.py`。
 
 發佈新版本：改 `livelingo/__init__.py` 裡的版本號，合併到 `main`。GitHub Actions 會在 Windows 上打包、把安裝檔真的安裝／更新／卸載測一次，通過後自動發佈成 Release，使用者下次開啟時會被問要不要更新。
 
