@@ -501,7 +501,7 @@ class Service:
             self.engine.stop()
         gpu_mode = self.mode["engine"] == "cuda"
         self.engine = self._new_engine()
-        self.translator.url = self.engine.url
+        self.translator.url, self.translator.key = self.engine.url, self.engine.key
         try:
             self.engine.start()
             if not self.engine.wait_ready(240):
@@ -580,7 +580,7 @@ class Service:
                     engine.stop()
                     return False
                 self.engine = engine
-                self.translator.url = engine.url
+                self.translator.url, self.translator.key = engine.url, engine.key
                 self.log("the translation engine is running again")
                 self._say("engine_back")
                 return True

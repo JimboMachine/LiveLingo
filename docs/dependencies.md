@@ -147,7 +147,7 @@
 ### 換模型、換引擎版本或下載來源
 
 1. `assets.py`：版本代碼（Hugging Face 的 commit、ENGINE_TAG），還有 CHECKS、ENGINE_FILES 裡每個檔案的位元組數和 sha256，要一起換
-2. `engine.py`：換引擎版本時：command() 用的每個參數新版還在不在（--swa-full、--cache-ram、--chat-template gemma…）
+2. `engine.py`：換引擎版本時：command() 用的每個參數新版還在不在（--swa-full、--cache-ram、--chat-template gemma…），還有新版認不認得環境變數 LLAMA_API_KEY（不認得的話引擎就沒有金鑰保護）
 3. `selftest.py`：engine_online 會抓鎖定的引擎並跑 --version；鎖定的網址有一個不在就會紅
 4. `README.md`：下載大小變了要改 README 的「約幾 GB」
 5. `gpu.py`：哪種顯示卡用哪個模型
@@ -355,7 +355,7 @@
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
 | 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文）、語言清單（LANGS）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
-| 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）（改壞會報錯） |
+| 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）；每次啟動把新的網址和金鑰交給翻譯（改壞會報錯）<br>`translate.py`：引擎每次啟動的金鑰（環境變數 LLAMA_API_KEY；請求要帶 Authorization: Bearer）（改壞不會報錯） |
 | 用語包（可多選） | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json`<br>`livelingo/data/terms_chat.json` | `service.py`：遊戲用語（改壞會報錯） |
 | 韓文唸法 | `livelingo/core/romanize.py` | `service.py`：韓文唸法（改壞會報錯） |
 

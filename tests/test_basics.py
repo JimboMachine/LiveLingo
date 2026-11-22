@@ -3738,6 +3738,7 @@ def test_engine_that_stops_is_restarted(tmp_path):
     class FakeEngine:
         def __init__(self, ok=True):
             self.proc, self.ok, self.url, self.stopped = Proc(), ok, f"http://engine/{len(made)}", False
+            self.key = f"key-{len(made)}"
             made.append(self)
 
         def start(self):
@@ -3751,7 +3752,7 @@ def test_engine_that_stops_is_restarted(tmp_path):
             self.stopped = True
 
     class Model:
-        tone, url = "casual", ""
+        tone, url, key = "casual", "", ""
 
         def translate(self, text, target, source=None, context=None):
             if service.engine.proc.poll() is not None:
@@ -3792,6 +3793,7 @@ def test_engine_that_stops_is_restarted(tmp_path):
         assert notices == ["engine_restarting", "engine_back"]
         assert notes == [hotkeys.NOTES["zh-TW"]["engine_restarting"], hotkeys.NOTES["zh-TW"]["engine_back"]]
         assert len(made) == 2 and made[0].stopped and service.engine is made[1] and service.translator.url == made[1].url
+        assert service.translator.key == made[1].key      # 新的引擎有新的金鑰，翻譯那邊要跟著換
         assert (tmp_path / "engine-stopped.log").read_text(encoding="utf-8") == "out of memory\n"      # 留一份，才看得到為什麼停
         assert service._engine_ok.is_set() and service.phase == "ready" and service.usage.summary()["today"]["failed"] == 0
         made_report = service.report_make()["text"]
@@ -3890,3 +3892,60 @@ def test_unhandled_errors_are_logged_and_shown(tmp_path):
     finally:
         service.closing.set()
         worker.join(2)
+
+
+def test_engine_needs_a_key(tmp_path, monkeypatch):
+    """本機的翻譯引擎每次啟動有一把隨機的金鑰：用環境變數交給它（不放指令列），翻譯的請求要帶著。"""
+    import io
+    import subprocess
+
+    from livelingo.core import engine as engine_mod
+    from livelingo.core.engine import Engine
+
+    exe, model = tmp_path / "llama-server.exe", tmp_path / "model.gguf"
+    exe.write_bytes(b"x")
+    model.write_bytes(b"x")
+    started = {}
+
+    class Proc:
+        pid = 4321
+
+        def poll(self):
+            return None
+
+    def popen(cmd, **kw):
+        started.update(cmd=cmd, env=kw.get("env"))
+        return Proc()
+
+    monkeypatch.setattr(engine_mod.subprocess, "Popen", popen)
+    monkeypatch.delenv("LLAMA_SERVER", raising=False)
+    first, second = Engine(exe, model, tmp_path / "engine.log"), Engine(exe, model, tmp_path / "engine.log")
+    assert len(first.key) >= 24 and first.key != second.key                        # 每次都不一樣
+    first.start()
+    assert started["env"]["LLAMA_API_KEY"] == first.key and "PATH" in started["env"]
+    assert not any(first.key in part for part in started["cmd"]) and "--api-key" not in started["cmd"]
+    assert ["--host", "127.0.0.1"] == started["cmd"][started["cmd"].index("--host"):][:2]      # 還是只聽這台電腦
+
+    sent = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def urlopen(req, timeout=0):
+        sent.append(dict(req.header_items()))
+        return Reply(json.dumps({"choices": [{"text": "안녕"}]}).encode())
+
+    from livelingo.core import translate as translate_mod
+
+    monkeypatch.setattr(translate_mod.urllib.request, "urlopen", urlopen)
+    translator = Translator("http://127.0.0.1:1")
+    translator.translate("你好", "ko", "zh")
+    assert "Authorization" not in sent[-1]                                          # 沒有金鑰（測試、自己接的引擎）就不帶
+    translator.key = first.key
+    translator.clear_cache()
+    translator.translate("你好", "ko", "zh")
+    assert sent[-1]["Authorization"] == f"Bearer {first.key}"

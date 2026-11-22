@@ -286,6 +286,7 @@ class Translator:
         """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
         lessons：呼叫後回傳使用者教過的句子 [{"src", "dst", "lang", "target"}]。"""
         self.url = url.rstrip("/")
+        self.key = ""                     # 翻譯引擎這一次啟動的金鑰（Engine.key）；空的就不帶
         self.glossary = glossary or (lambda: {})
         self.hints = hints or (lambda text, source, target: [])
         self.lessons = lessons or (lambda: [])
@@ -315,9 +316,11 @@ class Translator:
             "repeat_penalty": 1.0,
             "stop": ["<end_of_turn>"],
         }
+        headers = {"Content-Type": "application/json"}
+        if self.key:
+            headers["Authorization"] = f"Bearer {self.key}"
         req = urllib.request.Request(
-            f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"})
+            f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"), headers=headers)
         with urllib.request.urlopen(req, timeout=180) as r:
             return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
 
