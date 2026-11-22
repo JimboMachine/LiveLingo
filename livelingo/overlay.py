@@ -579,6 +579,12 @@ class Overlay:
             return
         self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"])
 
+    def on_partial(self, msg: dict, text: str) -> None:
+        """還在翻的句子：對方說的話先把翻到一半的譯文顯示出來（翻完會換成整句）。螢幕上讀到的要翻完才知道值不值得顯示，不先出。"""
+        if msg.get("via") != "heard" or not text.strip():
+            return
+        self.push("heard", text, msg.get("original", ""), key=msg["id"])
+
     def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0) -> None:
         """life：這一則自己停留幾秒（0 = 照設定的停留時間）。"""
         with self._lock:

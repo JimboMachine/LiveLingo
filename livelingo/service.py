@@ -43,6 +43,7 @@ VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也�
 
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
 VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
+PARTIAL_EVERY = 0.08      # 譯文邊翻邊顯示：最快多久更新一次畫面（秒）
 RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔幾秒再試一次；全部試完（大約兩分鐘）還不行才放棄
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
@@ -810,7 +811,7 @@ class Service:
         try:
             target = self._target_for(msg)
             started = time.time()
-            out = self.translator.translate(msg["original"], target, msg["lang"], self._context_for(msg))
+            out = self._translate(msg, target)
             spent = time.time() - started
             if msg["via"] in ("heard", "spoken") and not msg.get("edited") and not msg.get("took"):
                 self.delays.append((float(msg.get("hear") or 0.0), spent))      # 只算第一次翻的，重翻的不算
@@ -839,6 +840,25 @@ class Service:
             self.log(traceback.format_exc())
             self._count(msg, failed=True)
             self._post(dict(msg, pending=False, error=str(ex), why=why(ex)))
+
+    def _translate(self, msg: dict, target: str) -> str:
+        """翻一則。翻的時候譯文一邊出來一邊送給畫面（即時），最後回傳的才是整理過的整句。"""
+        import inspect
+
+        fn = self.translator.translate
+        if "on_part" not in inspect.signature(fn).parameters:
+            return fn(msg["original"], target, msg["lang"], self._context_for(msg))
+        sent = [0.0]
+
+        def part(text: str) -> None:
+            now = time.monotonic()
+            if now - sent[0] < PARTIAL_EVERY or not text.strip():
+                return
+            sent[0] = now
+            self.hub.publish("partial", {"id": msg["id"], "text": text})
+            self.overlay.on_partial(msg, text)
+
+        return fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part)
 
     def _tell_skipped(self, force: bool = False) -> None:
         """聊天刷得比翻譯快、有句子被略過時跟使用者說一聲（幾秒說一次，不要一則說一次）。"""

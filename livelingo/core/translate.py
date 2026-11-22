@@ -436,7 +436,8 @@ class Translator:
             return False
 
     def _ask(self, text: str, source: str, target: str, hints: list, examples: list | None = None,
-             style: str = "full", context: list[str] | None = None) -> str:
+             style: str = "full", context: list[str] | None = None, on_part=None) -> str:
+        """on_part(目前翻出來的字)：有給的話，模型每吐出幾個字就叫一次（畫面上譯文一個字一個字出來，不用等整句）。"""
         payload = {
             "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context,
                                    self.hint_intro),
@@ -450,8 +451,25 @@ class Translator:
             headers["Authorization"] = f"Bearer {self.key}"
         req = urllib.request.Request(
             f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"), headers=headers)
+        if on_part is None:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
+        payload["stream"] = True
+        req.data = json.dumps(payload).encode("utf-8")
+        out = ""
         with urllib.request.urlopen(req, timeout=180) as r:
-            return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
+            for raw in r:      # 一行一筆：「data: {…}」，最後一筆是「data: [DONE]」
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line.startswith("data:") or line[5:].strip() == "[DONE]":
+                    continue
+                piece = (json.loads(line[5:])["choices"][0].get("text") or "")
+                if piece:
+                    out += piece
+                    try:
+                        on_part(out)
+                    except Exception:  # noqa: BLE001  畫面那邊出錯不能讓翻譯失敗
+                        pass
+        return out.strip()
 
     def taught(self, text: str, source: str, target: str) -> tuple[str | None, list[tuple[str, str]]]:
         """使用者教過的句子：一模一樣的直接回傳他要的翻法；很像的最多挑兩句當範例。"""
@@ -490,18 +508,23 @@ class Translator:
                 break
         return best
 
-    def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None) -> str:
+    def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None,
+                  on_part=None) -> str:
         """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
-        context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。"""
+        context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。
+        on_part(目前的譯文)：翻的時候一邊出字一邊叫（只是先給人看；最後回傳的才是整理過、核對過的譯文）。"""
         text = text.strip()[:MAX_TEXT]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
             return to_script(text, target)
         if len(text) > self.max_chars:
             # 太長：以前是悄悄只翻前 500 個字，後面的不見了也沒人知道。現在切成幾段分開翻，再接起來
-            parts = split_long(text, self.max_chars)
-            outs = [self.translate(part, target, source, context if i == 0 else None) for i, part in enumerate(parts)]
-            return ("" if LANGS[target]["family"] in ("zh", "ja") else " ").join(o for o in outs if o)
+            parts, joiner, outs = split_long(text, self.max_chars), "" if LANGS[target]["family"] in ("zh", "ja") else " ", []
+            for i, part in enumerate(parts):
+                done = joiner.join(outs)
+                outs.append(self.translate(part, target, source, context if i == 0 else None,
+                                           on_part=(lambda t, done=done: on_part((done + joiner if done else "") + t)) if on_part else None))
+            return joiner.join(o for o in outs if o)
         context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
         key = (text, target, *context)
         if key in self._cache:
@@ -512,8 +535,9 @@ class Translator:
         hints = self.hints(text, source, target)
         kind = sentence_kind(text, source)
         sent = with_end_mark(text, source, kind)
+        show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
         with self._lock:
-            out = self._ask(sent, source, target, hints, examples, context=context)
+            out = self._ask(sent, source, target, hints, examples, context=context, **({"on_part": show} if show else {}))
             if context and len(out) > 3 * len(sent) + 30:
                 # 模型把前面幾句也翻進來了（譯文長得不合理）：不給前文再翻一次
                 out = self._ask(sent, source, target, hints, examples)

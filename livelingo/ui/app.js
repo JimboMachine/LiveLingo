@@ -366,7 +366,8 @@
       body += `<div class="text failed" title="${esc(m.error)}">${esc(m.why && m.why !== "other" ? t("err_" + m.why) : t("failed", { error: m.error }))}</div>` +
         `<div class="actions"><button data-act="again" data-id="${m.id}">${esc(t("retry"))}</button></div>`;
     } else if (m.pending) {
-      body += `<div class="text pending">${esc(t("translating"))}</div>`;
+      // 翻到一半的譯文先顯示（一個字一個字出來）；還沒有字的時候才寫「翻譯中」
+      body += m.partial ? `<div class="text streaming" id="part-${m.id}">${esc(m.partial)}</div>` : `<div class="text pending" id="part-${m.id}">${esc(t("translating"))}</div>`;
     } else {
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
       body += unsure + `<div class="text">${esc(m.translated)}</div>`;
@@ -2104,6 +2105,13 @@
         const slot = document.querySelector(".wz-result");
         if (slot) slot.innerHTML = `<div class="msg me" style="max-width:100%;align-items:flex-start"><div class="bubble">${bubbleHTML(m).replace(/<div class="actions">.*?<\/div>/, "")}</div></div>`;
       }
+    },
+    partial: (d) => {      // 譯文邊翻邊來：只換那一行字，不重畫整則
+      const m = S.messages.find((x) => x.id === d.id);
+      if (!m || !m.pending) return;
+      m.partial = d.text;
+      const el = $("part-" + d.id);
+      if (el) { el.textContent = d.text; el.className = "text streaming"; }
     },
     message_removed: (d) => {
       S.messages = S.messages.filter((x) => x.id !== d.id);

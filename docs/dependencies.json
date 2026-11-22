@@ -63,7 +63,7 @@
     {"from": "appjs", "to": "css", "what": "class 名稱、主題顏色", "kind": "name"},
     {"from": "appjs", "to": "brand", "what": "標誌（window.BRAND）", "kind": "name"},
     {"from": "appjs", "to": "server", "what": "API 路徑（/api/…）", "kind": "name"},
-    {"from": "appjs", "to": "service", "what": "事件名稱、狀態和留言的欄位", "kind": "name"},
+    {"from": "appjs", "to": "service", "what": "事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位", "kind": "name"},
     {"from": "appjs", "to": "config", "what": "設定名稱（S.cfg.…）", "kind": "name"},
     {"from": "html", "to": "brand", "what": "標誌的位置、載入順序", "kind": "name"},
     {"from": "html", "to": "css", "what": "class 名稱", "kind": "name"},
@@ -82,7 +82,7 @@
     {"from": "overlay", "to": "chatpaint", "what": "留言怎麼畫", "kind": "import"},
     {"from": "overlay", "to": "oswin", "what": "透明視窗、接著哪些螢幕和各自的大小", "kind": "import"},
     {"from": "overlay", "to": "config", "what": "顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）", "kind": "name"},
-    {"from": "overlay", "to": "service", "what": "留言的欄位", "kind": "name"},
+    {"from": "overlay", "to": "service", "what": "留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）", "kind": "name"},
     {"from": "chatpaint", "to": "config", "what": "五種語言的名字、提示、範例，還有字型", "kind": "name"},
     {"from": "region", "to": "config", "what": "五種語言的提示和字型", "kind": "name"},
     {"from": "hotkeys", "to": "config", "what": "預設的組合（hotkeys）、五種語言的短提示", "kind": "name"},
@@ -154,7 +154,7 @@
     {"from": "service", "to": "overlay", "what": "浮動留言", "kind": "import"},
     {"from": "service", "to": "tray", "what": "系統匣", "kind": "import"},
     {"from": "service", "to": "transcript", "what": "字幕記錄", "kind": "import"},
-    {"from": "service", "to": "translate", "what": "翻譯（可以帶前面兩句當前文）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）", "kind": "import"},
+    {"from": "service", "to": "translate", "what": "翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）", "kind": "import"},
     {"from": "service", "to": "engine", "what": "翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）；每次啟動把新的網址和金鑰交給翻譯", "kind": "import"},
     {"from": "translate", "to": "engine", "what": "引擎每次啟動的金鑰（環境變數 LLAMA_API_KEY；請求要帶 Authorization: Bearer）", "kind": "name"},
     {"from": "service", "to": "terms", "what": "遊戲用語", "kind": "import"},
@@ -294,6 +294,7 @@
     {"id": "storage", "title": "改模型、引擎放的位置，或加新的大檔案", "guard": "測試會擋：服務裡還有地方直接用 self.data 找模型或引擎。真的卸載會不會清乾淨，由 Windows 上的安裝檢查在看。", "steps": [{"nodes": ["service"], "check": "找模型、引擎一律用 self.store，不是 self.data；設定和紀錄才用 self.data"}, {"nodes": ["storage"], "check": "新的大檔案要列進 items（佔多少、能不能刪）；會搬的只有 PARTS 裡的資料夾"}, {"nodes": ["assets"], "check": "新模型、新引擎的檔名和資料夾"}, {"nodes": ["appjs"], "check": "儲存空間頁每一項的名字和說明（sto_i_、sto_d_）要五種語言"}, {"nodes": ["iss", "main", "ci"], "check": "卸載：搬出去的也要刪，只刪有記號檔的資料夾"}, {"nodes": ["iss", "ci"], "check": "卸載時選「留下設定」只刪 installer.iss 裡列的資料夾（models、engine、update、webview）：資料夾裡新增大的、可以重新產生的東西要加進那份清單和安裝檢查"}, {"nodes": ["readme", "guide"], "check": "卸載會留什麼、刪什麼的說明"}, {"nodes": ["tests"], "check": "test_storage_sizes_move_and_remove_unused"}]},
     {"id": "report", "title": "加新的設定、新的紀錄內容，或任何會存下使用者打的字、說的話的東西", "guard": "測試會擋：報告裡出現對話、詞彙表、取的名字、個人資料夾；report.py 裡出現連網路的東西；還沒給使用者看過就能存檔。新的設定值會不會洩漏內容，要自己看一次。", "steps": [{"nodes": ["service"], "check": "新的設定值如果是使用者自己打的字（名字、句子），在 _report_sections 裡拿掉，只留數量"}, {"nodes": ["service"], "check": "self.log 寫進紀錄檔的句子不能帶對話內容；裝置和程式的名稱可以"}, {"nodes": ["report"], "check": "新的段落要有五種語言的標題；路徑和帳號名稱一律過 scrub"}, {"nodes": ["appjs", "i18n"], "check": "畫面上說「裡面有什麼、沒有什麼」的那幾句要跟實際內容一樣（rep_hint、rep_part_…、報告開頭三行）"}, {"nodes": ["server"], "check": "/api/report 只有三件事：做出來、存檔、複製。不能加會送到外面的"}, {"nodes": ["tests"], "check": "test_problem_report_is_shown_first_and_never_sent"}]},
     {"id": "usage", "title": "加新的輸入來源（新的 via），或改翻譯的流程", "guard": "測試會擋：翻譯流程裡沒有記數、usage.py 出現連網路的東西、檔案裡出現數字以外的東西。新的來源有沒有算進去，要自己看一次。", "steps": [{"nodes": ["usage"], "check": "新的來源要加進 VIAS，不然那種句子不會被算到"}, {"nodes": ["service"], "check": "一句只算一次（_count 用訊息編號擋重翻）；翻譯失敗走 failed"}, {"nodes": ["appjs", "i18n"], "check": "來源的分項那一句（use_split）要加新的來源，五種語言"}, {"nodes": ["report"], "check": "問題報告的使用數字那一段會自動帶新的來源"}, {"nodes": ["tests"], "check": "test_usage_numbers_are_local_counts_only"}]},
-    {"id": "guide", "title": "改頁面的名字、按鈕的名字、快速鍵、鍵盤操作，或加使用者會用到的新功能", "guard": "測試會擋：五種語言的說明結構不一樣、提到的按鍵不一樣、說明裡寫的視窗內按鍵程式裡沒有、給朋友的那一頁載入外部的東西。說明裡寫的頁面名字和做法還對不對，要自己讀一次。", "steps": [{"nodes": ["guide"], "check": "data/help.json 五種語言一起改；引號裡的頁面和按鈕名字要和介面上的一模一樣"}, {"nodes": ["i18n"], "check": "介面上的名字改了（nav_、src_ 開頭的），回去改說明裡引用它的句子"}, {"nodes": ["appjs"], "check": "視窗裡的鍵盤操作改了（Ctrl+數字、F1、Esc），說明的「快速鍵和鍵盤」那一段要跟著改"}, {"nodes": ["guide"], "check": "安裝方式或系統需求變了：給朋友那一頁的安裝步驟（friend.install）要改"}, {"nodes": ["tests"], "check": "test_help_page_and_the_page_for_a_friend"}]}
+    {"id": "guide", "title": "改頁面的名字、按鈕的名字、快速鍵、鍵盤操作，或加使用者會用到的新功能", "guard": "測試會擋：五種語言的說明結構不一樣、提到的按鍵不一樣、說明裡寫的視窗內按鍵程式裡沒有、給朋友的那一頁載入外部的東西。說明裡寫的頁面名字和做法還對不對，要自己讀一次。", "steps": [{"nodes": ["guide"], "check": "data/help.json 五種語言一起改；引號裡的頁面和按鈕名字要和介面上的一模一樣"}, {"nodes": ["i18n"], "check": "介面上的名字改了（nav_、src_ 開頭的），回去改說明裡引用它的句子"}, {"nodes": ["appjs"], "check": "視窗裡的鍵盤操作改了（Ctrl+數字、F1、Esc），說明的「快速鍵和鍵盤」那一段要跟著改"}, {"nodes": ["guide"], "check": "安裝方式或系統需求變了：給朋友那一頁的安裝步驟（friend.install）要改"}, {"nodes": ["tests"], "check": "test_help_page_and_the_page_for_a_friend"}]},
+    {"id": "live", "title": "改「即時」：譯文邊翻邊出、對方還在說就先出字", "guard": "測試會擋：還沒翻完的字沒有送到畫面、整句不是最後才到、自己打的字先出半句、畫面沒有接 partial。真的快了多少，要用真的模型量。", "steps": [{"nodes": ["translate"], "check": "_ask 有給 on_part 才跟引擎要 stream；給畫面的半句要先過繁簡轉換和整理；重翻（問句、數字）那幾次不出半句"}, {"nodes": ["service"], "check": "_translate 送 partial 事件，最快 PARTIAL_EVERY 秒一次；整句的 message 一定最後到，蓋掉半句"}, {"nodes": ["overlay"], "check": "on_partial 只給對方說的話；螢幕讀到的要翻完才知道要不要顯示"}, {"nodes": ["appjs", "css"], "check": "還在翻的那一則用 #part-編號 直接換字，不整塊重畫；游標閃動在「減少動態」時要停"}, {"nodes": ["history", "transcript", "usage"], "check": "半句不進歷史、不進字幕檔、不算次數"}, {"nodes": ["tests"], "check": "test_translation_streams_out_while_it_is_made"}]}
   ]
 }

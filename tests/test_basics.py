@@ -205,12 +205,17 @@ class _FakeModel(Translator):
         super().__init__("http://127.0.0.1:9", **kw)
         self.answers, self.asked = answers, []
 
-    def _ask(self, text, source, target, hints, examples=None, style="full", context=None):
+    def _ask(self, text, source, target, hints, examples=None, style="full", context=None, on_part=None):
         self.asked.append((text, style, list(examples or [])))
         self.contexts = getattr(self, "contexts", []) + [list(context or [])]
         if callable(self.answers):
-            return self.answers(text, style, context)
-        return self.answers[style] if isinstance(self.answers, dict) else self.answers
+            out = self.answers(text, style, context)
+        else:
+            out = self.answers[style] if isinstance(self.answers, dict) else self.answers
+        if on_part:      # 像真的模型一樣，一個字一個字吐出來
+            for i in range(1, len(out) + 1):
+                on_part(out[:i])
+        return out
 
 
 def test_question_mark_gets_a_second_try():
@@ -4388,3 +4393,86 @@ def test_update_check_can_be_turned_off(tmp_path, monkeypatch):
     i18n = ui.joinpath("i18n.js").read_text(encoding="utf-8")
     for key in ("update_check", "update_check_desc", "about_update_off"):
         assert i18n.count(f"    {key}: ") + i18n.count(f", {key}: ") == len(UI_LANGS), key
+
+
+def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
+    """即時：譯文一邊翻一邊出現，不用等整句翻完。最後那一則才是整理過、核對過的。"""
+    import io
+    import json as _json
+    from pathlib import Path
+
+    import livelingo.service as service_mod
+    from livelingo.core import translate as tr_mod
+    from livelingo.service import Service
+
+    # 一、跟引擎要「一邊翻一邊回」，一行一筆地讀
+    seen = {}
+
+    def fake_open(req, timeout=0):
+        seen["body"] = _json.loads(req.data.decode("utf-8"))
+        lines = [b": keep-alive\n", b"\n"]
+        for piece in ("3", "분 후에", " 도착해.", ""):
+            lines += [("data: " + _json.dumps({"choices": [{"text": piece}]}, ensure_ascii=False) + "\n").encode("utf-8"), b"\n"]
+        lines += [b"data: [DONE]\n"]
+        return io.BytesIO(b"".join(lines))
+
+    monkeypatch.setattr(tr_mod.urllib.request, "urlopen", fake_open)
+    tr = Translator("http://127.0.0.1:9")
+    parts = []
+    assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append) == "3분 후에 도착해."
+    assert seen["body"]["stream"] is True and parts == ["3", "3분 후에", "3분 후에 도착해."]
+
+    def boom(text):
+        raise RuntimeError("screen is gone")
+
+    assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=boom) == "3분 후에 도착해."      # 畫面那邊出錯，翻譯照樣完成
+    monkeypatch.undo()
+
+    # 二、translate() 把還沒翻完的字整理過再給畫面（簡轉繁）；沒有要即時的時候，問法跟以前一樣
+    tr = _FakeModel("这个队伍很强。")
+    parts = []
+    assert tr.translate("이 팀 진짜 세다", "zh-TW", "ko", on_part=parts.append) == "這個隊伍很強。"
+    assert parts[0] == "這" and parts[-1] == "這個隊伍很強。" and all("这" not in p and "队" not in p for p in parts)
+    parts.clear()
+    assert tr.translate("이 팀 진짜 세다", "zh-TW", "ko", on_part=parts.append) == "這個隊伍很強。" and parts == []      # 記得的：直接給整句
+    long_text = "。".join(f"第{chr(0x4E00 + i)}句話要翻譯" for i in range(120))
+    tr = _FakeModel(lambda text, style, context: "가" * 3)
+    parts = []
+    out = tr.translate(long_text, "ko", "zh", on_part=parts.append)
+    assert len(tr.asked) > 1 and parts[-1] == out and all(len(a) <= len(b) for a, b in zip(parts, parts[1:]))      # 分段翻的：前面翻好的不會消失
+
+    # 三、服務把還沒翻完的字送給主畫面（partial）和浮動字幕（只有對方說的話）
+    monkeypatch.setattr(service_mod, "PARTIAL_EVERY", 0.0)
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", friend_lang="ko")
+    service.translator = _FakeModel(lambda text, style, context: "我們去打龍吧。" if "용" in text else "용 잡으러 가자.")
+    events, shown = [], []
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, data=None: (events.append((kind, data)), old_publish(kind, data))[1])
+    monkeypatch.setattr(service.overlay, "push", lambda *a, **kw: shown.append((a, kw)))
+    service.cfg.set(overlay=True)
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        service.submit("heard", "용 잡으러 가자", "ko")
+        service.submit("typed", "我們去打龍吧", "zh")
+        end = time.time() + 5
+        while time.time() < end and len([m for m in service.messages if not m.get("pending")]) < 2:
+            time.sleep(0.02)
+        by = {m["original"]: m for m in service.messages}
+        heard, typed = by["용 잡으러 가자"], by["我們去打龍吧"]
+        assert heard["translated"] == "我們去打龍吧。" and typed["translated"] == "용 잡으러 가자."
+        got = [d["text"] for k, d in events if k == "partial" and d["id"] == heard["id"]]
+        assert got and got[0] == "我" and got[-1] == "我們去打龍吧。"
+        assert [d["text"] for k, d in events if k == "partial" and d["id"] == typed["id"]][-1] == "용 잡으러 가자."
+        kinds = [k for k, d in events if (k == "partial" and d["id"] == heard["id"]) or (k == "message" and d.get("id") == heard["id"] and not d.get("pending"))]
+        assert kinds[-1] == "message" and set(kinds[:-1]) == {"partial"}      # 整句最後才到，蓋掉還沒翻完的
+        texts = [a[1] for a, kw in shown if kw.get("key") == heard["id"]]
+        assert texts[0] == "我" and texts[-1] == "我們去打龍吧。" and len(texts) > 2      # 浮動字幕也是一個字一個字出來
+        assert not [1 for a, kw in shown if kw.get("key") == typed["id"] and a[1] != "용 잡으러 가자."]      # 自己打的字不先出半句
+    finally:
+        service.closing.set()
+
+    ui = Path("livelingo/ui")
+    js, css = (ui / "app.js").read_text(encoding="utf-8"), (ui / "style.css").read_text(encoding="utf-8")
+    assert "partial: (d)" in js and "part-${m.id}" in js and ".text.streaming" in css and "prefers-reduced-motion" in css
