@@ -960,6 +960,13 @@
         ${rows}
       </section>`;
   }
+  function settingsApplied(r, key) {      // 匯入、恢復預設、復原之後：說結果、記下還能不能復原、把畫面換成新的設定
+    if (!r || !r.ok) { toast(t(r && r.error === "not_settings" ? "set_bad" : "n_save_failed", { error: "" }), 8000, "warn"); return; }
+    S.settingsBackup = r.backup || null;
+    if (!r.saved) toast(t("n_save_failed", { error: "" }), 8000, "error");
+    else { toast(t(key, { n: r.count }), 7000); flashSaved("#set-buttons"); }
+    renderSettingsPage();
+  }
   let healthTimer = null;
   async function loadHealth() {
     const r = await get("/api/health");
@@ -1072,6 +1079,19 @@
     if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage();
   }
 
+  function settingsFileHTML() {      // 設定的匯出、匯入、恢復預設；做完留一份可以復原
+    const b = S.settingsBackup;
+    const undo = b ? `<div class="note" id="set-undo">${ICON.info}<span>${esc(t(b.reason === "import" ? "set_undo_import" : "set_undo_reset"))}</span>
+        <button data-act="set-undo">${esc(t("set_undo"))}</button><button class="ghost" data-act="set-forget">${esc(t("set_keep"))}</button></div>` : "";
+    const ask = S.ui.resetAsk ? `<div class="note warn" id="set-ask">${ICON.info}<span>${esc(t("set_reset_ask"))}</span>
+        <button class="danger" data-act="set-reset-yes">${esc(t("set_reset_yes"))}</button><button class="ghost" data-act="set-reset-no">${esc(t("cancel"))}</button></div>` : "";
+    return `${undo}${ask}<div class="btn-row" id="set-buttons">
+        <button class="ghost" data-act="set-export">${esc(t("set_export"))}</button>
+        <button class="ghost" data-act="set-import">${esc(t("set_import"))}</button>
+        <input type="file" id="set-file" accept=".json,application/json" hidden>
+        ${S.ui.resetAsk ? "" : `<button class="ghost" data-act="set-reset">${esc(t("set_reset"))}</button>`}</div>`;
+  }
+
   function generalPage() {
     return `
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
@@ -1085,6 +1105,7 @@
         ${switchRow("copy_spoken", t("copy_spoken"))}
       </section>
       <section><div><h2>${esc(t("hk_title"))}</h2><div class="sub">${esc(t("hk_hint"))}</div></div>${hotkeysHTML()}</section>
+      <section><div><h2>${esc(t("set_title"))}</h2><div class="sub">${esc(t("set_hint"))}</div></div>${settingsFileHTML()}</section>
       <section><div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div></section>`;
   }
 
@@ -1448,6 +1469,20 @@
     accent: (el) => saveCfg({ accent: el.dataset.code }),
     swap: () => saveCfg({ my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang, their_auto: false }),
     "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
+    "set-export": async () => {
+      const r = await post("/api/settings", { export: true });
+      toast(r && r.ok ? t("set_exported", r) : t("set_export_failed", { error: (r && r.error) || "" }), 9000, r && r.ok ? "info" : "warn");
+    },
+    "set-import": () => { const f = $("set-file"); f.value = ""; f.click(); },
+    "set-reset": () => { S.ui.resetAsk = true; renderSettingsPage(); const b = document.querySelector('[data-act="set-reset-no"]'); if (b) b.focus(); },
+    "set-reset-no": () => { S.ui.resetAsk = false; renderSettingsPage(); const b = document.querySelector('[data-act="set-reset"]'); if (b) b.focus(); },
+    "set-reset-yes": async () => {
+      const r = await post("/api/settings", { reset: true });
+      S.ui.resetAsk = false;
+      settingsApplied(r, "set_reset_done");
+    },
+    "set-undo": async () => settingsApplied(await post("/api/settings", { undo: true }), "set_undone"),
+    "set-forget": async () => { const r = await post("/api/settings", { forget: true }); if (r && r.ok) S.settingsBackup = null; renderSettingsPage(); },
     "health-again": async () => { await loadHealth(); const b = document.querySelector('[data-act="health-again"]'); if (b) b.focus(); },
     "hist-more": () => loadHistory(true),
     "hist-export": async () => {
@@ -1525,6 +1560,14 @@
   });
 
   document.addEventListener("change", (e) => {
+    if (e.target.id === "set-file") {      // 匯入設定檔：在這裡讀檔，內容交給程式檢查
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      file.text().then((text) => { let data = null; try { data = JSON.parse(text); } catch (ex) { data = null; } return post("/api/settings", { data }); })
+        .then((r) => settingsApplied(r, "set_imported"))
+        .catch(() => toast(t("set_bad"), 9000, "warn"));
+      return;
+    }
     if (e.target.id === "lib-file") {      // 匯入詞彙檔：在這裡讀檔，內容交給程式檢查和合併
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -1774,7 +1817,7 @@
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
     S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
-    S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history;
+    S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history; S.settingsBackup = st.settings_backup || null;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
     renderAll();

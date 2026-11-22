@@ -16,7 +16,8 @@ from collections import deque
 from pathlib import Path
 
 from . import __version__, apps, assets, chatpaint, gpu, oswin, updater
-from .config import ACCENTS, DEFAULTS, EDITABLE, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config, Glossary, Lessons
+from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
+                     Glossary, Lessons)
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language, similarity
@@ -40,6 +41,12 @@ VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也�
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
 VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
+SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
+# 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著。匯出、匯入、恢復預設都不碰
+SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "region", "sources")
+# 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
+RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir")
+ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
 
 
@@ -220,6 +227,7 @@ class Service:
             "record": self.record_state(),
             "hotkeys": self.hotkeys_state(),
             "history": self.history.state(),
+            "settings_backup": self.settings_backup(),
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -725,6 +733,156 @@ class Service:
         with self._lock:
             msg = next((m for m in self.messages if m["id"] == msg_id), None)
         return bool(msg and msg.get("translated") and oswin.copy_text(msg["translated"]))
+
+    # ------------------------------------------------------------------ 設定：匯出、匯入、恢復預設、復原
+
+    def _settings_now(self) -> dict:
+        cfg = self.cfg.snapshot()
+        return {k: cfg[k] for k in DEFAULTS if k not in SETTINGS_SKIP}
+
+    def settings_export(self) -> dict:
+        """把現在的設定存成一個檔案（放在字幕記錄的資料夾），可以備份，或是重灌之後匯入回來。"""
+        folder = self.transcript_dir()
+        path = folder / f"LiveLingo-settings-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"app": "LiveLingo", "kind": SETTINGS_KIND, "version": 1, "app_version": __version__,
+                                        "config": self._settings_now()}, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as ex:
+            self.log(f"settings export failed: {ex!r}")
+            return {"ok": False, "error": str(ex)}
+        oswin.open_path(folder)
+        return {"ok": True, "path": str(path), "name": path.name}
+
+    def settings_backup(self) -> dict | None:
+        """上一次匯入或恢復預設之前的設定還留著嗎（可以復原）。回傳 {"at", "reason"} 或 None。"""
+        try:
+            data = json.loads((self.data / "settings-backup.json").read_text(encoding="utf-8"))
+            return {"at": float(data["at"]), "reason": str(data["reason"])}
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _keep_backup(self, reason: str) -> None:
+        try:
+            self.data.mkdir(parents=True, exist_ok=True)
+            (self.data / "settings-backup.json").write_text(
+                json.dumps({"at": time.time(), "reason": reason, "config": self._settings_now()}, ensure_ascii=False), encoding="utf-8")
+        except OSError as ex:
+            self.log(f"settings backup failed: {ex!r}")
+
+    def _valid_regions(self, sent) -> list[dict] | None:
+        """設定檔裡的聊天區（整份換掉用的）：每一個都要有編號和像樣的位置大小，其他欄位整理成固定的樣子。"""
+        if not isinstance(sent, list):
+            return None
+        out: list[dict] = []
+        for item in sent[:MAX_REGIONS]:
+            try:
+                box = {k: int(item[k]) for k in ("left", "top", "width", "height")}
+                rid = str(item["id"])[:12]
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not rid or box["width"] < 60 or box["height"] < 30 or any(r["id"] == rid for r in out):
+                continue
+            anchor = item.get("anchor")
+            anchor = [int(anchor[0]), int(anchor[1])] if isinstance(anchor, list) and len(anchor) == 2 and all(
+                isinstance(v, (int, float)) for v in anchor) else None
+            app = str(item.get("app") or "").strip()[:120] if anchor else ""
+            out.append({"id": rid, "name": " ".join(str(item.get("name") or "").split())[:30], **box,
+                        "on": bool(item.get("on", True)), "app": app, "anchor": anchor if app else None})
+        return out
+
+    @staticmethod
+    def _valid_rect(rect) -> list[int] | None:
+        if isinstance(rect, list) and len(rect) == 4 and all(isinstance(v, (int, float)) for v in rect) and rect[2] > 0 and rect[3] > 0:
+            return [int(v) for v in rect]
+        return None
+
+    def _valid_layouts(self, sent) -> list[dict] | None:
+        if not isinstance(sent, list):
+            return None
+        out = []
+        for item in sent[:MAX_LAYOUTS]:
+            if not isinstance(item, dict) or not isinstance(item.get("look"), dict):
+                continue
+            name = " ".join(str(item.get("name") or "").split())[:24]
+            look = {k: item["look"][k] for k in OVERLAY_LOOK if k in item["look"] and type(item["look"][k]) is type(DEFAULTS[k])}
+            rect = self._valid_rect(item.get("rect"))
+            if not name or not rect or any(o["name"] == name for o in out):
+                continue
+            out.append({"name": name, "look": look, "rect": rect,
+                        "form": item.get("form") if item.get("form") in OVERLAY_FORMS else "float",
+                        "monitor": max(0, min(15, int(item["monitor"]))) if isinstance(item.get("monitor"), int) else 0})
+        return out
+
+    def _apply_settings(self, values: dict) -> list[str]:
+        """
+        把一整份設定套上去（匯入、恢復預設、復原都走這裡）。介面改得到的項目走平常那一套檢查；
+        聊天區、留言位置、自己存的版面、字幕資料夾和進階數值另外檢查。不認得或不合格的項目跳過。回傳真的變了的項目。
+        """
+        before = self.cfg.snapshot()
+        self.update_config({k: v for k, v in values.items() if k in EDITABLE and k != "regions"})
+        extra: dict = {}
+        if "regions" in values:
+            regions = self._valid_regions(values["regions"])
+            if regions is not None:
+                extra["regions"] = regions
+        if "overlay_layouts" in values:
+            layouts = self._valid_layouts(values["overlay_layouts"])
+            if layouts is not None:
+                extra["overlay_layouts"] = layouts
+        if "overlay_rect" in values:
+            rect = self._valid_rect(values["overlay_rect"])
+            if rect or values["overlay_rect"] is None:
+                extra["overlay_rect"] = rect
+        if isinstance(values.get("transcript_dir"), str):
+            extra["transcript_dir"] = values["transcript_dir"].strip()[:400]
+        for key, (low, high) in ADVANCED_RANGE.items():
+            value = values.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and low <= value <= high:
+                extra[key] = type(DEFAULTS[key])(value)
+        if extra:
+            self.cfg.set(**extra)
+        after = self.cfg.snapshot()
+        changed = sorted(k for k in after if before[k] != after[k])
+        if "regions" in changed:
+            self._regions_changed()
+        if "overlay_rect" in changed:
+            self.overlay.reload()
+        if "transcript_dir" in changed:
+            self.hub.publish("record", self.record_state())
+        self.hub.publish("config", after)
+        return changed
+
+    def settings_import(self, data) -> dict:
+        """匯入設定檔。匯入之前的設定先留一份，可以復原。"""
+        if not isinstance(data, dict) or data.get("kind") != SETTINGS_KIND or not isinstance(data.get("config"), dict):
+            return {"ok": False, "error": "not_settings"}
+        self._keep_backup("import")
+        changed = self._apply_settings({k: v for k, v in data["config"].items() if k in DEFAULTS and k not in SETTINGS_SKIP})
+        return {"ok": True, "changed": changed, "count": len(changed), "saved": not self.cfg.error, "backup": self.settings_backup()}
+
+    def settings_reset(self) -> dict:
+        """
+        恢復預設：設定回到剛安裝的樣子。語言、框好的聊天區、自己存的版面、字幕資料夾留著；
+        詞彙表、教過的句子、歷史和下載好的模型本來就不是設定，不會動。之前的設定先留一份，可以復原。
+        """
+        self._keep_backup("reset")
+        values = {k: json.loads(json.dumps(v)) for k, v in DEFAULTS.items() if k not in SETTINGS_SKIP and k not in RESET_KEEP}
+        changed = self._apply_settings(values)
+        return {"ok": True, "changed": changed, "count": len(changed), "saved": not self.cfg.error, "backup": self.settings_backup()}
+
+    def settings_undo(self, forget: bool = False) -> dict:
+        """復原上一次匯入或恢復預設（forget：不復原，只是把留著的那一份丟掉）。"""
+        path = self.data / "settings-backup.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            values = data["config"]
+            assert isinstance(values, dict)
+        except Exception:  # noqa: BLE001
+            return {"ok": False, "error": "no_backup"}
+        changed = [] if forget else self._apply_settings({k: v for k, v in values.items() if k in DEFAULTS and k not in SETTINGS_SKIP})
+        path.unlink(missing_ok=True)
+        return {"ok": True, "changed": changed, "count": len(changed), "saved": not self.cfg.error, "backup": None}
 
     # ------------------------------------------------------------------ 健康檢查
 

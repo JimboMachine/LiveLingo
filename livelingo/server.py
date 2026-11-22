@@ -222,6 +222,14 @@ class Server:
                         return self._json(service.import_library(body.get("data")))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
+                    if route == "/api/settings":      # 設定的匯出、匯入、恢復預設、復原
+                        if body.get("export"):
+                            return self._json(service.settings_export())
+                        if body.get("reset"):
+                            return self._json(service.settings_reset())
+                        if body.get("undo") or body.get("forget"):
+                            return self._json(service.settings_undo(forget=bool(body.get("forget"))))
+                        return self._json(service.settings_import(body.get("data")))
                     if route == "/api/history":
                         if body.get("clear"):
                             return self._json(service.history_clear())

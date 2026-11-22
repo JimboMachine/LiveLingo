@@ -495,3 +495,4 @@ input::placeholder { color: var(--faint); }
 .health-row[data-state="warn"] .health-state { color: var(--me); }
 .health-row[data-state="bad"] .health-state { color: var(--danger); }
 #health-summary small { color: var(--dim); }
+.note > button + button { margin-left: 0; }

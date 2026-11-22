@@ -2481,3 +2481,95 @@ def test_health_check_lights(tmp_path, monkeypatch):
             + [f"h_s_{s}" for s in ("ok", "warn", "bad", "off")] + ["h_q_high", "h_q_standard", "h_e_gpu", "h_e_cpu"])
     for key in keys:
         assert len(re.findall(rf"\b{key}: ", i18n)) == len(UI_LANGS), key
+
+
+def test_settings_export_import_reset_undo(tmp_path, monkeypatch):
+    """
+    設定可以匯出成檔案、匯入回來、恢復預設；匯入和恢復預設之前的設定會留一份，可以復原。
+    恢復預設不動語言、框好的聊天區、自己存的版面；亂寫的設定檔不會把設定弄壞。
+    """
+    import json as _json
+
+    from livelingo import hotkeys, oswin, overlay
+    from livelingo.config import DEFAULTS, EDITABLE
+    from livelingo.service import RESET_KEEP, SETTINGS_KIND, SETTINGS_SKIP, Service
+
+    assert set(SETTINGS_SKIP) <= set(DEFAULTS) and set(RESET_KEEP) <= set(DEFAULTS) and not set(SETTINGS_SKIP) & set(RESET_KEEP)
+    monkeypatch.setattr(oswin, "open_path", lambda path: True)
+    monkeypatch.setenv("LIVELINGO_FAKE_MONITORS", "0,0,1920,1080")
+    service = Service(tmp_path)
+    service.hotkeys.backend = hotkeys.FakeBackend()
+    service.start_hotkeys()
+    service.overlay.window_class = overlay.MemoryWindow
+    region = {"id": "r1", "name": "隊伍", "left": 10, "top": 20, "width": 400, "height": 200, "on": True, "app": "", "anchor": None}
+    layout = {"name": "打 LOL", "look": {"overlay_font": 30, "overlay_bold": False}, "rect": [50, 60, 500, 260], "form": "float", "monitor": 0}
+    try:
+        service.update_config({"theme": "light", "accent": "rose", "overlay_font": 40, "tone": "polite", "my_lang": "ja", "ui_lang": "ja",
+                               "history_days": "90", "hotkeys": {"mic": "Ctrl+Shift+M"}, "ptt": True, "voice_sensitivity": 5})
+        service.cfg.set(regions=[region], overlay_layouts=[layout], overlay_rect=[100, 100, 500, 300], setup_done=True,
+                        window={"w": 1000, "h": 700, "x": 5, "y": 6}, interval=1.0)
+        mine = service.cfg.snapshot()
+
+        # ---- 匯出：是 LiveLingo 的設定檔，裡面沒有視窗位置這類不算設定的東西
+        done = service.settings_export()
+        assert done["ok"] and done["name"].startswith("LiveLingo-settings-")
+        exported = _json.loads((service.transcript_dir() / done["name"]).read_text(encoding="utf-8"))
+        assert exported["kind"] == SETTINGS_KIND and exported["config"]["theme"] == "light"
+        assert not set(SETTINGS_SKIP) & set(exported["config"]) and EDITABLE - set(SETTINGS_SKIP) <= set(exported["config"])
+
+        # ---- 恢復預設：設定回去了，該留的留著，而且留了一份可以復原
+        assert service.settings_backup() is None
+        reset = service.settings_reset()
+        now = service.cfg.snapshot()
+        assert reset["ok"] and reset["saved"] and reset["backup"]["reason"] == "reset" and reset["count"] == len(reset["changed"]) > 5
+        for key in ("theme", "accent", "overlay_font", "tone", "history_days", "hotkeys", "ptt", "voice_sensitivity", "overlay_rect", "interval"):
+            assert now[key] == DEFAULTS[key], key
+        for key in (*RESET_KEEP, *SETTINGS_SKIP):
+            assert now[key] == mine[key], key
+        assert service.hotkeys.bindings["mic"] == "Ctrl+Alt+M" and service.history.days == DEFAULTS["history_days"]      # 馬上生效
+        assert service.state()["settings_backup"]["reason"] == "reset"
+
+        # ---- 復原：跟恢復預設之前一模一樣，留著的那一份用掉了
+        undone = service.settings_undo()
+        assert undone["ok"] and service.cfg.snapshot() == mine and service.settings_backup() is None
+        assert service.hotkeys.bindings["mic"] == "Ctrl+Shift+M"
+        assert service.settings_undo() == {"ok": False, "error": "no_backup"}
+
+        # ---- 匯入：換一台電腦（全新的設定）匯入剛才那個檔，聊天區和版面也回來
+        other = Service(tmp_path / "pc2")
+        try:
+            fresh = other.cfg.snapshot()
+            got = other.settings_import(exported)
+            after = other.cfg.snapshot()
+            assert got["ok"] and got["backup"]["reason"] == "import" and "regions" in got["changed"] and "theme" in got["changed"]
+            for key in exported["config"]:
+                assert after[key] == mine[key], key
+            for key in SETTINGS_SKIP:
+                assert after[key] == fresh[key], key
+            other.settings_undo(forget=True)      # 不復原，只是把留著的丟掉
+            assert other.settings_backup() is None and other.cfg["theme"] == "light"
+        finally:
+            other.shutdown()
+
+        # ---- 亂寫的檔案：不是設定檔的不收；個別項目不合格的跳過，其他照套
+        for junk in (None, [], "x", {"kind": "livelingo-library"}, {"kind": SETTINGS_KIND}, {"kind": SETTINGS_KIND, "config": []}):
+            assert service.settings_import(junk) == {"ok": False, "error": "not_settings"}
+        weird = {"kind": SETTINGS_KIND, "config": {
+            "theme": "neon", "accent": "blue", "overlay_font": 9999, "hotkeys": {"mic": "M", "copy": "Ctrl+Alt+S"}, "history_days": 13,
+            "regions": [{"id": "r9", "left": 1, "top": 1, "width": 500, "height": 300, "name": "x" * 99, "app": "Game.exe", "anchor": "bad"},
+                        {"id": "tiny", "left": 0, "top": 0, "width": 5, "height": 5}, "junk", {"id": "r9", "left": 0, "top": 0, "width": 99, "height": 99}],
+            "overlay_layouts": [{"name": "ok", "look": {"overlay_font": "big", "overlay_bold": True}, "rect": [1, 2, 300, 200], "monitor": "x"},
+                                {"name": "", "look": {}, "rect": [1, 2, 3, 4]}, {"name": "norect", "look": {}}],
+            "overlay_rect": [1, 2, "wide", 4], "interval": 999, "threads": 8, "window": {"w": 1, "h": 1}, "setup_done": False,
+            "made_up": 1, "transcript_dir": 5}}
+        got = service.settings_import(weird)
+        now = service.cfg.snapshot()
+        assert got["ok"] and now["theme"] == "light" and now["accent"] == "blue" and now["overlay_font"] == 60
+        assert now["hotkeys"] == mine["hotkeys"] and now["history_days"] == 90
+        assert now["regions"] == [{"id": "r9", "name": "x" * 30, "left": 1, "top": 1, "width": 500, "height": 300, "on": True, "app": "", "anchor": None}]
+        assert now["overlay_layouts"] == [{"name": "ok", "look": {"overlay_bold": True}, "rect": [1, 2, 300, 200], "form": "float", "monitor": 0}]
+        assert now["overlay_rect"] == mine["overlay_rect"] and now["interval"] == 1.0 and now["threads"] == 8
+        assert now["window"] == mine["window"] and now["setup_done"] is True and "made_up" not in now
+        assert now["transcript_dir"] == mine["transcript_dir"]
+    finally:
+        service.shutdown()

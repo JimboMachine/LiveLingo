@@ -630,6 +630,14 @@ class Overlay:
         self.service.stored(what, ok)
         return ok
 
+    def reload(self) -> None:
+        """設定檔裡的位置被整個換掉了（匯入設定、恢復預設、復原）：照新的重新擺。"""
+        if self.window:
+            self.rect = self._home()
+            self._last = None
+            self._wake.set()
+            self.service.hub.publish("overlay", self.state())
+
     def reset_position(self) -> None:
         if self.bar:
             return

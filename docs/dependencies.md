@@ -12,10 +12,11 @@
 
 1. `config.py`：預設值（DEFAULTS），要讓介面能改就加進 EDITABLE
 2. `service.py`：update_config 裡的檢查，還有改了之後要馬上做的事
-3. `app.js`：設定畫面的開關、存好的回饋、畫面有沒有跟著更新
-4. `i18n.js`：名稱和說明，五種語言
-5. `overlay.py`、`tray.py`、`window.py`：真正讀這項設定的地方
-6. `test_basics.py`：補一個檢查
+3. `service.py`：匯出、匯入、恢復預設：這一項算不算設定（SETTINGS_SKIP）、恢復預設時要不要留著（RESET_KEEP）；介面改不到的項目要在 _apply_settings 另外檢查
+4. `app.js`：設定畫面的開關、存好的回饋、畫面有沒有跟著更新
+5. `i18n.js`：名稱和說明，五種語言
+6. `overlay.py`、`tray.py`、`window.py`：真正讀這項設定的地方
+7. `test_basics.py`：補一個檢查
 
 自動把關：測試會擋：設定沒有預設值、介面用了不存在的設定名稱、說明文字少一種語言。改了之後有沒有真的生效，要自己開起來看。
 
