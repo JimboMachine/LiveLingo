@@ -2470,7 +2470,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
     # 每一個燈的名字、每一種狀態、每一個代碼，五種語言都有一句話
     root = Path(__file__).resolve().parent.parent / "livelingo"
     source = (root / "service.py").read_text(encoding="utf-8")
-    body = source[source.index("    def health(self)"):source.index("    # ------------------------------------------------------------------ 對話歷史")]
+    body = source[source.index("    def health(self)"):source.index("    # ------------------------------------------------------------------ 問題報告")]
     codes = set(re.findall(r'"((?:engine|gpu|mic|listen|screen|hotkeys|saving|audio)_[a-z_]+)"', body))
     codes -= {"listen_apps", "mic_device", "speaker_device"}      # 這幾個是設定的名字，不是代碼
     for kind in ("mic", "listen"):
@@ -3199,3 +3199,126 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
     js = (root / "ui" / "app.js").read_text(encoding="utf-8")
     for piece in ('post("/api/update", { rollback: true })', 'post("/api/update", { unskip: true })', 'data-act="rollback-yes"', "up_back_downloading"):
         assert piece in js, piece
+
+
+def test_problem_report_is_shown_first_and_never_sent(tmp_path, monkeypatch):
+    """第 48 項：問題報告先整份給使用者看，他按了才存檔或複製；裡面沒有對話內容和個人資料夾，程式自己不送出任何東西。"""
+    import re
+    from pathlib import Path
+
+    from livelingo import report
+    from livelingo.config import UI_LANGS
+    from livelingo.service import Service
+
+    assert set(report.TEXT) == set(UI_LANGS)
+    for lang, text in report.TEXT.items():
+        assert set(text) == set(report.TEXT["zh-TW"]) and len(text["intro"]) == 3, lang
+        assert "{n}" in text["dropped"], lang
+
+    # 換掉個人資料夾、帳號名稱、電腦名稱（路徑有三種寫法；太短或太普通的名字不整個換）
+    hide = {"home": r"C:\Users\JimboKim", "user": "JimboKim", "pc": "DESKTOP-J1"}
+    raw = (r"folder C:\Users\JimboKim\Documents\LiveLingo, json C:\\Users\\JimboKim\\AppData, slash c:/users/jimbokim/x, "
+           "owner jimbokim on DESKTOP-J1, device JimboKim's AirPods, word jimbokimchi stays")
+    clean = report.scrub(raw, **hide)
+    assert "jimbokim" not in clean.lower().replace("jimbokimchi", "") and "DESKTOP-J1" not in clean
+    assert clean.count("%USERPROFILE%") == 3 and "<user>'s AirPods" in clean and "on <pc>" in clean and "jimbokimchi stays" in clean
+    assert report.scrub("the user al opened C:\\", home="C:\\", user="al") == "the user al opened C:\\"
+    assert report.scrub("admin mode, /home/admin/x", home="/home/admin", user="admin") == "admin mode, %USERPROFILE%/x"
+
+    # 紀錄檔裡含著對話整句話的行不要（短的字不比，免得誤刪）
+    rows, dropped = report.drop_said(["mic opened: 麥克風", "error while sending 오늘 저녁에 같이 게임할래", "ok"], ["오늘 저녁에 같이 게임할래", "麥克風", ""])
+    assert rows == ["mic opened: 麥克風", "ok"] and dropped == 1
+
+    # 排版：自己寫的說明在最前面，太長會截掉；空的段落寫「沒有」
+    text = report.build("en", [("app", {"version": "2.3.0", "installed": True, "error": None, "list": [], "nested": {"a": 1}}), ("log", [])],
+                        note="  it broke\nafter ten minutes  ", when=0, dropped=2, hide=hide)
+    assert text.startswith("LiveLingo problem report\r\n") and "It has not been sent to anyone" in text
+    assert "== What happened ==\r\nit broke\r\nafter ten minutes\r\n" in text
+    assert "version: 2.3.0\r\ninstalled: yes\r\nerror: -\r\nlist: -\r\nnested: a=1\r\n" in text
+    assert "== Recent log ==\r\n(none)\r\n2 lines were left out" in text
+    assert len(report.build("en", [], note="x" * 5000, hide=hide)) < 3000
+    assert report.tail(tmp_path / "missing.log", 10) == []
+
+    # 這個檔案不連網路
+    source = (Path(report.__file__)).read_text(encoding="utf-8")
+    for banned in ("urllib", "socket", "requests", "http.client", "webbrowser", "smtplib", "subprocess"):
+        assert banned not in source, banned
+
+    # 真的做一份
+    data = tmp_path / "data"
+    data.mkdir()
+    secret, reply = "오늘 저녁에 같이 게임할래?", "今天晚上要不要一起打遊戲？"
+    (data / "app.log").write_text("\n".join(
+        [f"2026-11-22 10:01:00 line {n}" for n in range(300)] + ["2026-11-22 10:02:00 mic capture opened: 麥克風 (HyperX Cloud II)",
+         f"2026-11-22 10:02:01 something leaked {secret} into the log",
+         f"2026-11-22 10:02:02 subtitle log saved: {Path.home()}/Documents/LiveLingo/a.txt"]) + "\n",
+        encoding="utf-8")
+    (data / "engine.log").write_text("0.00.028 I srv llama_server: initializing ...\n0.07.640 I srv llama_server: model loaded\n", encoding="utf-8")
+    opened, copied = [], []
+    monkeypatch.setattr("livelingo.service.oswin.open_path", lambda p: opened.append(Path(p)))
+    monkeypatch.setattr("livelingo.service.oswin.copy_text", lambda text: copied.append(text) or True)
+    monkeypatch.setattr("livelingo.service.oswin.monitors", lambda: [{"left": 0, "top": 0, "width": 2560, "height": 1440, "work": [0, 0, 2560, 1400], "primary": True}])
+    service = Service(data)
+    service.cfg.set(ui_lang="zh-TW", transcript_dir=str(tmp_path / "out"),
+                    regions=[{"id": "r1", "name": "朋友的秘密頻道", "left": 10, "top": 20, "width": 300, "height": 200, "on": True, "app": "Discord.exe", "anchor": [0, 0]}],
+                    overlay_layouts=[{"name": "我的排位版面", "look": {}, "rect": None, "form": "float", "monitor": 0}])
+    service.glossary.add("정글", "打野")
+    service.messages.append({"id": 1, "who": "them", "via": "heard", "original": secret, "translated": reply, "back": "", "pending": False, "error": ""})
+    service.history.add({"id": 1, "who": "them", "via": "heard", "original": secret, "translated": reply, "lang": "ko", "target": "zh-TW", "place": "", "at": 1})
+
+    assert service.report_save() == {"ok": False, "error": "report_none"} and service.report_copy()["ok"] is False      # 還沒看過不能存
+    made = service.report_make(note="聽對方說話十分鐘後就沒字幕了")
+    text = made["text"]
+    assert made["ok"] and made["bytes"] == len(text.encode("utf-8")) and made["lines"] == text.count("\n")
+    assert not list(tmp_path.glob("out/*")) and not opened and not copied      # 做出來只是給他看：沒存檔、沒開資料夾、沒複製
+    for title in ("發生了什麼事", "LiveLingo", "這台電腦", "健康檢查", "收音和螢幕", "儲存空間", "設定", "最近的紀錄", "翻譯引擎的紀錄"):
+        assert f"== {title} ==" in text, title
+    assert "聽對方說話十分鐘後就沒字幕了" in text and "version: 2.3.0" in text and "screens: 2560x1440 at 0,0 (main)" in text
+    assert f"word_list_count: {len(service.glossary.list())}" in text and "history_count: 1" in text and "llama_server: model loaded" in text
+    assert re.search(r"\[(ok|warn|bad|off)\] engine: engine_", text) and "line 299" in text and "line 99\r\n" not in text      # 紀錄只有最後 200 行
+    log_rows = text.split("== 最近的紀錄 ==\r\n")[1].split("\r\n\r\n")[0].split("\r\n")
+    assert 150 < len(log_rows) <= report.LOG_LINES
+    for private in (secret, reply, "정글", "打野", "朋友的秘密頻道", "我的排位版面"):
+        assert private not in text, private      # 對話、詞彙表、取的名字都不在裡面
+    assert "Discord.exe" in text and "有 1 行因為含著對話裡的句子" in text, [row for row in text.split("\r\n") if "region" in row or "行因為" in row]
+    assert "mic capture opened: 麥克風 (HyperX Cloud II)" in text and "something leaked" not in text
+    assert len(str(Path.home())) <= 3 or (str(Path.home()) not in text and "saved: %USERPROFILE%/Documents/LiveLingo/a.txt" in text)
+
+    # 存的和看到的一字不差；存好打開資料夾
+    saved = service.report_save()
+    path = Path(saved["path"])
+    assert saved["ok"] and path.parent == tmp_path / "out" and re.fullmatch(r"LiveLingo-report-\d{8}-\d{6}\.txt", saved["name"]) and opened == [tmp_path / "out"]
+    assert path.read_bytes() == b"\xef\xbb\xbf" + text.encode("utf-8")
+    assert service.report_copy() == {"ok": True} and copied == [text]
+
+    # 不放設定、不放紀錄
+    short = service.report_make(settings=False, log=False)["text"]
+    assert "== 設定 ==" not in short and "== 最近的紀錄 ==" not in short and "mic capture opened" not in short and "== 健康檢查 ==" in short
+
+    # 做報告的時候出錯：還是給得出一份（至少有版本和紀錄）
+    monkeypatch.setattr(service, "health", lambda: 1 / 0)
+    broken = service.report_make()["text"]
+    assert "report_error: ZeroDivisionError" in broken and "version: 2.3.0" in broken
+
+    root = Path(report.__file__).parent
+    server = (root / "server.py").read_text(encoding="utf-8")
+    assert 'route == "/api/report"' in server and "service.report_save()" in server and "service.report_copy()" in server
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    for piece in ('post("/api/report", { save: true })', 'post("/api/report", { copy: true })', 'data-act="report-make"', 'id="rep-text"', "rep_unsent"):
+        assert piece in js, piece
+
+
+def test_toast_is_not_mistaken_for_a_volume_bar():
+    """提示訊息和音量條不能用同一個 data- 名字：音量條每秒重畫好幾次，會把提示訊息的寬度改成 0%（變成一條直的）。"""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    js, css = (root / "app.js").read_text(encoding="utf-8"), (root / "style.css").read_text(encoding="utf-8")
+    assert 'el.dataset.toast = level || "info"' in js and '.toast[data-toast="warn"]' in css and '.toast[data-toast="error"]' in css
+    assert "toast[data-level" not in css and "el.dataset.level = " not in js
+    assert len(re.findall(r'querySelectorAll\("\[data-(?:vu|level)\]"\)', js)) == 2
+    # 會被整批改寬度的選擇器，只能選到音量條自己
+    for attr in re.findall(r'querySelectorAll\("\[data-(\w+)\]"\)\.forEach\(\(el\) => \{\n[^}]*el\.style\.width', js):
+        assert attr in ("vu", "level"), attr
+        assert f'id="toast"' not in "".join(re.findall(rf"<[^>]*data-{attr}=[^>]*>", (root / "index.html").read_text(encoding="utf-8")))

@@ -162,9 +162,9 @@ input::placeholder { color: var(--faint); }
 .note { color: var(--dim); }
 .note svg, .mic-note > svg { color: var(--accent); margin-top: 1px; flex: none; }
 .note > button { flex: none; height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; margin-left: auto; align-self: center; }
-.note.warn, .mic-note.warn, .toast[data-level="warn"] { border-left-color: var(--me); }
+.note.warn, .mic-note.warn, .toast[data-toast="warn"] { border-left-color: var(--me); }
 .note.warn svg, .mic-note.warn > svg { color: var(--me); }
-.note.error, .mic-note.error, .toast[data-level="error"] { border-left-color: var(--danger); }
+.note.error, .mic-note.error, .toast[data-toast="error"] { border-left-color: var(--danger); }
 .note.error svg, .mic-note.error > svg { color: var(--danger); }
 .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.15s linear; }
@@ -516,3 +516,9 @@ input::placeholder { color: var(--faint); }
 .panel .changes { text-align: left; max-height: 240px; overflow-y: auto; margin: 4px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
 .changes-older > summary { cursor: pointer; font-size: 13px; color: var(--dim); padding: 6px 0; }
 .changes-older > summary:hover { color: var(--text); }
+
+/* 問題報告：先看整份內容再決定 */
+.rep-label { font-size: 13px; color: var(--dim); }
+#report textarea { width: 100%; min-height: 72px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--ground); color: var(--text); font: inherit; font-size: 14px; line-height: 1.5; resize: vertical; }
+#rep-text { margin: 0; max-height: 360px; overflow: auto; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--ground); color: var(--text); font: 12px/1.6 ui-monospace, Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+#report .primary { height: 40px; border-radius: 10px; font-size: 14px; }

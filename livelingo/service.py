@@ -15,7 +15,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, oswin, storage, updater
+from . import __version__, apps, assets, changes, chatpaint, gpu, oswin, paths, report, storage, updater
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -192,6 +192,8 @@ class Service:
         self._speech_gpu_cancel = threading.Event()
         self._apps_audio_off = False      # 「只聽指定程式」這次試過不行，先改聽整台電腦（換選擇或重開程式會再試）
         self._lock = threading.RLock()
+        self.started = time.time()
+        self._report = ""             # 上一次做給使用者看的問題報告（存檔、複製用的就是這一份）
         self._download_cancel = threading.Event()
         self._selecting = False
         self.on_quit = lambda: None    # 請視窗關閉、讓程式正常結束（介面按離開）
@@ -1061,6 +1063,99 @@ class Service:
         order = ("bad", "warn", "ok", "off")
         worst = min((i["state"] for i in items), key=order.index)
         return {"ok": True, "worst": worst, "items": items, "at": time.time()}
+
+    # ------------------------------------------------------------------ 問題報告
+
+    def _report_sections(self, settings: bool, log: bool) -> tuple[list, int]:
+        """問題報告的每一段。只有狀態和數字：對話內容、歷史、詞彙表、教過的句子都不放（report.py 開頭有寫）。"""
+        health = self.health()
+        state = self.storage_state()
+        last = updater.Attempts(self.data).read()
+        update = self.update_state()
+        app = {
+            "version": __version__, "installed": paths.FROZEN, "running_minutes": round((time.time() - self.started) / 60),
+            "phase": self.phase, "quality": self.mode.get("quality"), "engine": self.mode.get("engine"), "model": self.mode.get("model"),
+            "fell_back_to_standard": self.fallback, "window": type(self.window).__name__ if self.window else "none",
+            "interface_language": self.cfg["ui_lang"], "my_language": self.cfg["my_lang"], "their_language": self.cfg["their_lang"],
+            "auto_detect": self.cfg["their_auto"], "messages_this_session": len(self.messages),
+            "history_count": self.history.count, "history_error": self.history.error or None,
+            "word_list_count": len(self.glossary.list()), "taught_sentences_count": len(self.lessons.list()),
+            "settings_file_error": self.cfg.error or None,
+            "previous_version": (update["previous"] or {}).get("version"), "skipped_update": update["skipped"] or None,
+            "last_update": {k: last[k] for k in ("version", "from", "rollback") if k in last} or None,
+        }
+        if self.phase == "error":
+            app["error"] = str(self.detail.get("message", ""))[:300]
+        machine = report.computer()
+        machine.update({"gpu": self.gpu.get("name"), "gpu_memory_gb": round(self.gpu.get("vram_mb", 0) / 1024, 1), "gpu_tier": self.gpu.get("tier"),
+                        "screens": [f"{m['width']}x{m['height']} at {m['left']},{m['top']}" + (" (main)" if m["primary"] else "")
+                                    for m in oswin.monitors()]})
+        lights = []
+        for item in health["items"]:
+            more = " ".join(f"{k}={item[k]}" for k in item if k not in ("id", "state", "code", "tab"))
+            lights.append(f"[{item['state']}] {item['id']}: {item['code']} {more}".rstrip())
+        sources = {}
+        for name, src in self.sources.items():
+            sources[name] = {"on": src["on"], "device": src["device"] or None, "error": src["error"] or None, "quiet": src["quiet"] or None,
+                             **({"chosen_programs_only": src["apps"]} if name == "listen" else {})}
+        if self.delays:
+            sources["voice_seconds"] = {"recognise": round(sum(d[0] for d in self.delays) / len(self.delays), 2),
+                                        "translate": round(sum(d[1] for d in self.delays) / len(self.delays), 2), "sentences": len(self.delays)}
+        sources["speech_on_graphics_card"] = {k: self.speech_gpu[k] for k in ("state", "active", "error") if self.speech_gpu[k] not in ("", None)}
+        hk = self.hotkeys_state()
+        sources["hotkeys"] = {"available": hk["available"], **hk["states"]}
+        store = {"moved_to_another_folder": state["moved"], "folder": state["folder"], "lost_folder": state["lost"] or None,
+                 "free_gb": round(state["free"] / 1e9, 1)}
+        for row in state["items"]:
+            store[row["id"]] = f"{round(row['bytes'] / 1e6, 1)} MB" + ("" if row["used"] else " (not in use)")
+        sections: list = [("app", app), ("computer", machine), ("health", lights), ("sources", sources), ("storage", store)]
+        dropped = 0
+        if settings:
+            cfg = self._settings_now()
+            cfg["regions"] = [{k: r.get(k) for k in ("id", "left", "top", "width", "height", "on", "app")} for r in cfg["regions"]]      # 取的名字不放
+            cfg["overlay_layouts"] = len(cfg["overlay_layouts"])
+            sections.append(("settings", cfg))
+        if log:
+            with self._lock:
+                said = [m.get(k) or "" for m in self.messages for k in ("original", "translated", "back")]
+            for row in self.history.search(limit=200)["items"]:
+                said += [row["original"], row["translated"]]
+            rows, dropped = report.drop_said(report.tail(self.data / "app.log", report.LOG_LINES), said)
+            engine_rows, more = report.drop_said(report.tail(self.data / "engine.log", report.ENGINE_LINES), said)
+            dropped += more
+            sections += [("log", rows), ("engine_log", engine_rows)]
+        return sections, dropped
+
+    def report_make(self, note: str = "", settings: bool = True, log: bool = True) -> dict:
+        """做一份問題報告給使用者看。只是做出來放在記憶體裡：不存檔、不送出，要存要複製都等使用者按。"""
+        try:
+            sections, dropped = self._report_sections(bool(settings), bool(log))
+            text = report.build(self.cfg["ui_lang"], sections, note=note, dropped=dropped)
+        except Exception as ex:  # noqa: BLE001  （報告是出問題的時候用的，自己不能再出問題）
+            self.log(traceback.format_exc())
+            text = report.build(self.cfg["ui_lang"], [("app", {"version": __version__, "report_error": repr(ex)}),
+                                                      ("log", report.tail(self.data / "app.log", 60))], note=note)
+        self._report = text
+        return {"ok": True, "text": text, "bytes": len(text.encode("utf-8")), "lines": text.count("\n")}
+
+    def report_save(self) -> dict:
+        """把剛才給使用者看過的那一份存成文字檔（放在字幕記錄的資料夾），存好把資料夾打開。存的和看到的一字不差。"""
+        if not self._report:
+            return {"ok": False, "error": "report_none"}
+        folder = self.transcript_dir()
+        try:
+            path = report.save(folder, self._report)
+        except OSError as ex:
+            self.log(f"problem report could not be saved: {ex!r}")
+            return {"ok": False, "error": "report_failed", "detail": str(ex)}
+        self.log(f"problem report saved: {path.name}")
+        oswin.open_path(folder)
+        return {"ok": True, "path": str(path), "name": path.name, "folder": str(folder)}
+
+    def report_copy(self) -> dict:
+        if not self._report:
+            return {"ok": False, "error": "report_none"}
+        return {"ok": bool(oswin.copy_text(self._report))}
 
     # ------------------------------------------------------------------ 對話歷史
 

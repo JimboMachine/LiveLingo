@@ -234,6 +234,13 @@ class Server:
                         if body.get("undo") or body.get("forget"):
                             return self._json(service.settings_undo(forget=bool(body.get("forget"))))
                         return self._json(service.settings_import(body.get("data")))
+                    if route == "/api/report":      # 問題報告：先做出來給使用者看，他按了才存檔或複製；不會送到任何地方
+                        if body.get("save"):
+                            return self._json(service.report_save())
+                        if body.get("copy"):
+                            return self._json(service.report_copy())
+                        return self._json(service.report_make(str(body.get("note") or ""), bool(body.get("settings", True)),
+                                                              bool(body.get("log", True))))
                     if route == "/api/seen":      # 介面已經說過「更新好了」：不用再說
                         service.updated_from = ""
                         return self._json({"ok": True})

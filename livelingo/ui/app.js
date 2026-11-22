@@ -102,7 +102,7 @@
   function toast(text, ms, level) {      // level：info（預設）/ warn / error
     const el = $("toast");
     el.textContent = text;
-    el.dataset.level = level || "info";
+    el.dataset.toast = level || "info";      // 不能叫 data-level：那是音量條用的，會被 paintLevels 當成音量條改寬度
     el.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, ms || 4200);
@@ -960,7 +960,29 @@
         <div class="note ${bad ? "error" : warn ? "warn" : ""}" id="health-summary" aria-live="polite">${ICON.shield}<span>${esc(summary)}<br><small>${esc(t("h_checked", { time: new Date(h.at * 1000).toLocaleTimeString(S.cfg.ui_lang) }))}</small></span>
           <button class="ghost" data-act="health-again">${esc(t("h_again"))}</button></div>
         ${rows}
-      </section>`;
+      </section>
+      ${reportHTML()}`;
+  }
+  // 問題報告：先做出來整份給使用者看，他按了才存成檔案或複製；程式不會自己送出任何東西
+  function reportHTML() {
+    const r = S.ui.report, parts = S.ui.reportParts || (S.ui.reportParts = { settings: true, log: true });
+    const head = `<div><h2>${esc(t("rep_title"))}</h2><div class="sub">${esc(t("rep_hint"))}</div></div>`;
+    const part = (key) => `<div class="setting-row"><div><div>${esc(t("rep_part_" + key))}</div><div class="desc">${esc(t("rep_part_" + key + "_desc"))}</div></div>
+      <button class="switch" role="switch" data-act="report-part" data-key="${key}" aria-checked="${parts[key] ? "true" : "false"}" aria-label="${esc(t("rep_part_" + key))}"><span></span></button></div>`;
+    if (!r) {
+      return `<section id="report">${head}
+        <label class="rep-label" for="rep-note">${esc(t("rep_note"))}</label>
+        <textarea id="rep-note" rows="3" maxlength="2000" placeholder="${esc(t("rep_note_hint"))}"></textarea>
+        ${part("settings")}${part("log")}
+        <div class="btn-row"><button class="primary" data-act="report-make">${esc(t("rep_make"))}</button></div></section>`;
+    }
+    return `<section id="report">${head}
+      <div class="note" id="rep-unsent">${ICON.shield}<span>${esc(t("rep_unsent", { lines: r.lines, size: sizeText(r.bytes) }))}</span></div>
+      <pre id="rep-text" tabindex="0" aria-label="${esc(t("rep_title"))}">${esc(r.text)}</pre>
+      <div class="btn-row" id="rep-buttons"><button class="primary" data-act="report-save">${esc(t("rep_save"))}</button>
+        <button class="ghost" data-act="report-copy">${esc(t("rep_copy"))}</button>
+        <button class="ghost" data-act="report-back">${esc(t("rep_back"))}</button></div>
+      ${r.saved ? `<div class="note" id="rep-saved" role="status">${ICON.info}<span>${esc(t("rep_saved", { name: r.saved }))}<br><small class="path">${esc(r.folder)}</small></span></div>` : ""}</section>`;
   }
   // 儲存空間：大檔案放在哪、各佔多少、搬到別的磁碟、刪掉沒在用的
   function storagePage() {
@@ -1605,6 +1627,35 @@
       const r = await post("/api/update", { unskip: true });
       if (r && r.ok) { S.update = r; toast(t("up_unskipped"), 5000); renderSettingsPage(); }
     },
+    "report-part": (el) => { S.ui.reportParts[el.dataset.key] = !S.ui.reportParts[el.dataset.key]; renderSettingsPage(); },
+    "report-make": async () => {
+      const note = $("rep-note") ? $("rep-note").value : "";
+      S.ui.reportNote = note;
+      const r = await post("/api/report", { note, settings: S.ui.reportParts.settings, log: S.ui.reportParts.log });
+      if (!r || !r.ok) return;
+      S.ui.report = r;
+      renderSettingsPage();
+      const box = $("rep-text");
+      if (box) { box.focus(); box.scrollIntoView({ block: "nearest" }); }
+    },
+    "report-back": () => {
+      S.ui.report = null;
+      renderSettingsPage();
+      const box = $("rep-note");
+      if (box) { box.value = S.ui.reportNote || ""; box.focus(); }
+    },
+    "report-save": async () => {
+      const r = await post("/api/report", { save: true });
+      if (!r || !r.ok) { toast(t(r && r.error === "report_none" ? "n_report_none" : "n_report_failed", { error: (r && r.detail) || "" }), 8000, "warn"); return; }
+      if (S.ui.report) Object.assign(S.ui.report, { saved: r.name, folder: r.folder });
+      renderSettingsPage();
+      const note = $("rep-saved");
+      if (note) note.scrollIntoView({ block: "nearest" });
+    },
+    "report-copy": async () => {
+      const r = await post("/api/report", { copy: true });
+      toast(t(r && r.ok ? "rep_copied" : "n_report_none"), 5000, r && r.ok ? "info" : "warn");
+    },
     "health-again": async () => { await loadHealth(); const b = document.querySelector('[data-act="health-again"]'); if (b) b.focus(); },
     "hist-more": () => loadHistory(true),
     "hist-export": async () => {
@@ -1917,6 +1968,7 @@
     });
     if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();      // 還在問「確定嗎」：Esc 就是不要
     if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();
+    if (S.ui.report && S.view === "settings" && S.ui.tab === "health") actions["report-back"]();
     if (S.ui.storeAsk && S.view === "settings") actions["store-remove-no"]({ dataset: { id: S.ui.storeAsk } });
     if (S.ui.backAsk && S.view === "settings") actions["rollback-no"]();
   });
