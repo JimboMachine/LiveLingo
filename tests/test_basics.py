@@ -3040,7 +3040,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
                 blob = f"installer of {version}".encode()
                 body = _json.dumps({"tag_name": "v" + version, "assets": [{
                     "name": "LiveLingo-Setup.exe", "size": len(blob), "digest": "sha256:" + hashlib.sha256(blob).hexdigest(),
-                    "browser_download_url": f"{base}/file/{version}"}]}).encode() if version != "0.0.9" else b"{}"
+                    "browser_download_url": f"{base}/file/{version}"}]}).encode() if version != "2.0.9" else b"{}"
             elif self.path.startswith("/file/"):
                 body = f"installer of {self.path.rsplit('/', 1)[1]}".encode()
             elif self.path == "/latest":
@@ -3069,7 +3069,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
         # 指定版本的安裝檔；查不到、或回來的不是那一版
         old_info = updater.release_of(older)
         assert old_info["version"] == older and old_info["url"] == f"{base}/file/{older}" and old_info["sha256"]
-        assert updater.release_of("0.0.9") is None
+        assert updater.release_of("2.0.9") is None
 
         # 一、自動更新的那一刻：記下「從哪一版來的」和那一版安裝檔的雜湊
         service = Service(data)
@@ -3152,15 +3152,15 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
                 assert f"/tags/v{older}" in Files.hits and f"/file/{older}" in Files.hits
 
             # 那一版在 GitHub 上找不到：不動現在的版本，回到原本的畫面，說一聲
-            pretend("0.0.9", None)
+            pretend("2.0.9", None)
             launched.clear(); exits.clear()
             service.phase, service.detail = "ready", {}
             assert service.rollback()["ok"]
             deadline = time.time() + 10
             while not notices and time.time() < deadline:
                 time.sleep(0.02)
-            assert notices[-1] == ("rollback_failed", {"version": "0.0.9"}) and not launched and not exits and service.phase == "ready"
-            assert attempts.read()["from"] == "0.0.9" and "skip" not in attempts.read()
+            assert notices[-1] == ("rollback_failed", {"version": "2.0.9"}) and not launched and not exits and service.phase == "ready"
+            assert attempts.read()["from"] == "2.0.9" and "skip" not in attempts.read()
         finally:
             service.shutdown()
 
