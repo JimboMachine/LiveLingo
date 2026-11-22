@@ -364,6 +364,7 @@ def run(out: Path, window: bool = True) -> int:
         service, srv = state["service"], state["server"]
         info: dict = {}
         done = threading.Event()
+        closed = threading.Event()
 
         def snap(name: str) -> None:
             import mss
@@ -418,6 +419,7 @@ def run(out: Path, window: bool = True) -> int:
                 info["error"] = traceback.format_exc()[-1500:]
             finally:
                 done.set()
+                service.tray.stop()      # 系統匣圖示開著的時候，關視窗只會把它藏起來，這裡要真的關掉
                 try:
                     win.destroy()
                 except Exception:  # noqa: BLE001
@@ -428,10 +430,15 @@ def run(out: Path, window: bool = True) -> int:
                 results["window"] = {"ok": False, "error": "the window did not load within 90 seconds", "info": info}
                 save()
                 os._exit(1)
+            if not closed.wait(30):      # 檢查做完了，視窗卻關不掉：記下來並結束，不要卡住整個檢查
+                results["window"] = {"ok": False, "error": "the window did not close within 30 seconds", "info": info}
+                save()
+                os._exit(1)
 
         threading.Thread(target=watchdog, daemon=True).start()
         started = time.time()
         opened = window_mod._run_webview(srv.url, service, on_loaded)
+        closed.set()
         ok = bool(opened and done.is_set() and "error" not in info and len(info.get("wizard_text", "")) > 20
                   and info.get("cards") == len(UI_LANGS) and info.get("has_window_ctl"))
         results["window"] = {"ok": ok, "info": info, "opened": opened, "seconds": round(time.time() - started, 2)}
