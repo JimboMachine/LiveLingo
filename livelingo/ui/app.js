@@ -1313,7 +1313,7 @@
         <button data-act="rollback-yes">${esc(t("up_back_yes"))}</button><button class="ghost" data-act="rollback-no">${esc(t("cancel"))}</button></div>`;
     } else if (p) {
       html += `<div class="setting-row store-row" id="up-back"><div class="health-text"><div>${esc(t("up_back_row", { version: p.version }))}</div>
-        <div class="desc">${esc(t(p.kept ? "up_back_kept" : "up_back_fetch"))}</div></div>
+        <div class="desc">${esc(t("up_back_fetch"))}</div></div>
         <button class="ghost" data-act="rollback">${esc(t("up_back", { version: p.version }))}</button></div>`;
     }
     return html ? `<section id="about-update">${html}</section>` : "";

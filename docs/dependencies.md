@@ -132,8 +132,9 @@
 4. `updater.py`：比較版本、下載、靜默安裝
 5. `service.py`、`config.py`、`app.js`、`README.md`、`guide.py`：開啟時要不要檢查更新是設定（update_check）；會連網路的地方變多或變少時，關於頁、README、說明頁那幾句要一起改
 6. `changes.py`：data/changes.json 要有新版本那一段，五種語言、句數一樣；更新提示、關於頁、GitHub 發行說明都讀它
-7. `updater.py`、`service.py`：回上一版：update.json 記「從哪一版來的」，留著的安裝檔要核對雜湊才用；新版加了舊版不認得的東西（像搬過位置的大檔案），退回之前要先處理（STORE_BEFORE）
-8. `installer.iss`：[Files] 要有 ignoreversion，裝舊版才換得掉新版的檔案
+7. `updater.py`、`service.py`、`build.yml`：用過的安裝檔不留著：新版一開就刪（updater.tidy、_installers_cleanup），剛跑完的那一個等安裝程式結束再試；比現在新的（還沒裝的更新）不能刪。Windows 安裝測試會真的看它有沒有被刪掉
+8. `updater.py`、`service.py`、`app.js`、`i18n.js`：回上一版：update.json 記「從哪一版來的」，退回時重新下載那一版、核對雜湊才裝（介面和儲存空間頁的說明要跟著這個說法）；新版加了舊版不認得的東西（像搬過位置的大檔案），退回之前要先處理（STORE_BEFORE）
+9. `installer.iss`：[Files] 要有 ignoreversion，裝舊版才換得掉新版的檔案
 
 自動把關：測試會擋：更新程式下載的檔名和發佈的檔名不一樣。自動打包會真的安裝、更新、卸載一次。
 

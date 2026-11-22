@@ -135,7 +135,7 @@ class Attempts:
             return False
 
     def record(self, version: str, **more) -> None:
-        """more：skip（之後不要再問的版本）、rollback（這次是退回）、from_sha256（現在這一版安裝檔的雜湊，退回時核對）。"""
+        """more：skip（之後不要再問的版本）、rollback（這次是退回）。"""
         try:
             self.path.write_text(json.dumps({"version": version, "at": time.time(), "from": __version__, **more}), encoding="utf-8")
         except OSError:
@@ -155,28 +155,39 @@ def sha256_of(path: Path) -> str:
 
 
 def previous(data: Path) -> dict | None:
-    """可以退回去的上一版：{"version", "kept"（安裝檔還留著，不用再下載）, "bytes"}。
+    """可以退回去的上一版：{"version"}。退回的時候重新下載那一版的安裝檔（用過的安裝檔不留著，見 tidy）。
     沒有可以退的（沒有自動更新過、現在就是退回來的、或上一版太舊）回傳 None。"""
     last = Attempts(data).read()
     older = str(last.get("from") or "")
     floor = os.environ.get("LIVELINGO_ROLLBACK_FLOOR") or ROLLBACK_FLOOR      # 環境變數是給測試用的
     if last.get("version") != __version__ or not older or not is_newer(__version__, older) or is_newer(floor, older):
         return None
-    path = kept_installer(data, older, last)
-    return {"version": older, "kept": bool(path), "bytes": path.stat().st_size if path else 0}
+    return {"version": older}
 
 
-def kept_installer(data: Path, version: str, last: dict | None = None) -> Path | None:
-    """上一版的安裝檔還留著、而且跟當初下載的一模一樣（雜湊對得上）才回傳；不然回傳 None（要重新下載）。"""
-    last = Attempts(data).read() if last is None else last
-    path = installer_path(data / "update", version)
-    want = str(last.get("from_sha256") or "")
-    try:
-        if last.get("from") == version and want and path.is_file() and sha256_of(path) == want:
-            return path
-    except OSError:
-        pass
-    return None
+def tidy(data: Path, only: list | None = None) -> tuple[int, list[Path]]:
+    """
+    新版開起來之後，把用過的安裝檔刪掉（一個一百多 MB，以前會一直留在 update 資料夾裡）。
+    刪的是：版本不比現在新的（剛裝完的這一版、更早的版本），還有使用者退掉、不會再裝的那一版；連沒下載完的 .part 一起。
+    比現在新的不碰：那是下載好還沒裝、或下載到一半的更新。update.json 和安裝紀錄也不碰。
+    only：只再試這幾個檔（上一次刪不掉的）。回傳（刪掉了多少位元組, 還刪不掉的檔案）。
+    剛更新完的那一刻，安裝程式自己還沒結束，它的檔案在 Windows 上刪不掉，所以要晚一點再試一次。
+    """
+    folder, freed, left = data / "update", 0, []
+    dropped = skipped(data)
+    for path in (only if only is not None else sorted(folder.glob("LiveLingo-Setup-*"))):
+        match = re.fullmatch(r"LiveLingo-Setup-(\d+(?:\.\d+)*)\.exe(?:\.part)?", path.name)
+        if not match or path.parent != folder or not path.is_file():
+            continue
+        if is_newer(match.group(1)) and match.group(1) != dropped:
+            continue
+        try:
+            size = path.stat().st_size
+            path.unlink()
+            freed += size
+        except OSError:
+            left.append(path)
+    return freed, left
 
 
 def skipped(data: Path) -> str:
@@ -199,9 +210,8 @@ def download(info: dict, folder: Path, progress=None, cancel=None) -> Path:
     """下載安裝檔並核對大小和雜湊，回傳檔案位置。"""
     folder.mkdir(parents=True, exist_ok=True)
     dest = installer_path(folder, info["version"])
-    keep = installer_path(folder, __version__).name      # 現在這一版的安裝檔留著：更新之後想回上一版，不用再下載
-    for old in folder.glob("LiveLingo-Setup-*"):
-        if old.name not in (dest.name, dest.name + ".part", keep):
+    for old in folder.glob("LiveLingo-Setup-*"):      # 別的版本的安裝檔都用不到了
+        if old.name not in (dest.name, dest.name + ".part"):
             try:
                 old.unlink()
             except OSError:

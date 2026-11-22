@@ -7,7 +7,7 @@
       "讀螢幕：換行的聊天會合成一句再翻；同一句話再出現一次也會翻；讀到全黑的畫面會告訴你原因。",
       "翻譯失敗時用看得懂的話說原因，可以直接按「重試」；翻譯引擎意外停止會自動重開。",
       "耳機拔掉或藍牙斷線之後會自動重新連接，不用自己再按一次；浮動字幕的停留時間會跟著句子長度變長。",
-      "卸載時可以選擇留下設定和歷史；可以在「關於」關掉自動檢查更新。",
+      "卸載時可以選擇留下設定和歷史；可以在「關於」關掉自動檢查更新；更新完會自動刪掉用過的安裝檔（一個一百多 MB）。",
       "下載的模型和翻譯引擎固定版本並逐一核對，翻譯引擎只接受 LiveLingo 自己的連線。"
     ],
     "zh-CN": [
@@ -17,7 +17,7 @@
       "读屏幕：换行的聊天会合成一句再翻；同一句话再出现一次也会翻；读到全黑的画面会告诉你原因。",
       "翻译失败时用看得懂的话说原因，可以直接按“重试”；翻译引擎意外停止会自动重开。",
       "耳机拔掉或蓝牙断线之后会自动重新连接，不用自己再按一次；浮动字幕的停留时间会跟着句子长度变长。",
-      "卸载时可以选择留下设置和历史；可以在“关于”关掉自动检查更新。",
+      "卸载时可以选择留下设置和历史；可以在“关于”关掉自动检查更新；更新完会自动删掉用过的安装文件（一个一百多 MB）。",
       "下载的模型和翻译引擎固定版本并逐一核对，翻译引擎只接受 LiveLingo 自己的连接。"
     ],
     "en": [
@@ -27,7 +27,7 @@
       "Screen reading: wrapped chat lines are joined into one sentence; a sentence that appears again is translated again; a black capture now tells you why.",
       "A failed translation explains the reason in plain words with a “Try again” button; the translation engine restarts by itself if it stops.",
       "After a headset is unplugged or Bluetooth drops, listening reconnects by itself; floating captions stay longer for longer sentences.",
-      "Uninstalling can keep your settings and history; the automatic update check can be turned off in About.",
+      "Uninstalling can keep your settings and history; the automatic update check can be turned off in About; used installers (over 100 MB each) are removed after updating.",
       "Downloaded models and the translation engine are pinned to fixed versions and verified, and the engine only accepts LiveLingo's own connection."
     ],
     "ko": [
@@ -37,7 +37,7 @@
       "화면 읽기: 줄이 바뀐 채팅을 한 문장으로 합쳐 번역하고, 같은 문장이 다시 나와도 번역하며, 화면이 검게 잡히면 이유를 알려 줍니다.",
       "번역에 실패하면 이유를 알기 쉬운 말로 알려 주고 ‘다시 시도’ 버튼이 나옵니다. 번역 엔진이 멈추면 자동으로 다시 시작합니다.",
       "헤드셋을 뽑거나 블루투스가 끊긴 뒤에는 자동으로 다시 연결합니다. 문장이 길수록 떠 있는 자막이 더 오래 표시됩니다.",
-      "제거할 때 설정과 기록을 남길 수 있고, ‘정보’에서 자동 업데이트 확인을 끌 수 있습니다.",
+      "제거할 때 설정과 기록을 남길 수 있고, ‘정보’에서 자동 업데이트 확인을 끌 수 있습니다. 업데이트가 끝나면 사용한 설치 파일(100 MB 이상)을 자동으로 지웁니다.",
       "내려받는 모델과 번역 엔진은 정해진 버전으로 고정하고 하나씩 검증하며, 번역 엔진은 LiveLingo의 연결만 받습니다."
     ],
     "ja": [
@@ -47,7 +47,7 @@
       "画面の読み取り：折り返されたチャットは一文にまとめて翻訳し、同じ文がもう一度出ても翻訳し、画面が真っ黒に写るときは理由を知らせます。",
       "翻訳に失敗したときは理由を分かりやすい言葉で示し、「再試行」ボタンが出ます。翻訳エンジンが止まると自動で再起動します。",
       "ヘッドセットを抜いたり Bluetooth が切れたりしても、自動でつなぎ直します。浮かぶ字幕は、文が長いほど長く表示されます。",
-      "アンインストール時に設定と履歴を残せます。「このアプリについて」で更新の自動確認をオフにできます。",
+      "アンインストール時に設定と履歴を残せます。「このアプリについて」で更新の自動確認をオフにできます。更新が終わると、使い終わったインストーラー（100 MB 以上）を自動で削除します。",
       "ダウンロードするモデルと翻訳エンジンはバージョンを固定して一つずつ検証し、翻訳エンジンは LiveLingo 自身の接続だけを受け付けます。"
     ]
   },

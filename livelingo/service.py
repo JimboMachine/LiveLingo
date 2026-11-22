@@ -44,6 +44,7 @@ VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也�
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
 VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
 PARTIAL_EVERY = 0.08      # 譯文邊翻邊顯示：最快多久更新一次畫面（秒）
+INSTALLER_RETRY = (20.0, 60.0, 300.0)      # 剛更新完刪不掉的安裝檔（安裝程式還沒結束）：隔這麼久再試（秒）
 RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔幾秒再試一次；全部試完（大約兩分鐘）還不行才放棄
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
@@ -326,6 +327,7 @@ class Service:
 
     def _boot(self) -> None:
         try:
+            self._installers_cleanup()
             if self._update_if_needed():
                 return
             self.overlay.apply()
@@ -395,8 +397,7 @@ class Service:
             if self._update_stop.is_set():
                 raise assets.DownloadError("cancelled")
             self.set_phase("updating", step="installing", version=info["version"])
-            kept = updater.installer_path(self.data / "update", __version__)      # 現在這一版的安裝檔（有的話）：留著，之後可以直接退回來
-            attempts.record(info["version"], **({"from_sha256": updater.sha256_of(kept)} if kept.is_file() else {}))
+            attempts.record(info["version"])
             updater.launch_installer(path)
         except Exception as ex:  # noqa: BLE001
             if self._update_stop.is_set():
@@ -433,23 +434,22 @@ class Service:
     def _rollback_work(self, prev: dict) -> None:
         version, before = prev["version"], (self.phase, dict(self.detail))
         try:
-            path = updater.kept_installer(self.data, version)
-            if not path:      # 沒留著（第一次是自己下載安裝的），或檔案跟當初的不一樣：重新下載
-                self.set_phase("updating", step="downloading", version=version, percent=0, back=True)
-                last = [0.0]
+            # 用過的安裝檔不留著（_installers_cleanup）：退回的時候重新下載那一版，核對過才裝
+            self.set_phase("updating", step="downloading", version=version, percent=0, back=True)
+            last = [0.0]
 
-                def progress(done, total):
-                    if time.time() - last[0] > 0.4 and total:
-                        last[0] = time.time()
-                        self.set_phase("updating", step="downloading", version=version, percent=int(done * 100 / total), back=True)
+            def progress(done, total):
+                if time.time() - last[0] > 0.4 and total:
+                    last[0] = time.time()
+                    self.set_phase("updating", step="downloading", version=version, percent=int(done * 100 / total), back=True)
 
-                info = updater.release_of(version)
-                if not info:
-                    raise assets.DownloadError(f"version {version} was not found")
-                updater.installer_path(self.data / "update", version).unlink(missing_ok=True)      # 跟當初不一樣的那個檔不能用：丟掉重新下載
-                path = updater.download(info, self.data / "update", progress, cancel=self._update_stop.is_set)
-                if self._update_stop.is_set():
-                    raise assets.DownloadError("cancelled")
+            info = updater.release_of(version)
+            if not info:
+                raise assets.DownloadError(f"version {version} was not found")
+            updater.installer_path(self.data / "update", version).unlink(missing_ok=True)      # 萬一有同名的舊檔：不用它，重新下載
+            path = updater.download(info, self.data / "update", progress, cancel=self._update_stop.is_set)
+            if self._update_stop.is_set():
+                raise assets.DownloadError("cancelled")
             self.set_phase("updating", step="installing", version=version, back=True)
             self._settings_copy()
             updater.Attempts(self.data).record(version, skip=__version__, rollback=True)
@@ -1654,6 +1654,32 @@ class Service:
                 left.append(str(p))
         if left != list(self.cfg["store_leftover"] or []):
             self.cfg.set(store_leftover=left)
+
+    def _installers_cleanup(self) -> None:
+        """新版開起來之後刪掉用過的安裝檔。剛更新完時安裝程式還沒結束，它自己那個檔刪不掉：過一下再試兩次，還不行就等下次開。"""
+        try:
+            freed, left = updater.tidy(self.data)
+        except Exception as ex:  # noqa: BLE001  （清不掉不能讓程式開不起來）
+            self.log(f"could not remove used installers: {ex!r}")
+            return
+        if freed:
+            self.log(f"removed used installers: {freed // (1 << 20)} MB")
+        if not left:
+            return
+
+        def later():
+            nonlocal left
+            for wait in INSTALLER_RETRY:
+                if self.closing.wait(wait) or not left:
+                    return
+                if self.phase == "updating":      # 正在更新或退回：update 資料夾現在不能碰
+                    continue
+                freed, left = updater.tidy(self.data, only=left)
+                if freed:
+                    self.log(f"removed used installers: {freed // (1 << 20)} MB")
+                    self._storage_changed()
+
+        threading.Thread(target=later, daemon=True, name="installers").start()
 
     def storage_remove(self, item_id: str) -> dict:
         """刪掉一樣沒在用的東西（另一個品質的模型、另一種引擎、下載過的更新檔、沒下載完的檔案）。"""

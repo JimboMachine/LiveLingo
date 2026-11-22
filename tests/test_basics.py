@@ -3087,7 +3087,7 @@ def test_update_prompt_says_what_changed(tmp_path, monkeypatch):
 
 
 def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
-    """第 47 項：更新之後留著上一版的安裝檔，可以一鍵退回；退回之後不再問要不要更新到被退掉的那一版。"""
+    """第 47 項：更新之後可以一鍵退回上一版（重新下載那一版的安裝檔，核對過才裝）；退回之後不再問要不要更新到被退掉的那一版。"""
     import hashlib
     import json as _json
     from pathlib import Path
@@ -3104,7 +3104,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
     attempts = updater.Attempts(data)
     assert attempts.read() == {} and updater.previous(data) is None and updater.skipped(data) == ""
 
-    # 下載新版的時候：現在這一版的安裝檔要留著，更舊的才刪
+    # 下載新版的時候：別的版本的安裝檔都用不到了，刪掉
     current_setup = updater.installer_path(data / "update", __version__)
     current_setup.write_bytes(b"this version's installer")
     (data / "update" / "LiveLingo-Setup-1.0.0.exe").write_bytes(b"ancient")
@@ -3148,14 +3148,14 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
     try:
         info = updater.check()
         got = updater.download(info, data / "update")
-        assert got.read_bytes() == payload and current_setup.exists() and not (data / "update" / "LiveLingo-Setup-1.0.0.exe").exists()
+        assert got.read_bytes() == payload and not current_setup.exists() and not (data / "update" / "LiveLingo-Setup-1.0.0.exe").exists()
         got.unlink()
         # 指定版本的安裝檔；查不到、或回來的不是那一版
         old_info = updater.release_of(older)
         assert old_info["version"] == older and old_info["url"] == f"{base}/file/{older}" and old_info["sha256"]
         assert updater.release_of("2.0.9") is None
 
-        # 一、自動更新的那一刻：記下「從哪一版來的」和那一版安裝檔的雜湊
+        # 一、自動更新的那一刻：記下「從哪一版來的」
         service = Service(data)
         exits = []
         service.exit_now = lambda: exits.append(True)
@@ -3176,12 +3176,11 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
                 time.sleep(0.02)
             assert done == [True] and launched == [updater.installer_path(data / "update", newer)] and exits == [True]
             last = attempts.read()
-            assert last["version"] == newer and last["from"] == __version__ and last["from_sha256"] == hashlib.sha256(b"this version's installer").hexdigest()
-            assert current_setup.exists()      # 留著，之後退回來不用下載
+            assert last["version"] == newer and last["from"] == __version__ and "from_sha256" not in last
         finally:
             service.shutdown()
 
-        # 二、假裝現在是新版（剛從 older 更新上來），上一版的安裝檔留著
+        # 二、假裝現在是新版（剛從 older 更新上來）。update 資料夾裡就算有同名的舊檔也不用它
         def pretend(from_version: str, blob: bytes | None, **more) -> None:
             for p in (data / "update").glob("LiveLingo-Setup-*"):
                 p.unlink()
@@ -3189,12 +3188,12 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
                 updater.installer_path(data / "update", from_version).write_bytes(blob)
             attempts.path.write_text(_json.dumps({"version": __version__, "at": time.time(), "from": from_version, **more}), encoding="utf-8")
 
-        kept = b"installer of the version before"
-        pretend(older, kept, from_sha256=hashlib.sha256(kept).hexdigest())
+        kept = b"some old file with the same name"
+        pretend(older, kept)
         # 比 ROLLBACK_FLOOR 舊的版本不提供（它不認得這一版加的東西，退回去會出事）
         assert updater.is_newer(updater.ROLLBACK_FLOOR, older) and updater.previous(data) is None
         monkeypatch.setenv("LIVELINGO_ROLLBACK_FLOOR", "2.0.0")      # 以下假裝上一版夠新
-        assert updater.previous(data) == {"version": older, "kept": True, "bytes": len(kept)}
+        assert updater.previous(data) == {"version": older}
         assert updater.just_updated(data) == older and updater.just_updated(data) == ""
         launched.clear()
         Files.hits.clear()
@@ -3205,7 +3204,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
         monkeypatch.setattr("livelingo.service.oswin.open_path", lambda p: None)
         try:
             service.phase = "ready"
-            assert service.state()["update"]["previous"] == {"version": older, "kept": True, "bytes": len(kept)}
+            assert service.state()["update"]["previous"] == {"version": older}
             service.phase = "downloading"
             assert service.rollback()["error"] == "store_busy"
             service.phase = "ready"
@@ -3215,17 +3214,18 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
             while not exits and time.time() < deadline:
                 time.sleep(0.02)
             assert exits == [True] and launched == [updater.installer_path(data / "update", older)]
-            assert not any(h.startswith(("/tags/", "/file/")) for h in Files.hits)      # 用留著的，沒有下載
+            assert f"/tags/v{older}" in Files.hits and f"/file/{older}" in Files.hits      # 重新下載那一版
+            assert launched[0].read_bytes() == f"installer of {older}".encode()      # 裝的是核對過的那一份，不是資料夾裡原本的同名檔
             last = attempts.read()
             assert last["version"] == older and last["from"] == __version__ and last["skip"] == __version__ and last["rollback"] is True
             assert service.phase == "updating" and service.detail == {"step": "installing", "version": older, "back": True}
             copy = service.transcript_dir() / f"LiveLingo-settings-{__version__}-before-rollback.json"      # 設定另外存了一份
             assert _json.loads(copy.read_text(encoding="utf-8"))["config"]["theme"] == "light"
 
-            # 留著的安裝檔被動過（雜湊不對）或不見了：重新下載、核對過才裝
+            # 資料夾裡有沒有同名的檔都一樣：重新下載、核對過才裝
             for blob in (b"tampered", None):
-                pretend(older, blob, from_sha256=hashlib.sha256(kept).hexdigest())
-                assert updater.previous(data) == {"version": older, "kept": False, "bytes": 0}
+                pretend(older, blob)
+                assert updater.previous(data) == {"version": older}
                 launched.clear(); exits.clear(); Files.hits.clear()
                 service.phase, service.detail = "ready", {}
                 assert service.rollback()["ok"]
@@ -3280,6 +3280,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
     assert updater.parse_version(updater.ROLLBACK_FLOOR) >= (2, 3, 0)      # 2.3.0 之前的版本不認得 --remove-store 和搬過位置的大檔案
     ci = (root.parent / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
     assert '"rollback": True' in ci and "LIVELINGO_ROLLBACK_FLOOR" in ci      # Windows 上真的退一次
+    assert "LIVELINGO_RELEASE_API" in ci and "the used installer to be removed" in ci and "from_sha256" not in ci      # 退回要重新下載；用過的安裝檔要刪掉
     js = (root / "ui" / "app.js").read_text(encoding="utf-8")
     for piece in ('post("/api/update", { rollback: true })', 'post("/api/update", { unskip: true })', 'data-act="rollback-yes"', "up_back_downloading"):
         assert piece in js, piece
@@ -4984,3 +4985,90 @@ def test_speakers_are_told_apart(tmp_path, monkeypatch):
     assert row["removable"] and storage.remove_item(tmp_path, store, "voice") and not path.exists()
     source = Path("livelingo/service.py").read_text(encoding="utf-8")
     assert 'voices=self._voices_now if key == "listen" else None' in source      # 只分對方說的話
+
+
+def test_used_installers_are_removed_after_updating(tmp_path, monkeypatch):
+    """更新完，用過的安裝檔（一個一百多 MB）要刪掉，不能一直留在 update 資料夾；下載好還沒裝的不能碰。"""
+    import json as _json
+    from pathlib import Path
+
+    import livelingo.service as service_mod
+    from livelingo import __version__, updater
+    from livelingo.service import Service
+
+    parts = updater.parse_version(__version__)
+    newer = ".".join(str(n) for n in (*parts[:2], parts[2] + 1))
+    newest = ".".join(str(n) for n in (*parts[:2], parts[2] + 2))
+    data = tmp_path / "data"
+    folder = data / "update"
+    folder.mkdir(parents=True)
+    assert updater.tidy(tmp_path / "nowhere") == (0, [])      # 沒有那個資料夾也不會出事
+
+    def fill():
+        files = {f"LiveLingo-Setup-{__version__}.exe": 1000, "LiveLingo-Setup-2.2.1.exe": 900, "LiveLingo-Setup-2.2.1.exe.part": 50,
+                 f"LiveLingo-Setup-{newer}.exe": 800, f"LiveLingo-Setup-{newest}.exe.part": 70,
+                 "install.log": 10, "LiveLingo-Setup-notes.txt": 5, "LiveLingo-Setup-abc.exe": 5}
+        for name, size in files.items():
+            (folder / name).write_bytes(b"x" * size)
+        (folder / f"LiveLingo-Setup-{__version__}.exe.d").mkdir(exist_ok=True)      # 不是檔案的不碰
+
+    def names():
+        return sorted(p.name for p in folder.iterdir())
+
+    # 剛從 2.2.1 更新上來：這一版和更舊的安裝檔刪掉；比現在新的（下載好還沒裝、下載到一半）和別的檔都留著
+    fill()
+    (data / "update.json").write_text(_json.dumps({"version": __version__, "at": 1.0, "from": "2.2.1"}), encoding="utf-8")
+    freed, left = updater.tidy(data)
+    assert (freed, left) == (1950, [])
+    assert names() == sorted([f"LiveLingo-Setup-{newer}.exe", f"LiveLingo-Setup-{newest}.exe.part", "install.log", "LiveLingo-Setup-notes.txt",
+                              "LiveLingo-Setup-abc.exe", f"LiveLingo-Setup-{__version__}.exe.d"])
+    assert (data / "update.json").exists() and updater.previous(data) is None      # 2.2.1 太舊，本來就不能退；紀錄檔沒被動到
+    assert updater.tidy(data) == (0, [])
+
+    # 剛從 newer 退回來：被退掉的那一版不會再裝，它的安裝檔也刪
+    fill()
+    (data / "update.json").write_text(_json.dumps({"version": __version__, "at": 1.0, "from": newer, "skip": newer, "rollback": True}), encoding="utf-8")
+    assert updater.tidy(data)[0] == 1950 + 800 and f"LiveLingo-Setup-{newer}.exe" not in names() and f"LiveLingo-Setup-{newest}.exe.part" in names()
+    (data / "update.json").unlink()
+
+    # 程式一開就清；安裝程式還沒結束、它自己那個檔刪不掉的話，過一下再試，刪掉了儲存空間頁要跟著更新
+    monkeypatch.setattr(service_mod, "INSTALLER_RETRY", (0.05, 0.05, 0.05))
+    fill()
+    busy = {"on": True, "tries": 0}
+    mine, real_unlink = folder / f"LiveLingo-Setup-{__version__}.exe", Path.unlink
+
+    def unlink(self, *args, **kw):
+        if self == mine and busy["on"]:
+            busy["tries"] += 1
+            raise PermissionError(13, "in use")
+        return real_unlink(self, *args, **kw)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    service = Service(data)
+    logs, events = [], []
+    service.log = lambda text: logs.append(text)
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, payload=None: (events.append(kind), old_publish(kind, payload))[1])
+    try:
+        service.phase = "updating"                        # 正在更新或退回的時候不能碰 update 資料夾
+        service._installers_cleanup()
+        assert mine.exists() and not (folder / "LiveLingo-Setup-2.2.1.exe").exists() and (folder / f"LiveLingo-Setup-{newer}.exe").exists()
+        assert busy["tries"] == 1 and logs == ["removed used installers: 0 MB"]
+        time.sleep(0.12)
+        assert mine.exists() and busy["tries"] == 1
+        service.phase = "ready"
+        busy["on"] = False
+        deadline = time.time() + 5
+        while mine.exists() and time.time() < deadline:
+            time.sleep(0.02)
+        assert not mine.exists() and (folder / f"LiveLingo-Setup-{newer}.exe").exists()
+        deadline = time.time() + 2
+        while "storage" not in events and time.time() < deadline:
+            time.sleep(0.02)
+        assert "storage" in events
+    finally:
+        service.closing.set()
+    source = Path("livelingo/service.py").read_text(encoding="utf-8")
+    boot = source[source.index("    def _boot(self)"):source.index("    def _boot(self)") + 400]
+    assert boot.index("self._installers_cleanup()") < boot.index("self._update_if_needed()")      # 先清，再看要不要更新
+    assert "up_back_kept" not in Path("livelingo/ui/i18n.js").read_text(encoding="utf-8")      # 介面不再說「安裝檔還留著」
