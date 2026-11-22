@@ -18,7 +18,13 @@ from . import __version__
 from .assets import DownloadError, fetch
 
 RELEASE_API = "https://api.github.com/repos/JimboMachine/LiveLingo/releases/latest"
+TAG_API = "https://api.github.com/repos/JimboMachine/LiveLingo/releases/tags/v{version}"      # 某一個舊版本（回上一版用）
 ASSET_NAME = "LiveLingo-Setup.exe"
+NOTES_NAME = "changes.json"   # 跟安裝檔一起發行的「每一版改了什麼」
+NOTES_LIMIT = 200_000
+# 最舊可以退回到哪一版。比這更舊的版本不認得之後才有的東西（搬過位置的大檔案、卸載時叫程式清東西的參數），
+# 退回去會出事（要重新下載模型、卸載會卡住），所以不提供。之後新版如果又加了舊版不認得的東西，要把這個數字往上調。
+ROLLBACK_FLOOR = "2.3.0"
 RETRY_AFTER = 30 * 60     # 同一個版本裝了還是舊的話，隔這麼久才再試（避免一直重裝重開）
 
 
@@ -44,39 +50,158 @@ def enabled() -> bool:
     return bool(os.environ.get("LIVELINGO_UPDATE_API")) or (sys.platform == "win32" and getattr(sys, "frozen", False))
 
 
-def check(timeout: float = 8) -> dict | None:
-    """有新版本就回傳 {"version", "url", "size", "sha256"}，沒有或查不到就回傳 None。"""
-    req = urllib.request.Request(api_url(), headers={"User-Agent": "LiveLingo", "Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        rel = json.loads(r.read().decode("utf-8"))
-    tag = rel.get("tag_name") or ""
-    if rel.get("draft") or rel.get("prerelease") or not is_newer(tag):
-        return None
+def _installer(rel: dict) -> dict | None:
+    """從 GitHub 的一筆發行資料裡找出安裝檔：{"version", "url", "size", "sha256", "notes_url"}。"""
+    notes_url = next((a.get("browser_download_url") or "" for a in rel.get("assets", []) if a.get("name") == NOTES_NAME), "")
     for a in rel.get("assets", []):
         if a.get("name") == ASSET_NAME:
             digest = a.get("digest") or ""
-            return {"version": ".".join(str(n) for n in parse_version(tag)), "url": a["browser_download_url"],
-                    "size": int(a.get("size") or 0),
+            return {"version": ".".join(str(n) for n in parse_version(rel.get("tag_name") or "")), "url": a["browser_download_url"],
+                    "size": int(a.get("size") or 0), "notes_url": notes_url,
                     "sha256": digest.split(":", 1)[1].lower() if digest.startswith("sha256:") else ""}
     return None
 
 
+def _release(url: str, timeout: float) -> dict:
+    req = urllib.request.Request(url, headers={"User-Agent": "LiveLingo", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def check(timeout: float = 8) -> dict | None:
+    """有新版本就回傳 {"version", "url", "size", "sha256", "notes_url"}，沒有或查不到就回傳 None。"""
+    rel = _release(api_url(), timeout)
+    if rel.get("draft") or rel.get("prerelease") or not is_newer(rel.get("tag_name") or ""):
+        return None
+    return _installer(rel)
+
+
+def release_of(version: str, timeout: float = 8) -> dict | None:
+    """某一個指定版本的安裝檔在哪（回上一版、安裝檔沒留著的時候用）。查不到會丟出例外或回傳 None。"""
+    rel = _release((os.environ.get("LIVELINGO_RELEASE_API") or TAG_API).format(version=version), timeout)
+    info = _installer(rel)
+    return info if info and parse_version(info["version"]) == parse_version(version) else None
+
+
+def fetch_notes(url: str, timeout: float = 6) -> dict:
+    """新版本改了什麼（跟安裝檔一起發行的 changes.json）。拿不到、太大、看不懂都回傳空的：沒有說明也照樣可以更新。"""
+    if not url:
+        return {}
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "LiveLingo"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read(NOTES_LIMIT + 1)
+        if len(raw) > NOTES_LIMIT:
+            return {}
+        from .changes import clean
+
+        return clean(json.loads(raw.decode("utf-8")))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def just_updated(folder: Path) -> str:
+    """剛剛是不是自動更新（或退回）完第一次開：是的話回傳之前的版本號（只會說一次），不是回傳空字串。"""
+    path = folder / "update.json"
+    try:
+        last = json.loads(path.read_text(encoding="utf-8"))
+        if last.get("version") != __version__ or last.get("told") or not last.get("from") or last["from"] == __version__:
+            return ""
+        last["told"] = True
+        path.write_text(json.dumps(last), encoding="utf-8")
+        return str(last["from"])
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 class Attempts:
-    """記住上次試著更新到哪一版，裝完還是舊版的話不要馬上再試。"""
+    """記住上次更新（或退回）到哪一版、從哪一版來的。裝完還是舊版的話不要馬上再試。"""
 
     def __init__(self, folder: Path):
         self.path = folder / "update.json"
 
-    def recently_tried(self, version: str) -> bool:
+    def read(self) -> dict:
         try:
             last = json.loads(self.path.read_text(encoding="utf-8"))
-            return last.get("version") == version and time.time() - float(last.get("at", 0)) < RETRY_AFTER
+            return last if isinstance(last, dict) else {}
         except Exception:  # noqa: BLE001
+            return {}
+
+    def recently_tried(self, version: str) -> bool:
+        last = self.read()
+        try:
+            return last.get("version") == version and time.time() - float(last.get("at", 0)) < RETRY_AFTER
+        except (TypeError, ValueError):
             return False
 
-    def record(self, version: str) -> None:
+    def record(self, version: str, **more) -> None:
+        """more：skip（之後不要再問的版本）、rollback（這次是退回）。"""
         try:
-            self.path.write_text(json.dumps({"version": version, "at": time.time(), "from": __version__}), encoding="utf-8")
+            self.path.write_text(json.dumps({"version": version, "at": time.time(), "from": __version__, **more}), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def installer_path(folder: Path, version: str) -> Path:
+    return folder / f"LiveLingo-Setup-{version}.exe"
+
+
+def sha256_of(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def previous(data: Path) -> dict | None:
+    """可以退回去的上一版：{"version"}。退回的時候重新下載那一版的安裝檔（用過的安裝檔不留著，見 tidy）。
+    沒有可以退的（沒有自動更新過、現在就是退回來的、或上一版太舊）回傳 None。"""
+    last = Attempts(data).read()
+    older = str(last.get("from") or "")
+    floor = os.environ.get("LIVELINGO_ROLLBACK_FLOOR") or ROLLBACK_FLOOR      # 環境變數是給測試用的
+    if last.get("version") != __version__ or not older or not is_newer(__version__, older) or is_newer(floor, older):
+        return None
+    return {"version": older}
+
+
+def tidy(data: Path, only: list | None = None) -> tuple[int, list[Path]]:
+    """
+    新版開起來之後，把用過的安裝檔刪掉（一個一百多 MB，以前會一直留在 update 資料夾裡）。
+    刪的是：版本不比現在新的（剛裝完的這一版、更早的版本），還有使用者退掉、不會再裝的那一版；連沒下載完的 .part 一起。
+    比現在新的不碰：那是下載好還沒裝、或下載到一半的更新。update.json 和安裝紀錄也不碰。
+    only：只再試這幾個檔（上一次刪不掉的）。回傳（刪掉了多少位元組, 還刪不掉的檔案）。
+    剛更新完的那一刻，安裝程式自己還沒結束，它的檔案在 Windows 上刪不掉，所以要晚一點再試一次。
+    """
+    folder, freed, left = data / "update", 0, []
+    dropped = skipped(data)
+    for path in (only if only is not None else sorted(folder.glob("LiveLingo-Setup-*"))):
+        match = re.fullmatch(r"LiveLingo-Setup-(\d+(?:\.\d+)*)\.exe(?:\.part)?", path.name)
+        if not match or path.parent != folder or not path.is_file():
+            continue
+        if is_newer(match.group(1)) and match.group(1) != dropped:
+            continue
+        try:
+            size = path.stat().st_size
+            path.unlink()
+            freed += size
+        except OSError:
+            left.append(path)
+    return freed, left
+
+
+def skipped(data: Path) -> str:
+    """退回上一版之後，不要再問的那個版本（有更新的版本出來才會再問）。沒有就回傳空字串。"""
+    last = Attempts(data).read()
+    return str(last.get("skip") or "") if last.get("version") == __version__ else ""
+
+
+def unskip(data: Path) -> None:
+    attempts = Attempts(data)
+    last = attempts.read()
+    if last.pop("skip", None):
+        try:
+            attempts.path.write_text(json.dumps(last), encoding="utf-8")
         except OSError:
             pass
 
@@ -84,8 +209,8 @@ class Attempts:
 def download(info: dict, folder: Path, progress=None, cancel=None) -> Path:
     """下載安裝檔並核對大小和雜湊，回傳檔案位置。"""
     folder.mkdir(parents=True, exist_ok=True)
-    dest = folder / f"LiveLingo-Setup-{info['version']}.exe"
-    for old in folder.glob("LiveLingo-Setup-*"):
+    dest = installer_path(folder, info["version"])
+    for old in folder.glob("LiveLingo-Setup-*"):      # 別的版本的安裝檔都用不到了
         if old.name not in (dest.name, dest.name + ".part"):
             try:
                 old.unlink()
@@ -94,11 +219,7 @@ def download(info: dict, folder: Path, progress=None, cancel=None) -> Path:
     fetch(info["url"], dest, progress, cancel=cancel, attempts=3)      # cancel() 回傳 True 時中止（使用者按了取消）
     ok = not info.get("size") or dest.stat().st_size == info["size"]
     if ok and info.get("sha256"):
-        h = hashlib.sha256()
-        with open(dest, "rb") as f:
-            while chunk := f.read(1 << 20):
-                h.update(chunk)
-        ok = h.hexdigest() == info["sha256"]
+        ok = sha256_of(dest) == info["sha256"]
     if not ok:
         dest.unlink(missing_ok=True)
         raise DownloadError("the downloaded installer did not match the published file")

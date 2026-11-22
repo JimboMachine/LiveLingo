@@ -25,7 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install numpy pillow opencv-python-headless opencc-python-reimplemented==0.1.7 pytest
+      - run: pip install numpy pillow opencv-python-headless opencc-python-reimplemented pytest -c constraints.txt
+      - run: python packaging/check_pins.py pytest opencv-python-headless
       - run: python -m pytest tests -q
 
   windows:
@@ -39,7 +40,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pyinstaller pytest
+        run: pip install -r requirements.txt pyinstaller pytest -c constraints.txt
+
+      # 裝進來的每個套件（連它們自己帶進來的）都要跟 constraints.txt 鎖的一樣，不然就停
+      - name: Check pinned versions
+        run: python packaging/check_pins.py pyinstaller pytest
 
       - name: Checks
         run: python -m pytest tests -q
@@ -89,8 +94,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: floating-chat-screenshot
-          path: floating-chat*.png
+          name: screenshots
+          path: |
+            floating-chat*.png
+            window-*.png
           if-no-files-found: ignore
           retention-days: 14
 
@@ -110,6 +117,8 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; nothing to publish."
           else
-            gh release create "$tag" dist/LiveLingo-Setup.exe --target "$GITHUB_SHA" --title "LiveLingo $tag" \
-              --notes "下載 LiveLingo-Setup.exe，點兩下安裝。已經安裝過的話，開啟 LiveLingo 時會自動更新到這個版本。"
+            # 發行說明和程式裡看到的「這一版改了什麼」是同一份（livelingo/data/changes.json）；一起發行，更新提示才讀得到
+            python -m livelingo.changes dist/release-notes.md
+            gh release create "$tag" dist/LiveLingo-Setup.exe livelingo/data/changes.json --target "$GITHUB_SHA" --title "LiveLingo $tag" \
+              --notes-file dist/release-notes.md
           fi

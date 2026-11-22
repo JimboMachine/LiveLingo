@@ -7,6 +7,9 @@
 - **聽我說話**：對麥克風說話，翻成對方的語言並自動複製，貼上就能傳。
 - **打字**：輸入一句話，按 Enter 就翻好並複製。翻成韓文時會附上唸法。
 - **浮動留言**：翻譯像實況聊天室的留言一樣直接顯示在遊戲畫面上，背景透明、滑鼠會穿過去，過幾秒自動消失。位置、字體大小、停留時間都可以調。
+- **自動偵測對方的語言**：「對方用的語言」選「自動偵測」，會從對方的聲音判斷是中文、韓文、英文還是日文，換語言時自己跟著切換。
+- **記錄字幕**：對話畫面右上角按「記錄字幕」開始，按「結束並儲存」就把這段時間的原文和翻譯存成一個 txt 檔（預設在「文件\LiveLingo」，可以換資料夾）。
+- **外觀**：深色、淺色或跟隨 Windows，五種強調色，視窗標題列也會跟著換顏色（Windows 11）。
 - 翻譯語言可以選：繁體中文、簡體中文、韓文、英文、日文，兩邊也可以選同一種（繁體和簡體互轉，或只想看字幕）。介面語言和翻譯語言一樣是這五種（有測試在看：新增翻譯語言時，沒有對應的介面就不會通過）。
 - 全部在你的電腦上完成，免費、沒有次數限制，聊天內容不會傳到外面。
 
@@ -16,7 +19,7 @@
 
 1. 下載安裝檔：**[LiveLingo-Setup.exe](https://github.com/JimboMachine/LiveLingo/releases/latest/download/LiveLingo-Setup.exe)**
 2. 點兩下安裝。安裝完桌面會有 LiveLingo 的圖示。
-3. 第一次開啟會下載翻譯需要的檔案（約 4 GB，有 RTX 4070 以上顯示卡時約 9 GB），只需要下載這一次。下載的同時可以先選聲音裝置、框出聊天區。
+3. 第一次開啟會下載翻譯需要的檔案（約 4 GB，有 RTX 4070 以上顯示卡時約 10 GB），只需要下載這一次。下載的同時可以先選聲音裝置、框出聊天區。
 
 > Windows 可能會跳出「Windows 已保護您的電腦」。這是因為安裝檔沒有付費的數位簽章，按「其他資訊」再按「仍要執行」就可以。
 
@@ -24,11 +27,11 @@
 
 ## 更新
 
-每次開啟 LiveLingo 都會檢查有沒有新版本。有的話會先問你：按「現在更新」會自動下載、安裝，然後重新開啟；按「這次先不要」就繼續用現在的版本，下次開啟時會再問。下載到一半也可以取消。沒有網路時會照常使用，下次開啟再檢查。
+每次開啟 LiveLingo 都會檢查有沒有新版本。有的話會先問你：按「現在更新」會自動下載、安裝，然後重新開啟；按「這次先不要」就繼續用現在的版本，下次開啟時會再問。下載到一半也可以取消。沒有網路時會照常使用，下次開啟再檢查。不想讓它開啟時連網路的話，到「關於」把「開啟時檢查有沒有新版本」關掉。
 
 ## 卸載
 
-到 Windows 的「設定 → 應用程式 → 已安裝的應用程式」找到 LiveLingo，按「解除安裝」。程式、桌面圖示、下載的模型和設定會全部刪除。
+到 Windows 的「設定 → 應用程式 → 已安裝的應用程式」找到 LiveLingo，按「解除安裝」。它會先問要不要把你的設定、詞彙表、教過的句子和對話歷史留在電腦上：選「是」只刪除程式、桌面圖示和下載的模型，之後再安裝設定都還在；選「否」就全部刪除。
 
 ## 翻譯品質
 
@@ -46,6 +49,8 @@
 
 語音辨識使用 Whisper large-v3-turbo，在 CPU 上執行。
 
+分辨說話者（選用，預設關閉）使用 WeSpeaker 的 ResNet34 聲紋模型（wespeaker-voxceleb-resnet34-LM，CC BY 4.0 授權），打開那個功能時才下載，約 27 MB。聲紋平常只留在記憶體裡；打開「記住取過名字的人」才會把取過名字的人存在這台電腦上（下次開就認得），不會傳出去，卸載時會刪掉。
+
 ## 小提醒
 
 - 請戴耳機。用喇叭的話，麥克風會把對方的聲音也收進去。
@@ -59,7 +64,7 @@
 ## 給開發者
 
 ```
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt   # 每個套件都鎖在確切的版本
 python -m livelingo                 # 從原始碼執行（Windows）
 python -m pytest tests              # 不需要模型的檢查
 python -m livelingo --selftest out.json --no-window
@@ -72,8 +77,13 @@ python -m livelingo --selftest out.json --no-window
 | `livelingo/server.py` | 只開在本機的 API 和事件串流，介面透過它和主體溝通 |
 | `livelingo/ui/` | 介面（HTML、CSS、JavaScript，五種語言的文字在 `i18n.js`） |
 | `livelingo/updater.py` | 更新（開啟時發現新版本會先問，可以略過） |
-| `packaging/` | PyInstaller 設定、Inno Setup 安裝程式、圖示、安裝測試 |
+| `livelingo/transcript.py` | 字幕記錄（存成 txt 檔） |
+| `livelingo/ui/brand.js` | 品牌標誌和名稱，介面裡每個地方都從這裡拿 |
+| `packaging/` | PyInstaller 設定、Inno Setup 安裝程式、圖示（`livelingo.ico`，由標誌的定稿檔做成）、安裝測試 |
 | `tests/devserver.py` | 不需要 Windows 和音效卡就能把介面跑起來（假的音訊裝置） |
+| `docs/dependencies.md` | 相依圖：每個部分牽動誰，改了哪裡要回去檢查哪裡（資料在 `dependencies.json`，有測試確認它跟程式一致） |
+
+改任何東西之後，先到 `docs/dependencies.md` 找到你改的那一項，把列出來的地方都檢查一遍。新增模組、文字表或共用的名稱時，`docs/dependencies.json` 要一起補，再跑 `python docs/make_dependencies.py`。
 
 發佈新版本：改 `livelingo/__init__.py` 裡的版本號，合併到 `main`。GitHub Actions 會在 Windows 上打包、把安裝檔真的安裝／更新／卸載測一次，通過後自動發佈成 Release，使用者下次開啟時會被問要不要更新。
 

@@ -14,7 +14,7 @@ from . import oswin
 
 MAIN_MIN = (380, 150)
 SETTINGS_SIZE = (900, 800)
-SUBTITLE_SIZE = (900, 150)
+NORMAL_VIEWS = ("main", "settings")      # 這兩個畫面共用同一個視窗大小
 
 
 class WindowCtl:
@@ -26,7 +26,6 @@ class WindowCtl:
         self.win = win
         self.service = service
         self.main_geom = None       # 離開主畫面時記住的大小和位置
-        self.subtitle_pos = None
 
     def _safe(self, fn, *args):
         try:
@@ -56,7 +55,7 @@ class WindowCtl:
     def focus(self) -> None:
         self.restore()
         self._safe(self.win.show)
-        if not self.service.cfg["on_top"] and self.service.view != "subtitle":
+        if not self.service.cfg["on_top"]:
             self.set_on_top(True)       # 先置頂再取消，視窗才會真的跑到最前面
             self.set_on_top(False)
 
@@ -70,38 +69,50 @@ class WindowCtl:
             return 0, 0, 1920, 1080
 
     def apply_view(self, view: str, previous: str) -> None:
+        """對話和設定用同一個視窗大小，切換時不動；只有第一次設定會改大小。"""
         geom = self.geometry()
-        if previous == "main" and geom:
+        if previous in NORMAL_VIEWS and view not in NORMAL_VIEWS and geom:
             self.main_geom = geom
-        if previous == "subtitle" and geom:
-            self.subtitle_pos = (geom[2], geom[3])
         sx, sy, sw, sh = self._screen()
-        if view == "subtitle":
-            w, h = min(SUBTITLE_SIZE[0], sw - 80), SUBTITLE_SIZE[1]
-            x, y = self.subtitle_pos or (sx + (sw - w) // 2, sy + sh - h - 110)
-            self._safe(self.win.resize, w, h)
-            self._safe(self.win.move, x, y)
-            self.set_on_top(True)
-            return
-        if previous == "subtitle":
-            self.set_on_top(self.service.cfg["on_top"])
-        if view in ("settings", "wizard"):
+        if view == "wizard":
             w, h = min(SETTINGS_SIZE[0], sw - 40), min(SETTINGS_SIZE[1], sh - 80)
             self._safe(self.win.resize, w, h)
             if geom:      # 變寬之後如果超出螢幕，往左移回來
                 x = min(geom[2], sx + sw - w - 10)
                 y = min(geom[3], sy + sh - h - 50)
-                if (x, y) != (geom[2], geom[3]) or previous == "subtitle":
+                if (x, y) != (geom[2], geom[3]):
                     self._safe(self.win.move, max(sx, x), max(sy, y))
-        elif view == "main" and self.main_geom:
+        elif previous not in NORMAL_VIEWS and self.main_geom:
             w, h, x, y = self.main_geom
             self._safe(self.win.resize, w, h)
             self._safe(self.win.move, x, y)
 
     def save_geometry(self) -> None:
-        geom = self.geometry() if self.service.view == "main" else self.main_geom
+        geom = self.geometry() if self.service.view in NORMAL_VIEWS else self.main_geom
         if geom and geom[0] >= MAIN_MIN[0] and geom[1] >= 300 and geom[2] > -30000:
             self.service.cfg.set(window={"w": geom[0], "h": geom[1], "x": geom[2], "y": geom[3]})
+
+    def choose_folder(self, start: str = "") -> str:
+        """跳出 Windows 的「選擇資料夾」視窗，回傳選到的資料夾；按取消回傳空字串。"""
+        try:
+            import webview
+
+            kind = getattr(getattr(webview, "FileDialog", None), "FOLDER", None)
+            if kind is None:
+                kind = webview.FOLDER_DIALOG
+            picked = self.win.create_file_dialog(kind, directory=start or "")
+            return str(picked[0]) if picked else ""
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"folder dialog failed: {ex!r}")
+            return ""
+
+    def set_chrome(self, caption: str, text: str, dark: bool) -> bool:
+        """標題列的顏色跟著介面的主題。"""
+        try:
+            return oswin.style_title_bar(int(self.win.native.Handle.ToInt64()), caption, text, dark)
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"title bar colours failed: {ex!r}")
+            return False
 
 
 def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event | None = None) -> bool:
@@ -134,6 +145,8 @@ def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event 
         def shown():
             started["ok"] = True
             service.window = ctl
+            ctl.set_chrome(*service.chrome)
+            service.tray.start()      # 系統匣圖示：有它，關視窗才能收到系統匣而不是結束程式
             try:
                 oswin.exclude_from_capture(int(win.native.Handle.ToInt32()))
             except Exception as ex:  # noqa: BLE001
@@ -141,6 +154,16 @@ def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event 
 
         def closing():
             ctl.save_geometry()
+            # 關閉視窗時收到系統匣（可以在設定關掉）；真的要結束（系統匣的「結束」、更新、另一個地方要求離開）就照常關
+            if service.cfg["close_to_tray"] and service.tray.running and not quit_event.is_set():
+                try:
+                    win.hide()
+                except Exception as ex:  # noqa: BLE001
+                    service.log(f"hide to tray failed: {ex!r}")
+                    return None
+                service.tray.notify_hidden()
+                return False
+            return None
 
         def watch():
             # 程式需要自己結束時（更新、另一個地方要求離開），把視窗關掉
@@ -179,7 +202,8 @@ def _run_browser(url: str, service, quit_event: threading.Event) -> None:
     edge = _find_edge() if sys.platform == "win32" else None
     if edge:
         subprocess.Popen([edge, f"--app={url}", "--window-size=480,820",
-                          f"--user-data-dir={service.data / 'edge-profile'}"], stdin=subprocess.DEVNULL)
+                          f"--user-data-dir={service.data / 'edge-profile'}"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         import webbrowser
 

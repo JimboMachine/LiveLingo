@@ -8,7 +8,7 @@ ROOT = Path(SPECPATH).parent
 
 datas = [(str(ROOT / "livelingo" / "ui"), "livelingo/ui"), (str(ROOT / "livelingo" / "data"), "livelingo/data")]
 binaries = []
-hiddenimports = ["_cffi_backend", "tkinter", "PIL._imagingft"]
+hiddenimports = ["_cffi_backend", "tkinter", "PIL._imagingft", "pystray._win32", "six"]
 # 這些套件會在執行時讀自己資料夾裡的檔案（模型、設定、字典、原生程式庫），要整包帶走
 for package in ("rapidocr", "faster_whisper", "ctranslate2", "onnxruntime", "opencc", "soundcard", "sounddevice", "_sounddevice_data", "webview",
                 "clr_loader", "pythonnet", "av", "tokenizers"):

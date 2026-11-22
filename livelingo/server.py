@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .config import DEFAULTS, OVERLAY_LOOK
 from .paths import resource_dir
 from .service import Service
 
@@ -71,7 +72,7 @@ class Server:
 
             def _body(self) -> dict:
                 length = int(self.headers.get("Content-Length") or 0)
-                if length <= 0 or length > 200_000:
+                if length <= 0 or length > 2_000_000:      # 匯入的詞彙檔可能有幾百句
                     return {}
                 try:
                     value = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -94,6 +95,43 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.devices())
+                if url.path == "/api/apps":      # 現在開著哪些程式（「只聽這幾個程式」的清單）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.apps_state())
+                if url.path == "/api/health":      # 健康檢查：每一項一個燈
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.health())
+                if url.path == "/api/help":      # 說明頁的內容（現在的介面語言、現在的快速鍵）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.help_state())
+                if url.path == "/api/usage":      # 使用數字：今天、最近 7 天、30 天各幾句、失敗幾次、平均等多久
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.usage_state())
+                if url.path == "/api/storage":      # 儲存空間：放在哪、每一樣佔多少、還剩多少
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.storage_state())
+                if url.path == "/api/history":      # 對話歷史：q 搜尋的字、offset 從第幾則開始、limit 幾則（最新的在前）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    one = lambda name, default: (query.get(name) or [default])[0]      # noqa: E731
+                    try:
+                        offset, limit = int(one("offset", "0")), int(one("limit", "50"))
+                    except ValueError:
+                        offset, limit = 0, 50
+                    return self._json({**service.history.search(one("q", ""), offset, limit), **service.history.state()})
+                if url.path == "/api/screens":      # 接著哪些螢幕、留言現在在哪（設定頁的縮小螢幕圖）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.overlay.screens())
+                if url.path == "/api/overlay_preview":      # 設定畫面上的浮動留言預覽（照現在的設定畫的一張圖）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._send(200, service.overlay_preview(), "image/png")
                 if url.path == "/api/events":
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -146,8 +184,8 @@ class Server:
                 route = url.path
                 try:
                     if route == "/api/config":
-                        service.update_config(body)
-                        return self._json({"ok": True, "config": service.cfg.snapshot()})
+                        result = service.update_config(body)
+                        return self._json({"ok": True, **result, "config": service.cfg.snapshot()})
                     if route == "/api/source":
                         service.set_source(str(body.get("key")), bool(body.get("on")))
                         return self._json({"ok": True})
@@ -155,10 +193,11 @@ class Server:
                         service.submit("typed", str(body.get("text") or "")[:500])
                         return self._json({"ok": True})
                     if route == "/api/region":
-                        service.select_region(then_enable=bool(body.get("enable", True)))
+                        service.select_region(then_enable=bool(body.get("enable", True)),
+                                              rid=str(body["id"]) if body.get("id") else None, new=bool(body.get("new")))
                         return self._json({"ok": True})
                     if route == "/api/ocr_test":
-                        return self._json(service.ocr_test())
+                        return self._json(service.ocr_test(str(body["id"]) if body.get("id") else None))
                     if route == "/api/meters":
                         service.set_meters(bool(body.get("on")))
                         return self._json({"ok": True})
@@ -175,6 +214,10 @@ class Server:
                     if route == "/api/fix":
                         ok = service.fix(int(body.get("id") or 0), str(body.get("src") or ""), str(body.get("dst") or ""))
                         return self._json({"ok": ok})
+                    if route == "/api/edit":      # 改辨識出來的原文，重新翻
+                        return self._json({"ok": service.edit(int(body.get("id") or 0), str(body.get("text") or ""))})
+                    if route == "/api/again":     # 翻譯失敗的那一則再翻一次
+                        return self._json({"ok": service.again(int(body.get("id") or 0))})
                     if route == "/api/teach":
                         return self._json({"ok": service.teach(int(body.get("id") or 0), str(body.get("text") or "")[:500])})
                     if route == "/api/lessons/remove":
@@ -185,11 +228,86 @@ class Server:
                     if route == "/api/glossary/remove":
                         service.glossary_remove(str(body.get("src") or ""))
                         return self._json({"ok": True})
+                    if route == "/api/speakers":      # 分辨說話者：取名字、全部重來、模型沒準備好時再試一次
+                        if body.get("action") == "rename":
+                            return self._json(service.speaker_rename(int(body.get("id") or 0), str(body.get("name") or "")))
+                        if body.get("action") == "forget":
+                            return self._json(service.speakers_forget())
+                        service.speakers_load(retry=True)
+                        return self._json({"ok": True})
+                    if route == "/api/speech_gpu":      # 語音辨識用顯示卡：下載需要的檔案
+                        return self._json({"ok": service.speech_gpu_download(cancel=bool(body.get("cancel")))})
+                    if route == "/api/library":      # 詞彙表和教過的句子：匯出成檔案、從檔案匯入
+                        if body.get("export"):
+                            return self._json(service.export_library())
+                        return self._json(service.import_library(body.get("data")))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
+                    if route == "/api/settings":      # 設定的匯出、匯入、恢復預設、復原
+                        if body.get("export"):
+                            return self._json(service.settings_export())
+                        if body.get("reset"):
+                            return self._json(service.settings_reset())
+                        if body.get("undo") or body.get("forget"):
+                            return self._json(service.settings_undo(forget=bool(body.get("forget"))))
+                        return self._json(service.settings_import(body.get("data")))
+                    if route == "/api/report":      # 問題報告：先做出來給使用者看，他按了才存檔或複製；不會送到任何地方
+                        if body.get("save"):
+                            return self._json(service.report_save())
+                        if body.get("copy"):
+                            return self._json(service.report_copy())
+                        return self._json(service.report_make(str(body.get("note") or ""), bool(body.get("settings", True)),
+                                                              bool(body.get("log", True))))
+                    if route == "/api/seen":      # 介面已經說過「更新好了」：不用再說
+                        service.updated_from = ""
+                        return self._json({"ok": True})
+                    if route == "/api/storage":      # 搬大檔案、取消、刪掉沒在用的、打開資料夾
+                        if body.get("choose"):      # 跳出選資料夾的視窗，會等使用者選完
+                            return self._json(service.storage_choose())
+                        if body.get("back"):
+                            return self._json(service.storage_move(back=True))
+                        if body.get("move"):
+                            return self._json(service.storage_move(str(body["move"])))
+                        if body.get("cancel"):
+                            return self._json(service.storage_cancel())
+                        if body.get("remove"):
+                            return self._json(service.storage_remove(str(body["remove"])))
+                        if body.get("open"):
+                            return self._json(service.storage_open())
+                        return self._json({"ok": False})
+                    if route == "/api/help":      # 把給朋友的快速上手存成一個檔案
+                        return self._json(service.help_friend(str(body.get("friend") or "")))
+                    if route == "/api/usage":
+                        return self._json(service.usage_clear() if body.get("clear") else {"ok": False})
+                    if route == "/api/history":
+                        if body.get("clear"):
+                            return self._json(service.history_clear())
+                        if body.get("export"):
+                            return self._json(service.history_export(str(body.get("q") or "")))
+                        return self._json({"ok": False})
+                    if route == "/api/hotkeys":      # 設定頁在等使用者按新的組合：先停用，按完恢復
+                        service.pause_hotkeys(bool(body.get("pause")))
+                        return self._json({"ok": True, **service.hotkeys_state()})
+                    if route == "/api/quick_input":      # 設定頁的「現在試試看」：跟按快速鍵叫出輸入框一樣
+                        return self._json({"ok": service.quick_input()})
                     if route == "/api/clear":
                         service.clear_messages()
                         return self._json({"ok": True})
+                    if route == "/api/record":
+                        if "on" in body:
+                            return self._json({"ok": True, **service.set_recording(bool(body.get("on")))})
+                        if body.get("open"):
+                            return self._json({"ok": service.open_transcript(str(body.get("open")))})
+                        if body.get("choose"):
+                            threading.Thread(target=service.choose_transcript_dir, daemon=True).start()
+                            return self._json({"ok": True})
+                        return self._json({"ok": True, **service.record_state()})
+                    if route == "/api/exit":
+                        self._json({"ok": True})
+                        threading.Thread(target=service.on_quit, daemon=True).start()
+                        return None
+                    if route == "/api/chrome":
+                        return self._json({"ok": service.set_chrome(str(body.get("caption")), str(body.get("text")), bool(body.get("dark")))})
                     if route == "/api/view":
                         service.set_view(str(body.get("view")))
                         return self._json({"ok": True})
@@ -198,6 +316,23 @@ class Server:
                             service.overlay.set_edit(bool(body.get("edit")))
                         if body.get("reset"):
                             service.overlay.reset_position()
+                        if body.get("preset"):      # 一鍵版面：外觀和位置一起換
+                            result = service.overlay.apply_preset(str(body.get("preset")))
+                            return self._json({"ok": result is not None, **(result or {}), **service.overlay.state()})
+                        if body.get("reset_look"):      # 恢復預設外觀（位置不動）
+                            result = service.update_config({k: DEFAULTS[k] for k in OVERLAY_LOOK})
+                            return self._json({"ok": True, **result, **service.overlay.state()})
+                        if "rect" in body:      # 設定頁的螢幕圖上拖方框（final：放開了，這才存）
+                            return self._json({**service.overlay.place(body.get("rect"), bool(body.get("final", True))),
+                                               **{k: v for k, v in service.overlay.state().items() if k != "rect"}})
+                        if "monitor" in body:      # 換一個螢幕顯示
+                            return self._json({**service.overlay.choose_monitor(body.get("monitor")), "editing": service.overlay.editing})
+                        if "layout_save" in body:      # 自己存的版面：存、套用、刪
+                            return self._json(service.overlay.save_layout(body.get("layout_save")))
+                        if "layout" in body:
+                            return self._json(service.overlay.apply_layout(body.get("layout")))
+                        if "layout_remove" in body:
+                            return self._json(service.overlay.remove_layout(body.get("layout_remove")))
                         if body.get("test"):
                             threading.Thread(target=service.overlay.test, daemon=True).start()
                         return self._json({"ok": True, **service.overlay.state()})
@@ -205,6 +340,10 @@ class Server:
                         service.focus()
                         return self._json({"ok": True})
                     if route == "/api/update":
+                        if body.get("rollback"):      # 回上一版
+                            return self._json(service.rollback())
+                        if body.get("unskip"):      # 退回之後不再問的那一版：恢復提示
+                            return self._json(service.update_unskip())
                         service.update_choice(str(body.get("choice") or ""))
                         return self._json({"ok": True})
                     if route == "/api/retry":

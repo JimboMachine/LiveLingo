@@ -1,6 +1,7 @@
 """啟動、關閉本機的翻譯引擎（llama.cpp 的 llama-server）。"""
 
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -38,6 +39,9 @@ class Engine:
         self.proc: subprocess.Popen | None = None
         self.port = free_port()
         self.url = f"http://127.0.0.1:{self.port}"
+        # 每次啟動隨機產生的金鑰：引擎只聽這台電腦，但沒有金鑰的話，電腦上任何程式（或瀏覽器裡的網頁）都能叫它翻東西、佔住它。
+        # 用環境變數交給引擎，不放在指令列上（指令列別的程式看得到）。
+        self.key = secrets.token_urlsafe(24)
         self._pid_file = log_path.with_name("engine.pid")
 
     def healthy(self) -> bool:
@@ -91,7 +95,8 @@ class Engine:
         log = open(self.log_path, "w", encoding="utf-8", errors="replace")
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         self.proc = subprocess.Popen(self.command(), stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                                     cwd=str(Path(self.exe).parent), creationflags=flags)
+                                     cwd=str(Path(self.exe).parent), creationflags=flags,
+                                     env={**os.environ, "LLAMA_API_KEY": self.key})
         try:
             self._pid_file.write_text(f"{self.proc.pid}\nllama-server", encoding="utf-8")
         except OSError:

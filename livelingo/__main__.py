@@ -23,10 +23,38 @@ def main() -> int:
 
         select(Path(_arg("--select-region")), _arg("--lang", "zh-TW"))
         return 0
+    if "--quick-input" in sys.argv:      # 快速輸入框：打的字寫到檔案就結束
+        from .quickbox import ask
+
+        ask(Path(_arg("--quick-input")), _arg("--lang", "zh-TW"))
+        return 0
+    if "--remove-store" in sys.argv:      # 卸載程式叫的：大檔案搬到別的磁碟的話，那邊的也刪掉（只刪有記號檔的資料夾）
+        import json
+
+        from . import storage
+        from .paths import data_dir
+
+        data = data_dir()
+        try:
+            saved = json.loads((data / "config.json").read_text(encoding="utf-8")).get("store_dir") or ""
+        except (OSError, ValueError):
+            saved = ""
+        if storage.remove_moved(data, str(saved)):
+            try:      # 使用者選擇留下設定的話，下次安裝不要還指著已經刪掉的資料夾
+                kept = json.loads((data / "config.json").read_text(encoding="utf-8"))
+                kept.pop("store_dir", None)
+                (data / "config.json").write_text(json.dumps(kept, ensure_ascii=False, indent=2), encoding="utf-8")
+            except (OSError, ValueError):
+                pass
+        return 0
     if "--selftest" in sys.argv:
         from .selftest import run as selftest
 
         return selftest(Path(_arg("--selftest")), window="--no-window" not in sys.argv)
+    if "--probe-app-audio" in sys.argv:      # 健康檢查用：試收自己這個程序的聲音，結果寫到檔案
+        from .core.procaudio import probe
+
+        return probe(_arg("--probe-app-audio"))
     if "--version" in sys.argv:
         from . import __version__
 
@@ -58,6 +86,7 @@ def main() -> int:
         return 0
 
     service = Service(data)
+    service.watch_errors()      # 沒被接住的錯誤寫進紀錄檔，並在畫面上說一聲
 
     def exit_now():
         service.shutdown()

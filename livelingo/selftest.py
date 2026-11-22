@@ -17,7 +17,7 @@ from pathlib import Path
 
 def run(out: Path, window: bool = True) -> int:
     results: dict = {}
-    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
+    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray", "app_audio", "hotkeys", "quick_input"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
 
     def check(name, fn):
         started = time.time()
@@ -133,6 +133,71 @@ def run(out: Path, window: bool = True) -> int:
             raise RuntimeError(errors[0])
         return {"device": cap.device_name, "way": cap.backend, "blocks": cap.q.qsize()}
 
+    def app_audio():
+        """只收單一程式的聲音：另外開一個程序試收自己的聲音，記下 Windows 給不給、收到多少。"""
+        import subprocess
+
+        from .core import procaudio
+
+        if not procaudio.available():
+            return {"available": False}
+        result = tmp / "app-audio.json"
+        head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        # 三個輸出入都要指定：沒有主控台的打包版從某些地方啟動時，沒指定的那個會讓子程序開不起來
+        done = subprocess.run([*head, "--probe-app-audio", str(result)], timeout=60, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
+        info = json.loads(result.read_text(encoding="utf-8")) if result.exists() else {}
+        info["exit"] = done.returncode
+        assert done.returncode == 0 and info.get("opened") and not info.get("error"), info
+        return info
+
+    def hotkeys():
+        """全域快速鍵：真的跟 Windows 登記得起來、按下的通知會送到、同一組被登記走時看得出來。"""
+        import ctypes
+        import threading
+
+        from . import hotkeys as hk
+
+        fired = threading.Event()
+        first = hk.Hotkeys(lambda name: fired.set() if name == "overlay" else None)
+        if not first.available:
+            return {"available": False}
+        second = hk.Hotkeys(lambda name: None)
+        combo = "Ctrl+Alt+Shift+F11"
+        try:
+            first.start()
+            states = first.set({"overlay": combo})
+            assert states["overlay"] == "ok", states
+            second.start()
+            taken = second.set({"mic": combo})      # 同一組已經被登記走了：要標成被佔用
+            assert taken["mic"] == "taken", taken
+            backend = first.backend
+            number = next(n for n, name in backend._ids.items() if name == "overlay")
+            ctypes.windll.user32.PostThreadMessageW(backend._thread_id, backend._WM_HOTKEY, number, 0)      # 模擬 Windows 的通知，不送任何按鍵
+            assert fired.wait(3), "hotkey message was not delivered"
+            first.pause(True)
+            freed = second.set({"mic": combo})      # 放掉之後別人就登記得到
+            assert freed["mic"] == "ok", freed
+        finally:
+            first.stop()
+            second.stop()
+        return {"available": True, "registered": combo, "taken_detected": True, "fired": True}
+
+    def quick_input():
+        """快速輸入框：另外開的小程式開得起來，打的字有交回來。"""
+        import subprocess
+
+        if sys.platform != "win32":
+            return {"available": False}
+        result = tmp / "quick.json"
+        head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        done = subprocess.run([*head, "--quick-input", str(result), "--lang", "zh-TW"], timeout=60, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW,
+                              env={**os.environ, "LIVELINGO_FAKE_QUICK": "等我一下"})
+        info = json.loads(result.read_text(encoding="utf-8")) if result.exists() else {}
+        assert done.returncode == 0 and info.get("text") == "等我一下", {"exit": done.returncode, **info}
+        return {"exit": done.returncode, "text": info["text"]}
+
     def screen_grab():
         import mss
         import numpy as np
@@ -151,6 +216,17 @@ def run(out: Path, window: bool = True) -> int:
         frame = chatpaint.compose([(tile, 1.0)], (520, 160))
         assert tile.getchannel("A").getextrema()[1] == 255
         info = {"tile": list(tile.size), "fonts": {k: bool(chatpaint._font_path(k)) for k in ("cjk", "ko", "latin")}}
+        # 三種字型在這台電腦上真的畫出來的樣子（明體、楷體只有 Windows 有，存成圖讓人看得到）
+        from .config import DEFAULTS
+
+        info["families"] = {}
+        for family in chatpaint.FAMILIES:
+            look = dict(DEFAULTS, ui_lang="zh-TW", overlay_family=family, overlay_backdrop=0 if family == "sans" else 30)
+            info["families"][family] = Path(chatpaint._font_path("cjk", family, False) or "").name
+            try:
+                chatpaint.preview(look).save(out.with_name(f"floating-chat-look-{family}.png"))
+            except OSError:
+                pass
         if overlay.LayeredWindow is None:
             return info
         import ctypes
@@ -209,9 +285,23 @@ def run(out: Path, window: bool = True) -> int:
     def engine_online():
         from . import assets
 
-        releases = assets.list_engine_releases()
-        picked = {kind: [n for n, _ in (assets.pick_engine_assets(releases, kind) or [])] for kind in ("cpu", "cuda")}
+        import urllib.request
+
+        picked = {"tag": assets.ENGINE_TAG, **{kind: [n for n, _, _ in assets.ENGINE_FILES[kind]] for kind in ("cpu", "cuda")}}
         assert picked["cpu"] and len(picked["cuda"]) == 2, picked
+        # 鎖定的每一個下載都還在不在（只要第一個位元組；模型有好幾 GB，不整個抓）。大小對不上也算壞掉
+        gone = []
+        for url, size, _ in assets.pinned():
+            try:
+                req = urllib.request.Request(url, headers={**assets.UA, "Range": "bytes=0-0"})
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    total = (r.headers.get("Content-Range") or "").rpartition("/")[2]
+                    if total.isdigit() and int(total) != size:
+                        gone.append(f"{url}: {total} bytes, expected {size}")
+            except Exception as ex:  # noqa: BLE001
+                gone.append(f"{url}: {ex}")
+        assert not gone, gone
+        picked["pinned"] = len(assets.pinned())
         if sys.platform == "win32":
             import subprocess
 
@@ -236,7 +326,7 @@ def run(out: Path, window: bool = True) -> int:
         base = f"http://127.0.0.1:{srv.port}"
         with urllib.request.urlopen(base + "/", timeout=10) as r:
             assert b"LiveLingo" in r.read()
-        for f in ("app.js", "i18n.js", "style.css"):
+        for f in ("app.js", "brand.js", "i18n.js", "style.css"):
             with urllib.request.urlopen(f"{base}/{f}", timeout=10) as r:
                 assert r.status == 200 and len(r.read()) > 1000
         try:
@@ -261,12 +351,25 @@ def run(out: Path, window: bool = True) -> int:
     check("audio_devices", audio_devices)
     check("second_mic_way", second_mic_way)
     check("mic_capture", mic_capture)
+    check("app_audio", app_audio)
+    check("hotkeys", hotkeys)
+    check("quick_input", quick_input)
     check("screen_grab", screen_grab)
     check("floating_chat", floating_chat)
+
+    def tray():
+        if sys.platform != "win32":
+            return
+        ok = state["service"].tray.start()
+        assert ok, state["service"].tray.error
+        time.sleep(1.0)
+        assert state["service"].tray.running
+
     check("gpu", gpu_detect)
     if "--online" in sys.argv:
         check("engine_online", engine_online)
     check("server", server)
+    check("tray", tray)      # 要等主體建好才有系統匣可以試
 
     if window and "service" in state:
         from . import window as window_mod
@@ -275,6 +378,16 @@ def run(out: Path, window: bool = True) -> int:
         service, srv = state["service"], state["server"]
         info: dict = {}
         done = threading.Event()
+        closed = threading.Event()
+
+        def snap(name: str) -> None:
+            import mss
+            from PIL import Image
+
+            w, h, x, y = service.window.geometry()
+            with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                shot = sct.grab({"left": max(0, x - 8), "top": max(0, y - 8), "width": w + 16, "height": h + 16})
+                Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX").save(out.with_name(name))
 
         def on_loaded(win):
             if done.is_set():
@@ -291,18 +404,37 @@ def run(out: Path, window: bool = True) -> int:
                 info["cards"] = win.evaluate_js("document.querySelectorAll('.ui-langs button').length")      # 介面語言的按鈕
                 time.sleep(0.5)
                 info["has_window_ctl"] = service.window is not None
+                info["tray_running"] = bool(service.tray.running)      # 視窗出現時應該已經把系統匣圖示開起來
                 if service.window:
                     info["size_before"] = service.window.geometry()
-                    service.set_view("subtitle")
+                    service.set_view("main")
                     time.sleep(1.0)
-                    info["size_subtitle"] = service.window.geometry()
+                    info["size_main"] = service.window.geometry()
                     service.set_view("wizard")
                     time.sleep(1.0)
                     info["size_after"] = service.window.geometry()
+                    # 把真的視窗拍下來（含 Windows 的標題列），之後看得到外觀在 Windows 上是不是對的；拍不到不算錯
+                    try:
+                        info["title_bar"] = service.window.set_chrome(*service.chrome)
+                        snap("window-wizard.png")
+                        service.cfg.set(setup_done=True)
+                        service.set_view("main")
+                        time.sleep(1.5)
+                        snap("window-main.png")
+                        service.update_config({"theme": "light", "accent": "violet"})
+                        time.sleep(1.5)
+                        info["chrome_light"] = list(service.chrome)
+                        snap("window-light.png")
+                    except Exception as ex:  # noqa: BLE001
+                        info["snapshots"] = repr(ex)
+                    finally:
+                        service.update_config({"theme": "dark", "accent": "mint"})
+                        service.cfg.set(setup_done=False)
             except Exception:  # noqa: BLE001
                 info["error"] = traceback.format_exc()[-1500:]
             finally:
                 done.set()
+                service.tray.stop()      # 系統匣圖示開著的時候，關視窗只會把它藏起來，這裡要真的關掉
                 try:
                     win.destroy()
                 except Exception:  # noqa: BLE001
@@ -313,10 +445,15 @@ def run(out: Path, window: bool = True) -> int:
                 results["window"] = {"ok": False, "error": "the window did not load within 90 seconds", "info": info}
                 save()
                 os._exit(1)
+            if not closed.wait(30):      # 檢查做完了，視窗卻關不掉：記下來並結束，不要卡住整個檢查
+                results["window"] = {"ok": False, "error": "the window did not close within 30 seconds", "info": info}
+                save()
+                os._exit(1)
 
         threading.Thread(target=watchdog, daemon=True).start()
         started = time.time()
         opened = window_mod._run_webview(srv.url, service, on_loaded)
+        closed.set()
         ok = bool(opened and done.is_set() and "error" not in info and len(info.get("wizard_text", "")) > 20
                   and info.get("cards") == len(UI_LANGS) and info.get("has_window_ctl"))
         results["window"] = {"ok": ok, "info": info, "opened": opened, "seconds": round(time.time() - started, 2)}

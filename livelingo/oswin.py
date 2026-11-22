@@ -1,6 +1,7 @@
 """只有 Windows 才用得到的小工具：剪貼簿、單一執行個體、讓視窗不被螢幕擷取拍到。"""
 
 import sys
+from pathlib import Path
 
 IS_WIN = sys.platform == "win32"
 MUTEX_NAME = "LiveLingoRunning"   # 安裝程式用這個名字判斷 LiveLingo 是不是還開著
@@ -81,6 +82,18 @@ def read_clipboard() -> str:
         u32.CloseClipboard()
 
 
+def allow_foreground(pid: int) -> bool:
+    """讓我們自己開的小程式（快速輸入框）可以把視窗放到最前面。只是給那個程式許可，不會動到別的視窗。"""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.user32.AllowSetForegroundWindow(int(pid)))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def acquire_single_instance() -> bool:
     """第一個開的回傳 True；已經有一個在跑就回傳 False。"""
     global _mutex
@@ -117,6 +130,35 @@ def exclude_from_capture(hwnd: int) -> None:
         pass
 
 
+def style_title_bar(hwnd: int, caption: str = "#171A1E", text: str = "#F2F4F6", dark: bool = True) -> bool:
+    """把 Windows 的標題列改成和程式一樣的顏色，視窗從上到下才是同一套。顏色是 #RRGGBB。
+
+    用的是 Windows 自己提供的視窗外觀設定（Windows 11 才能指定顏色；Windows 10 只會變成深色或淺色），
+    拖曳、貼齊螢幕邊緣、改大小都還是 Windows 原本的行為。
+    """
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    def colorref(value: str) -> wintypes.DWORD:
+        value = value.lstrip("#")
+        r, g, b = int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+        return wintypes.DWORD(r | (g << 8) | (b << 16))
+
+    try:
+        set_attr = ctypes.windll.dwmapi.DwmSetWindowAttribute
+        set_attr.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+        ok = True
+        on = ctypes.c_int(1 if dark else 0)
+        set_attr(hwnd, 20, ctypes.byref(on), ctypes.sizeof(on))                  # 深色或淺色的標題列
+        for attribute, value in ((35, colorref(caption)), (36, colorref(text)), (34, colorref(caption))):      # 底色、文字、外框
+            ok = set_attr(hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value)) == 0 and ok
+        return ok
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def work_area() -> tuple[int, int, int, int]:
     """主螢幕扣掉工作列之後的範圍 (left, top, width, height)。"""
     if IS_WIN:
@@ -127,6 +169,71 @@ def work_area() -> tuple[int, int, int, int]:
         if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0):   # SPI_GETWORKAREA
             return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
     return 0, 0, 1920, 1040
+
+
+_MONITOR_API = None
+
+
+def _monitor_api():
+    """
+    問螢幕配置要用的 Windows 函式和資料型別，只準備一次。用自己的一份 user32（不跟別的模組共用參數設定），
+    型別也固定同一個：之前每次呼叫都重新定義型別、設定在共用的那一份上，兩條執行緒同時問就會互相蓋掉而出錯。
+    """
+    global _MONITOR_API
+    if _MONITOR_API is None:
+        import ctypes
+        from ctypes import wintypes
+
+        class Info(ctypes.Structure):
+            _fields_ = [("size", wintypes.DWORD), ("monitor", wintypes.RECT), ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
+
+        dll = ctypes.WinDLL("user32")
+        callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
+        dll.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(Info)]
+        dll.GetMonitorInfoW.restype = wintypes.BOOL
+        dll.EnumDisplayMonitors.argtypes = [wintypes.HANDLE, ctypes.c_void_p, callback, wintypes.LPARAM]
+        dll.EnumDisplayMonitors.restype = wintypes.BOOL
+        _MONITOR_API = (dll, Info, callback)
+    return _MONITOR_API
+
+
+def monitors() -> list[dict]:
+    """
+    接著的每一個螢幕：[{"left","top","width","height","work":[左,上,寬,高]（扣掉工作列）,"primary"}]，
+    主螢幕排第一個，其他的由左到右。測試用：LIVELINGO_FAKE_MONITORS="0,0,1920,1080;1920,0,2560,1440"。
+    """
+    import os
+
+    fake = os.environ.get("LIVELINGO_FAKE_MONITORS")
+    found: list[dict] = []
+    if fake is not None:
+        for n, part in enumerate(p for p in fake.split(";") if p.strip()):
+            left, top, width, height = (int(v) for v in part.split(","))
+            found.append({"left": left, "top": top, "width": width, "height": height,
+                          "work": [left, top, width, height - 40], "primary": n == 0})
+    elif IS_WIN:
+        import ctypes
+
+        dll, info_type, callback_type = _monitor_api()
+
+        def each(handle, _dc, _rect, _lparam):
+            info = info_type()
+            info.size = ctypes.sizeof(info_type)
+            if dll.GetMonitorInfoW(handle, ctypes.byref(info)):
+                m, w = info.monitor, info.work
+                found.append({"left": m.left, "top": m.top, "width": m.right - m.left, "height": m.bottom - m.top,
+                              "work": [w.left, w.top, w.right - w.left, w.bottom - w.top], "primary": bool(info.flags & 1)})
+            return True
+
+        try:
+            dll.EnumDisplayMonitors(None, None, callback_type(each), 0)
+        except Exception:  # noqa: BLE001
+            found = []
+    if not found:
+        left, top, width, height = work_area()
+        found = [{"left": 0, "top": 0, "width": max(width, 640), "height": max(height + 40, 480),
+                  "work": [left, top, width, height], "primary": True}]
+    return sorted(found, key=lambda m: (not m["primary"], m["left"], m["top"]))
 
 
 def has_webview2() -> bool:
@@ -170,6 +277,69 @@ def mic_privacy_blocked() -> bool | None:
             if value.lower() == "deny":
                 return True
     return False if seen else None
+
+
+def documents_dir() -> Path:
+    """使用者的「文件」資料夾（可能被搬到 OneDrive，所以要問 Windows，不能自己猜）。"""
+    if IS_WIN:
+        try:
+            import ctypes
+
+            buf = ctypes.create_unicode_buffer(520)
+            if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0 and buf.value:      # 5 = CSIDL_PERSONAL
+                return Path(buf.value)
+        except Exception:  # noqa: BLE001
+            pass
+    return Path.home() / "Documents"
+
+
+# 「按住才說話」可以選的按鍵（名字: Windows 的虛擬鍵碼）。挑的是遊戲裡比較少用到、按著也不會打出字的鍵
+PTT_KEYS = {"F8": 0x77, "F9": 0x78, "F10": 0x79, "CapsLock": 0x14, "RightCtrl": 0xA3, "RightAlt": 0xA5,
+            "Mouse4": 0x05, "Mouse5": 0x06}
+
+
+def key_down(name: str) -> bool:
+    """這個鍵現在是不是按著（不管焦點在哪個視窗，遊戲全螢幕時也讀得到）。"""
+    if not IS_WIN or name not in PTT_KEYS:
+        return False
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.user32.GetAsyncKeyState(PTT_KEYS[name]) & 0x8000)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+_dll_dirs: list = []
+
+
+def add_dll_dirs(folders) -> None:
+    """把資料夾加進「找 DLL 的地方」（語音辨識用顯示卡時，CUDA 和 cuDNN 的檔案在使用者的資料夾裡）。"""
+    import os
+
+    for folder in folders:
+        folder = str(folder)
+        if not IS_WIN or folder in _dll_dirs:
+            continue
+        _dll_dirs.append(folder)
+        os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
+        try:
+            os.add_dll_directory(folder)
+        except OSError:
+            pass
+
+
+def open_path(path) -> bool:
+    """用 Windows 預設的程式打開檔案或資料夾。"""
+    if not IS_WIN:
+        return False
+    import os
+
+    try:
+        os.startfile(str(path))      # noqa: S606
+        return True
+    except OSError:
+        return False
 
 
 def open_mic_settings() -> bool:

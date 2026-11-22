@@ -55,6 +55,27 @@ class FakeAudio:
                 {"id": "mic-webcam", "name": "麥克風 (HD Webcam C270)", "default": False}],
         }
 
+    def apps_available(self) -> bool:
+        return os.environ.get("LIVELINGO_FAKE_APPS") is not None
+
+    def capture_apps(self, exes, on_error=None, on_open=None):
+        """只聽指定程式：LIVELINGO_FAKE_APPS_FAIL=1 時模擬 Windows 不給聲音。"""
+        if not self.apps_available():
+            return None
+        self.opened.append(("apps", ",".join(exes)))
+        cap = ArrayCapture("loopback", np.concatenate([np.zeros(SR // 2, dtype=np.float32), self.heard]))
+        cap.device_name = "、".join(e[:-4] if e.lower().endswith(".exe") else e for e in exes)
+        if os.environ.get("LIVELINGO_FAKE_APPS_FAIL"):
+            def run():
+                time.sleep(0.3)
+                if on_error:
+                    on_error("loopback", RuntimeError("0x88890008"))
+
+            cap.run = run
+        elif on_open:
+            on_open("loopback", cap.device_name)
+        return cap
+
     def capture(self, kind, device, on_error=None, on_open=None):
         self.opened.append((kind, device))
         if device == "spk-speaker":       # 模擬一個打不開的裝置
@@ -91,6 +112,15 @@ def main() -> None:
         import cv2
 
         service.grab = lambda region: cv2.imread(shot)
+    if os.environ.get("LIVELINGO_FAKE_UNSURE"):      # 把聽到的句子都當成「沒把握」，方便看介面上的記號
+        real_speech = service._on_speech
+        service._on_speech = lambda kind, text, lang, seconds=0.0, unsure=False: real_speech(
+            kind, text, lang, seconds, kind == "loopback")
+    taken = os.environ.get("LIVELINGO_FAKE_HOTKEYS")      # 假的全域快速鍵；值是「假裝被別的程式佔用」的組合，用逗號分開
+    if taken is not None:
+        from livelingo.hotkeys import FakeBackend
+
+        service.hotkeys.backend = FakeBackend(taken=[c for c in taken.split(",") if c.strip()])
     server = Server(service, port=int(os.environ.get("LIVELINGO_PORT", "0")))
     server.token = os.environ.get("LIVELINGO_TOKEN", server.token)
     server.start()

@@ -1,0 +1,10 @@
+// 品牌標誌（使用者選的「LL 互扣」：兩個 L 扣成一個對話框）只放在這一個檔案：導覽列、啟動畫面、關於頁、空畫面都從這裡拿。
+// 圖形來自標誌的定稿檔（livelingo-icon.svg 和 16 到 24 像素用的 livelingo-icon-small.svg），這裡不改形狀；
+// 桌面和工作列的圖示是同一組檔案做的 packaging/livelingo.ico。
+window.BRAND = {
+  name: ["Live", "Lingo"],
+  mark: '<svg class="mark" aria-hidden="true" viewBox="0 0 1024 1024"><defs><linearGradient id="llg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1D2126"/><stop offset="1" stop-color="#0B0D0F"/></linearGradient><linearGradient id="lll" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><rect x="8" y="8" width="1008" height="1008" rx="232" fill="url(#llg)"/><rect x="10" y="10" width="1004" height="1004" rx="230" fill="none" stroke="url(#lll)" stroke-width="4"/><g transform="translate(512 512) scale(1.0) translate(-512 -547)"><g fill="none" stroke-width="150" stroke-linecap="round" stroke-linejoin="round"><path d="M290 290 V700 H534" stroke="#4ADE9A"/><path d="M734 734 V324 H490" stroke="#F2B84B"/></g><path d="M215 700 L215 880 L380 752 Z" fill="#4ADE9A"/></g></svg>',
+  markSmall: '<svg class="mark small" aria-hidden="true" viewBox="0 0 1024 1024"><defs><linearGradient id="llsg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1D2126"/><stop offset="1" stop-color="#0B0D0F"/></linearGradient></defs><rect x="8" y="8" width="1008" height="1008" rx="200" fill="url(#llsg)"/><g transform="translate(512 512) scale(1.2) translate(-512 -547)"><g fill="none" stroke-width="176" stroke-linecap="round" stroke-linejoin="round"><path d="M290 290 V700 H480" stroke="#4ADE9A"/><path d="M734 734 V324 H544" stroke="#F2B84B"/></g><path d="M202 700 L202 880 L367 752 Z" fill="#4ADE9A"/></g></svg>',
+};
+document.querySelectorAll("[data-mark]").forEach((el) => { el.outerHTML = window.BRAND.mark; });
+document.querySelectorAll("[data-wordmark]").forEach((el) => { el.innerHTML = `${window.BRAND.name[0]}<b>${window.BRAND.name[1]}</b>`; });
