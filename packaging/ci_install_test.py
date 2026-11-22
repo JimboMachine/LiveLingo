@@ -2,7 +2,7 @@
 在 GitHub 的 Windows 機器上，把剛做好的安裝檔真的裝一次、更新一次、卸載一次，確認：
   1. 安靜安裝後程式在、桌面和開始功能表捷徑在、「新增或移除程式」裡有登記
   2. 裝好的程式自我檢查通過（視窗開得起來）
-  3. 更新：假裝 GitHub 上有 99.0.0，程式會先問；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
+  3. 更新：假裝 GitHub 上有 99.0.0，程式會先問（問的時候帶著這一版改了什麼、要下載多大）；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
   4. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
 """
@@ -146,9 +146,19 @@ class Release(BaseHTTPRequestHandler):
                 while chunk := f.read(1 << 20):
                     self.wfile.write(chunk)
             return
-        body = json.dumps({"tag_name": "v99.0.0", "assets": [{
-            "name": "LiveLingo-Setup.exe", "size": SETUP.stat().st_size, "digest": "sha256:" + digest,
-            "browser_download_url": f"http://127.0.0.1:{self.server.server_address[1]}/LiveLingo-Setup.exe"}]}).encode()
+        if self.path.endswith("changes.json"):      # 跟安裝檔一起發行的「這一版改了什麼」
+            body = json.dumps({"99.0.0": {"en": ["A change made up for this test"], "zh-TW": ["測試用的改動"]},
+                               "0.0.1": {"en": ["Too old to be shown"]}}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        base = f"http://127.0.0.1:{self.server.server_address[1]}"
+        body = json.dumps({"tag_name": "v99.0.0", "assets": [
+            {"name": "LiveLingo-Setup.exe", "size": SETUP.stat().st_size, "digest": "sha256:" + digest,
+             "browser_download_url": f"{base}/LiveLingo-Setup.exe"},
+            {"name": "changes.json", "size": 100, "browser_download_url": f"{base}/changes.json"}]}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -194,6 +204,12 @@ def asking():
 skipper = subprocess.Popen([str(APP)], env=env)
 print("started pid", skipper.pid)
 run = wait_for("the app to ask about the update", asking, 180)
+asked = api(run, "/api/state")["detail"]
+print("update prompt:", json.dumps(asked, ensure_ascii=True))
+if [n["version"] for n in asked.get("notes") or []] != ["99.0.0"] or asked["notes"][0]["items"].get("en") != ["A change made up for this test"]:
+    fail("the update prompt does not carry what changed in the new version")
+if asked.get("size") != SETUP.stat().st_size:
+    fail("the update prompt does not say how large the download is")
 api(run, "/api/update", {"choice": "later"})
 wait_for("the app to carry on after 'not this time'", lambda: api(run, "/api/state")["phase"] != "updating", 60)
 if any(h.endswith(".exe") for h in Release.hits):

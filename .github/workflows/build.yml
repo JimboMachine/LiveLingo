@@ -112,6 +112,8 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; nothing to publish."
           else
-            gh release create "$tag" dist/LiveLingo-Setup.exe --target "$GITHUB_SHA" --title "LiveLingo $tag" \
-              --notes "下載 LiveLingo-Setup.exe，點兩下安裝。已經安裝過的話，開啟 LiveLingo 時會自動更新到這個版本。"
+            # 發行說明和程式裡看到的「這一版改了什麼」是同一份（livelingo/data/changes.json）；一起發行，更新提示才讀得到
+            python -m livelingo.changes dist/release-notes.md
+            gh release create "$tag" dist/LiveLingo-Setup.exe livelingo/data/changes.json --target "$GITHUB_SHA" --title "LiveLingo $tag" \
+              --notes-file dist/release-notes.md
           fi

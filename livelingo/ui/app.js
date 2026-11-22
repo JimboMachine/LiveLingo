@@ -1159,6 +1159,22 @@
       <section><div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div></section>`;
   }
 
+  // 每一版改了什麼：用現在的介面語言，沒有那個語言就用英文
+  function changesHTML(list, withVersion) {
+    return list.map((v) => {
+      const items = v.items[S.cfg.ui_lang] || v.items.en || v.items["zh-TW"] || [];
+      return `${withVersion ? `<div class="changes-version">${esc(t("about_changes_version", { version: v.version }))}</div>` : ""}<ul>${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`;
+    }).join("");
+  }
+  function aboutChangesHTML() {
+    const all = Object.keys(S.changes || {}).map((version) => ({ version, items: S.changes[version] }));
+    const now = all.filter((v) => v.version === S.version), older = all.filter((v) => v.version !== S.version);
+    if (!now.length && !older.length) return "";
+    return `<section id="about-changes"><div><h2>${esc(t("about_changes_title"))}</h2><div class="sub">${esc(t("about_version", { version: S.version }))}</div></div>
+        ${now.length ? `<div class="changes">${changesHTML(now, false)}</div>` : ""}
+        ${older.length ? `<details class="changes-older"><summary>${esc(t("about_changes_older"))}</summary><div class="changes">${changesHTML(older, true)}</div></details>` : ""}</section>`;
+  }
+
   function aboutPage() {
     const fact = (icon, title, text) => `<div class="fact">${ICON[icon]}<div><b>${esc(title)}</b><span>${esc(text)}</span></div></div>`;
     return `
@@ -1170,7 +1186,8 @@
         ${fact("shield", t("about_local_title"), t("about_local"))}
         ${fact("quality", t("about_engine_title"), t("about_engine"))}
         ${fact("info", t("about_update_title"), t("about_update"))}
-      </section>`;
+      </section>
+      ${aboutChangesHTML()}`;
   }
 
   function renderSettingsPage() {
@@ -1334,7 +1351,8 @@
       const text = d.step === "downloading" ? t("up_downloading", { version: d.version, percent: d.percent || 0 })
         : (d.step === "installing" ? t("up_installing", { version: d.version }) : t("up_checking"));
       if (d.step === "ask") {
-        html = `<h2>${esc(t("up_ask_title", { version: d.version }))}</h2><p>${esc(t("up_ask_text"))}</p>
+        html = `<h2>${esc(t("up_ask_title", { version: d.version }))}</h2><p>${esc(t("up_ask_text"))}${d.size ? " " + esc(t("up_size", { size: sizeText(d.size) })) : ""}</p>
+          ${(d.notes || []).length ? `<div class="changes" id="up-notes" tabindex="0" role="group" aria-label="${esc(t("up_notes_title"))}"><b>${esc(t("up_notes_title"))}</b>${changesHTML(d.notes, d.notes.length > 1)}</div>` : ""}
           <div class="btn-row center"><button class="primary" data-act="update-now">${esc(t("up_now"))}</button>
           <button class="ghost" data-act="update-later">${esc(t("up_later"))}</button></div>`;
       } else {
@@ -2000,6 +2018,8 @@
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
     S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
+    S.changes = st.changes || {};
+    if (st.updated_from) { toast(t("up_done", { version: st.version }), 12000); post("/api/seen", { update: true }); }      // 剛自動更新完：說一次
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
     S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history; S.settingsBackup = st.settings_backup || null;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";

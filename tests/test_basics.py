@@ -2884,3 +2884,119 @@ def test_storage_sizes_move_and_remove_unused(tmp_path, monkeypatch):
         assert i18n.count(f"n_{code}:") == 5, code
     for row in ("model_4b", "model_12b", "engine_cpu", "engine_cuda", "cudnn", "whisper", "ocr", "updates", "partial", "records"):
         assert i18n.count(f"sto_i_{row}:") == 5 and i18n.count(f"sto_d_{row}:") == 5, row
+
+
+def test_update_prompt_says_what_changed(tmp_path, monkeypatch):
+    """第 46 項：更新提示裡有這一版改了什麼。程式裡、更新提示、GitHub 發行說明用的是同一份 changes.json。"""
+    import json as _json
+    import re
+    from pathlib import Path
+
+    from livelingo import __version__, changes, updater
+
+    root = Path(changes.__file__).parent
+    notes = changes.bundled()
+    # 現在這一版一定要寫改了什麼，五種語言都要有，而且句數一樣（少翻一句會被擋）
+    assert __version__ in notes and list(notes)[0] == __version__
+    for version, entry in notes.items():
+        assert set(entry) == set(UI_LANGS), version
+        assert len({len(items) for items in entry.values()}) == 1 and 1 <= len(entry["en"]) <= changes.MAX_ITEMS, version
+        for items in entry.values():
+            assert all(0 < len(i) <= changes.MAX_CHARS for i in items)
+    assert _json.loads((root / "data" / "changes.json").read_text(encoding="utf-8")) == notes      # 檔案本身就是乾淨的，沒有被 clean 丟掉的東西
+
+    # 從網路拿來的：壞掉的部分丟掉，不會整個壞
+    dirty = {"3.0.0": {"en": ["ok", "", 5, "x" * 999], "zh-TW": "not a list", "ko": []}, "bad version": {"en": ["x"]}, "2.9": ["x"], "1.0.0": {"en": ["old"]}}
+    cleaned = changes.clean(dirty)
+    assert list(cleaned) == ["3.0.0", "1.0.0"] and cleaned["3.0.0"] == {"en": ["ok", "x" * changes.MAX_CHARS]}
+    assert changes.clean(None) == {} and changes.clean(["x"]) == {} and changes.clean({"1.0.0": {"en": [f"n{i}" for i in range(20)]}})["1.0.0"]["en"] == [f"n{i}" for i in range(changes.MAX_ITEMS)]
+    # 只列比現在新的，新的在前
+    many = changes.clean({"2.4.0": {"en": ["b"]}, "2.10.0": {"en": ["c"]}, "2.3.0": {"en": ["a"]}, "1.0.0": {"en": ["z"]}})
+    assert [n["version"] for n in changes.since(many, "2.3.0")] == ["2.10.0", "2.4.0"] and changes.since(many, "9.0.0") == [] and changes.since(many, "weird") == []
+
+    # 發行說明
+    text = changes.release_notes()
+    assert "LiveLingo-Setup.exe" in text and "## 這一版改了什麼" in text and "## What's new" in text
+    assert all(f"- {item}" in text for item in notes[__version__]["zh-TW"] + notes[__version__]["en"])
+    out = tmp_path / "notes.md"
+    assert changes.main([str(out)]) == 0 and out.read_text(encoding="utf-8") == text
+    workflow = (root.parent / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    assert "python -m livelingo.changes dist/release-notes.md" in workflow and "livelingo/data/changes.json --target" in workflow and "--notes-file dist/release-notes.md" in workflow
+    assert '"livelingo/data"' in (root.parent / "packaging" / "livelingo.spec").read_text(encoding="utf-8")      # data 資料夾有打包進去
+
+    # 查更新：一起帶回說明檔的網址；拿說明
+    class Hub(BaseHTTPRequestHandler):
+        notes_body = _json.dumps({"9.9.9": {"en": ["Faster"], "zh-TW": ["更快"]}, __version__: {"en": ["current"]}}).encode()
+
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):  # noqa: N802
+            base = f"http://127.0.0.1:{self.server.server_address[1]}"
+            if self.path == "/notes":
+                body = Hub.notes_body
+            else:
+                body = _json.dumps({"tag_name": "v9.9.9", "assets": [
+                    {"name": "LiveLingo-Setup.exe", "size": 123, "browser_download_url": base + "/setup"},
+                    {"name": "changes.json", "browser_download_url": base + "/notes"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Hub)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        monkeypatch.setenv("LIVELINGO_UPDATE_API", base + "/latest")
+        info = updater.check()
+        assert info["version"] == "9.9.9" and info["notes_url"] == base + "/notes" and info["size"] == 123
+        got = updater.fetch_notes(info["notes_url"])
+        assert changes.since(got) == [{"version": "9.9.9", "items": {"en": ["Faster"], "zh-TW": ["更快"]}}]
+        Hub.notes_body = b"<html>not json</html>"
+        assert updater.fetch_notes(info["notes_url"]) == {}
+        Hub.notes_body = b"[" + b"1," * updater.NOTES_LIMIT + b"1]"
+        assert updater.fetch_notes(info["notes_url"]) == {}      # 太大：不讀
+        assert updater.fetch_notes("") == {} and updater.fetch_notes("http://127.0.0.1:9/none", timeout=1) == {}
+
+        # 服務：問要不要更新的時候帶著說明和大小；按「這次先不要」就照常
+        from livelingo.service import Service
+        Hub.notes_body = _json.dumps({"9.9.9": {"en": ["Faster"], "zh-TW": ["更快"]}}).encode()
+        service = Service(tmp_path / "svc")
+        try:
+            assert service.changes == notes and service.state()["changes"] == notes and service.state()["updated_from"] == ""
+            seen = []
+            service.set_phase = lambda phase, **detail: seen.append((phase, detail))
+            done = []
+            threading.Thread(target=lambda: done.append(service._update_if_needed()), daemon=True).start()
+            deadline = time.time() + 10
+            while not any(d.get("step") == "ask" for _, d in seen) and time.time() < deadline:
+                time.sleep(0.02)
+            ask = next(d for _, d in seen if d.get("step") == "ask")
+            assert ask == {"step": "ask", "version": "9.9.9", "size": 123, "notes": [{"version": "9.9.9", "items": {"en": ["Faster"], "zh-TW": ["更快"]}}]}
+            service.update_choice("later")
+            deadline = time.time() + 10
+            while not done and time.time() < deadline:
+                time.sleep(0.02)
+            assert done == [False]
+        finally:
+            service.shutdown()
+    finally:
+        httpd.shutdown()
+
+    # 自動更新完第一次開：說一次「已更新」，之後不再說
+    folder = tmp_path / "upd"
+    folder.mkdir()
+    assert updater.just_updated(folder) == ""
+    (folder / "update.json").write_text(_json.dumps({"version": __version__, "at": time.time(), "from": "2.2.1"}), encoding="utf-8")
+    assert updater.just_updated(folder) == "2.2.1" and updater.just_updated(folder) == ""
+    (folder / "update.json").write_text(_json.dumps({"version": "9.9.9", "at": time.time(), "from": "2.2.1"}), encoding="utf-8")
+    assert updater.just_updated(folder) == ""      # 沒裝成功（還是舊版）：不說
+    (folder / "update.json").write_text(_json.dumps({"version": __version__, "at": time.time(), "from": __version__}), encoding="utf-8")
+    assert updater.just_updated(folder) == ""
+
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    assert "changesHTML(d.notes" in js and 'post("/api/seen"' in js and "aboutChangesHTML()" in js
+    assert not re.search(r"<li>\$\{(?!esc\()", js)      # 說明是從網路來的字：一定當作純文字放進畫面
+    ci = (root.parent / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
+    assert "the update prompt does not carry what changed" in ci

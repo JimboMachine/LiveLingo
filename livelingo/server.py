@@ -234,6 +234,9 @@ class Server:
                         if body.get("undo") or body.get("forget"):
                             return self._json(service.settings_undo(forget=bool(body.get("forget"))))
                         return self._json(service.settings_import(body.get("data")))
+                    if route == "/api/seen":      # 介面已經說過「更新好了」：不用再說
+                        service.updated_from = ""
+                        return self._json({"ok": True})
                     if route == "/api/storage":      # 搬大檔案、取消、刪掉沒在用的、打開資料夾
                         if body.get("choose"):      # 跳出選資料夾的視窗，會等使用者選完
                             return self._json(service.storage_choose())

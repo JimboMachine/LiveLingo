@@ -19,6 +19,8 @@ from .assets import DownloadError, fetch
 
 RELEASE_API = "https://api.github.com/repos/JimboMachine/LiveLingo/releases/latest"
 ASSET_NAME = "LiveLingo-Setup.exe"
+NOTES_NAME = "changes.json"   # 跟安裝檔一起發行的「每一版改了什麼」
+NOTES_LIMIT = 200_000
 RETRY_AFTER = 30 * 60     # 同一個版本裝了還是舊的話，隔這麼久才再試（避免一直重裝重開）
 
 
@@ -45,20 +47,52 @@ def enabled() -> bool:
 
 
 def check(timeout: float = 8) -> dict | None:
-    """有新版本就回傳 {"version", "url", "size", "sha256"}，沒有或查不到就回傳 None。"""
+    """有新版本就回傳 {"version", "url", "size", "sha256", "notes_url"}，沒有或查不到就回傳 None。"""
     req = urllib.request.Request(api_url(), headers={"User-Agent": "LiveLingo", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         rel = json.loads(r.read().decode("utf-8"))
     tag = rel.get("tag_name") or ""
     if rel.get("draft") or rel.get("prerelease") or not is_newer(tag):
         return None
+    notes_url = next((a.get("browser_download_url") or "" for a in rel.get("assets", []) if a.get("name") == NOTES_NAME), "")
     for a in rel.get("assets", []):
         if a.get("name") == ASSET_NAME:
             digest = a.get("digest") or ""
             return {"version": ".".join(str(n) for n in parse_version(tag)), "url": a["browser_download_url"],
-                    "size": int(a.get("size") or 0),
+                    "size": int(a.get("size") or 0), "notes_url": notes_url,
                     "sha256": digest.split(":", 1)[1].lower() if digest.startswith("sha256:") else ""}
     return None
+
+
+def fetch_notes(url: str, timeout: float = 6) -> dict:
+    """新版本改了什麼（跟安裝檔一起發行的 changes.json）。拿不到、太大、看不懂都回傳空的：沒有說明也照樣可以更新。"""
+    if not url:
+        return {}
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "LiveLingo"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read(NOTES_LIMIT + 1)
+        if len(raw) > NOTES_LIMIT:
+            return {}
+        from .changes import clean
+
+        return clean(json.loads(raw.decode("utf-8")))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def just_updated(folder: Path) -> str:
+    """剛剛是不是自動更新完第一次開：是的話回傳舊的版本號（只會說一次），不是回傳空字串。"""
+    path = folder / "update.json"
+    try:
+        last = json.loads(path.read_text(encoding="utf-8"))
+        if last.get("version") != __version__ or last.get("told") or not last.get("from") or last["from"] == __version__:
+            return ""
+        last["told"] = True
+        path.write_text(json.dumps(last), encoding="utf-8")
+        return str(last["from"])
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 class Attempts:

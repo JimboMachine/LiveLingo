@@ -15,7 +15,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, chatpaint, gpu, oswin, storage, updater
+from . import __version__, apps, assets, changes, chatpaint, gpu, oswin, storage, updater
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -132,6 +132,10 @@ class Service:
         self.hub = hub or EventHub()
         self.cfg = Config(data)
         self.cfg.on_fail = lambda error: self.notice("save_failed", error=error)      # 設定檔寫不進去要讓使用者知道
+        self.changes = changes.bundled()
+        self.updated_from = updater.just_updated(data)
+        if self.updated_from:
+            self.log(f"updated from {self.updated_from} to {__version__}")
         self.store = storage.store_dir(data, self.cfg["store_dir"])      # 大檔案（模型、翻譯引擎）放的地方，可以搬到別的磁碟
         self._move: dict | None = None      # 正在搬大檔案：{"to", "done", "total"}
         self._move_cancel = threading.Event()
@@ -232,6 +236,8 @@ class Service:
             "hotkeys": self.hotkeys_state(),
             "history": self.history.state(),
             "settings_backup": self.settings_backup(),
+            "changes": self.changes,                 # 每一版改了什麼（關於頁）
+            "updated_from": self.updated_from,       # 剛自動更新完第一次開：舊的版本號（只說一次）
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -309,7 +315,8 @@ class Service:
             self.notice("update_failed", version=info["version"])
             return False
         self._update_stop.clear()
-        self.set_phase("updating", step="ask", version=info["version"])
+        notes = changes.since(updater.fetch_notes(info.get("notes_url") or ""))      # 這次更新會改什麼（拿不到就不顯示）
+        self.set_phase("updating", step="ask", version=info["version"], notes=notes, size=info.get("size") or 0)
         choice = None
         while choice is None and not self.closing.is_set():
             try:
