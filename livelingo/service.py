@@ -21,7 +21,7 @@ from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVER
                      Glossary, Lessons)
 from .core.engine import Engine
 from .core.romanize import romanize
-from .core.translate import LANGS, MAX_TEXT, Translator, detect_language, numbers_lost, similarity
+from .core.translate import LANGS, MAX_TEXT, Translator, detect_language, numbers_lost, similarity, why
 from .history import DAYS as HISTORY_DAYS
 from .jobs import Jobs
 from .history import History
@@ -806,7 +806,7 @@ class Service:
                 msg = dict(msg, took=round(float(msg.get("hear") or 0.0) + spent, 1))
             if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
                 return
-            msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
+            msg = dict(msg, translated=out, target=target, pending=False, error="", why="", back="",
                        lost=numbers_lost(msg["original"], out, target, msg["lang"]),      # 原文有、譯文找不到的數字：畫面會提醒核對
                        pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
             self._count(msg)
@@ -826,7 +826,7 @@ class Service:
                 return
             self.log(traceback.format_exc())
             self._count(msg, failed=True)
-            self._post(dict(msg, pending=False, error=str(ex)))
+            self._post(dict(msg, pending=False, error=str(ex), why=why(ex)))
 
     def _tell_skipped(self, force: bool = False) -> None:
         """聊天刷得比翻譯快、有句子被略過時跟使用者說一聲（幾秒說一次，不要一則說一次）。"""
@@ -904,6 +904,17 @@ class Service:
             return False
         msg = dict(msg, original=text, lang=detect_language(text) or msg["lang"], unsure=False, edited=True,
                    pending=True, copied=False, taught=False, back="", error="")
+        self._post(msg)
+        self.jobs.put(msg, asked=True)
+        return True
+
+    def again(self, msg_id: int) -> bool:
+        """翻譯失敗的那一則再翻一次（排最前面）。"""
+        with self._lock:
+            msg = next((m for m in self.messages if m["id"] == msg_id), None)
+        if not msg or msg.get("pending") or not msg.get("error"):
+            return False
+        msg = dict(msg, pending=True, error="", why="")
         self._post(msg)
         self.jobs.put(msg, asked=True)
         return True

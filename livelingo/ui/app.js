@@ -361,7 +361,9 @@
     const unsure = m.unsure && !m.pending
       ? `<button class="unsure" data-act="fix" data-id="${m.id}">${ICON.info}<span>${esc(t(m.via === "screen" ? "unsure_seen" : "unsure_heard"))}</span></button>` : "";
     if (m.error) {
-      body += `<div class="text failed">${esc(t("failed", { error: m.error }))}</div>`;
+      // 先用看得懂的話說原因；電腦回報的原文放在提示裡（滑鼠移上去看得到），不知道原因的才直接顯示
+      body += `<div class="text failed" title="${esc(m.error)}">${esc(m.why && m.why !== "other" ? t("err_" + m.why) : t("failed", { error: m.error }))}</div>` +
+        `<div class="actions"><button data-act="again" data-id="${m.id}">${esc(t("retry"))}</button></div>`;
     } else if (m.pending) {
       body += `<div class="text pending">${esc(t("translating"))}</div>`;
     } else {
@@ -1586,6 +1588,7 @@
       const r = await post("/api/teach", { id: Number(el.dataset.id), text });
       if (r.ok) { box.parentElement.innerHTML = ""; toast(t("n_taught")); }
     },
+    again: (el) => post("/api/again", { id: Number(el.dataset.id) }),
     copy: async (el) => { const r = await post("/api/copy", { id: Number(el.dataset.id) }); if (r.ok) toast(t("copied"), 1600); },
     tab: (el) => openTab(el.dataset.tab),
     "try-one": () => { const say = $("say"); say.value = t("say_placeholder").replace(/^[^：:]*[：:]\s*/, ""); say.focus(); },

@@ -4183,3 +4183,64 @@ def test_black_capture_is_reported(tmp_path):
     service._screen_black(["a"])
     service._stop_watcher()
     assert service._black_regions == set() and notices == ["screen_black", "screen_black"]
+
+
+def test_failed_translation_says_why_and_can_be_retried(tmp_path):
+    """翻譯失敗：用看得懂的話說原因（五種語言），電腦回報的原文只當補充；失敗的那一則可以按「重試」再翻。"""
+    import socket
+    import urllib.error
+    from pathlib import Path
+
+    from livelingo.core.translate import why
+    from livelingo.service import Service
+
+    assert why(urllib.error.URLError(ConnectionRefusedError(10061, "refused"))) == "engine_down"
+    assert why(ConnectionResetError("reset")) == "engine_down"
+    assert why(socket.timeout("timed out")) == "timeout" and why(urllib.error.URLError("timed out")) == "timeout"
+    http = lambda code: urllib.error.HTTPError("http://x", code, "x", {}, None)
+    assert why(http(401)) == "engine_key" and why(http(503)) == "engine_busy" and why(http(500)) == "engine_reply"
+    assert why(KeyError("choices")) == "engine_reply" and why(RuntimeError("?")) == "other"
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    i18n, app = ui.joinpath("i18n.js").read_text(encoding="utf-8"), ui.joinpath("app.js").read_text(encoding="utf-8")
+    for code in ("engine_down", "timeout", "engine_key", "engine_busy", "engine_reply"):
+        assert i18n.count(f"err_{code}: ") == len(UI_LANGS), code
+    assert 't("err_" + m.why)' in app and 'data-act="again"' in app and 'post("/api/again"' in app
+
+    class Flaky:
+        tone, fail = "casual", True
+
+        def translate(self, text, target, source=None, context=None):
+            if self.fail:
+                raise urllib.error.URLError(ConnectionRefusedError(10061, "refused"))
+            return "안녕"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False)
+    service.translator = Flaky()
+    service._engine_gone = lambda: False               # 引擎還在，只是這一次沒回應
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        mid = service.submit("typed", "你好", "zh")
+        get = lambda: next(m for m in service.messages if m["id"] == mid)
+        wait(lambda: get()["error"])
+        assert get()["why"] == "engine_down" and not get()["pending"]
+        assert service.again(mid + 99) is False
+        service.translator.fail = False
+        assert service.again(mid) is True
+        wait(lambda: get()["translated"] == "안녕")
+        assert get()["error"] == "" and get()["why"] == "" and service.again(mid) is False      # 翻好的不能再按
+    finally:
+        service.closing.set()
+        worker.join(2)

@@ -394,6 +394,22 @@ def numbers_lost(original: str, out: str, target: str, source: str | None = None
     return lost
 
 
+def why(ex: BaseException) -> str:
+    """翻譯失敗的原因，分成幾種（介面用使用者的語言說明；電腦回報的原文只當補充）。"""
+    import socket
+    import urllib.error
+
+    if isinstance(ex, urllib.error.HTTPError):
+        return "engine_key" if ex.code in (401, 403) else "engine_busy" if ex.code in (429, 503) else "engine_reply"
+    if isinstance(ex, (TimeoutError, socket.timeout)) or "timed out" in str(ex).lower():
+        return "timeout"
+    if isinstance(ex, (urllib.error.URLError, ConnectionError)):
+        return "engine_down"
+    if isinstance(ex, (ValueError, KeyError, IndexError)):
+        return "engine_reply"      # 引擎回了看不懂的東西
+    return "other"
+
+
 class Translator:
     def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None):
         """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
