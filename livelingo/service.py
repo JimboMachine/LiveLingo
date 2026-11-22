@@ -462,8 +462,9 @@ class Service:
         self.hub.publish("record", self.record_state())
         return True
 
-    def submit(self, via: str, text: str, lang: str | None = None) -> None:
-        """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。"""
+    def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False) -> None:
+        """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
+        unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。"""
         text = text.strip()
         if not text:
             return
@@ -471,7 +472,7 @@ class Service:
         who = "them" if via in ("screen", "heard") else "me"
         msg = {"id": next(self._ids), "who": who, "via": via, "original": text, "lang": lang,
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
-               "time": time.strftime("%H:%M")}
+               "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time()}
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
             self._post(msg)
         self.jobs.put(msg)
@@ -485,6 +486,18 @@ class Service:
         # 我打的字、我說的話：是我的語言就翻成對方的語言，否則翻回我的語言
         return their if msg["lang"] == LANGS[my]["family"] else my
 
+    def _context_for(self, msg: dict) -> list[str]:
+        """這一句前面最近的兩句對話（原文），給翻譯模型參考。只看兩分鐘內、語音和打字的句子；
+        螢幕上讀到的是一行一行各自獨立的文字，不拿來當前文，也不用前文。"""
+        if not self.cfg["use_context"] or msg.get("via") == "screen":
+            return []
+        at = msg.get("at") or time.time()
+        with self._lock:
+            before = [m for m in self.messages
+                      if m["id"] < msg["id"] and m.get("via") != "screen" and not m.get("error")
+                      and at - (m.get("at") or 0) <= 120]
+        return [m["original"] for m in before[-2:]]
+
     def _translate_worker(self) -> None:
         while not self.closing.is_set():
             try:
@@ -496,7 +509,7 @@ class Service:
                 continue
             try:
                 target = self._target_for(msg)
-                out = self.translator.translate(msg["original"], target, msg["lang"])
+                out = self.translator.translate(msg["original"], target, msg["lang"], self._context_for(msg))
                 if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
                     continue
                 msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
@@ -548,6 +561,19 @@ class Service:
             msg = dict(msg, pending=True, copied=False)
             self._post(msg)
             self.jobs.put(msg)
+        return True
+
+    def edit(self, msg_id: int, text: str) -> bool:
+        """「聽錯了／看錯了」：把辨識出來的原文改成對的，重新翻這一則。"""
+        text = text.strip()[:500]
+        with self._lock:
+            msg = next((m for m in self.messages if m["id"] == msg_id), None)
+        if not msg or not text or msg.get("pending") or text == msg["original"]:
+            return False
+        msg = dict(msg, original=text, lang=detect_language(text) or msg["lang"], unsure=False, edited=True,
+                   pending=True, copied=False, taught=False, back="", error="")
+        self._post(msg)
+        self.jobs.put(msg)
         return True
 
     def teach(self, msg_id: int, dst: str) -> bool:
@@ -716,7 +742,7 @@ class Service:
             ocr = self._load_ocr()
             if self.watcher is None:
                 self.watcher = ScreenWatcher(
-                    ocr, on_message=lambda text, lang: self.submit("screen", text, lang),
+                    ocr, on_message=lambda text, lang, score=1.0: self.submit("screen", text, lang, unsure=score < 0.8),
                     on_status=self._screen_error,
                     interval=float(self.cfg["interval"]), source_langs=self._screen_langs(),
                     grab=getattr(self, "grab", None))
@@ -921,7 +947,7 @@ class Service:
         self._stop_voice(key)
         threading.Thread(target=self._start_voice, args=(key,), daemon=True).start()
 
-    def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0) -> None:
+    def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0, unsure: bool = False) -> None:
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
             return
@@ -934,7 +960,7 @@ class Service:
             speaker, other = ((self.cfg["their_lang"], self.cfg["my_lang"]) if kind == "loopback"
                               else (self.cfg["my_lang"], self.cfg["their_lang"]))
             text = to_script(text, speaker if LANGS[speaker]["family"] == "zh" else other)
-        self.submit("heard" if kind == "loopback" else "spoken", text, lang)
+        self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure)
 
     def _on_speaking(self, kind: str, speaking: bool) -> None:
         self._source(SOURCE_OF[kind], speaking=speaking)

@@ -220,12 +220,12 @@
 
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
-| 看螢幕 | `livelingo/core/watcher.py` | `service.py`：看螢幕（改壞會報錯） |
+| 看螢幕 | `livelingo/core/watcher.py` | `service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
 | 文字辨識 | `livelingo/core/ocr.py` | `service.py`：文字辨識（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `service.py`：收音、裝置清單（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯） |
-| 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識、自動偵測語言（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
+| 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
-| 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯、語言清單（LANGS）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
+| 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文）、語言清單（LANGS）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
 | 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎（改壞會報錯） |
 | 遊戲用語 | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json` | `service.py`：遊戲用語（改壞會報錯） |
 | 韓文唸法 | `livelingo/core/romanize.py` | `service.py`：韓文唸法（改壞會報錯） |

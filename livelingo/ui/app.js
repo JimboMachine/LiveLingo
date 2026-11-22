@@ -175,6 +175,29 @@
     const el = $("status");
     el.dataset.phase = S.phase;
     $("status-text").textContent = t("st_" + S.phase, { percent: percent() });
+    renderQualityChip();
+  }
+
+  // 主畫面上標出現在用哪一種翻譯品質；滑鼠停上去說明原因，按下去到「翻譯品質」頁
+  function qualityReason() {
+    const tier = S.gpu.tier || "cpu";
+    if (S.mode.quality === "high") return t("chip_why_high", { name: S.gpu.name || "" });
+    if (S.fallback) return t("gpu_fallback");
+    if (tier === "high") return t("chip_why_chosen");
+    if (S.gpu.name) return t("gpu_small", { name: S.gpu.name, gb: gb(S.gpu.vram_mb) });
+    return t("gpu_none");
+  }
+
+  function renderQualityChip() {
+    const chip = $("quality-chip");
+    const known = S.phase === "ready" && S.mode && S.mode.quality;
+    chip.hidden = !known;
+    if (!known) return;
+    const high = S.mode.quality === "high";
+    chip.dataset.q = high ? "high" : (S.fallback ? "fallback" : "standard");
+    chip.textContent = t(high ? "chip_high" : "chip_standard");
+    chip.title = qualityReason();
+    chip.setAttribute("aria-label", chip.textContent + " " + chip.title);
   }
 
   function sourceHint(key) {
@@ -323,13 +346,16 @@
 
   function bubbleHTML(m) {
     let body = `<div class="orig">${esc(m.original)}</div>`;
+    // 辨識的時候沒什麼把握：標出來，按下去可以把原文改對再重翻
+    const unsure = m.unsure && !m.pending
+      ? `<button class="unsure" data-act="fix" data-id="${m.id}">${ICON.info}<span>${esc(t(m.via === "screen" ? "unsure_seen" : "unsure_heard"))}</span></button>` : "";
     if (m.error) {
       body += `<div class="text failed">${esc(t("failed", { error: m.error }))}</div>`;
     } else if (m.pending) {
       body += `<div class="text pending">${esc(t("translating"))}</div>`;
     } else {
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
-      body += `<div class="text">${esc(m.translated)}</div>`;
+      body += unsure + `<div class="text">${esc(m.translated)}</div>`;
       if (m.back && S.cfg.back_translate) body += `<div class="back">${ICON.back}<span>${esc(t("back", { text: m.back }))}</span></div>`;
       if (m.pron && S.cfg.show_pronunciation) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
       if (m.copied) body += `<div class="copied">${ICON.check}<span>${esc(t("copied_hint"))}</span></div>`;
@@ -349,8 +375,13 @@
     m.original.split(/[\s,.!?~…·、，。！？「」『』()（）\[\]<>"']+/).forEach((w) => {
       if (w && words.indexOf(w) < 0 && words.length < 16) words.push(w);
     });
-    return `<div class="fix" data-id="${m.id}">
-      <label class="dim small" for="fix-src-${m.id}">${esc(t("fix_label"))}</label>
+    // 語音和螢幕上讀來的句子：可能是原文就辨識錯了，先讓他改原文
+    const edit = m.via === "typed" ? "" : `
+      <label class="dim small" for="edit-${m.id}">${esc(t(m.via === "screen" ? "edit_label_seen" : "edit_label_heard"))}</label>
+      <textarea id="edit-${m.id}" class="edit-src" rows="2" maxlength="500">${esc(m.original)}</textarea>
+      <button class="primary" data-act="edit-save" data-id="${m.id}">${esc(t("edit_save"))}</button>`;
+    return `<div class="fix" data-id="${m.id}">${edit}
+      <label class="dim small ${edit ? "teach-label" : ""}" for="fix-src-${m.id}">${esc(t("fix_label"))}</label>
       <div class="words">${words.map((w) => `<button type="button" data-act="fix-word" data-word="${esc(w)}">${esc(w)}</button>`).join("")}</div>
       <div class="pair">
         <input id="fix-src-${m.id}" class="fix-src" aria-label="${esc(t("fix_word"))}" placeholder="${esc(t("fix_word"))}" maxlength="80">
@@ -510,7 +541,9 @@
     const gpuLine = S.gpu.name
       ? (tier === "high" ? t("gpu_found", { name: S.gpu.name, gb: gb(S.gpu.vram_mb) }) : t("gpu_small", { name: S.gpu.name, gb: gb(S.gpu.vram_mb) }))
       : t("gpu_none");
-    const ko = S.cfg.their_lang === "ko" || S.cfg.my_lang === "ko";
+    // 語氣的說明照「會翻成哪個語言」寫：韓文、日文有明確的說法（半語／タメ口、해요體／です・ます）
+    const toneOf = ["ko", "ja"].find((l) => S.cfg.their_lang === l) || ["ko", "ja"].find((l) => S.cfg.my_lang === l) || "";
+    const tk = (key) => t(toneOf ? `${key}_${toneOf}` : key);
     const rows = S.glossary.length
       ? S.glossary.map((g) => `<div class="grow-row"><span>${esc(g.src)}</span><span>${esc(g.dst)}</span>
           <button data-act="gloss-remove" data-src="${esc(g.src)}" aria-label="${esc(t("remove", { word: g.src }))}">${ICON.x}</button></div>`).join("")
@@ -535,13 +568,14 @@
         <div class="note ${S.fallback ? "warn" : ""}">${ICON.info}<span>${esc(S.fallback ? t("gpu_fallback") : gpuLine)}</span></div>
       </section>
       <section>
-        <h2>${esc(ko ? t("tone_title_ko") : t("tone_title"))}</h2>
+        <h2>${esc(tk("tone_title"))}</h2>
         <div class="pills">
-          <button class="pill tall" data-act="tone" data-tone="casual" aria-pressed="${S.cfg.tone === "casual"}">${esc(ko ? t("tone_casual_ko") : t("tone_casual"))}</button>
-          <button class="pill tall" data-act="tone" data-tone="polite" aria-pressed="${S.cfg.tone === "polite"}">${esc(ko ? t("tone_polite_ko") : t("tone_polite"))}</button>
+          <button class="pill tall" data-act="tone" data-tone="casual" aria-pressed="${S.cfg.tone === "casual"}">${esc(tk("tone_casual"))}</button>
+          <button class="pill tall" data-act="tone" data-tone="polite" aria-pressed="${S.cfg.tone === "polite"}">${esc(tk("tone_polite"))}</button>
         </div>
       </section>
-      <section>${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>
+      <section>${switchRow("use_context", t("use_context"), t("use_context_desc"))}
+        ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>
       <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}</section>
       <section>
         <div><h2>${esc(t("gloss_title"))}</h2><div class="sub">${esc(t("gloss_hint"))}</div></div>
@@ -979,6 +1013,15 @@
       if (!src || !dst) { (src ? box.querySelector(".fix-dst") : box.querySelector(".fix-src")).focus(); return; }
       const r = await post("/api/fix", { id: Number(el.dataset.id), src, dst });
       if (r.ok) { box.parentElement.innerHTML = ""; toast(t("n_saved")); }
+    },
+    "edit-save": async (el) => {
+      const box = el.closest(".fix");
+      const input = box.querySelector(".edit-src");
+      const text = input.value.trim();
+      const m = S.messages.find((x) => x.id === Number(el.dataset.id));
+      if (!text || (m && text === m.original)) { input.focus(); return; }
+      const r = await post("/api/edit", { id: Number(el.dataset.id), text });
+      if (r.ok) box.parentElement.innerHTML = "";
     },
     "teach-save": async (el) => {
       const box = el.closest(".fix");

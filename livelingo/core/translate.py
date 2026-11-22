@@ -58,6 +58,17 @@ BUILTIN_EXAMPLES = {
     ],
 }
 EXAMPLES_INTRO = "The user wants messages like these translated this way (source => translation):\n"
+# 每個語言「朋友之間」和「有禮貌」各是哪一種說法（韓文、日文有明確的敬語體系，中文用「您、請」）
+REGISTER = {
+    "casual": {"ko": " (in Korean use informal 반말)", "ja": " (in Japanese use casual plain form, タメ口, not です/ます)"},
+    "polite": {"ko": " (in Korean use polite 해요체)", "ja": " (in Japanese use polite です/ます form)",
+               "zh-TW": " (in Chinese use polite wording such as 您 and 請)",
+               "zh-CN": " (in Chinese use polite wording such as 您 and 请)"},
+}
+SHORT_REGISTER = {"ko": ", so use informal Korean (반말)", "ja": ", so use casual plain Japanese (タメ口)"}
+# 前面幾句對話（原文）。只給模型參考代名詞、省略的主詞在說誰，不翻它們
+CONTEXT_INTRO = ("For context only, these are the previous messages of the conversation. Do not translate them "
+                 "and do not repeat them; use them only to understand what the new message refers to:\n")
 
 _END_MARKS = "。．.!！?？~～…"
 _ZH_QUESTION = re.compile(
@@ -169,7 +180,7 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
 
 def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual",
                  hints: list[tuple[str, str]] | None = None, examples: list[tuple[str, str]] | None = None,
-                 style: str = "full") -> str:
+                 style: str = "full", context: list[str] | None = None) -> str:
     """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。
     style：full = 平常用的；short = 語氣提示換成比較短的寫法（直述句被翻成問句時重翻用）；
     plain = 只有官方的提示（模型把原文原封不動吐回來時重翻用，意思最穩但語氣會比較正式）。"""
@@ -180,16 +191,16 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
         extra = ""
     elif style == "short":
         extra = ("This is a chat message between close friends"
-                 + (", so use informal Korean (반말)" if target == "ko" and tone != "polite" else "")
+                 + (SHORT_REGISTER.get(target, "") if tone != "polite" else "")
                  + ". Translate faithfully: a statement stays a statement, a question stays a question, "
                    "and nothing is added. Keep names, game terms and Latin-alphabet words unchanged.\n")
     elif tone == "polite":
         extra = ("The text is a chat message. Use a polite, friendly tone"
-                 + (" (in Korean use polite 해요체)" if target == "ko" else "")
+                 + REGISTER["polite"].get(target, "")
                  + ", and keep names, game terms and Latin-alphabet words unchanged.\n")
     else:
         extra = ("The text is a casual chat message between friends on Discord. Keep the same casual, friendly tone"
-                 + (" (in Korean use informal 반말)" if target == "ko" else "")
+                 + REGISTER["casual"].get(target, "")
                  + ", and keep names, game terms and Latin-alphabet words unchanged.\n")
     if style == "full":
         extra += FAITHFUL
@@ -204,6 +215,8 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
         extra += "Word meanings: " + "; ".join(f"{a} = {b}" for a, b in words) + "\n"
     if examples and style != "plain":
         extra += EXAMPLES_INTRO + "".join(f"{a} => {b}\n" for a, b in examples)
+    if context and style == "full":
+        extra += CONTEXT_INTRO + "".join(f"- {line}\n" for line in context)
     body = (
         f"You are a professional {s_name} ({s_code}) to {t_name} ({target}) translator. "
         f"Your goal is to accurately convey the meaning and nuances of the original {s_name} text "
@@ -277,7 +290,7 @@ class Translator:
         self.tone = tone
         self.max_chars = max_chars
         self._lock = threading.Lock()  # 一次只翻一則，其他排隊
-        self._cache: dict[tuple[str, str], str] = {}
+        self._cache: dict[tuple, str] = {}
 
     def clear_cache(self) -> None:
         self._cache.clear()
@@ -290,9 +303,9 @@ class Translator:
             return False
 
     def _ask(self, text: str, source: str, target: str, hints: list, examples: list | None = None,
-             style: str = "full") -> str:
+             style: str = "full", context: list[str] | None = None) -> str:
         payload = {
-            "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style),
+            "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context),
             "max_tokens": min(1024, 64 + 4 * len(text)),
             "temperature": 0,
             "repeat_penalty": 1.0,
@@ -341,13 +354,15 @@ class Translator:
                 break
         return best
 
-    def translate(self, text: str, target: str, source: str | None = None) -> str:
-        """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。"""
+    def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None) -> str:
+        """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
+        context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。"""
         text = text.strip()[: self.max_chars]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
             return to_script(text, target)
-        key = (text, target)
+        context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
+        key = (text, target, *context)
         if key in self._cache:
             return self._cache[key]
         exact, examples = self.taught(text, source, target)
@@ -357,7 +372,10 @@ class Translator:
         kind = sentence_kind(text, source)
         sent = with_end_mark(text, source, kind)
         with self._lock:
-            out = self._ask(sent, source, target, hints, examples)
+            out = self._ask(sent, source, target, hints, examples, context=context)
+            if context and len(out) > 3 * len(sent) + 30:
+                # 模型把前面幾句也翻進來了（譯文長得不合理）：不給前文再翻一次
+                out = self._ask(sent, source, target, hints, examples)
             out = self._clean(out, sent, source, target, hints, examples)
             if kind == "statement" and ("?" in out or "？" in out):
                 # 直述句被翻成問句：換一種寫法再翻一次，那次不是問句就用那次的

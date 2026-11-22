@@ -180,6 +180,8 @@ class Server:
                     if route == "/api/fix":
                         ok = service.fix(int(body.get("id") or 0), str(body.get("src") or ""), str(body.get("dst") or ""))
                         return self._json({"ok": ok})
+                    if route == "/api/edit":      # 改辨識出來的原文，重新翻
+                        return self._json({"ok": service.edit(int(body.get("id") or 0), str(body.get("text") or ""))})
                     if route == "/api/teach":
                         return self._json({"ok": service.teach(int(body.get("id") or 0), str(body.get("text") or "")[:500])})
                     if route == "/api/lessons/remove":

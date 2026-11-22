@@ -129,8 +129,11 @@ class _FakeModel(Translator):
         super().__init__("http://127.0.0.1:9", **kw)
         self.answers, self.asked = answers, []
 
-    def _ask(self, text, source, target, hints, examples=None, style="full"):
+    def _ask(self, text, source, target, hints, examples=None, style="full", context=None):
         self.asked.append((text, style, list(examples or [])))
+        self.contexts = getattr(self, "contexts", []) + [list(context or [])]
+        if callable(self.answers):
+            return self.answers(text, style, context)
         return self.answers[style] if isinstance(self.answers, dict) else self.answers
 
 
@@ -1029,7 +1032,7 @@ def test_back_translation(tmp_path):
         def __init__(self):
             self.calls = []
 
-        def translate(self, text, target, source=None):
+        def translate(self, text, target, source=None, context=None):
             self.calls.append((text, target, source))
             return f"<{target}>{text}"
 
@@ -1080,3 +1083,132 @@ def test_back_translation(tmp_path):
     finally:
         service.closing.set()
         worker.join(2)
+
+
+def test_context_of_previous_sentences(tmp_path):
+    """參考前文：前面兩句的原文放進提示裡給模型參考；模型把前文也翻出來時不給前文重翻；
+    螢幕上讀到的字不用前文；設定關掉就不用。"""
+    from livelingo.core.translate import CONTEXT_INTRO, build_prompt
+    from livelingo.service import Service
+
+    prompt = build_prompt("그럼 내가 갈게", "ko", "zh-TW", {}, context=["바론 먹을까?", "지금 체력 없어"])
+    assert CONTEXT_INTRO in prompt and "- 바론 먹을까?\n- 지금 체력 없어\n" in prompt
+    assert prompt.rstrip().endswith("그럼 내가 갈게<end_of_turn>\n<start_of_turn>model")      # 要翻的那句還是在最後面
+    assert CONTEXT_INTRO not in build_prompt("그럼 내가 갈게", "ko", "zh-TW", {})
+    assert CONTEXT_INTRO not in build_prompt("그럼 내가 갈게", "ko", "zh-TW", {}, style="short", context=["a"])
+
+    tr = _FakeModel("那我去。")
+    assert tr.translate("그럼 내가 갈게", "zh-TW", "ko", ["1", "2", "3"]) == "那我去。"
+    assert tr.contexts == [["2", "3"]]                                         # 只用最後兩句
+    assert tr.translate("그럼 내가 갈게", "zh-TW", "ko", ["2", "3"]) == "那我去。" and len(tr.asked) == 1      # 同樣的前文：用快取
+    tr.translate("그럼 내가 갈게", "zh-TW", "ko", ["別的前文"])
+    assert len(tr.asked) == 2                                                  # 前文不一樣要重翻
+    leaky = _FakeModel(lambda text, style, context: "要打巴龍嗎？現在沒血了。" * 6 + "那我去。" if context else "那我去。")
+    assert leaky.translate("그럼 내가 갈게", "zh-TW", "ko", ["바론 먹을까?"]) == "那我去。"      # 譯文長得不合理：不給前文再翻一次
+    assert leaky.contexts == [["바론 먹을까?"], []]
+
+    service = Service(tmp_path)
+    now = time.time()
+    service.messages.extend([
+        {"id": 1, "via": "heard", "original": "很久以前的話", "at": now - 500},
+        {"id": 2, "via": "heard", "original": "바론 먹을까?", "at": now - 20},
+        {"id": 3, "via": "screen", "original": "螢幕上的字", "at": now - 10},
+        {"id": 4, "via": "typed", "original": "我沒血了", "at": now - 5},
+        {"id": 5, "via": "heard", "original": "翻失敗的", "at": now - 4, "error": "x"},
+    ])
+    assert service._context_for({"id": 6, "via": "heard", "at": now}) == ["바론 먹을까?", "我沒血了"]
+    assert service._context_for({"id": 6, "via": "screen", "at": now}) == []
+    assert service._context_for({"id": 4, "via": "typed", "at": now - 5}) == ["바론 먹을까?"]      # 只看它前面的
+    assert service.update_config({"use_context": False})["saved"]
+    assert service._context_for({"id": 6, "via": "heard", "at": now}) == [] and Config(tmp_path)["use_context"] is False
+
+
+def test_tone_for_each_language():
+    """語氣：韓文（半語／해요體）、日文（タメ口／です・ます）、中文有禮貌時（您、請）各有自己的說法。"""
+    from livelingo.core.translate import build_prompt
+
+    def prompt(target, tone, style="full"):
+        return build_prompt("你吃飯了嗎", "zh" if target not in ("zh-TW", "zh-CN") else "ko", target, {}, tone, style=style)
+
+    assert "반말" in prompt("ko", "casual") and "해요체" in prompt("ko", "polite")
+    assert "タメ口" in prompt("ja", "casual") and "です/ます form)" in prompt("ja", "polite") and "タメ口" not in prompt("ja", "polite")
+    assert "您 and 請" in prompt("zh-TW", "polite") and "您 and 请" in prompt("zh-CN", "polite")
+    assert "您" not in prompt("zh-TW", "casual") and "반말" not in prompt("en", "casual")
+    assert "タメ口" in prompt("ja", "casual", "short") and "タメ口" not in prompt("ja", "polite", "short")
+
+
+def test_unsure_and_edit_original(tmp_path):
+    """沒把握的句子做記號；把辨識錯的原文改對會重新翻譯，記號拿掉。"""
+    from livelingo.core.speech import not_sure
+    from livelingo.service import Service
+
+    assert not_sure(-0.9, 0.1) and not_sure(-0.3, 0.6) and not not_sure(-0.3, 0.1)
+
+    class Echo:
+        tone = "casual"
+
+        def translate(self, text, target, source=None, context=None):
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.translator = Echo()
+    service.cfg.set(back_translate=False)
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        service._on_speech("loopback", "지금 갈개", "ko", 0.5, True)
+        heard = service.messages[-1]
+        assert heard["unsure"] is True and heard["via"] == "heard"
+        wait(lambda: service.messages[-1]["translated"])
+        assert not service.edit(heard["id"], "지금 갈개") and not service.edit(heard["id"], "  ") and not service.edit(999, "x")
+        assert service.edit(heard["id"], "지금 갈게")
+        wait(lambda: service.messages[-1]["translated"] == "<zh-TW>지금 갈게")
+        fixed = service.messages[-1]
+        assert fixed["id"] == heard["id"] and fixed["unsure"] is False and fixed["edited"] is True and len(service.messages) == 1
+
+        service._on_speech("mic", "我現在過去", "zh", 0.5)
+        assert service.messages[-1]["unsure"] is False
+        service.submit("typed", "打字的", "zh", unsure=True)
+        assert service.messages[-1]["unsure"] is False                           # 自己打的字沒有「聽錯」這回事
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+    # 讀螢幕：辨識分數跟著文字一起交出來，分數低的做記號
+    got = []
+    service.submit = lambda via, text, lang=None, unsure=False: got.append((via, text, unsure))
+
+    class FakeOcr:
+        family = "ko"
+
+    import numpy as np
+
+    import livelingo.core.watcher as watcher_mod
+    from livelingo.core.ocr import Line
+
+    lines = [Line("안녕하세요 반갑습니다", 0, 0, 20, 0.95), Line("지금 갈게요 기다려", 0, 40, 20, 0.7)]
+    old = watcher_mod.message_lines
+    watcher_mod.message_lines = lambda _lines: lines
+    FakeOcr.read = lambda self, bgr: []
+    frames = iter([np.zeros((60, 200, 3), np.uint8)] * 2 + [np.full((60, 200, 3), 90, np.uint8)] * 50)
+    service.grab = lambda region: next(frames)
+    service._load_ocr = lambda: FakeOcr()
+    service.cfg.set(region={"left": 0, "top": 0, "width": 200, "height": 60}, interval=0.02)
+    try:
+        service._start_screen()
+        wait(lambda: len(got) >= 2)
+        assert got == [("screen", "안녕하세요 반갑습니다", False), ("screen", "지금 갈게요 기다려", True)]
+    finally:
+        watcher_mod.message_lines = old
+        service._stop_watcher()
+

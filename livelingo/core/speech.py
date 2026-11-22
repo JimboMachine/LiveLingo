@@ -24,6 +24,11 @@ QUIET = 0.0008      # 整段聲音的最大值比這個還小，就當成完全�
 MAX_GAIN = 30.0     # 太小聲的聲音最多放大這麼多倍
 
 
+def not_sure(avg_logprob: float, no_speech_prob: float) -> bool:
+    """這一段辨識出來了，但模型自己沒什麼把握（背景很吵、說得很快很含糊）：介面會標「可能聽錯」。"""
+    return avg_logprob < -0.75 or no_speech_prob > 0.5
+
+
 def level_of(block: np.ndarray) -> float:
     """把一小段聲音的音量換成 0~1：-60 dB 以下當作沒聲音，-10 dB 以上當作滿格。"""
     rms = float(np.sqrt(np.mean(np.square(block)))) if len(block) else 0.0
@@ -137,39 +142,42 @@ class Recognizer:
             m.encode = lambda features: pending.pop() if pending else real_encode(features)
         try:
             segments, _ = self._decode(audio, lang)
-            parts = []
+            parts, unsure = [], False
             for s in segments:
                 if s.no_speech_prob > 0.8 or s.avg_logprob < -1.2 or s.compression_ratio > 2.4:
                     continue
+                if not_sure(s.avg_logprob, s.no_speech_prob):
+                    unsure = True
                 parts.append(s.text.strip())
         finally:
             if enc is not None:
                 del m.encode
-        return " ".join(p for p in parts if p).strip(), lang
+        return " ".join(p for p in parts if p).strip(), lang, unsure
 
-    def transcribe(self, audio: np.ndarray, langs: list[str], stay: float = 1.0) -> tuple[str, str] | None:
-        """audio：16 kHz 單聲道。langs：可能的語言（zh / ko / en / ja），多於一個時會自動判斷是哪個。"""
+    def transcribe(self, audio: np.ndarray, langs: list[str], stay: float = 1.0) -> tuple[str, str, bool] | None:
+        """audio：16 kHz 單聲道。langs：可能的語言（zh / ko / en / ja），多於一個時會自動判斷是哪個。
+        回傳（文字, 語言, 是不是沒把握）。"""
         langs = list(langs)      # 辨識到一半時清單可能被換掉（自動偵測換語言），先留一份
         with self._lock:
             self._fw.pad_or_trim = self._short_pad
             try:
                 try:
-                    text, lang = self._run(audio, langs, stay=stay)
+                    text, lang, unsure = self._run(audio, langs, stay=stay)
                 except Exception:  # noqa: BLE001  加速的算法萬一不相容，退回標準算法
                     self._fw.pad_or_trim = self._orig_pad
-                    text, lang = self._run(audio, langs, share_encoder=False, stay=stay)
+                    text, lang, unsure = self._run(audio, langs, share_encoder=False, stay=stay)
             finally:
                 self._fw.pad_or_trim = self._orig_pad
         if not text or _HALLUCINATIONS.search(text):
             return None
         if len(re.sub(r"[\W_]+", "", text)) < 2:
             return None
-        return text, lang
+        return text, lang, unsure
 
 
 class SpeechPipeline(threading.Thread):
     """
-    一條收音來源一條管線：收音 → 切句 → 辨識 → 交給 on_text(來源, 文字, 語言, 辨識花的秒數)。
+    一條收音來源一條管線：收音 → 切句 → 辨識 → 交給 on_text(來源, 文字, 語言, 辨識花的秒數, 是不是沒把握)。
     辨識器（Recognizer）是共用的，兩條管線不會同時搶 CPU。
     """
 
@@ -219,10 +227,10 @@ class SpeechPipeline(threading.Thread):
                 try:
                     res = self.recognizer.transcribe(utter, self.langs, self.stay)
                 except Exception as ex:  # noqa: BLE001
-                    self.on_text(self.capture.kind, str(ex), "error", 0.0)
+                    self.on_text(self.capture.kind, str(ex), "error", 0.0, False)
                     continue
                 if res:
-                    self.on_text(self.capture.kind, res[0], res[1], time.time() - t)
+                    self.on_text(self.capture.kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False)
             if self.segmenter.speaking != was_speaking:
                 was_speaking = self.segmenter.speaking
                 self.on_state(self.capture.kind, was_speaking)

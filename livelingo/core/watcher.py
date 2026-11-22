@@ -71,7 +71,7 @@ class ScreenWatcher(threading.Thread):
                  source_langs: set[str] | None = None, first_scan_keep: int = 4, grab=None):
         super().__init__(daemon=True)
         self.ocr = ocr
-        self.on_message = on_message          # on_message(原文, 語言代碼)
+        self.on_message = on_message          # on_message(原文, 語言代碼, 辨識分數 0~1)
         self.on_status = on_status or (lambda s: None)
         self.interval = interval
         self.source_langs = source_langs or {"ko"}
@@ -146,13 +146,13 @@ class ScreenWatcher(threading.Thread):
                     lang = wanted(ln.text, self.source_langs)
                     if lang and not self.seen.seen(ln.text):
                         self.seen.add(ln.text)
-                        fresh.append((ln.text, lang))
+                        fresh.append((ln.text, lang, ln.score))
                 if first:
                     # 第一次只翻畫面最下面幾則，免得一口氣翻一整頁
                     first = False
                     fresh = fresh[-self.first_scan_keep:]
-                for text, lang in fresh:
-                    self.on_message(text, lang)
+                for text, lang, score in fresh:
+                    self.on_message(text, lang, score)
             except Exception as ex:  # noqa: BLE001
                 self.on_status(str(ex))
                 time.sleep(2)

@@ -91,6 +91,10 @@ def main() -> None:
         import cv2
 
         service.grab = lambda region: cv2.imread(shot)
+    if os.environ.get("LIVELINGO_FAKE_UNSURE"):      # 把聽到的句子都當成「沒把握」，方便看介面上的記號
+        real_speech = service._on_speech
+        service._on_speech = lambda kind, text, lang, seconds=0.0, unsure=False: real_speech(
+            kind, text, lang, seconds, kind == "loopback")
     server = Server(service, port=int(os.environ.get("LIVELINGO_PORT", "0")))
     server.token = os.environ.get("LIVELINGO_TOKEN", server.token)
     server.start()
