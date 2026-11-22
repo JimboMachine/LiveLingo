@@ -1284,9 +1284,9 @@ class Service:
                 self.hub.publish("storage_move", dict(self._move))
 
         def stop(code: str, **more) -> None:
+            self.notice(code, **more)      # 先說結果，再把「正在搬」拿掉：等 _move 變空的人（測試、下一個動作）一定已經看得到結果
             self._move = None
             self._storage_changed()
-            self.notice(code, **more)
 
         try:
             storage.copy_parts(old, target, progress, self._move_cancel.is_set, mark=target != self.data)
