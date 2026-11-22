@@ -1017,3 +1017,66 @@ def test_floating_chat_presets(tmp_path):
     service.overlay.apply_preset("chat")
     assert chatpaint.style_of(service.cfg) == chatpaint.DEFAULT_STYLE
     assert service.cfg["overlay_rect"] == overlay.default_rect() and service.cfg["overlay_font"] == DEFAULTS["overlay_font"]
+
+
+def test_back_translation(tmp_path):
+    """回譯：我說的話翻成對方的語言之後，再翻回我的語言給我看；對方的話不用；重翻之後回譯也要跟著換。"""
+    from livelingo.service import Service
+
+    class Echo:
+        tone = "casual"
+
+        def __init__(self):
+            self.calls = []
+
+        def translate(self, text, target, source=None):
+            self.calls.append((text, target, source))
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.translator = Echo()
+    events = []
+    service.hub.publish = lambda name, data: events.append((name, dict(data) if isinstance(data, dict) else data))
+    shown = []
+    service.overlay.on_message = lambda msg: shown.append(msg["id"])
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    def last(msg_id):
+        return [d for n, d in events if n == "message" and d["id"] == msg_id][-1]
+
+    try:
+        service.submit("typed", "我現在過去", "zh")
+        mine = service.messages[-1]["id"]
+        wait(lambda: last(mine).get("back"))
+        assert last(mine)["translated"] == "<ko>我現在過去" and last(mine)["back"] == "<zh-TW><ko>我現在過去"
+        assert service.translator.calls[-1] == ("<ko>我現在過去", "zh-TW", "ko")          # 從對方的語言翻回我的語言
+        assert shown.count(mine) == 2                                                    # 回譯不會讓浮動留言再跳一次（原文一次、翻好一次）
+
+        service.submit("heard", "지금 갈게", "ko")
+        theirs = service.messages[-1]["id"]
+        wait(lambda: last(theirs)["translated"])
+        time.sleep(0.2)
+        assert last(theirs)["back"] == ""                                                # 對方的話本來就翻成我的語言，不用回譯
+
+        assert service.teach(mine, "지금 갈게")                                           # 重新教過：舊的回譯清掉，換成新的
+        wait(lambda: last(mine).get("back") == "<zh-TW>지금 갈게")
+
+        service.update_config({"back_translate": False})
+        service.submit("typed", "等我一下", "zh")
+        quiet = service.messages[-1]["id"]
+        wait(lambda: last(quiet)["translated"])
+        time.sleep(0.2)
+        assert last(quiet)["back"] == "" and Config(tmp_path)["back_translate"] is False
+    finally:
+        service.closing.set()
+        worker.join(2)

@@ -470,7 +470,7 @@ class Service:
         lang = lang or detect_language(text) or "en"
         who = "them" if via in ("screen", "heard") else "me"
         msg = {"id": next(self._ids), "who": who, "via": via, "original": text, "lang": lang,
-               "translated": "", "pron": "", "copied": False, "pending": True, "error": "",
+               "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
                "time": time.strftime("%H:%M")}
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
             self._post(msg)
@@ -491,20 +491,50 @@ class Service:
                 msg = self.jobs.get(timeout=0.5)
             except queue.Empty:
                 continue
+            if "back_of" in msg:
+                self._back_translate(msg["back_of"])
+                continue
             try:
                 target = self._target_for(msg)
                 out = self.translator.translate(msg["original"], target, msg["lang"])
                 if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
                     continue
-                msg = dict(msg, translated=out, target=target, pending=False, error="",
+                msg = dict(msg, translated=out, target=target, pending=False, error="", back="",
                            pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
                 if msg["who"] == "me" and target != self.cfg["my_lang"] and not msg.get("copied"):
                     if msg["via"] == "typed" or self.cfg["copy_spoken"]:
                         msg["copied"] = oswin.copy_text(out)
                 self._post(msg)
+                self._want_back(msg)
             except Exception as ex:  # noqa: BLE001
                 self.log(traceback.format_exc())
                 self._post(dict(msg, pending=False, error=str(ex)))
+
+    def _want_back(self, msg: dict) -> None:
+        """我說的話翻成對方的語言之後，排一個回譯（排在佇列最後面，不會擋到後面進來的句子）。"""
+        if (self.cfg["back_translate"] and msg["who"] == "me" and msg.get("translated") and msg.get("target")
+                and LANGS[msg["target"]]["family"] != LANGS[self.cfg["my_lang"]]["family"]):
+            self.jobs.put({"back_of": msg["id"], "text": msg["translated"]})
+
+    def _back_translate(self, msg_id: int) -> None:
+        with self._lock:
+            msg = next((m for m in self.messages if m["id"] == msg_id), None)
+        if not msg or msg.get("pending") or not msg.get("translated") or not msg.get("target"):
+            return
+        text = msg["translated"]
+        try:
+            back = self.translator.translate(text, self.cfg["my_lang"], LANGS[msg["target"]]["family"])
+        except Exception:  # noqa: BLE001  回譯只是輔助，翻不出來就不顯示
+            self.log(traceback.format_exc())
+            return
+        with self._lock:      # 等回譯的這段時間句子可能被重翻或刪掉了：只在還是同一句的時候才寫回去
+            for i, old in enumerate(self.messages):
+                if old["id"] == msg_id and old.get("translated") == text and not old.get("pending"):
+                    self.messages[i] = msg = dict(old, back=back)
+                    break
+            else:
+                return
+        self.hub.publish("message", msg)      # 只更新對話畫面；浮動留言和字幕記錄不用重來
 
     def fix(self, msg_id: int, src: str, dst: str) -> bool:
         """「翻錯了？」：把這個詞記進詞彙表，然後重新翻這一則。"""
@@ -532,11 +562,12 @@ class Service:
             return False
         self.translator.clear_cache()
         self.hub.publish("lessons", self.lessons.list())
-        msg = dict(msg, translated=dst, error="", taught=True,
+        msg = dict(msg, translated=dst, error="", taught=True, back="",
                    pron=self._pronunciation(dst, msg["target"]) if msg["who"] == "me" else "")
         if msg["who"] == "me" and msg["target"] != self.cfg["my_lang"]:
             msg["copied"] = oswin.copy_text(dst)
         self._post(msg)
+        self._want_back(msg)
         return True
 
     def lesson_remove(self, src: str, target: str) -> None:

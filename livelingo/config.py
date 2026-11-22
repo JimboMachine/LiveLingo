@@ -21,6 +21,7 @@ DEFAULTS = {
     "tone": "casual",            # casual = 朋友語氣（韓文半語）；polite = 有禮貌
     "quality": "auto",           # auto = 照顯示卡自動決定；standard；high
     "game_terms": True,          # 內建的遊戲用語表（英雄聯盟，韓文和中文之間）
+    "back_translate": True,      # 我說的、打的翻成對方的語言之後，再翻回來給我看（回譯）
     "speaker_device": None,      # 對方的聲音從哪個播放裝置出來（裝置 id），None = Windows 預設
     "speaker_name": "",
     "mic_device": None,          # 我用哪支麥克風（裝置 id），None = Windows 預設
@@ -64,7 +65,7 @@ DEFAULTS = {
 # 介面可以改的設定（其他的只能直接改檔案）
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
-EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "speaker_device", "speaker_name",
+EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "back_translate", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",

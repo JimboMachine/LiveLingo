@@ -230,6 +230,8 @@ input::placeholder { color: var(--faint); }
 .msg .text.pending { color: var(--dim); font-size: 14px; font-weight: 400; }
 .msg .text.failed { color: var(--danger); font-size: 13px; font-weight: 400; }
 .msg .pron, .msg .copied { font-size: 12px; color: var(--me-dim); }
+.msg .back { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--dim); animation: view-in 0.18s ease-out; }
+.msg .back svg { flex: none; margin-top: 3px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .msg .copied { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 2px; }
 .msg .copied svg { width: 13px; height: 13px; stroke-width: 2.4; }
 .msg .actions { display: flex; gap: 6px; margin-top: 4px; }
