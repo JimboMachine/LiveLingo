@@ -4122,3 +4122,64 @@ def test_uninstall_asks_before_removing_personal_data():
     assert "會全部刪除" not in root.joinpath("README.md").read_text(encoding="utf-8")
     help_text = root.joinpath("livelingo", "data", "help.json").read_text(encoding="utf-8")
     assert "卸載時會一起刪掉" not in help_text and "removed when you uninstall" not in help_text
+
+
+def test_black_capture_is_reported(tmp_path):
+    """遊戲用「全螢幕」時抓到的畫面是全黑的：黑了幾秒就說一聲、健康檢查亮黃燈；畫面回來就恢復。切換畫面黑一下不算。"""
+    import numpy as np
+
+    from livelingo.core import watcher as watcher_mod
+    from livelingo.core.watcher import ScreenWatcher
+    from livelingo.service import Service
+
+    class NoText:
+        def read(self, bgr):
+            return []
+
+    frames = {"a": np.zeros((60, 200, 3), np.uint8), "b": np.full((60, 200, 3), 40, np.uint8)}
+    told = []
+    w = ScreenWatcher(NoText(), on_message=lambda *a: None, grab=lambda place: frames[place["id"]], on_black=told.append)
+    w.set_regions([{"id": "a", "left": 0, "top": 0, "width": 200, "height": 60}, {"id": "b", "left": 0, "top": 0, "width": 200, "height": 60}])
+    clock = [100.0]
+    real = watcher_mod.time.monotonic
+    watcher_mod.time.monotonic = lambda: clock[0]
+    try:
+        look = lambda: [w._look(slot, w.grab) for slot in list(w._slots)]
+        look()
+        assert told == [] and w.black() == []                 # 才剛黑：先不說
+        clock[0] += 3
+        look()
+        assert told == []
+        clock[0] += 3
+        look()
+        assert told == [["a"]] and w.black() == ["a"]         # 黑了六秒：只有全黑的那一區
+        look()
+        assert told == [["a"]]                                # 不會一直說
+        frames["a"] = np.full((60, 200, 3), 200, np.uint8)
+        look()
+        assert told == [["a"], []] and w.black() == []        # 畫面回來了
+        frames["a"] = np.zeros((60, 200, 3), np.uint8)
+        look()
+        clock[0] += 2
+        frames["a"] = np.full((60, 200, 3), 90, np.uint8)     # 只黑了兩秒（切換畫面）：不算
+        look()
+        assert told == [["a"], []]
+    finally:
+        watcher_mod.time.monotonic = real
+
+    service = Service(tmp_path)
+    notices = []
+    service.notice = lambda code, **more: notices.append(code)
+    service.cfg.set(regions=[{"id": "a", "name": "", "left": 0, "top": 0, "width": 200, "height": 60, "on": True, "app": "", "anchor": None}])
+    service.sources["screen"]["on"] = True
+    light = lambda: next(i for i in service.health()["items"] if i["id"] == "screen")
+    assert light()["code"] == "screen_ok"
+    service._screen_black(["a"])
+    service._screen_black(["a"])
+    assert notices == ["screen_black"]                        # 同一區只說一次
+    assert (light()["state"], light()["code"]) == ("warn", "screen_black")
+    service._screen_black([])
+    assert light()["code"] == "screen_ok"
+    service._screen_black(["a"])
+    service._stop_watcher()
+    assert service._black_regions == set() and notices == ["screen_black", "screen_black"]

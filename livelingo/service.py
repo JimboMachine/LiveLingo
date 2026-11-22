@@ -208,6 +208,7 @@ class Service:
         self.speech_gpu = {"state": "off", "percent": 0, "error": "", "mb": assets.CUDNN_MB, "active": False}
         self._speech_gpu_cancel = threading.Event()
         self._apps_audio_off = False      # 「只聽指定程式」這次試過不行，先改聽整台電腦（換選擇或重開程式會再試）
+        self._black_regions: set[str] = set()      # 抓到的畫面是全黑的聊天區（遊戲用全螢幕時會這樣）
         self._lock = threading.RLock()
         self.started = time.time()
         self._report = ""             # 上一次做給使用者看的問題報告（存檔、複製用的就是這一份）
@@ -1196,6 +1197,8 @@ class Service:
             add("screen", "off", "screen_off", "screen", n=len(regions))
         elif closed:
             add("screen", "warn", "screen_closed", "screen", name=apps.display_name(closed[0]["app"]))
+        elif self._black_regions & {str(r.get("id") or "") for r in on}:
+            add("screen", "warn", "screen_black", "screen")
         else:
             stats = self.watcher.stats() if self.watcher else {}
             add("screen", "ok", "screen_ok", "screen", n=len(on), lines=sum(int(v.get("lines", 0)) for v in stats.values()))
@@ -1862,7 +1865,7 @@ class Service:
                     ocr, on_message=self._on_screen_line, on_status=self._screen_error,
                     interval=float(self.cfg["interval"]), source_langs=self._screen_langs(),
                     grab=getattr(self, "grab", None), locate=self._locate,
-                    on_stats=lambda stats: self.hub.publish("screen_stats", stats))
+                    on_stats=lambda stats: self.hub.publish("screen_stats", stats), on_black=self._screen_black)
                 self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
             self.watcher.paused = False
@@ -1871,10 +1874,19 @@ class Service:
             self.log(traceback.format_exc())
             self._source("screen", on=False, busy=False, error=str(ex))
 
+    def _screen_black(self, ids: list[str]) -> None:
+        """有聊天區抓到的畫面變成全黑（或恢復了）。新變黑的說一聲；健康檢查也會亮黃燈。"""
+        new = set(ids) - self._black_regions
+        self._black_regions = set(ids)
+        if new:
+            self.log(f"screen region(s) {sorted(new)} are completely black; exclusive fullscreen?")
+            self.notice("screen_black")
+
     def _screen_error(self, err: str) -> None:
         if self.watcher and self.watcher.failed:
             self.log(f"screen watcher stopped: {err}")
             self.watcher = None
+            self._black_regions = set()
             self._source("screen", on=False, busy=False, error=err)
         else:
             self._source("screen", error=err)
@@ -1883,6 +1895,7 @@ class Service:
         if self.watcher:
             self.watcher.stop()
             self.watcher = None
+        self._black_regions = set()
 
     def select_region(self, then_enable: bool = True, rid: str | None = None, new: bool = False) -> None:
         """

@@ -185,7 +185,8 @@
 2. `i18n.js`：每個代碼一句話（h_代碼），五種語言
 3. `app.js`：健康檢查頁、狀態變了自動重查
 4. `audio.py`、`hotkeys.py`、`watcher.py`、`engine.py`、`gpu.py`、`config.py`、`history.py`：各自的狀態是從哪裡來的
-5. `test_basics.py`：各種狀況的檢查
+5. `watcher.py`、`service.py`：讀螢幕抓到全黑的畫面（on_black）：黑幾秒才算、提醒只說一次、停止讀螢幕時要清掉
+6. `test_basics.py`：各種狀況的檢查
 
 自動把關：測試會擋：健康檢查的代碼少了哪一種語言的說明。新的功能如果有「開不起來」「被擋住」這種狀態，要記得在健康檢查加一個燈或併進現有的燈。
 

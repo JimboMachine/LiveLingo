@@ -174,6 +174,8 @@ class _Slot:
         self.seen = SeenLines()
         self.last: list[str] = []      # 上一次讀到的每一則（由上到下），用來看出哪幾則是新出現在下面的
         self.edge = 0.0                # 這個區域裡看過的文字最右邊到哪裡（判斷換行用）
+        self.dark_since = None         # 從什麼時候開始抓到的畫面是全黑的
+        self.black = False             # 已經黑了好幾秒：多半是遊戲用「全螢幕」，Windows 不讓別的程式看到畫面
         # scans 辨識了幾次；lines 讀到幾行 = sent 拿去翻的 + repeat 讀過的 + other 不是要翻的語言 + old 一開始就在畫面上的
         self.stats = {"scans": 0, "lines": 0, "sent": 0, "repeat": 0, "other": 0, "old": 0}
 
@@ -191,12 +193,15 @@ class ScreenWatcher(threading.Thread):
     """
 
     def __init__(self, ocr: OcrEngine, on_message, on_status=None, interval: float = 0.7,
-                 source_langs: set[str] | None = None, first_scan_keep: int = 4, grab=None, locate=None, on_stats=None):
+                 source_langs: set[str] | None = None, first_scan_keep: int = 4, grab=None, locate=None, on_stats=None,
+                 on_black=None):
         super().__init__(daemon=True)
         self.ocr = ocr
         self.on_message = on_message          # on_message(原文, 語言代碼, 辨識分數 0~1, 區域)
         self.on_status = on_status or (lambda s: None)
         self.on_stats = on_stats or (lambda stats: None)      # on_stats({區域 id: 統計數字})，數字有變才呼叫
+        self.on_black = on_black or (lambda ids: None)        # on_black([區域 id])：哪幾個區域抓到的畫面是全黑的，有變才呼叫
+        self.black_after = 5.0                                # 連續黑幾秒才算（切換畫面時黑一下不算）
         self.interval = interval
         self.source_langs = source_langs or {"ko"}
         self.first_scan_keep = first_scan_keep
@@ -242,6 +247,11 @@ class ScreenWatcher(threading.Thread):
     def stats(self) -> dict:
         with self._lock:
             return {str(slot.region.get("id") or ""): dict(slot.stats) for slot in self._slots}
+
+    def black(self) -> list[str]:
+        """現在抓到的畫面是全黑的區域。"""
+        with self._lock:
+            return [str(slot.region.get("id") or "") for slot in self._slots if slot.black]
 
     def stop(self):
         self._halt.set()
@@ -293,6 +303,16 @@ class ScreenWatcher(threading.Thread):
             slot.prev = None      # 視窗回來之後等畫面停下來再讀
             return
         bgr = np.ascontiguousarray(grab(place))
+        # 整塊全黑：遊戲用「全螢幕」（不是無邊框）時，抓到的畫面就是這樣。黑了幾秒就告訴使用者，不然只會看到「什麼都沒翻」
+        dark = bool(bgr.size) and int(bgr.max()) < 12
+        slot.dark_since = (slot.dark_since or time.monotonic()) if dark else None
+        black = dark and time.monotonic() - slot.dark_since >= self.black_after
+        if black != slot.black:
+            slot.black = black
+            try:
+                self.on_black(self.black())
+            except Exception:  # noqa: BLE001
+                pass
         th = self._thumb(bgr)
         stable = slot.prev is not None and float(np.abs(th - slot.prev).mean()) < 1.0
         # 只要有幾個小格子明顯變了就算有變化（一行新訊息只佔畫面很小一塊）
