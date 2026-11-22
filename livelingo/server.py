@@ -146,8 +146,8 @@ class Server:
                 route = url.path
                 try:
                     if route == "/api/config":
-                        service.update_config(body)
-                        return self._json({"ok": True, "config": service.cfg.snapshot()})
+                        result = service.update_config(body)
+                        return self._json({"ok": True, **result, "config": service.cfg.snapshot()})
                     if route == "/api/source":
                         service.set_source(str(body.get("key")), bool(body.get("on")))
                         return self._json({"ok": True})

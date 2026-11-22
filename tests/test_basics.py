@@ -890,3 +890,43 @@ def test_dependency_map_is_current():
     maker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(maker)
     assert maker.render(data) == root.joinpath("docs", "dependencies.md").read_text(encoding="utf-8"), "先跑 python docs/make_dependencies.py"
+
+
+def test_settings_really_save(tmp_path):
+    """設定改了就寫進檔案、重開還在；寫不進去會說，而且只說一次；回傳值讓介面知道要不要顯示「已儲存」。"""
+    from livelingo.service import Service
+
+    service = Service(tmp_path)
+    events = []
+    service.hub.publish = lambda name, data: events.append((name, data))
+
+    result = service.update_config({"overlay_font": 33, "copy_spoken": 0, "theme": "light", "nonsense": 1, "tone": "rude"})
+    assert result["saved"] is True and result["error"] == ""
+    assert result["changed"] == ["copy_spoken", "overlay_font", "theme"]       # 不認得的、不合法的都不會進去
+    assert service.cfg["copy_spoken"] is False                                   # 開關一律存成 true / false
+    again = Config(tmp_path)
+    assert (again["overlay_font"], again["copy_spoken"], again["theme"], again["tone"]) == (33, False, "light", "casual")
+    assert service.update_config({"overlay_font": 33})["changed"] == []          # 沒變也算存好，不會出錯
+
+    # 唸法：不管開關都先算好，介面切換開關時舊的句子才會跟著變
+    service.cfg.set(show_pronunciation=False)
+    assert service._pronunciation("안녕", "ko") and service._pronunciation("你好", "zh-TW") == ""
+
+    # 設定檔寫不進去（這裡用「路徑其實是資料夾」來模擬）：回傳 False、跳一次提醒，之後修好了又能存
+    events.clear()
+    good = service.cfg.path
+    service.cfg.path = tmp_path / "blocked" / "config.json"
+    (tmp_path / "blocked").write_text("not a folder", encoding="utf-8")
+    failed = service.update_config({"overlay_font": 20})
+    assert failed["saved"] is False and failed["error"]
+    assert service.cfg["overlay_font"] == 20                                     # 這次開著的時候還是有效
+    service.update_config({"overlay_font": 21})
+    assert [d["code"] for n, d in events if n == "notice"] == ["save_failed"]    # 連續失敗只提醒一次
+    service.cfg.path = good
+    assert service.update_config({"overlay_font": 22})["saved"] is True
+    assert Config(tmp_path)["overlay_font"] == 22
+
+    # 不是在設定畫面直接改的東西存好了，也會通知介面
+    events.clear()
+    service.overlay.reset_position()
+    assert ("saved", {"what": "overlay_rect"}) in events

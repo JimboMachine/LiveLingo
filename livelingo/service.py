@@ -16,7 +16,7 @@ from collections import deque
 from pathlib import Path
 
 from . import __version__, assets, gpu, oswin, updater
-from .config import ACCENTS, EDITABLE, THEMES, UI_LANGS, Config, Glossary, Lessons
+from .config import ACCENTS, DEFAULTS, EDITABLE, THEMES, UI_LANGS, Config, Glossary, Lessons
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.translate import LANGS, Translator, detect_language
@@ -98,6 +98,7 @@ class Service:
         self.data = data
         self.hub = hub or EventHub()
         self.cfg = Config(data)
+        self.cfg.on_fail = lambda error: self.notice("save_failed", error=error)      # 設定檔寫不進去要讓使用者知道
         self.glossary = Glossary(data)
         self.lessons = Lessons(data)      # 使用者教過的整句翻法
         self.terms = TermPack()
@@ -190,6 +191,11 @@ class Service:
     def notice(self, code: str, **params) -> None:
         """在介面上跳一則短訊息（代碼由介面翻成使用者選的語言）。"""
         self.hub.publish("notice", {"code": code, **params})
+
+    def stored(self, what: str, ok: bool = True) -> None:
+        """不是在設定畫面上直接改的東西（框選的範圍、浮動留言的位置、字幕資料夾）存好了：讓介面顯示「已儲存」。"""
+        if ok:
+            self.hub.publish("saved", {"what": what})
 
     # ------------------------------------------------------------------ 啟動
 
@@ -354,9 +360,8 @@ class Service:
         return self.terms.find(text, source, target)
 
     def _pronunciation(self, text: str, target: str) -> str:
-        if self.cfg["show_pronunciation"] and LANGS[target]["family"] == "ko":
-            return romanize(text)
-        return ""
+        # 不管「顯示唸法」有沒有開都先算好，介面照設定決定要不要顯示，這樣開關一切換舊的句子也會跟著變
+        return romanize(text) if LANGS[target]["family"] == "ko" else ""
 
     def _post(self, msg: dict) -> dict:
         with self._lock:
@@ -443,8 +448,9 @@ class Service:
         picked = self.window.choose_folder(str(self.transcript_dir()))
         if not picked:
             return False
-        self.cfg.set(transcript_dir=picked)
+        ok = self.cfg.set(transcript_dir=picked)
         self.hub.publish("config", self.cfg.snapshot())
+        self.stored("transcript_dir", ok)
         self.hub.publish("record", self.record_state())
         return True
 
@@ -555,7 +561,8 @@ class Service:
 
     # ------------------------------------------------------------------ 設定
 
-    def update_config(self, changes: dict) -> None:
+    def update_config(self, changes: dict) -> dict:
+        """改設定：檢查、存檔、馬上套用。回傳 {"saved": 有沒有存進設定檔, "changed": 真的變了的項目}。"""
         changes = {k: v for k, v in changes.items() if k in EDITABLE}
         if changes.get("ui_lang") not in (None, *UI_LANGS):
             changes.pop("ui_lang")
@@ -576,12 +583,12 @@ class Service:
                     changes[key] = max(low, min(high, int(changes[key])))
                 except (TypeError, ValueError):
                     changes.pop(key)
-        for key in ("overlay", "overlay_original", "overlay_mine", "their_auto", "transcript_original", "close_to_tray"):
-            if key in changes:
+        for key in changes:
+            if isinstance(DEFAULTS[key], bool):
                 changes[key] = bool(changes[key])
         before = self.cfg.snapshot()
         # 兩邊可以選同一種語言（只想要字幕，或是繁體和簡體互轉），不會自動對調
-        self.cfg.set(**changes)
+        saved = self.cfg.set(**changes)
         after = self.cfg.snapshot()
         self.hub.publish("config", after)
 
@@ -595,7 +602,8 @@ class Service:
             self.translator.clear_cache()
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
-        if changed("overlay", "overlay_font", "overlay_backdrop", "overlay_original", "ui_lang", "my_lang", "their_lang"):
+        if changed("overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
+                   "ui_lang", "my_lang", "their_lang"):
             self.overlay.apply()
             if changed("overlay"):
                 self.hub.publish("overlay", self.overlay.state())
@@ -612,6 +620,7 @@ class Service:
             new_mode = gpu.choose_mode(after["quality"], self.gpu)
             if new_mode != self.mode or self.phase != "ready":
                 threading.Thread(target=self._prepare, daemon=True).start()
+        return {"saved": saved, "error": self.cfg.error, "changed": sorted(k for k in after if before[k] != after[k])}
 
     def _languages_changed(self) -> None:
         with self._lock:
@@ -709,8 +718,9 @@ class Service:
             finally:
                 self._selecting = False
             if region and region.get("width", 0) >= 60 and region.get("height", 0) >= 30:
-                self.cfg.set(region=region)
+                ok = self.cfg.set(region=region)
                 self.hub.publish("config", self.cfg.snapshot())
+                self.stored("region", ok)
                 if self.watcher:
                     self.watcher.set_region(region)
                 if then_enable:

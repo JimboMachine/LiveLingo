@@ -51,6 +51,49 @@
     } catch (e) { return null; }
   }
 
+  // ---------------------------------------------------------------- 設定：改了就存，存好有回饋
+
+  const SAVE_TARGET = {      // 「已儲存」出現在哪個控制項旁邊（沒列的：用 data-key 或 data-change 找）
+    theme: '[data-act="theme"][aria-pressed="true"]', accent: '[data-act="accent"][aria-pressed="true"]',
+    ui_lang: '[data-act="ui-lang"][aria-pressed="true"]', tone: '[data-act="tone"][aria-pressed="true"]',
+    quality: '[data-act="quality"][aria-pressed="true"]', my_lang: "#sel-my", their_lang: "#sel-their", their_auto: "#sel-their",
+    speaker_device: '[data-act="device"][data-key="speaker"]', mic_device: '[data-act="device"][data-key="mic"]',
+    transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]'
+  };
+  let savedTimer = null;
+  function placeSaved() {      // 設定頁重畫之後也會再叫一次，回饋不會因為重畫就不見
+    const chip = $("saved-chip"), mark = S.ui.saved;
+    document.querySelectorAll(".just-saved").forEach((el) => el.classList.remove("just-saved"));
+    if (!mark || Date.now() > mark.until) { chip.hidden = true; return; }
+    const page = $("settings-page");
+    const el = S.view === "settings" && page.querySelector(SAVE_TARGET[mark.key] || `[data-key="${mark.key}"], [data-change="${mark.key}"]`);
+    const row = el && el.closest(".setting-row, .range-row, .field, .btn-row, .pills, .swatches");
+    if (row) row.classList.add("just-saved");
+    chip.hidden = false;
+    if (el) {
+      const r = el.getBoundingClientRect(), w = chip.offsetWidth, h = chip.offsetHeight;
+      chip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + "px";
+      chip.style.top = (r.top - h - 6 > 8 ? r.top - h - 6 : r.bottom + 6) + "px";
+      chip.style.right = "auto";
+    } else { chip.style.left = "auto"; chip.style.right = "20px"; chip.style.top = "64px"; }
+  }
+  function flashSaved(key) {
+    const chip = $("saved-chip");
+    S.ui.saved = { key, until: Date.now() + 1700 };
+    chip.innerHTML = `${ICON.check}<span>${esc(t("saved"))}</span>`;
+    chip.hidden = false;
+    chip.classList.remove("show"); void chip.offsetWidth; chip.classList.add("show");      // 連續改幾項時動畫重新開始
+    placeSaved();
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => { S.ui.saved = null; placeSaved(); }, 1750);
+  }
+  async function saveCfg(patch, key) {      // 使用者改設定都走這裡：存好顯示「已儲存」，存不進去說清楚
+    const r = await post("/api/config", patch);
+    if (r && r.ok && r.saved) flashSaved(key || Object.keys(patch)[0]);
+    else toast(t("n_save_failed", { error: (r && r.error) || "" }), 8000, "error");
+    return r;
+  }
+
   let toastTimer = null;
   function toast(text, ms, level) {      // level：info（預設）/ warn / error
     const el = $("toast");
@@ -284,7 +327,7 @@
     } else {
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
       body += `<div class="text">${esc(m.translated)}</div>`;
-      if (m.pron) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
+      if (m.pron && S.cfg.show_pronunciation) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
       if (m.copied) body += `<div class="copied">${ICON.check}<span>${esc(t("copied_hint"))}</span></div>`;
       body += `<div class="actions"><button data-act="fix" data-id="${m.id}">${esc(t("wrong"))}</button>` +
         `<button data-act="copy" data-id="${m.id}">${esc(t("copy"))}</button></div>`;
@@ -628,14 +671,23 @@
   function renderSettingsPage() {
     const page = $("settings-page");
     const scroll = page.scrollTop;
+    const active = page.contains(document.activeElement) ? document.activeElement : null;
+    const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
+      ? `[data-act="${active.dataset.act}"]` + ["key", "code", "q", "tone", "id"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
+    const typed = [...page.querySelectorAll("input[id]:not([type=range]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "audio") page.innerHTML = devicesHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
     else if (S.ui.tab === "about") page.innerHTML = aboutPage();
     else page.innerHTML = generalPage();
+    if (S.ui.tab !== "about") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
+    typed.forEach(([id, value]) => { const el = $(id); if (el && value && !el.value) el.value = value; });
     page.scrollTop = scroll;
+    const again = focus && page.querySelector(focus);
+    if (again && !again.disabled) again.focus({ preventScroll: true });
     paintLevels();
+    placeSaved();
   }
 
   function renderSettings() { renderRail(); renderSettingsPage(); }
@@ -834,9 +886,9 @@
   const actions = {
     view: (el) => setView(el.dataset.view),
     "toggle-langs": () => { S.ui.langOpen = !S.ui.langOpen; renderLangs(); },
-    "set-lang": (el) => post("/api/config", el.dataset.side === "their_lang"
+    "set-lang": (el) => saveCfg(el.dataset.side === "their_lang"
       ? { their_lang: el.dataset.code, their_auto: false } : { [el.dataset.side]: el.dataset.code }),
-    "set-auto": () => post("/api/config", { their_auto: true }),
+    "set-auto": () => saveCfg({ their_auto: true }),
     source: (el) => {
       const key = el.dataset.key;
       post("/api/source", { key, on: !(S.sources[key] || {}).on });
@@ -887,13 +939,13 @@
     },
     device: (el) => {
       const key = el.dataset.key;
-      post("/api/config", key === "speaker"
+      saveCfg(key === "speaker"
         ? { speaker_device: el.dataset.id, speaker_name: el.dataset.name }
         : { mic_device: el.dataset.id, mic_name: el.dataset.name });
     },
-    quality: (el) => post("/api/config", { quality: el.dataset.q }),
-    tone: (el) => post("/api/config", { tone: el.dataset.tone }),
-    toggle: (el) => post("/api/config", { [el.dataset.key]: !S.cfg[el.dataset.key] }),
+    quality: (el) => saveCfg({ quality: el.dataset.q }),
+    tone: (el) => saveCfg({ tone: el.dataset.tone }),
+    toggle: (el) => saveCfg({ [el.dataset.key]: !S.cfg[el.dataset.key] }),
     "find-mic": () => { S.ui.find = { state: "listening" }; renderMicViews(); post("/api/find_mic"); },
     "find-dismiss": () => { S.ui.find = null; renderMicViews(); },
     record: () => { if (!S.record.saving) post("/api/record", { on: !S.record.on }); },
@@ -920,10 +972,10 @@
       S.ui.ocr = "reading"; renderSettingsPage();
       S.ui.ocr = await post("/api/ocr_test"); renderSettingsPage();
     },
-    "ui-lang": (el) => post("/api/config", { ui_lang: el.dataset.code }),
-    theme: (el) => post("/api/config", { theme: el.dataset.code }),
-    accent: (el) => post("/api/config", { accent: el.dataset.code }),
-    swap: () => post("/api/config", { my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang, their_auto: false }),
+    "ui-lang": (el) => saveCfg({ ui_lang: el.dataset.code }),
+    theme: (el) => saveCfg({ theme: el.dataset.code }),
+    accent: (el) => saveCfg({ accent: el.dataset.code }),
+    swap: () => saveCfg({ my_lang: S.cfg.their_lang, their_lang: S.cfg.my_lang, their_auto: false }),
     "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
     "wz-begin": () => { if (S.phase === "need_download") post("/api/download"); wizardGo(1); },
     "wz-next": () => wizardGo(S.ui.wz + 1),
@@ -953,17 +1005,27 @@
     if (fn) { e.preventDefault(); fn(el); }
   });
 
+  let liveTimer = null, livePatch = null;
   document.addEventListener("input", (e) => {
     const key = e.target.dataset && e.target.dataset.range;
     const out = key && $("out-" + key);
     if (out) out.textContent = RANGE_TEXT[key](Number(e.target.value));
+    if (!key) return;
+    S.ui.live = key;      // 拖滑桿的時候就即時套用（浮動留言跟著變），這段期間設定頁不重畫，不然滑桿會被換掉
+    livePatch = { [key]: Number(e.target.value) };
+    if (!liveTimer) liveTimer = setTimeout(() => { liveTimer = null; if (livePatch) post("/api/config", livePatch); livePatch = null; }, 90);
   });
 
   document.addEventListener("change", (e) => {
     const key = e.target.dataset && e.target.dataset.change;
-    if (key === "their_lang") post("/api/config", e.target.value === "auto" ? { their_auto: true } : { their_lang: e.target.value, their_auto: false });
-    else if (key) post("/api/config", { [key]: e.target.value });
+    if (!key) return;
+    if (e.target.dataset.range) {      // 放開滑桿：這才算存好
+      clearTimeout(liveTimer); liveTimer = null; livePatch = null; S.ui.live = null;
+      saveCfg({ [key]: Number(e.target.value) }, key);
+    } else if (key === "their_lang") saveCfg(e.target.value === "auto" ? { their_auto: true } : { their_lang: e.target.value, their_auto: false }, key);
+    else saveCfg({ [key]: e.target.value }, key);
   });
+  document.addEventListener("pointerup", () => { if (S.ui.live) setTimeout(() => { S.ui.live = null; }, 300); });
 
   document.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1046,7 +1108,8 @@
       if (before.theme !== cfg.theme || before.accent !== cfg.accent) applyTheme();
       if (before.ui_lang !== cfg.ui_lang) { renderAll(); return; }
       renderLangs(); renderSources(); renderOverlayState();
-      if (S.view === "settings") renderSettingsPage();
+      if (before.show_pronunciation !== cfg.show_pronunciation) renderMessages();
+      if (S.view === "settings" && !S.ui.live) renderSettingsPage();
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
@@ -1067,6 +1130,7 @@
       renderOverlayState();
       if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage();
     },
+    saved: (d) => flashSaved(d.what),
     view: (d) => { if (d.view !== S.view) showView(d.view); },
     region_done: () => {
       if (S.view === "wizard") renderWizard();

@@ -4,6 +4,7 @@ import json
 import locale
 import os
 import threading
+import time
 from pathlib import Path
 
 UI_LANGS = ("zh-TW", "zh-CN", "en", "ko", "ja")      # 翻譯語言有幾種，介面就有幾種（有測試在看）
@@ -83,6 +84,7 @@ def system_ui_lang() -> str:
 
 
 def _write_json(path: Path, value) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp, path)
@@ -92,6 +94,8 @@ class Config:
     def __init__(self, folder: Path):
         self.path = folder / "config.json"
         self._lock = threading.RLock()
+        self.error = ""              # 上一次存檔失敗的原因（空的：有存好）
+        self.on_fail = None          # 存不進去時呼叫一次（傳原因），之後存好了再失敗才會再呼叫
         self.data = json.loads(json.dumps(DEFAULTS))
         try:
             saved = json.loads(self.path.read_text(encoding="utf-8"))
@@ -120,17 +124,30 @@ class Config:
         with self._lock:
             return json.loads(json.dumps(self.data))
 
-    def set(self, **changes) -> None:
+    def set(self, **changes) -> bool:
+        """改設定並馬上寫進設定檔。回傳有沒有真的存好。"""
         with self._lock:
             self.data.update(changes)
-            self.save()
+            return self.save()
 
-    def save(self) -> None:
+    def save(self) -> bool:
         with self._lock:
+            failed_before, problem = bool(self.error), ""
+            for attempt in range(3):      # 防毒軟體或同步軟體偶爾會把檔案鎖住一下子，多試兩次
+                try:
+                    _write_json(self.path, self.data)
+                    self.error = ""
+                    return True
+                except OSError as ex:
+                    problem = str(ex) or type(ex).__name__
+                    time.sleep(0.05 * (attempt + 1))
+            self.error = problem
+        if not failed_before and self.on_fail:
             try:
-                _write_json(self.path, self.data)
-            except OSError:
+                self.on_fail(problem)
+            except Exception:  # noqa: BLE001
                 pass
+        return False
 
 
 GLOSSARY_SEED = [

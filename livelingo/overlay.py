@@ -481,16 +481,18 @@ class Overlay:
         if self.window:
             self.window.set_edit(on)
         if not on and self.rect:
-            self.service.cfg.set(overlay_rect=list(self.rect))
+            ok = self.service.cfg.set(overlay_rect=list(self.rect))
             self.service.hub.publish("config", self.service.cfg.snapshot())
+            self.service.stored("overlay_rect", ok)
         self.service.hub.publish("overlay", self.state())
         self._last = None
         self._wake.set()
 
     def reset_position(self) -> None:
         self.rect = default_rect()
-        self.service.cfg.set(overlay_rect=list(self.rect))
+        ok = self.service.cfg.set(overlay_rect=list(self.rect))
         self.service.hub.publish("config", self.service.cfg.snapshot())
+        self.service.stored("overlay_rect", ok)
         self._last = None
         self._wake.set()
 
