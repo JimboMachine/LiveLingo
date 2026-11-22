@@ -215,6 +215,11 @@ class Service:
         self._voice_tries: dict[str, int] = {}      # 斷線之後已經重試了幾次
         self._live: dict[str, dict] = {}      # 收音來源（loopback / mic）→ 還在說、先顯示出來的那一則（即時字幕）
         self._live_stop: dict[str, Stop] = {}      # 收音來源 → 正在翻的那半句的「停」按鈕
+        # 分辨說話者：聲紋模型和分出來的人只在記憶體裡（core/voices.py）；名字是使用者在這一次開啟期間取的
+        self.voices = None
+        self.speakers = {"state": "off", "percent": 0, "error": "", "mb": assets.VOICE_MB}
+        self._speaker_names: dict[int, str] = {}
+        self._speaker_run = 1      # 按一次「全部重新分辨」加一：之前標的編號就不算數了
         self._black_regions: set[str] = set()      # 抓到的畫面是全黑的聊天區（遊戲用全螢幕時會這樣）
         self._lock = threading.RLock()
         self.started = time.time()
@@ -262,6 +267,7 @@ class Service:
             "delay": self.delay(),
             "screen_stats": self.watcher.stats() if self.watcher else {},
             "speech_gpu": self.speech_gpu_state(),
+            "speakers": self.speakers_state(),
             "ptt_keys": list(oswin.PTT_KEYS),
             "fallback": self.fallback,
             "sources": self.sources,
@@ -747,11 +753,12 @@ class Service:
                 "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
 
     def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
-               place: str = "", live: dict | None = None) -> int | None:
+               place: str = "", live: dict | None = None, speaker: int | None = None) -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
         hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。
-        live：這一句還在說的時候已經先顯示出來的那一則（即時字幕）；整句接手同一則，不另外多一則。回傳這則訊息的編號。"""
+        live：這一句還在說的時候已經先顯示出來的那一則（即時字幕）；整句接手同一則，不另外多一則。
+        speaker：第幾個說話者（有開「分辨說話者」而且分得出來才有）。回傳這則訊息的編號。"""
         text = text.strip()[:MAX_TEXT]
         if not text:
             if live:
@@ -763,6 +770,8 @@ class Service:
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
                "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time(),
                "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30]}
+        if speaker:
+            msg.update(speaker=int(speaker), speaker_run=self._speaker_run, voice=self._speaker_names.get(int(speaker), ""))
         if live:      # 同一則、同一個時間，先翻出來的半句留在畫面上，等整句翻好再換掉
             msg.update(id=live["id"], time=live["time"], at=live["at"], partial=live.get("partial", ""))
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
@@ -1552,7 +1561,7 @@ class Service:
         modes = [m for m in (self.mode, gpu.choose_mode(self.cfg["quality"], self.gpu) if self.gpu else None) if m]
         speech_gpu = self.cfg["speech_device"] == "gpu"      # 語音辨識用顯示卡：要 cuDNN，也要顯示卡版引擎帶來的 CUDA 檔案
         return {"models": {m["model"] for m in modes}, "engines": {m["engine"] for m in modes} | ({"cuda"} if speech_gpu else set()),
-                "cudnn": speech_gpu, "updating": self.phase == "updating"}
+                "cudnn": speech_gpu, "updating": self.phase == "updating", "voice": bool(self.cfg["tell_speakers"])}
 
     def storage_state(self) -> dict:
         """大小都是位元組。lost：設定裡記的資料夾找不到了（外接硬碟沒插？），暫時用回原本的位置。"""
@@ -1924,6 +1933,9 @@ class Service:
             self._regions_changed()
         if changed("speech_device"):
             threading.Thread(target=self._speech_device_changed, daemon=True).start()
+        if changed("tell_speakers"):
+            self.speakers_load()
+            self._storage_changed()
         if changed("voice_sensitivity", "end_silence", "speech_mode"):      # 收音中直接換，不用重開
             with self._lock:
                 for pipe in self.pipelines.values():
@@ -2248,6 +2260,8 @@ class Service:
             if capture is None:
                 capture = self.audio.capture(kind, device, on_error=self._voice_error, on_open=self._voice_opened)
             self.recognizer.beam = BEAMS[self.cfg["speech_mode"]]
+            if key == "listen":
+                self.speakers_load()      # 有開「分辨說話者」的話，模型在背景準備（還沒好之前字幕照出，只是不標是誰）
             pipe = SpeechPipeline(capture, self.recognizer, self._voice_langs(key),
                                   on_text=self._on_speech, on_state=self._on_speaking,
                                   end_silence=float(self.cfg["end_silence"]), on_level=self._on_level,
@@ -2255,7 +2269,9 @@ class Service:
                                   gate=self._mic_gate if key == "mic" else None,
                                   # 即時字幕只給「對方說的話」：自己說的反正要等整句才複製，先辨識只會拖慢對方那一邊
                                   on_partial=self._on_live if key == "listen" else None,
-                                  live=lambda: bool(self.cfg["live_captions"]), busy=self._live_wait)
+                                  live=lambda: bool(self.cfg["live_captions"]), busy=self._live_wait,
+                                  # 分辨說話者也只給「對方說的話」
+                                  voices=self._voices_now if key == "listen" else None)
             if key == "listen" and self.cfg["their_auto"]:
                 pipe.stay = 1.5
             old = self.pipelines.pop(key, None)
@@ -2386,6 +2402,86 @@ class Service:
         threading.Thread(target=work, daemon=True, name="cudnn").start()
         return True
 
+    # ---- 分辨說話者
+
+    def speakers_state(self) -> dict:
+        """給介面：有沒有開、模型的狀態、目前分出來哪幾個人（編號、取的名字、說了幾句）。"""
+        people = self.voices.speakers.people() if self.voices else []
+        return {**self.speakers, "on": bool(self.cfg["tell_speakers"]), "run": self._speaker_run,
+                "people": [dict(p, name=self._speaker_names.get(p["id"], "")) for p in people]}
+
+    def _speakers(self, **changes) -> None:
+        self.speakers.update(changes)
+        self.hub.publish("speakers", self.speakers_state())
+
+    def _voices_now(self):
+        """語音那邊每一句說完會來問：現在要不要分辨是誰（要的話回傳分辨用的東西）。"""
+        return self.voices if self.cfg["tell_speakers"] and self.speakers["state"] == "ready" else None
+
+    def speakers_load(self, retry: bool = False) -> None:
+        """開了「分辨說話者」：模型沒有就先下載（約 27 MB），再載入。都在背景做，好了之後下一句開始就會標是誰。"""
+        if not self.cfg["tell_speakers"]:
+            self._speakers(state="off", error="")
+            return
+        if self.voices:
+            self._speakers(state="ready", error="")
+            return
+        if self.speakers["state"] in ("downloading", "loading") or (self.speakers["state"] == "failed" and not retry):
+            return
+        self._speakers(state="downloading" if not assets.has_voice(self.store) else "loading", percent=0, error="")
+
+        def work():
+            try:
+                path = assets.get_voice(self.store, lambda done, total: self._speakers(
+                    percent=int(done * 100 / total) if total else 0), self.closing.is_set)
+                self._speakers(state="loading")
+                from .core.voices import Voices
+
+                self.voices = Voices(path)
+            except Exception as ex:  # noqa: BLE001
+                self.log(f"speaker model not ready: {ex!r}")
+                self._speakers(state="failed", error=str(ex)[:300])
+                return
+            self.log("speaker model loaded")
+            self._speakers(state="ready" if self.cfg["tell_speakers"] else "off", error="")
+            self._storage_changed()
+
+        threading.Thread(target=work, daemon=True, name="voices").start()
+
+    def speaker_rename(self, speaker: int, name: str) -> dict:
+        """幫第幾個說話者取名字（空的 = 改回「說話者 n」）。只記在這一次開啟期間。"""
+        name = " ".join(str(name or "").split())[:24]
+        if not self.voices or not any(p["id"] == speaker for p in self.voices.speakers.people()):
+            return {"ok": False}
+        if name:
+            self._speaker_names[speaker] = name
+        else:
+            self._speaker_names.pop(speaker, None)
+        with self._lock:      # 畫面上已經有的句子也跟著換名字
+            for i, old in enumerate(self.messages):
+                if old.get("speaker") == speaker and old.get("speaker_run") == self._speaker_run:
+                    self.messages[i] = dict(old, voice=name)
+        self.transcript.name_speaker(speaker, name)
+        self.hub.publish("speakers", self.speakers_state())
+        return {"ok": True, "name": name}
+
+    def speakers_forget(self) -> dict:
+        """全部重新分辨：忘掉目前分出來的人和名字（換了一群人，或分錯了）。之前的句子不再標是誰。"""
+        if self.voices:
+            self.voices.speakers.forget()
+        self._speaker_names.clear()
+        self._speaker_run += 1
+        self.transcript.forget_speakers()
+        self.hub.publish("speakers", self.speakers_state())
+        return {"ok": True}
+
+    def speaker_tag(self, msg: dict) -> tuple | None:
+        """這一則要標成誰：（第幾個說話者, 取的名字）。沒分出來、或是「重新分辨」之前標的，就沒有。"""
+        n = msg.get("speaker")
+        if not n or msg.get("speaker_run") != self._speaker_run or not self.cfg["tell_speakers"]:
+            return None
+        return int(n), self._speaker_names.get(int(n), "")
+
     # ---- 只聽指定程式的聲音
 
     def apps_state(self) -> dict:
@@ -2436,7 +2532,8 @@ class Service:
             self._recent_voice.remove(twin)
         return False
 
-    def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0, unsure: bool = False) -> None:
+    def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0, unsure: bool = False,
+                   speaker: int | None = None) -> None:
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
             self._end_live(kind)
@@ -2449,7 +2546,9 @@ class Service:
         text = self._voice_script(kind, text, lang)
         heard = text
         msg_id = self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure, hear=seconds,
-                             live=self._take_live(kind))
+                             live=self._take_live(kind), speaker=speaker if kind == "loopback" else None)
+        if speaker:
+            self.hub.publish("speakers", self.speakers_state())      # 多了一個人，或某個人又多說一句
         self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
 
     def _voice_script(self, kind: str, text: str, lang: str | None) -> str:

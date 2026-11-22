@@ -14,6 +14,18 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 # 名字的顏色：對方說的、螢幕上讀到的、我自己的；note 是程式自己的短提示（例如按了快速鍵：麥克風開了）
 NAME_COLORS = {"heard": (196, 148, 255), "screen": (255, 196, 92), "me": (92, 222, 255), "note": (74, 222, 154)}
 NOTE_NAME = "LiveLingo"
+# 分辨說話者：第 1、2、3… 個人的名字顏色（輪著用）。避開「我」的青色和「聊天」的橘色，免得看錯是誰。
+SPEAKER_COLORS = [(196, 148, 255), (124, 227, 139), (255, 143, 179), (127, 168, 255), (242, 227, 107), (255, 138, 115)]
+SPEAKER = {"zh-TW": "說話者 {n}", "zh-CN": "说话者 {n}", "en": "Speaker {n}", "ko": "화자 {n}", "ja": "話者 {n}"}
+
+
+def speaker_name(n: int, ui_lang: str, given: str = "") -> str:
+    """第 n 個說話者要顯示的名字：使用者取過名字就用那個，不然是「說話者 n」。"""
+    return given.strip() or (SPEAKER.get(ui_lang) or SPEAKER["en"]).format(n=n)
+
+
+def speaker_color(n: int) -> tuple:
+    return SPEAKER_COLORS[(max(1, int(n)) - 1) % len(SPEAKER_COLORS)]
 TEXT_COLOR = (255, 255, 255)
 DIM_COLOR = (214, 214, 224)
 
@@ -204,11 +216,12 @@ def _wrap(parts: list[tuple[str, tuple]], size: int, width: int, han: str = "cjk
 
 
 def paint_message(kind: str, name: str, text: str, width: int, size: int, *, original: str = "",
-                  backdrop: int = 0, han: str = "cjk", style: dict | None = None) -> Image.Image:
+                  backdrop: int = 0, han: str = "cjk", style: dict | None = None, name_color: tuple | None = None) -> Image.Image:
     """
     畫一則留言：彩色的名字接著內容，太長會換行。回傳寬度固定、高度剛好的透明圖。
     style（都可以省略，見 DEFAULT_STYLE）：family 字型、bold 粗體、color 字的顏色、outline 描邊 0 到 4、
     names 要不要顯示名字、name_colors 三種名字的顏色、align 靠左／置中／靠右。
+    name_color：這一則的名字用這個顏色（分辨說話者時，每個人一個顏色），沒給就照種類。
     """
     style = {**DEFAULT_STYLE, **(style or {})}
     family = style["family"] if style["family"] in FAMILIES else "sans"
@@ -238,7 +251,7 @@ def paint_message(kind: str, name: str, text: str, width: int, size: int, *, ori
     line_h = round(size * 1.38)
     parts = [(text, text_color)]
     if style["names"] and name:
-        parts = [(name, name_colors.get(kind, name_colors["heard"])), ("  ", text_color), *parts]
+        parts = [(name, name_color or name_colors.get(kind, name_colors["heard"])), ("  ", text_color), *parts]
     lines = _wrap(parts, size, inner, han, family, bold)
     small = max(10, round(size * 0.72))
     small_lines = _wrap([(original, dim_color)], small, inner, han, family, bold) if original else []

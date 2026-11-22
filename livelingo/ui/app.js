@@ -387,7 +387,34 @@
     // 語音的句子：後面標從說完到翻好花了幾秒
     const took = m.took > 0 && !m.pending ? ` · <span class="took" title="${esc(t("took_hint"))}">${esc(t("took", { s: Number(m.took).toFixed(1) }))}</span>` : "";
     const place = m.place ? ` · ${esc(m.place)}` : "";      // 同時讀好幾個聊天區時，標是哪一個讀到的
-    return `${icon}<span>${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}${place}${took}</span>`;
+    // 有分出是誰說的：「對方」換成那個人（顏色的點加名字），點下去可以去改名字
+    const sp = S.speakers || {};
+    const tagged = m.speaker && S.cfg.tell_speakers && m.speaker_run === sp.run;
+    const who = tagged ? `<button class="spk" data-act="spk-open" title="${esc(t("spk_open"))}"><span class="spk-dot spk-c${(m.speaker - 1) % 6}"></span>${esc(speakerLabel(m.speaker))}</button>` : esc(t("who_" + m.who));
+    return `${icon}<span>${who} · ${esc(t("via_" + m.via))}${place}${took}</span>`;
+  }
+
+  // ---- 分辨說話者
+  function speakerLabel(n) {
+    const p = ((S.speakers || {}).people || []).find((x) => x.id === n);
+    return (p && p.name) || t("spk_n", { n });
+  }
+  function speakersHTML() {
+    const sp = S.speakers || {};
+    let more = "";
+    if (S.cfg.tell_speakers) {
+      if (sp.state === "downloading") more = `<div class="note">${ICON.info}<span id="spk-percent">${esc(t("spk_downloading", { mb: sp.mb, percent: sp.percent || 0 }))}</span></div>`;
+      else if (sp.state === "loading") more = `<div class="note">${ICON.info}<span>${esc(t("spk_loading"))}</span></div>`;
+      else if (sp.state === "failed") more = `<div class="note warn">${ICON.info}<span>${esc(t("spk_failed", { error: sp.error || "" }))}</span>
+        <button class="primary small" data-act="spk-retry">${esc(t("retry"))}</button></div>`;
+      else if (sp.state === "ready" && !(sp.people || []).length) more = `<div class="note">${ICON.info}<span>${esc(t("spk_none"))}</span></div>`;
+      else if (sp.state === "ready") more = `<div class="sub">${esc(t("spk_list"))}</div>` + sp.people.map((p) => `
+        <div class="setting-row spk-row"><label for="spk-name-${p.id}"><span class="spk-dot spk-c${(p.id - 1) % 6}"></span><span>${esc(t("spk_n", { n: p.id }))}</span><span class="desc">${esc(t("spk_count", { n: p.count }))}</span></label>
+          <input type="text" id="spk-name-${p.id}" data-speaker="${p.id}" value="${esc(p.name || "")}" maxlength="24" placeholder="${esc(t("spk_name"))}"></div>`).join("") +
+        `<div class="btn-row"><button class="ghost small" data-act="spk-forget">${esc(t("spk_forget"))}</button></div>`;
+    }
+    return `<section><div><h2>${esc(t("spk_title"))}</h2><div class="sub">${esc(t("spk_hint"))}</div></div>
+        ${switchRow("tell_speakers", t("tell_speakers"), t("tell_speakers_desc"))}${more}</section>`;
   }
 
   function fixHTML(m) {
@@ -548,7 +575,8 @@
         ${switchRow("drop_echo", t("drop_echo"), t("drop_echo_desc"))}
         ${switchRow("ptt", t("ptt"), t("ptt_desc"))}
         ${S.cfg.ptt ? choiceRow("ptt_key", t("ptt_key"), (S.pttKeys || []).map((k) => [k, keyName(k)])) : ""}
-      </section>`;
+      </section>
+      ${speakersHTML()}`;
   }
 
   function paintLevels() {
@@ -1622,6 +1650,9 @@
     "apps-refresh": () => loadApps(),
     "sgpu-download": () => post("/api/speech_gpu", { download: true }),
     "sgpu-cancel": () => post("/api/speech_gpu", { cancel: true }),
+    "spk-retry": () => post("/api/speakers", { action: "retry" }),
+    "spk-forget": async () => { const r = await post("/api/speakers", { action: "forget" }); if (r && r.ok) toast(t("spk_forgot"), 4200); },
+    "spk-open": () => { S.ui.tab = "audio"; setView("settings"); setTimeout(() => { const el = document.querySelector('[data-key="tell_speakers"]'); if (el) el.scrollIntoView({ block: "center" }); }, 60); },
     "lib-export": async () => {
       const r = await post("/api/library", { export: true });
       toast(r.ok ? t("lib_exported", r) : t("lib_export_failed", { error: r.error || "" }), 9000, r.ok ? "info" : "warn");
@@ -1929,6 +1960,13 @@
   });
 
   document.addEventListener("change", (e) => {
+    if (e.target.dataset && e.target.dataset.speaker) {      // 幫說話者取名字：改完（離開輸入框或按 Enter）就存
+      const input = e.target;
+      post("/api/speakers", { action: "rename", id: Number(input.dataset.speaker), name: input.value }).then((r) => {
+        if (r && r.ok) { input.value = r.name; flashSaved("#" + input.id); } else toast(t("n_save_failed", { error: "" }), 6000, "error");
+      });
+      return;
+    }
     if (e.target.id === "set-file") {      // 匯入設定檔：在這裡讀檔，內容交給程式檢查
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -2148,6 +2186,16 @@
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
+    speakers: (d) => {      // 分辨說話者：模型的狀態、多了一個人、有人改了名字
+      const before = S.speakers || {};
+      S.speakers = d;
+      const percent = $("spk-percent");
+      if (percent && d.state === "downloading" && before.state === "downloading") { percent.textContent = t("spk_downloading", { mb: d.mb, percent: d.percent || 0 }); return; }
+      const typing = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.speaker;      // 正在打名字：不要重畫把字洗掉
+      if (S.view === "settings" && S.ui.tab === "audio" && !S.ui.live && !typing) renderSettingsPage();
+      const sign = (x) => JSON.stringify([x.on, x.run, (x.people || []).map((p) => p.name)]);
+      if (sign(before) !== sign(d)) renderMessages();
+    },
     speech_gpu: (d) => {
       const before = S.speechGpu || {};
       S.speechGpu = d;
@@ -2216,7 +2264,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
-    S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
+    S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.update = st.update || {};
     if (st.updated_from) {      // 剛自動更新（或退回）完第一次開：說一次

@@ -51,7 +51,7 @@ def test_downloads_are_pinned_and_checked(tmp_path, monkeypatch):
     import pytest
 
     # ---- 每一個下載都鎖住了
-    files = [(url, name) for url, name, _ in assets.MODELS.values()] + [(url, rel) for url, rel, _ in assets.OCR_FILES + assets.WHISPER_FILES]
+    files = [(url, name) for url, name, _ in assets.MODELS.values()] + [(url, rel) for url, rel, _ in assets.OCR_FILES + assets.WHISPER_FILES + assets.VOICE_FILES]
     assert {name for _, name in files} == set(assets.CHECKS)                       # 每個檔案都有核對用的資料，沒有多的
     for url, _ in files:
         assert re.search(r"/resolve/[0-9a-f]{40}/", url), url                      # 鎖在一個 commit 上，不是 main
@@ -4727,3 +4727,228 @@ def test_live_captions_while_the_other_person_is_still_talking(tmp_path, monkeyp
     assert 'switchRow("live_captions"' in js and "m.live" in js and ".orig.hearing" in css
     source = Path("livelingo/service.py").read_text(encoding="utf-8")
     assert 'on_partial=self._on_live if key == "listen" else None' in source      # 只給對方說的話
+
+
+def test_speakers_are_told_apart(tmp_path, monkeypatch):
+    """分辨說話者：照聲紋把對方分成說話者 1、2、3，各有顏色、可以取名字；聲紋和名字只在記憶體裡，不進設定、歷史、問題報告。"""
+    import json as json_mod
+    from pathlib import Path
+
+    import numpy as np
+
+    import livelingo.core.voices as voices_mod
+    from livelingo import chatpaint, storage, transcript
+    from livelingo.core.audio import SR
+    from livelingo.core.speech import LivePacer, SpeechPipeline
+    from livelingo.core.voices import MAYBE, SAME, Speakers, Voiceprint, fbank
+    from livelingo.service import Service
+
+    def voice(*parts):      # 做一個方向固定的聲紋：(第幾維, 多少) …
+        v = np.zeros(256, dtype=np.float32)
+        for i, x in parts:
+            v[i] = x
+        return v / np.linalg.norm(v)
+
+    # 一、分人的規則
+    a, b, c = voice((0, 1)), voice((1, 1)), voice((2, 1))
+    people = Speakers()
+    assert people.who(None, 3.0) is None and people.who(a, 0.5) is None      # 沒有聲紋、太短：不分
+    assert people.who(a, 1.0) is None and people.people() == []             # 誰都不像，但太短：不拿來認識新的人
+    assert people.who(a, 3.0) == 1 and people.who(b, 3.0) == 2 and people.who(a, 2.0) == 1
+    near = voice((0, 0.47), (5, (1 - 0.47 ** 2) ** 0.5))                  # 跟 1 號有點像，又不夠像
+    assert MAYBE <= float(near @ a) < SAME
+    before = people._sums[0].copy()
+    assert people.who(near, 3.0) == 1 and np.array_equal(people._sums[0], before)      # 標給他，但不拿去改他的聲紋
+    alike = voice((0, 0.9), (6, (1 - 0.81) ** 0.5))
+    assert people.who(alike, 0.8) == 1 and np.array_equal(people._sums[0], before)     # 夠像但很短：也不改
+    assert people.who(alike, 2.0) == 1 and not np.array_equal(people._sums[0], before)
+    assert people.people() == [{"id": 1, "count": 5}, {"id": 2, "count": 1}]
+    few = Speakers(limit=2)
+    assert [few.who(v, 3.0) for v in (a, b, c)] == [1, 2, None]             # 人數到上限：不再多分
+    people.forget()
+    assert people.people() == [] and people.who(b, 3.0) == 1                # 全部重來：從 1 開始
+
+    # 二、聲音特徵的形狀；太短的聲音不送進模型
+    feats = fbank(np.random.default_rng(1).standard_normal(SR).astype(np.float32) * 0.1)
+    assert feats.shape == (98, 80) and feats.dtype == np.float32 and abs(float(feats.mean(axis=0).max())) < 1e-3
+    assert fbank(np.zeros(100, dtype=np.float32)).shape == (0, 80)
+    assert Voiceprint.__new__(Voiceprint).embed(np.zeros(int(SR * 0.5), dtype=np.float32)) is None
+
+    # 三、語音那邊：有分出是誰才多交一個 speaker；分的時候出錯，字幕照出
+    got, state = [], {"who": 2}
+
+    class Seg:
+        speaking, emit = False, []
+
+        def feed(self, audio):
+            out, self.emit = self.emit, []
+            return out
+
+        def so_far(self):
+            return None
+
+    class Rec:
+        def busy(self):
+            return False
+
+        def transcribe(self, audio, langs, stay=1.0, quick=False):
+            return ("안녕하세요", "ko", False)
+
+    class Who:
+        def who(self, audio):
+            if state["who"] == "boom":
+                raise RuntimeError("model broke")
+            return state["who"]
+
+    pipe = SpeechPipeline.__new__(SpeechPipeline)
+    pipe.capture = type("C", (), {"kind": "loopback"})()
+    pipe.segmenter, pipe.recognizer, pipe.langs, pipe.stay = Seg(), Rec(), ["ko"], 1.0
+    pipe.on_text = lambda kind, text, lang, seconds, unsure, **kw: got.append(kw)
+    pipe.live, pipe.busy, pipe.pacer = (lambda: False), (lambda: False), LivePacer()
+    pipe.voices = lambda: Who()
+    for who in (2, None, "boom"):
+        state["who"] = who
+        pipe.segmenter.emit = [np.zeros(SR * 2, dtype=np.float32)]
+        pipe._hear(np.zeros(1600, dtype=np.float32))
+    pipe.voices = lambda: None                            # 功能沒開
+    pipe.segmenter.emit = [np.zeros(SR * 2, dtype=np.float32)]
+    pipe._hear(np.zeros(1600, dtype=np.float32))
+    assert got == [{"speaker": 2}, {}, {}, {}]
+
+    # 四、服務：模型在背景準備，失敗看得到、可以再試
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False, ui_lang="zh-TW")
+    assert service.cfg["tell_speakers"] is False and service.speakers_state()["on"] is False
+    assert service._voices_now() is None and service.state()["speakers"]["state"] == "off"
+    events = []
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, data=None: (events.append((kind, data)), old_publish(kind, data))[1])
+
+    class FakeVoices:
+        def __init__(self, path=None):
+            self.speakers = Speakers()
+
+        def who(self, audio):
+            return 1
+
+    plan = {"fail": True}
+
+    def fake_get(store, progress=None, cancel=None):
+        if plan["fail"]:
+            raise OSError("no network")
+        progress(50, 100)
+        return Path(store) / "voice.onnx"
+
+    monkeypatch.setattr("livelingo.assets.get_voice", fake_get)
+    monkeypatch.setattr("livelingo.assets.has_voice", lambda store: False)
+    monkeypatch.setattr(voices_mod, "Voices", FakeVoices)
+
+    def wait_for(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    service.speakers_load()
+    assert service.speakers["state"] == "off"            # 沒開：什麼都不下載
+    service.cfg.set(tell_speakers=True)
+    service.speakers_load()
+    wait_for(lambda: service.speakers["state"] == "failed")
+    assert "no network" in service.speakers["error"] and service._voices_now() is None
+    service.speakers_load()
+    assert service.speakers["state"] == "failed"         # 不會自己一直重試
+    plan["fail"] = False
+    service.speakers_load(retry=True)
+    wait_for(lambda: service.speakers["state"] == "ready")
+    assert isinstance(service.voices, FakeVoices) and service._voices_now() is service.voices
+    assert any(k == "speakers" and d["state"] == "downloading" and d["percent"] == 50 for k, d in events)
+    assert service._storage_used()["voice"] is True
+
+    # 五、訊息帶著是誰說的；取名字；全部重來
+    service.translator = _FakeModel(lambda text, style, context: "你好")
+    shown = []
+    monkeypatch.setattr(service.overlay, "push", lambda *args, **kw: shown.append((args, kw)))
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        service.voices.speakers.who(a, 3.0)
+        service.voices.speakers.who(b, 3.0)
+        service.transcript.start()
+        service._on_speech("loopback", "안녕", "ko", 0.2, speaker=1)
+        service._on_speech("loopback", "반가워", "ko", 0.2, speaker=2)
+        service._on_speech("mic", "大家好", "zh", 0.2, speaker=1)      # 我自己說的不分
+        service._on_speech("loopback", "뭐해", "ko", 0.2)              # 這一句分不出來
+        wait_for(lambda: len(service.messages) == 4 and not any(m.get("pending") for m in service.messages))
+        first, second, mine, unknown = list(service.messages)
+        assert (first["speaker"], first["speaker_run"], first["voice"]) == (1, 1, "") and second["speaker"] == 2
+        assert "speaker" not in mine and "speaker" not in unknown
+        assert service.speaker_tag(first) == (1, "") and service.speaker_tag(mine) is None
+        assert [kw.get("who") for args, kw in shown if kw.get("key") == second["id"]][-1] == (2, "")      # 浮動字幕也知道是誰
+        secret = "阿哲Zq7"
+        assert service.speaker_rename(1, f"  {secret}  ") == {"ok": True, "name": secret}
+        assert service.speaker_rename(9, "x") == {"ok": False}      # 沒有這個人
+        assert service.messages[0]["voice"] == secret and service.speaker_tag(service.messages[0]) == (1, secret)
+        state = service.speakers_state()
+        assert state["people"][0]["name"] == secret and state["people"][1]["name"] == "" and state["run"] == 1
+        assert len(service.speaker_rename(2, "x" * 60)["name"]) == 24
+        assert service.speaker_rename(2, "")["name"] == "" and 2 not in service._speaker_names
+        service._on_speech("loopback", "가자", "ko", 0.2, speaker=1)
+        wait_for(lambda: len(service.messages) == 5 and not service.messages[-1].get("pending"))
+        assert service.messages[-1]["voice"] == secret              # 之後的句子直接帶著名字
+
+        # 字幕記錄（使用者自己要存的檔）寫的是那個人的名字
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert f"{secret}：안녕" in text and "說話者 2：반가워" in text and "對方：뭐해" in text and "我：大家好" in text
+
+        # 設定檔、歷史、問題報告裡都沒有名字，也沒有聲紋
+        from livelingo import history as history_mod
+        assert not {"speaker", "voice", "speaker_run"} & set(history_mod.FIELDS)
+        saved = (tmp_path / history_mod.FILE).read_text(encoding="utf-8")
+        assert "가자" in saved and secret not in saved and "speaker" not in saved
+        assert secret not in (tmp_path / "config.json").read_text(encoding="utf-8")
+        assert secret not in service.report_make()["text"]
+        assert not any(tmp_path.rglob("*.npy")) and secret.encode("utf-8") not in b"".join(
+            p.read_bytes() for p in tmp_path.rglob("*") if p.is_file())
+
+        # 關掉功能：不再標；再打開，原來的還在
+        service.cfg.set(tell_speakers=False)
+        assert service.speaker_tag(service.messages[0]) is None and service._voices_now() is None
+        service.cfg.set(tell_speakers=True)
+        assert service.speaker_tag(service.messages[0]) == (1, secret)
+
+        # 全部重新分辨：人和名字都忘掉，之前的句子不再標是誰，字幕記錄也不再寫
+        assert service.speakers_forget() == {"ok": True}
+        assert service.speakers_state()["people"] == [] and service.speakers_state()["run"] == 2
+        assert service.speaker_tag(service.messages[0]) is None and not service._speaker_names
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert secret not in text and "對方：안녕" in text
+    finally:
+        service.closing.set()
+
+    # 六、名字和顏色：五種語言、六個顏色輪著用，介面上的圓點跟浮動字幕同一組顏色
+    assert set(chatpaint.SPEAKER) == set(UI_LANGS)
+    assert chatpaint.speaker_name(3, "ko") == "화자 3" and chatpaint.speaker_name(3, "ko", " 민수 ") == "민수"
+    assert chatpaint.speaker_color(1) == chatpaint.speaker_color(7) != chatpaint.speaker_color(2)
+    assert chatpaint.NAME_COLORS["me"] not in chatpaint.SPEAKER_COLORS and chatpaint.NAME_COLORS["screen"] not in chatpaint.SPEAKER_COLORS
+    plain = chatpaint.paint_message("heard", "說話者 2", "你好", 400, 22)
+    tinted = chatpaint.paint_message("heard", "說話者 2", "你好", 400, 22, name_color=chatpaint.speaker_color(2))
+    assert plain.size == tinted.size and plain.tobytes() != tinted.tobytes()
+    ui = Path("livelingo/ui")
+    js, css = (ui / "app.js").read_text(encoding="utf-8"), (ui / "style.css").read_text(encoding="utf-8")
+    dots = css[css.index(".spk-dot {"):css.index(".msg .meta .spk {")].upper()
+    for i, color in enumerate(chatpaint.SPEAKER_COLORS):
+        assert "#%02X%02X%02X" % color in dots, i
+    assert "spk-c${(m.speaker - 1) % 6}" in js and len(chatpaint.SPEAKER_COLORS) == 6
+    assert "speakers: (d) =>" in js and 'switchRow("tell_speakers"' in js and "m.speaker_run === sp.run" in js
+
+    # 七、儲存空間：模型列得出來，功能關著才可以刪
+    store = tmp_path / "store"
+    path = assets.voice_path(store)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"x" * 2048)
+    row = [r for r in storage.items(tmp_path, store, {"voice": True}) if r["id"] == "voice"][0]
+    assert row["bytes"] == 2048 and row["used"] and not row["removable"]
+    row = [r for r in storage.items(tmp_path, store, {"voice": False}) if r["id"] == "voice"][0]
+    assert row["removable"] and storage.remove_item(tmp_path, store, "voice") and not path.exists()
+    source = Path("livelingo/service.py").read_text(encoding="utf-8")
+    assert 'voices=self._voices_now if key == "listen" else None' in source      # 只分對方說的話

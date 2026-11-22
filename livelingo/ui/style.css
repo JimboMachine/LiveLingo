@@ -228,6 +228,12 @@ input::placeholder { color: var(--faint); }
 .msg { display: flex; flex-direction: column; gap: 4px; max-width: 88%; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
 .msg .meta .took { color: var(--faint); }
+.spk-dot { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 50%; background: #C494FF; box-shadow: 0 0 0 1px var(--line); }
+.spk-c1 { background: #7CE38B; } .spk-c2 { background: #FF8FB3; } .spk-c3 { background: #7FA8FF; } .spk-c4 { background: #F2E36B; } .spk-c5 { background: #FF8A73; }
+.msg .meta .spk { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.msg .meta .spk:hover { text-decoration: underline; }
+.spk-row label { display: flex; align-items: center; gap: 8px; }
+.spk-row input { flex: 0 1 220px; min-width: 120px; }
 .msg .meta svg { width: 13px; height: 13px; }
 .msg .bubble { background: var(--surface-2); border-radius: 4px 14px 14px 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
 .msg .orig { font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }

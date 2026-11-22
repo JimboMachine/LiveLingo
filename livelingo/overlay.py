@@ -577,25 +577,30 @@ class Overlay:
         kind = "me" if msg.get("who") == "me" else ("screen" if msg.get("via") == "screen" else "heard")
         if kind == "me" and not self.service.cfg["overlay_mine"]:
             return
-        self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"])
+        self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"], who=self._who(msg))
+
+    def _who(self, msg: dict) -> tuple | None:
+        """這一則是第幾個說話者、叫什麼名字（有開「分辨說話者」而且分得出來才有）。"""
+        tag = getattr(self.service, "speaker_tag", None)
+        return tag(msg) if tag else None
 
     def on_partial(self, msg: dict, text: str) -> None:
         """還在翻的句子：對方說的話先把翻到一半的譯文顯示出來（翻完會換成整句）。螢幕上讀到的要翻完才知道值不值得顯示，不先出。"""
         if msg.get("via") != "heard" or not text.strip():
             return
-        self.push("heard", text, msg.get("original", ""), key=msg["id"])
+        self.push("heard", text, msg.get("original", ""), key=msg["id"], who=self._who(msg))
 
-    def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0) -> None:
-        """life：這一則自己停留幾秒（0 = 照設定的停留時間）。"""
+    def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0, who: tuple | None = None) -> None:
+        """life：這一則自己停留幾秒（0 = 照設定的停留時間）。who：（第幾個說話者, 取的名字），名字用那個人的顏色。"""
         with self._lock:
             now = time.monotonic()
             for item in self.items:
                 if key is not None and item["key"] == key:      # 同一則（例如按了「翻錯了」重翻）：換掉內容
-                    item.update(text=text, original=original, at=now - FADE_IN, version=item["version"] + 1)
+                    item.update(text=text, original=original, at=now - FADE_IN, version=item["version"] + 1, who=who or item.get("who"))
                     break
             else:
                 self.items.append({"key": key if key is not None else f"x{now}", "kind": kind, "text": text,
-                                   "original": original, "at": now, "version": 0, "life": float(life)})
+                                   "original": original, "at": now, "version": 0, "life": float(life), "who": who})
                 del self.items[:-MAX_ITEMS]
         self._wake.set()
 
@@ -802,9 +807,12 @@ class Overlay:
         if tile is None:
             names = chatpaint.NAMES.get(cfg["ui_lang"] or "en", chatpaint.NAMES["en"])
             original = item["original"] if cfg["overlay_original"] and item["original"] != item["text"] else ""
-            tile = chatpaint.paint_message(item["kind"], names.get(item["kind"], chatpaint.NOTE_NAME), item["text"], width, size,
+            name, tint = names.get(item["kind"], chatpaint.NOTE_NAME), None
+            if item.get("who"):      # 分得出是誰：名字換成那個人的，顏色也是他的
+                name, tint = chatpaint.speaker_name(item["who"][0], cfg["ui_lang"] or "en", item["who"][1]), chatpaint.speaker_color(item["who"][0])
+            tile = chatpaint.paint_message(item["kind"], name, item["text"], width, size,
                                            original=original, backdrop=int(cfg["overlay_backdrop"]),
-                                           han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]), style=style)
+                                           han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]), style=style, name_color=tint)
             if len(self._tiles) > 120:
                 self._tiles.clear()
             self._tiles[key] = tile

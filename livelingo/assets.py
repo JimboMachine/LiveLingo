@@ -30,6 +30,7 @@ _GEMMA_4B = ("bullerwins/translategemma-4b-it-GGUF", "7c938465a870d8624bcfa98a8e
 _GEMMA_12B = ("bullerwins/translategemma-12b-it-GGUF", "d7d1d8cc4ff53d4bc883ef33eae3894f07833b63")
 _OCR = ("monkt/paddleocr-onnx", "7b02d0a30a07ba2b92ad1ff5a8941ae2c633de65")
 _WHISPER = ("deepdml/faster-whisper-large-v3-turbo-ct2", "4df90f75321148c3a29a9e2351b7ddf8f5b115a8")
+_VOICE = ("Wespeaker/wespeaker-voxceleb-resnet34-LM", "f0c48c298fd835726c27956a5d617bad7115627e")      # WeSpeaker 官方帳號，CC BY 4.0
 
 MODELS = {
     "4b": (_hf(*_GEMMA_4B, "translategemma-4b-it-Q4_K_M.gguf"), "translategemma-4b.gguf", 2490),
@@ -43,6 +44,9 @@ OCR_FILES = [
 WHISPER_FILES = [(_hf(*_WHISPER, n), f"whisper/{n}", mb) for n, mb in (
     ("config.json", 1), ("preprocessor_config.json", 1), ("tokenizer.json", 3), ("vocabulary.json", 1),
     ("model.bin", 1620))]
+# 分辨說話者用的聲紋模型：不是每個人都需要，所以打開那個功能時才下載（get_voice）
+VOICE_FILES = [(_hf(*_VOICE, "voxceleb_resnet34_LM.onnx"), "voice/voxceleb_resnet34_LM.onnx", 27)]
+VOICE_MB = sum(mb for _, _, mb in VOICE_FILES)
 # 存在 models/ 下面的檔名 → (位元組數, sha256)。上面每一個檔案都要有（有測試在看）。
 CHECKS = {
     "translategemma-4b.gguf": (2489909312, "7f7357c14abd9da4eb200b38b05da502cd6e10d7e1d403fbc9f78c19f3209b72"),
@@ -55,6 +59,7 @@ CHECKS = {
     "whisper/tokenizer.json": (2710337, "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd"),
     "whisper/vocabulary.json": (1068114, "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"),
     "whisper/model.bin": (1617884929, "e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da"),
+    "voice/voxceleb_resnet34_LM.onnx": (26530309, "7bb2f06e9df17cdf1ef14ee8a15ab08ed28e8d0ef5054ee135741560df2ec068"),
 }
 
 # 翻譯引擎（llama.cpp 的 llama-server）：鎖在這一個版本，不再去抓「當天最新的」。
@@ -80,6 +85,22 @@ class DownloadError(Exception):
 # NVIDIA 把它放在 PyPI 上（nvidia-cudnn-cu12），是一個壓縮檔，裡面的 DLL 拿出來就能用。
 CUDNN_INDEX = "https://pypi.org/pypi/nvidia-cudnn-cu12/json"
 CUDNN_MB = 700
+
+
+def voice_path(data: Path) -> Path:
+    """分辨說話者用的聲紋模型放在哪。"""
+    return data / "models" / VOICE_FILES[0][1]
+
+
+def has_voice(data: Path) -> bool:
+    return voice_path(data).is_file() and voice_path(data).stat().st_size > 0
+
+
+def get_voice(data: Path, progress=None, cancel=None) -> Path:
+    """下載聲紋模型（約 27 MB），大小和 sha256 都要對。progress(已下載位元組, 總位元組)。"""
+    for url, rel, _ in VOICE_FILES:
+        fetch(url, data / "models" / rel, progress, cancel, check=CHECKS[rel])
+    return voice_path(data)
 
 
 def cudnn_dir(data: Path) -> Path:
@@ -249,7 +270,7 @@ def _download(url: str, dest: Path, part: Path, progress, cancel, attempts: int)
 def pinned() -> list[tuple[str, int, str]]:
     """所有鎖定的下載：[(網址, 位元組數, sha256)]。自我檢查用它確認每一個都還抓得到。"""
     out = [(url, *CHECKS[name]) for url, name, _ in MODELS.values()]
-    out += [(url, *CHECKS[rel]) for url, rel, _ in OCR_FILES + WHISPER_FILES]
+    out += [(url, *CHECKS[rel]) for url, rel, _ in OCR_FILES + WHISPER_FILES + VOICE_FILES]
     out += [(f"{ENGINE_BASE}/{name}", size, digest) for files in ENGINE_FILES.values() for name, size, digest in files]
     return out
 

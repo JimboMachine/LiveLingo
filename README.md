@@ -49,6 +49,8 @@
 
 語音辨識使用 Whisper large-v3-turbo，在 CPU 上執行。
 
+分辨說話者（選用，預設關閉）使用 WeSpeaker 的 ResNet34 聲紋模型（wespeaker-voxceleb-resnet34-LM，CC BY 4.0 授權），打開那個功能時才下載，約 27 MB。聲紋只留在記憶體裡，不會存檔。
+
 ## 小提醒
 
 - 請戴耳機。用喇叭的話，麥克風會把對方的聲音也收進去。

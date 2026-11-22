@@ -228,6 +228,13 @@ class Server:
                     if route == "/api/glossary/remove":
                         service.glossary_remove(str(body.get("src") or ""))
                         return self._json({"ok": True})
+                    if route == "/api/speakers":      # 分辨說話者：取名字、全部重來、模型沒準備好時再試一次
+                        if body.get("action") == "rename":
+                            return self._json(service.speaker_rename(int(body.get("id") or 0), str(body.get("name") or "")))
+                        if body.get("action") == "forget":
+                            return self._json(service.speakers_forget())
+                        service.speakers_load(retry=True)
+                        return self._json({"ok": True})
                     if route == "/api/speech_gpu":      # 語音辨識用顯示卡：下載需要的檔案
                         return self._json({"ok": service.speech_gpu_download(cancel=bool(body.get("cancel")))})
                     if route == "/api/library":      # 詞彙表和教過的句子：匯出成檔案、從檔案匯入

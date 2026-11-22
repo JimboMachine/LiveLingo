@@ -252,15 +252,18 @@ class SpeechPipeline(threading.Thread):
     on_partial(來源, 文字, 語言)。說完了、要開始辨識整句的時候先叫 on_partial(來源, "", None)（半句不用再翻了）；
     整句照樣走 on_text；那一句最後沒有結果（雜音、太短）就叫 on_partial(來源, None, None) 收回。
     busy()：回傳 True 的時候先不要做（電腦正在忙別的重活）。
+    分辨說話者：有給 voices 的話，每一句說完順便算是誰說的，多交一個 speaker=編號 給 on_text。
     """
 
     gate = None      # gate()：現在要不要收音（「按住才說話」沒按著的時候是 False）。None = 一直收
     on_partial = None      # 沒給就不做即時字幕
+    voices = None          # voices()：回傳分辨說話者用的東西（有 who(聲音)），沒開那個功能就回傳 None
     _live_text = None
 
     def __init__(self, capture, recognizer: Recognizer, langs: list[str], on_text, on_state=None,
-                 end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None, on_partial=None, live=None, busy=None):
+                 end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None, on_partial=None, live=None, busy=None, voices=None):
         super().__init__(daemon=True)
+        self.voices = voices
         self.on_partial = on_partial
         self.live = live or (lambda: True)
         self.busy = busy or (lambda: False)
@@ -320,6 +323,13 @@ class SpeechPipeline(threading.Thread):
                 was_speaking = self.segmenter.speaking
                 self.on_state(self.capture.kind, was_speaking)
 
+    def _who(self, utter: np.ndarray) -> int | None:
+        try:
+            voices = self.voices() if self.voices else None
+            return voices.who(utter) if voices else None
+        except Exception:  # noqa: BLE001  分不出來不能讓字幕也沒有
+            return None
+
     def _hear(self, audio: np.ndarray) -> None:
         """把新進來的聲音交給切句的；說完的句子送去辨識，還在說的那一句看情況先辨識一次。"""
         kind, given = self.capture.kind, False
@@ -334,7 +344,9 @@ class SpeechPipeline(threading.Thread):
                 continue
             if res:
                 given = True
-                self.on_text(kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False)
+                who = self._who(utter)      # 這一句是誰說的（有開「分辨說話者」才會有）
+                self.on_text(kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False,
+                             **({"speaker": who} if who else {}))
                 self._live_text = None      # 先顯示的那一則已經被整句接手
                 self.pacer.reset()
         if not self.on_partial:
