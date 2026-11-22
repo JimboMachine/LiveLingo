@@ -216,6 +216,8 @@ class Server:
                         return self._json({"ok": ok})
                     if route == "/api/edit":      # 改辨識出來的原文，重新翻
                         return self._json({"ok": service.edit(int(body.get("id") or 0), str(body.get("text") or ""))})
+                    if route == "/api/again":     # 翻譯失敗的那一則再翻一次
+                        return self._json({"ok": service.again(int(body.get("id") or 0))})
                     if route == "/api/teach":
                         return self._json({"ok": service.teach(int(body.get("id") or 0), str(body.get("text") or "")[:500])})
                     if route == "/api/lessons/remove":
@@ -225,6 +227,13 @@ class Server:
                         return self._json({"ok": service.glossary_add(str(body.get("src") or ""), str(body.get("dst") or ""))})
                     if route == "/api/glossary/remove":
                         service.glossary_remove(str(body.get("src") or ""))
+                        return self._json({"ok": True})
+                    if route == "/api/speakers":      # 分辨說話者：取名字、全部重來、模型沒準備好時再試一次
+                        if body.get("action") == "rename":
+                            return self._json(service.speaker_rename(int(body.get("id") or 0), str(body.get("name") or "")))
+                        if body.get("action") == "forget":
+                            return self._json(service.speakers_forget())
+                        service.speakers_load(retry=True)
                         return self._json({"ok": True})
                     if route == "/api/speech_gpu":      # 語音辨識用顯示卡：下載需要的檔案
                         return self._json({"ok": service.speech_gpu_download(cancel=bool(body.get("cancel")))})

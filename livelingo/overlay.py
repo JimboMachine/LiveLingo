@@ -15,6 +15,14 @@ MIN_SIZE = (240, 110)
 FADE_IN, FADE_OUT = 0.22, 0.9
 MAX_ITEMS = 40
 NOTE_SECONDS = 3.0      # 程式自己的短提示停留幾秒
+READ_START = 3.0        # 看到一則留言、眼睛移過去要的時間
+
+
+def read_seconds(text: str) -> float:
+    """邊打遊戲邊讀完這一句大概要幾秒：中文、韓文、日文一秒 5 個字，英文一秒 15 個字母（大約 3 個單字）。"""
+    wide = sum(1 for ch in text if ord(ch) >= 0x1100)
+    narrow = sum(1 for ch in text if ord(ch) < 0x1100 and not ch.isspace())
+    return wide / 5 + narrow / 15
 
 
 BAR_LOOK = {"overlay_align": "center", "overlay_grow": "up", "overlay_lines": 2}      # 底部字幕條固定的排法，其他外觀照設定
@@ -569,19 +577,30 @@ class Overlay:
         kind = "me" if msg.get("who") == "me" else ("screen" if msg.get("via") == "screen" else "heard")
         if kind == "me" and not self.service.cfg["overlay_mine"]:
             return
-        self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"])
+        self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"], who=self._who(msg))
 
-    def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0) -> None:
-        """life：這一則自己停留幾秒（0 = 照設定的停留時間）。"""
+    def _who(self, msg: dict) -> tuple | None:
+        """這一則是第幾個說話者、叫什麼名字（有開「分辨說話者」而且分得出來才有）。"""
+        tag = getattr(self.service, "speaker_tag", None)
+        return tag(msg) if tag else None
+
+    def on_partial(self, msg: dict, text: str) -> None:
+        """還在翻的句子：對方說的話先把翻到一半的譯文顯示出來（翻完會換成整句）。螢幕上讀到的要翻完才知道值不值得顯示，不先出。"""
+        if msg.get("via") != "heard" or not text.strip():
+            return
+        self.push("heard", text, msg.get("original", ""), key=msg["id"], who=self._who(msg))
+
+    def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0, who: tuple | None = None) -> None:
+        """life：這一則自己停留幾秒（0 = 照設定的停留時間）。who：（第幾個說話者, 取的名字），名字用那個人的顏色。"""
         with self._lock:
             now = time.monotonic()
             for item in self.items:
                 if key is not None and item["key"] == key:      # 同一則（例如按了「翻錯了」重翻）：換掉內容
-                    item.update(text=text, original=original, at=now - FADE_IN, version=item["version"] + 1)
+                    item.update(text=text, original=original, at=now - FADE_IN, version=item["version"] + 1, who=who or item.get("who"))
                     break
             else:
                 self.items.append({"key": key if key is not None else f"x{now}", "kind": kind, "text": text,
-                                   "original": original, "at": now, "version": 0, "life": float(life)})
+                                   "original": original, "at": now, "version": 0, "life": float(life), "who": who})
                 del self.items[:-MAX_ITEMS]
         self._wake.set()
 
@@ -761,8 +780,13 @@ class Overlay:
 
     @staticmethod
     def _life(item: dict, life: float) -> float:
-        """這一則停留幾秒：自己有指定就用自己的（程式的短提示），不然照設定；0 = 不會自己消失。"""
-        return float(item.get("life") or life)
+        """這一則停留幾秒：自己有指定就用自己的（程式的短提示），不然照設定；0 = 不會自己消失。
+        設定的秒數是「最少」停留多久：長的句子來不及讀完，所以照長度多留一下（最多到設定的三倍再加 5 秒）。"""
+        own = float(item.get("life") or 0.0)
+        if own or life <= 0:
+            return own or 0.0
+        need = READ_START + 1.5 * read_seconds(str(item.get("text") or ""))
+        return max(life, min(need, 3 * life + 5))
 
     def _alpha(self, item: dict, now: float, life: float) -> float:
         age = now - item["at"]
@@ -783,9 +807,12 @@ class Overlay:
         if tile is None:
             names = chatpaint.NAMES.get(cfg["ui_lang"] or "en", chatpaint.NAMES["en"])
             original = item["original"] if cfg["overlay_original"] and item["original"] != item["text"] else ""
-            tile = chatpaint.paint_message(item["kind"], names.get(item["kind"], chatpaint.NOTE_NAME), item["text"], width, size,
+            name, tint = names.get(item["kind"], chatpaint.NOTE_NAME), None
+            if item.get("who"):      # 分得出是誰：名字換成那個人的，顏色也是他的
+                name, tint = chatpaint.speaker_name(item["who"][0], cfg["ui_lang"] or "en", item["who"][1]), chatpaint.speaker_color(item["who"][0])
+            tile = chatpaint.paint_message(item["kind"], name, item["text"], width, size,
                                            original=original, backdrop=int(cfg["overlay_backdrop"]),
-                                           han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]), style=style)
+                                           han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]), style=style, name_color=tint)
             if len(self._tiles) > 120:
                 self._tiles.clear()
             self._tiles[key] = tile

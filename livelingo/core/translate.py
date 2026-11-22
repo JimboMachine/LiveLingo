@@ -3,6 +3,7 @@
 import json
 import re
 import threading
+import unicodedata
 import urllib.request
 
 from opencc import OpenCC
@@ -180,10 +181,17 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
     return pattern.sub(repl, text), list(dict.fromkeys(used))
 
 
+# 還沒說完的半句：實測沒有這一段的話，模型會把「이제 과학적」翻成一整句「現在要用科學的方式。」；有了就只翻聽到的
+UNFINISHED = ("The speaker is still talking, so the text may stop in the middle of a sentence. "
+              "Translate only the words that are there. Do not finish or guess the rest of the sentence.\n")
+
+
 def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual",
                  hints: list[tuple[str, str]] | None = None, examples: list[tuple[str, str]] | None = None,
-                 style: str = "full", context: list[str] | None = None, hint_intro: str | None = None) -> str:
+                 style: str = "full", context: list[str] | None = None, hint_intro: str | None = None,
+                 unfinished: bool = False) -> str:
     """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。
+    unfinished：這是還沒說完的半句（即時字幕）。跟模型說清楚，不然它會自己把句子編完。
     style：full = 平常用的；short = 語氣提示換成比較短的寫法（直述句被翻成問句時重翻用）；
     plain = 只有官方的提示（模型把原文原封不動吐回來時重翻用，意思最穩但語氣會比較正式）。"""
     s_name, s_code = SOURCES[source]
@@ -219,6 +227,8 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
         extra += EXAMPLES_INTRO + "".join(f"{a} => {b}\n" for a, b in examples)
     if context and style == "full":
         extra += CONTEXT_INTRO + "".join(f"- {line}\n" for line in context)
+    if unfinished:
+        extra += UNFINISHED
     body = (
         f"You are a professional {s_name} ({s_code}) to {t_name} ({target}) translator. "
         f"Your goal is to accurately convey the meaning and nuances of the original {s_name} text "
@@ -281,11 +291,156 @@ def tidy(out: str, target: str) -> str:
     return out.strip()
 
 
+MAX_TEXT = 2000      # 一則訊息最長幾個字（介面的輸入框也是這個數）
+_SENTENCE_END = re.compile(r"(?<=[。．！？!?…~～\n])|(?<=[.])(?=\s)")
+_SOFT_BREAK = re.compile(r"(?<=[，、,;；:：\s])")
+
+
+def split_long(text: str, limit: int) -> list[str]:
+    """太長的文字切成幾段（每段不超過 limit 個字）：先在句子結尾切，一句就超過的再在逗號、空白切，真的沒地方切才硬切。"""
+    def pack(pieces: list[str]) -> list[str]:
+        out, now = [], ""
+        for piece in pieces:
+            if now and len(now) + len(piece) > limit:
+                out.append(now)
+                now = ""
+            now += piece
+        return out + ([now] if now else [])
+
+    parts = []
+    for sentence in pack([p for p in _SENTENCE_END.split(text) if p]):
+        if len(sentence) <= limit:
+            parts.append(sentence)
+            continue
+        for chunk in pack([p for p in _SOFT_BREAK.split(sentence) if p]):
+            parts += [chunk[i:i + limit] for i in range(0, len(chunk), limit)]
+    return [p.strip() for p in parts if p.strip()]
+
+
+_DIGITS = re.compile(r"\d+")
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
+# 寫成數字但其實不是數量的網路用語：翻出來本來就不會有數字
+_NUMBER_SLANG = {
+    "zh": re.compile(r"(?<!\d)(?:6{2,}|5{3,}|23{2,}|88|886|520|1314|3Q|3q)(?!\d)"),
+    "ko": re.compile(r"(?<!\d)(?:8282|1004)(?!\d)"),
+    "ja": re.compile(r"(?<!\d)8{3,}(?!\d)"),
+    "en": re.compile(r"\b(?:gr8|m8|l8r?|b4|w8|2day|2nite|2moro|4ever|n1)\b", re.I),
+}
+_HAN = "零一二三四五六七八九"
+_KO_SINO = "영일이삼사오육칠팔구"
+_KO_NATIVE = {1: ("하나", "한", "첫"), 2: ("둘", "두"), 3: ("셋", "세", "석"), 4: ("넷", "네", "넉"), 5: ("다섯",), 6: ("여섯",),
+              7: ("일곱",), 8: ("여덟",), 9: ("아홉",), 10: ("열",), 20: ("스물", "스무")}
+_EN = {0: ("zero", "no"), 1: ("one", "first", "a", "an", "once"), 2: ("two", "second", "twice", "both", "double"),
+       3: ("three", "third", "triple"), 4: ("four", "fourth"), 5: ("five", "fifth"), 6: ("six", "sixth"), 7: ("seven", "seventh"),
+       8: ("eight", "eighth"), 9: ("nine", "ninth"), 10: ("ten", "tenth"), 11: ("eleven",), 12: ("twelve",), 20: ("twenty",)}
+
+
+def numbers(text: str, source: str | None = None) -> list[str]:
+    """文字裡用阿拉伯數字寫的數（全形算半形、1,000 算 1000、06 算 6）。「666」「gr8」這種用語不算。"""
+    text = unicodedata.normalize("NFKC", text)
+    if source in _NUMBER_SLANG:
+        text = _NUMBER_SLANG[source].sub(" ", text)
+    return [str(int(n)) for n in _DIGITS.findall(_THOUSANDS.sub("", text))]
+
+
+def _spelled(n: int, target: str) -> list[str]:
+    """這個數在譯文裡不用阿拉伯數字時可能的寫法（只處理常見的小數字和整千、整萬）。"""
+    family, out = LANGS[target]["family"], []
+    if family in ("zh", "ja"):
+        if n < 10:
+            out.append(_HAN[n])
+        elif n < 100:
+            out.append(("" if n < 20 else _HAN[n // 10]) + "十" + (_HAN[n % 10] if n % 10 else ""))
+        out += {0: ["〇", "沒", "没", "無", "无", "ゼロ"], 2: ["兩", "两", "雙", "双", "ふた"], 1: ["ひと", "首"], 30: ["半小時", "半小时", "半"],
+                100: ["百"]}.get(n, [])
+        if n >= 1000 and n % 1000 == 0:
+            out += [f"{n // 1000}千", "千"] if n < 10000 else []
+        if n >= 10000 and n % 10000 == 0:
+            out += [f"{n // 10000}萬", f"{n // 10000}万"]
+    elif family == "ko":
+        if n < 10:
+            out.append(_KO_SINO[n])
+        elif n < 100:
+            out.append(("" if n < 20 else _KO_SINO[n // 10]) + "십" + (_KO_SINO[n % 10] if n % 10 else ""))
+        out += _KO_NATIVE.get(n, ())
+        if 10 < n < 30 and n % 10 in _KO_NATIVE:
+            out += [("열" if n < 20 else "스물") + w for w in _KO_NATIVE[n % 10]]
+        out += {0: ["공", "없"], 30: ["반"], 100: ["백"]}.get(n, [])
+        if n >= 1000 and n % 1000 == 0 and n < 10000:
+            out += [f"{n // 1000}천", "천"]
+        if n >= 10000 and n % 10000 == 0:
+            out.append(f"{n // 10000}만")
+    else:
+        out += _EN.get(n, ())
+        out += {30: ["half"], 100: ["hundred"], 1000: ["thousand"]}.get(n, [])
+    if n >= 1000 and n % 1000 == 0:
+        out.append(f"{n // 1000}k")
+    return out
+
+
+def numbers_lost(original: str, out: str, target: str, source: str | None = None) -> list[str]:
+    """
+    原文裡用數字寫的數，譯文裡找不到的（譯文寫成「三」「세」「three」也算有）。
+    時間、人數、金額翻錯一個數字意思就差很多，而且看譯文看不出來，所以翻完核對一次。
+    只查「原文有、譯文沒有」：譯文把「세 명」寫成「3 個人」是對的，不算錯。
+    """
+    source = source or detect_language(original)
+    if not out or source == LANGS[target]["family"]:
+        return []
+    if source is None:      # 整句只有數字和符號，看不出語言：只要是哪一種語言的用語就不查
+        original = unicodedata.normalize("NFKC", original)
+        for slang in _NUMBER_SLANG.values():
+            original = slang.sub(" ", original)
+    have = numbers(out)
+    text = unicodedata.normalize("NFKC", out)
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    lost = []
+    for n in numbers(original, source):
+        if n in have:
+            have.remove(n)
+        elif not any((w in words) if w.isascii() and w.isalpha() else (w.lower() in text.lower()) for w in _spelled(int(n), target)):
+            lost.append(n)
+    return lost
+
+
+def why(ex: BaseException) -> str:
+    """翻譯失敗的原因，分成幾種（介面用使用者的語言說明；電腦回報的原文只當補充）。"""
+    import socket
+    import urllib.error
+
+    if isinstance(ex, urllib.error.HTTPError):
+        return "engine_key" if ex.code in (401, 403) else "engine_busy" if ex.code in (429, 503) else "engine_reply"
+    if isinstance(ex, (TimeoutError, socket.timeout)) or "timed out" in str(ex).lower():
+        return "timeout"
+    if isinstance(ex, (urllib.error.URLError, ConnectionError)):
+        return "engine_down"
+    if isinstance(ex, (ValueError, KeyError, IndexError)):
+        return "engine_reply"      # 引擎回了看不懂的東西
+    return "other"
+
+
+class Stopped(Exception):
+    """翻到一半被叫停（on_part 回傳 False，或有人按了 Stop）。不是錯誤。"""
+
+
+class Stop:
+    """交給 translate(stop=…) 的「停」按鈕：呼叫 stop() 就馬上中斷那一次翻譯（丟出 Stopped）。
+    引擎還在讀原文、一個字都還沒吐出來的時候也停得下來（即時字幕：整句來了，半句就不用翻了）。
+    一個 Stop 只管一次翻譯，不會誤停到別的句子。"""
+
+    def __init__(self):
+        self.asked = False
+
+    def stop(self) -> None:
+        self.asked = True
+
+
 class Translator:
     def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None):
         """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
         lessons：呼叫後回傳使用者教過的句子 [{"src", "dst", "lang", "target"}]。"""
         self.url = url.rstrip("/")
+        self.key = ""                     # 翻譯引擎這一次啟動的金鑰（Engine.key）；空的就不帶
         self.glossary = glossary or (lambda: {})
         self.hints = hints or (lambda text, source, target: [])
         self.lessons = lessons or (lambda: [])
@@ -306,20 +461,123 @@ class Translator:
             return False
 
     def _ask(self, text: str, source: str, target: str, hints: list, examples: list | None = None,
-             style: str = "full", context: list[str] | None = None) -> str:
+             style: str = "full", context: list[str] | None = None, on_part=None, unfinished: bool = False,
+             stop: Stop | None = None) -> str:
+        """on_part(目前翻出來的字)：有給的話，模型每吐出幾個字就叫一次（畫面上譯文一個字一個字出來，不用等整句）。
+        on_part 回傳 False 表示「不用翻完了」：馬上停，丟出 Stopped。stop：見 Stop。"""
         payload = {
             "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context,
-                                   self.hint_intro),
+                                   self.hint_intro, unfinished),
             "max_tokens": min(1024, 64 + 4 * len(text)),
             "temperature": 0,
             "repeat_penalty": 1.0,
             "stop": ["<end_of_turn>"],
         }
+        headers = {"Content-Type": "application/json"}
+        if self.key:
+            headers["Authorization"] = f"Bearer {self.key}"
         req = urllib.request.Request(
-            f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=180) as r:
-            return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
+            f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"), headers=headers)
+        if on_part is None and stop is None:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
+        payload["stream"] = True
+        out = ""
+        stream = self._stream(json.dumps(payload).encode("utf-8"), headers, stop)
+        try:
+            for raw in stream:      # 一行一筆：「data: {…}」，最後一筆是「data: [DONE]」
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line.startswith("data:") or line[5:].strip() == "[DONE]":
+                    continue
+                piece = (json.loads(line[5:])["choices"][0].get("text") or "")
+                if piece:
+                    out += piece
+                    try:
+                        keep = on_part(out) if on_part else None
+                    except Exception:  # noqa: BLE001  畫面那邊出錯不能讓翻譯失敗
+                        keep = None
+                    if keep is False:      # 不用翻完了（這句話已經有更新的內容）
+                        raise Stopped()
+        finally:
+            stream.close()      # 連線一關，引擎就會停下來
+        if stop is not None and stop.asked:
+            raise Stopped()
+        return out.strip()
+
+    def _stream(self, body: bytes, headers: dict, stop: Stop | None = None):
+        """跟引擎要「一邊翻一邊回」，一行一行交出來。
+        自己開連線、自己讀：等引擎的時候每 0.1 秒看一次有沒有人按了停（用 urlopen 的話會一直卡到引擎回第一個字，
+        在 Windows 上從別的地方也叫不醒它）。連線一關，引擎就會停下那一次的工作。"""
+        import select
+        import socket
+        import urllib.error
+        import urllib.parse
+
+        url = urllib.parse.urlsplit(f"{self.url.rstrip('/')}/v1/completions")
+        port = url.port or 80
+        sock = socket.create_connection((url.hostname, port), timeout=30)
+
+        def more() -> bytes:
+            waited = 0.0
+            while True:
+                if stop is not None and stop.asked:
+                    raise Stopped()
+                if select.select([sock], [], [], 0.1)[0]:
+                    return sock.recv(65536)
+                waited += 0.1
+                if waited >= 180:
+                    raise TimeoutError("timed out")
+
+        try:
+            head = [f"POST {url.path} HTTP/1.1", f"Host: {url.hostname}:{port}", "Connection: close", "Accept: text/event-stream",
+                    f"Content-Length: {len(body)}"] + [f"{k}: {v}" for k, v in headers.items()]
+            sock.sendall(("\r\n".join(head) + "\r\n\r\n").encode("latin-1") + body)
+            buf = b""
+            while b"\r\n\r\n" not in buf:
+                data = more()
+                if not data:
+                    raise ConnectionError("the engine closed the connection")
+                buf += data
+            head_bytes, buf = buf.split(b"\r\n\r\n", 1)
+            lines = head_bytes.decode("latin-1").split("\r\n")
+            status = int(lines[0].split()[1])
+            if status != 200:
+                raise urllib.error.HTTPError(self.url, status, lines[0], None, None)
+            chunked = any(line.lower().replace(" ", "") == "transfer-encoding:chunked" for line in lines[1:])
+            text, done = b"", False
+            while True:
+                if chunked:      # 一塊一塊來的：「長度（十六進位）\r\n 內容 \r\n」，長度 0 是結束
+                    while True:
+                        cut = buf.find(b"\r\n")
+                        if cut < 0:
+                            break
+                        size = int(buf[:cut].split(b";")[0] or b"0", 16)
+                        if size == 0:
+                            done = True
+                            break
+                        if len(buf) < cut + 2 + size + 2:
+                            break
+                        text += buf[cut + 2:cut + 2 + size]
+                        buf = buf[cut + 2 + size + 2:]
+                else:
+                    text, buf = text + buf, b""
+                while b"\n" in text:
+                    line, text = text.split(b"\n", 1)
+                    yield line
+                if done:
+                    break
+                data = more()
+                if not data:
+                    break
+                buf += data
+            if text:
+                yield text
+        finally:
+            sock.close()
+
+    def busy(self) -> bool:
+        """現在是不是正在翻。"""
+        return self._lock.locked()
 
     def taught(self, text: str, source: str, target: str) -> tuple[str | None, list[tuple[str, str]]]:
         """使用者教過的句子：一模一樣的直接回傳他要的翻法；很像的最多挑兩句當範例。"""
@@ -358,15 +616,28 @@ class Translator:
                 break
         return best
 
-    def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None) -> str:
+    def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None,
+                  on_part=None, unfinished: bool = False, stop: Stop | None = None) -> str:
         """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
-        context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。"""
-        text = text.strip()[: self.max_chars]
+        context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。
+        on_part(目前的譯文)：翻的時候一邊出字一邊叫（只是先給人看；最後回傳的才是整理過、核對過的譯文）。
+        on_part 回傳 False 就停下來不翻了，丟出 Stopped（對方還在說、這半句已經過時的時候用）。
+        unfinished：還沒說完的半句（即時字幕）。只翻一次、不補句尾、不核對；結果另外記，不會被當成整句的譯文。
+        stop：一個 Stop；別的地方呼叫它的 stop() 就馬上中斷這一次（丟出 Stopped）。"""
+        text = text.strip()[:MAX_TEXT]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
             return to_script(text, target)
+        if len(text) > self.max_chars:
+            # 太長：以前是悄悄只翻前 500 個字，後面的不見了也沒人知道。現在切成幾段分開翻，再接起來
+            parts, joiner, outs = split_long(text, self.max_chars), "" if LANGS[target]["family"] in ("zh", "ja") else " ", []
+            for i, part in enumerate(parts):
+                done = joiner.join(outs)
+                outs.append(self.translate(part, target, source, context if i == 0 else None, unfinished=unfinished, stop=stop,
+                                           on_part=(lambda t, done=done: on_part((done + joiner if done else "") + t)) if on_part else None))
+            return joiner.join(o for o in outs if o)
         context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
-        key = (text, target, *context)
+        key = (text, target, *context, *(["…"] if unfinished else []))
         if key in self._cache:
             return self._cache[key]
         exact, examples = self.taught(text, source, target)
@@ -374,9 +645,17 @@ class Translator:
             return exact
         hints = self.hints(text, source, target)
         kind = sentence_kind(text, source)
-        sent = with_end_mark(text, source, kind)
+        sent = text if unfinished else with_end_mark(text, source, kind)
+        show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
         with self._lock:
-            out = self._ask(sent, source, target, hints, examples, context=context)
+            if stop is not None and stop.asked:      # 排隊等引擎的時候就被叫停了
+                raise Stopped()
+            out = self._ask(sent, source, target, hints, examples, context=context, **({"on_part": show} if show else {}),
+                            **({"unfinished": True} if unfinished else {}), **({"stop": stop} if stop else {}))
+            if unfinished:
+                out = tidy(to_script(out, target), target)
+                self._cache[key] = out
+                return out
             if context and len(out) > 3 * len(sent) + 30:
                 # 模型把前面幾句也翻進來了（譯文長得不合理）：不給前文再翻一次
                 out = self._ask(sent, source, target, hints, examples)
@@ -386,6 +665,14 @@ class Translator:
                 again = self._ask(sent, source, target, hints, examples, "short")
                 if "?" not in again and "？" not in again and not _leftover(again, source, target):
                     out = again
+            if numbers_lost(sent, out, target, source):
+                # 原文的數字在譯文裡不見了或變了：換寫法再翻，哪一次數字都在就用哪一次。都不行就照舊，由畫面提醒使用者核對
+                for style in ("short", "plain"):
+                    again = self._ask(sent, source, target, hints if style == "short" else [], examples if style == "short" else [], style)
+                    again = self._clean(again, sent, source, target, [], []) if _leftover(again, source, target) else again
+                    if not numbers_lost(sent, again, target, source) and not _leftover(again, source, target):
+                        out = again
+                        break
         out = to_script(out, target)
         out = tidy(out, target)
         if len(self._cache) > 500:

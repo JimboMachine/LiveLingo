@@ -168,7 +168,7 @@ def remove_moved(data: Path, saved: str) -> bool:
 
 
 def items(data: Path, store: Path, used: dict) -> list[dict]:
-    """每一樣東西佔多少。used：{"models": 現在要用的模型代碼, "engines": 要用的引擎種類, "cudnn": 語音辨識有沒有在用顯示卡}。
+    """每一樣東西佔多少。used：{"models": 現在要用的模型代碼, "engines": 要用的引擎種類, "cudnn": 語音辨識有沒有在用顯示卡, "voice": 有沒有開著分辨說話者}。
     每一項 {"id", "bytes", "used", "removable"}；不存在的不列。"""
     rows = []
 
@@ -184,6 +184,7 @@ def items(data: Path, store: Path, used: dict) -> list[dict]:
         add("engine_" + kind, assets.engine_dir(store, kind), kind in used.get("engines", ()))
     add("cudnn", assets.cudnn_dir(store), bool(used.get("cudnn")))
     add("whisper", store / "models" / "whisper", True)
+    add("voice", assets.voice_path(store).parent, bool(used.get("voice")))
     add("ocr", store / "models" / "ocr", True)
     part = sum(p.stat().st_size for p in _partials(store))
     if part:
@@ -210,6 +211,8 @@ def remove_item(data: Path, store: Path, item_id: str) -> bool:
         paths = [assets.engine_dir(store, item_id[7:])]
     elif item_id == "cudnn":
         paths = [assets.cudnn_dir(store)]
+    elif item_id == "voice":
+        paths = [assets.voice_path(store).parent]
     elif item_id == "updates":
         paths = [data / "update"]
     elif item_id == "partial":

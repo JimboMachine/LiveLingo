@@ -41,19 +41,95 @@ def test_gpu_modes(monkeypatch):
     assert gpu.detect()["name"] == "NVIDIA GeForce RTX 5090"
 
 
-def test_engine_asset_picking():
-    def asset(name):
-        return {"name": name, "browser_download_url": "https://example.invalid/" + name}
+def test_downloads_are_pinned_and_checked(tmp_path, monkeypatch):
+    """要下載的檔案都鎖在確切的版本、都有大小和 sha256；下載完會核對，不對的不會留下來、也不會被拿來用。"""
+    import hashlib
+    import io
+    import re
+    from pathlib import Path
 
-    releases = [
-        {"assets": [asset("llama-b9000-bin-ubuntu-x64.zip")]},
-        {"assets": [asset("llama-b8999-bin-win-cpu-x64.zip"), asset("llama-b8999-bin-win-cuda-12.4-x64.zip"),
-                    asset("cudart-llama-bin-win-cuda-12.4-x64.zip"), asset("llama-b8999-bin-win-cpu-arm64.zip")]},
-    ]
-    assert [n for n, _ in assets.pick_engine_assets(releases, "cpu")] == ["llama-b8999-bin-win-cpu-x64.zip"]
-    assert [n for n, _ in assets.pick_engine_assets(releases, "cuda")] == [
-        "llama-b8999-bin-win-cuda-12.4-x64.zip", "cudart-llama-bin-win-cuda-12.4-x64.zip"]
-    assert assets.pick_engine_assets([{"assets": []}], "cuda") is None
+    import pytest
+
+    # ---- 每一個下載都鎖住了
+    files = [(url, name) for url, name, _ in assets.MODELS.values()] + [(url, rel) for url, rel, _ in assets.OCR_FILES + assets.WHISPER_FILES + assets.VOICE_FILES]
+    assert {name for _, name in files} == set(assets.CHECKS)                       # 每個檔案都有核對用的資料，沒有多的
+    for url, _ in files:
+        assert re.search(r"/resolve/[0-9a-f]{40}/", url), url                      # 鎖在一個 commit 上，不是 main
+    for size, digest in assets.CHECKS.values():
+        assert size > 0 and re.fullmatch(r"[0-9a-f]{64}", digest)
+    assert re.fullmatch(r"b\d+", assets.ENGINE_TAG) and f"/download/{assets.ENGINE_TAG}" in assets.ENGINE_BASE
+    assert len(assets.ENGINE_FILES["cpu"]) == 1 and len(assets.ENGINE_FILES["cuda"]) == 2
+    for kind, engine_files in assets.ENGINE_FILES.items():
+        for name, size, digest in engine_files:
+            assert name.endswith("-x64.zip") and size > 0 and re.fullmatch(r"[0-9a-f]{64}", digest)
+        assert assets.ENGINE_MB[kind] == round(sum(size for _, size, _ in engine_files) / 1e6)
+    assert len(assets.pinned()) == len(files) + 3 and all(url.startswith("https://") for url, _, _ in assets.pinned())
+    source = (Path(assets.__file__)).read_text(encoding="utf-8")
+    assert "resolve/main" not in source and "api.github.com" not in source         # 不再抓「最新的」
+
+    # ---- 下載完核對
+    good = b"the real file " * 100
+    check = (len(good), hashlib.sha256(good).hexdigest())
+    served = []
+
+    class Reply(io.BytesIO):
+        status = 200
+
+        def __init__(self, body):
+            super().__init__(body)
+            self.headers = {"Content-Length": str(len(body))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def serve(*bodies):
+        queue_ = list(bodies)
+
+        def urlopen(req, timeout=0):
+            served.append(req.headers.get("Range"))
+            return Reply(queue_.pop(0))
+
+        monkeypatch.setattr(assets.urllib.request, "urlopen", urlopen)
+
+    monkeypatch.setattr(assets.time, "sleep", lambda s: None)
+    dest = tmp_path / "model.bin"
+    serve(good)
+    assets.fetch("https://x/model", dest, check=check)
+    assert dest.read_bytes() == good and not dest.with_name("model.bin.part").exists()
+
+    dest.unlink()
+    serve(b"something else entirely", b"still not the file")                       # 兩次都不是那個檔案
+    with pytest.raises(assets.DownloadError, match="not the expected one"):
+        assets.fetch("https://x/model", dest, check=check)
+    assert not dest.exists() and not dest.with_name("model.bin.part").exists()      # 沒留下來
+
+    serve(b"wrong the first time", good)                                           # 第一次不對：整個重抓，第二次對了
+    assets.fetch("https://x/model", dest, check=check)
+    assert dest.read_bytes() == good
+
+    dest.unlink()
+    serve(good)                                                                    # 沒給核對資料（更新安裝檔自己另外核對）：照舊
+    assets.fetch("https://x/model", dest)
+    assert dest.read_bytes() == good
+
+    # ---- 引擎：照鎖定的檔名和雜湊抓
+    asked = []
+
+    def fake_fetch(url, dest, progress=None, cancel=None, attempts=8, check=None):
+        asked.append((url, check))
+        import zipfile
+
+        with zipfile.ZipFile(dest, "w") as z:
+            z.writestr("llama-server.exe", b"exe")
+
+    monkeypatch.setattr(assets, "fetch", fake_fetch)
+    monkeypatch.setattr(assets.sys, "platform", "win32")
+    exe = assets.get_engine(tmp_path / "data", "cuda")
+    assert exe.name == "llama-server.exe"
+    assert asked == [(f"{assets.ENGINE_BASE}/{name}", (size, digest)) for name, size, digest in assets.ENGINE_FILES["cuda"]]
 
 
 def test_terms_and_prompt():
@@ -129,12 +205,18 @@ class _FakeModel(Translator):
         super().__init__("http://127.0.0.1:9", **kw)
         self.answers, self.asked = answers, []
 
-    def _ask(self, text, source, target, hints, examples=None, style="full", context=None):
+    def _ask(self, text, source, target, hints, examples=None, style="full", context=None, on_part=None, unfinished=False, stop=None):
         self.asked.append((text, style, list(examples or [])))
+        self.unfinished = getattr(self, "unfinished", []) + [bool(unfinished)]
         self.contexts = getattr(self, "contexts", []) + [list(context or [])]
         if callable(self.answers):
-            return self.answers(text, style, context)
-        return self.answers[style] if isinstance(self.answers, dict) else self.answers
+            out = self.answers(text, style, context)
+        else:
+            out = self.answers[style] if isinstance(self.answers, dict) else self.answers
+        if on_part:      # 像真的模型一樣，一個字一個字吐出來
+            for i in range(1, len(out) + 1):
+                on_part(out[:i])
+        return out
 
 
 def test_question_mark_gets_a_second_try():
@@ -1483,7 +1565,7 @@ def test_speech_on_the_graphics_card(tmp_path, monkeypatch):
         "9.2.0.82": [{"filename": "nvidia_cudnn_cu12-9.2.0.82-py3-none-win_amd64.whl", "url": "https://x/9.2", "size": 4}],
         "9.99.0.1": [{"filename": "nvidia_cudnn_cu12-9.99.0.1-py3-none-win_amd64.whl", "url": "https://x/yanked", "size": 5, "yanked": True}],
         "weird": [{"filename": "x-win_amd64.whl", "url": "https://x/weird"}]}}
-    assert assets.pick_cudnn_wheel(index) == ("https://x/9.10", 3)                   # 最新的 9、Windows 版、沒被撤回
+    assert assets.pick_cudnn_wheel(index) == ("https://x/9.10", 3, "")               # 最新的 9、Windows 版、沒被撤回
     assert assets.pick_cudnn_wheel({"releases": {"8.1": index["releases"]["8.9.7.29"]}}) is None
 
     wheel = io.BytesIO()
@@ -1503,7 +1585,7 @@ def test_speech_on_the_graphics_card(tmp_path, monkeypatch):
     monkeypatch.setattr(assets.urllib.request, "urlopen", lambda req, timeout=0: Reply(json.dumps(index).encode()))
     fetched = []
 
-    def fake_fetch(url, dest, progress=None, cancel=None, attempts=8):
+    def fake_fetch(url, dest, progress=None, cancel=None, attempts=8, check=None):
         fetched.append(url)
         dest.write_bytes(wheel.getvalue())
         if progress:
@@ -2870,7 +2952,9 @@ def test_storage_sizes_move_and_remove_unused(tmp_path, monkeypatch):
     assert '"--remove-store" in sys.argv' in main_src and "storage.remove_moved(data, str(saved))" in main_src
     iss = (Path(storage.__file__).parents[1] / "packaging" / "installer.iss").read_text(encoding="utf-8")
     assert 'Parameters: "--remove-store"' in iss and "[UninstallRun]" in iss
-    assert iss.index("[UninstallRun]") < iss.index("[UninstallDelete]")
+    # 順序：先叫程式刪搬走的大檔案（那時候程式還在），整個卸載完才刪資料夾
+    assert "[UninstallDelete]" not in iss and "CurUninstallStep <> usPostUninstall" in iss
+    assert iss.startswith("\ufeff")      # 檔案裡有中文、韓文、日文的訊息：要有 BOM，安裝程式的編譯器才會當成 UTF-8
     ci = (Path(storage.__file__).parents[1] / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
     assert storage.MARK in ci and "not-ours.txt" in ci      # 真的安裝、卸載的那個檢查也看這件事
     # 服務裡找模型、引擎一律用 self.store；每一個會回給介面的原因代碼都有五種語言的句子
@@ -3003,7 +3087,7 @@ def test_update_prompt_says_what_changed(tmp_path, monkeypatch):
 
 
 def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
-    """第 47 項：更新之後留著上一版的安裝檔，可以一鍵退回；退回之後不再問要不要更新到被退掉的那一版。"""
+    """第 47 項：更新之後可以一鍵退回上一版（重新下載那一版的安裝檔，核對過才裝）；退回之後不再問要不要更新到被退掉的那一版。"""
     import hashlib
     import json as _json
     from pathlib import Path
@@ -3020,7 +3104,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
     attempts = updater.Attempts(data)
     assert attempts.read() == {} and updater.previous(data) is None and updater.skipped(data) == ""
 
-    # 下載新版的時候：現在這一版的安裝檔要留著，更舊的才刪
+    # 下載新版的時候：別的版本的安裝檔都用不到了，刪掉
     current_setup = updater.installer_path(data / "update", __version__)
     current_setup.write_bytes(b"this version's installer")
     (data / "update" / "LiveLingo-Setup-1.0.0.exe").write_bytes(b"ancient")
@@ -3064,14 +3148,14 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
     try:
         info = updater.check()
         got = updater.download(info, data / "update")
-        assert got.read_bytes() == payload and current_setup.exists() and not (data / "update" / "LiveLingo-Setup-1.0.0.exe").exists()
+        assert got.read_bytes() == payload and not current_setup.exists() and not (data / "update" / "LiveLingo-Setup-1.0.0.exe").exists()
         got.unlink()
         # 指定版本的安裝檔；查不到、或回來的不是那一版
         old_info = updater.release_of(older)
         assert old_info["version"] == older and old_info["url"] == f"{base}/file/{older}" and old_info["sha256"]
         assert updater.release_of("2.0.9") is None
 
-        # 一、自動更新的那一刻：記下「從哪一版來的」和那一版安裝檔的雜湊
+        # 一、自動更新的那一刻：記下「從哪一版來的」
         service = Service(data)
         exits = []
         service.exit_now = lambda: exits.append(True)
@@ -3092,12 +3176,11 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
                 time.sleep(0.02)
             assert done == [True] and launched == [updater.installer_path(data / "update", newer)] and exits == [True]
             last = attempts.read()
-            assert last["version"] == newer and last["from"] == __version__ and last["from_sha256"] == hashlib.sha256(b"this version's installer").hexdigest()
-            assert current_setup.exists()      # 留著，之後退回來不用下載
+            assert last["version"] == newer and last["from"] == __version__ and "from_sha256" not in last
         finally:
             service.shutdown()
 
-        # 二、假裝現在是新版（剛從 older 更新上來），上一版的安裝檔留著
+        # 二、假裝現在是新版（剛從 older 更新上來）。update 資料夾裡就算有同名的舊檔也不用它
         def pretend(from_version: str, blob: bytes | None, **more) -> None:
             for p in (data / "update").glob("LiveLingo-Setup-*"):
                 p.unlink()
@@ -3105,12 +3188,12 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
                 updater.installer_path(data / "update", from_version).write_bytes(blob)
             attempts.path.write_text(_json.dumps({"version": __version__, "at": time.time(), "from": from_version, **more}), encoding="utf-8")
 
-        kept = b"installer of the version before"
-        pretend(older, kept, from_sha256=hashlib.sha256(kept).hexdigest())
+        kept = b"some old file with the same name"
+        pretend(older, kept)
         # 比 ROLLBACK_FLOOR 舊的版本不提供（它不認得這一版加的東西，退回去會出事）
         assert updater.is_newer(updater.ROLLBACK_FLOOR, older) and updater.previous(data) is None
         monkeypatch.setenv("LIVELINGO_ROLLBACK_FLOOR", "2.0.0")      # 以下假裝上一版夠新
-        assert updater.previous(data) == {"version": older, "kept": True, "bytes": len(kept)}
+        assert updater.previous(data) == {"version": older}
         assert updater.just_updated(data) == older and updater.just_updated(data) == ""
         launched.clear()
         Files.hits.clear()
@@ -3121,7 +3204,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
         monkeypatch.setattr("livelingo.service.oswin.open_path", lambda p: None)
         try:
             service.phase = "ready"
-            assert service.state()["update"]["previous"] == {"version": older, "kept": True, "bytes": len(kept)}
+            assert service.state()["update"]["previous"] == {"version": older}
             service.phase = "downloading"
             assert service.rollback()["error"] == "store_busy"
             service.phase = "ready"
@@ -3131,17 +3214,18 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
             while not exits and time.time() < deadline:
                 time.sleep(0.02)
             assert exits == [True] and launched == [updater.installer_path(data / "update", older)]
-            assert not any(h.startswith(("/tags/", "/file/")) for h in Files.hits)      # 用留著的，沒有下載
+            assert f"/tags/v{older}" in Files.hits and f"/file/{older}" in Files.hits      # 重新下載那一版
+            assert launched[0].read_bytes() == f"installer of {older}".encode()      # 裝的是核對過的那一份，不是資料夾裡原本的同名檔
             last = attempts.read()
             assert last["version"] == older and last["from"] == __version__ and last["skip"] == __version__ and last["rollback"] is True
             assert service.phase == "updating" and service.detail == {"step": "installing", "version": older, "back": True}
             copy = service.transcript_dir() / f"LiveLingo-settings-{__version__}-before-rollback.json"      # 設定另外存了一份
             assert _json.loads(copy.read_text(encoding="utf-8"))["config"]["theme"] == "light"
 
-            # 留著的安裝檔被動過（雜湊不對）或不見了：重新下載、核對過才裝
+            # 資料夾裡有沒有同名的檔都一樣：重新下載、核對過才裝
             for blob in (b"tampered", None):
-                pretend(older, blob, from_sha256=hashlib.sha256(kept).hexdigest())
-                assert updater.previous(data) == {"version": older, "kept": False, "bytes": 0}
+                pretend(older, blob)
+                assert updater.previous(data) == {"version": older}
                 launched.clear(); exits.clear(); Files.hits.clear()
                 service.phase, service.detail = "ready", {}
                 assert service.rollback()["ok"]
@@ -3196,6 +3280,7 @@ def test_roll_back_to_the_previous_version(tmp_path, monkeypatch):
     assert updater.parse_version(updater.ROLLBACK_FLOOR) >= (2, 3, 0)      # 2.3.0 之前的版本不認得 --remove-store 和搬過位置的大檔案
     ci = (root.parent / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
     assert '"rollback": True' in ci and "LIVELINGO_ROLLBACK_FLOOR" in ci      # Windows 上真的退一次
+    assert "LIVELINGO_RELEASE_API" in ci and "the used installer to be removed" in ci and "from_sha256" not in ci      # 退回要重新下載；用過的安裝檔要刪掉
     js = (root / "ui" / "app.js").read_text(encoding="utf-8")
     for piece in ('post("/api/update", { rollback: true })', 'post("/api/update", { unskip: true })', 'data-act="rollback-yes"', "up_back_downloading"):
         assert piece in js, piece
@@ -3273,7 +3358,7 @@ def test_problem_report_is_shown_first_and_never_sent(tmp_path, monkeypatch):
     assert not list(tmp_path.glob("out/*")) and not opened and not copied      # 做出來只是給他看：沒存檔、沒開資料夾、沒複製
     for title in ("發生了什麼事", "LiveLingo", "這台電腦", "健康檢查", "收音和螢幕", "儲存空間", "設定", "最近的紀錄", "翻譯引擎的紀錄"):
         assert f"== {title} ==" in text, title
-    assert "聽對方說話十分鐘後就沒字幕了" in text and "version: 2.3.0" in text and "screens: 2560x1440 at 0,0 (main)" in text
+    assert "聽對方說話十分鐘後就沒字幕了" in text and f"version: {__import__('livelingo').__version__}" in text and "screens: 2560x1440 at 0,0 (main)" in text
     assert f"word_list_count: {len(service.glossary.list())}" in text and "history_count: 1" in text and "llama_server: model loaded" in text
     assert re.search(r"\[(ok|warn|bad|off)\] engine: engine_", text) and "line 299" in text and "line 99\r\n" not in text      # 紀錄只有最後 200 行
     log_rows = text.split("== 最近的紀錄 ==\r\n")[1].split("\r\n\r\n")[0].split("\r\n")
@@ -3298,7 +3383,7 @@ def test_problem_report_is_shown_first_and_never_sent(tmp_path, monkeypatch):
     # 做報告的時候出錯：還是給得出一份（至少有版本和紀錄）
     monkeypatch.setattr(service, "health", lambda: 1 / 0)
     broken = service.report_make()["text"]
-    assert "report_error: ZeroDivisionError" in broken and "version: 2.3.0" in broken
+    assert "report_error: ZeroDivisionError" in broken and f"version: {__import__('livelingo').__version__}" in broken
 
     root = Path(report.__file__).parent
     server = (root / "server.py").read_text(encoding="utf-8")
@@ -3484,3 +3569,1663 @@ def test_help_page_and_the_page_for_a_friend(tmp_path, monkeypatch):
         assert piece in js, piece
     for key in ("nav_help", "help_friend_title", "help_friend_saved", "n_help_failed"):
         assert len(re.findall(rf"\b{key}: ", i18n)) == len(UI_LANGS), key
+
+
+def test_my_own_sentences_are_translated_first(tmp_path):
+    """排隊：我打的、說的先翻，再來是對方說的，然後是螢幕上讀到的，回譯最後；螢幕上排太久的略過並說一聲；
+    使用者自己按重翻的不會被略過。"""
+    import queue
+
+    import pytest
+
+    from livelingo import hotkeys, jobs
+    from livelingo.service import Service
+
+    clock = [100.0]
+    q = jobs.Jobs(now=lambda: clock[0], stale=20)
+    q.put({"via": "screen", "n": 1})
+    q.put({"back_of": 9})
+    q.put({"via": "heard", "n": 2})
+    q.put({"via": "screen", "n": 3})
+    q.put({"via": "typed", "n": 4})
+    q.put({"via": "spoken", "n": 5})
+    order = [q.get(0)[0] for _ in range(6)]
+    assert [j.get("n") for j in order] == [4, 5, 2, 1, 3, None] and "back_of" in order[-1]
+    with pytest.raises(queue.Empty):
+        q.get(0.01)
+
+    q.put({"via": "screen", "n": 1})
+    q.put({"via": "heard", "n": 2})
+    q.put({"via": "screen", "n": 3}, asked=True)      # 使用者按了重翻
+    clock[0] += 21
+    q.put({"via": "screen", "n": 4})                  # 剛到的
+    got = [(job["n"], late) for job, late in (q.get(0) for _ in range(4))]
+    assert got == [(3, False), (2, False), (1, True), (4, False)]      # 只有排了 21 秒的那一則螢幕訊息要略過
+
+    class Slow:
+        tone = "casual"
+
+        def __init__(self):
+            self.calls, self.hold = [], threading.Event()
+
+        def translate(self, text, target, source=None, context=None):
+            self.calls.append(text)
+            if text == "첫 번째":
+                self.hold.wait(5)      # 第一句翻得很慢，後面的都在排隊
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, ui_lang="ko")
+    service.translator = Slow()
+    ticks = [0.0]
+    service.jobs = jobs.Jobs(now=lambda: ticks[0], stale=20)
+    notices, notes = [], []
+    service.notice = lambda code, **more: notices.append((code, more))
+    service.overlay.note = notes.append
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        service.submit("screen", "첫 번째", "ko")
+        wait(lambda: service.translator.calls == ["첫 번째"])
+        service.submit("screen", "두 번째", "ko")
+        service.submit("screen", "세 번째", "ko")
+        service.submit("heard", "들리는 말", "ko")
+        service.submit("typed", "我打的字", "zh")
+        ticks[0] = 30.0                                   # 排隊的時候過了 30 秒
+        service.submit("screen", "방금 온 것", "ko")
+        service.translator.hold.set()
+        wait(lambda: service.jobs.waiting() == 0 and len(service.translator.calls) == 4 and notices)
+        assert service.translator.calls == ["첫 번째", "我打的字", "들리는 말", "방금 온 것"]      # 我的先，舊的兩則螢幕訊息沒翻
+        assert notices == [("skipped", {"n": 2})]                                               # 兩則合起來只說一次
+        assert notes == [hotkeys.NOTES["ko"]["skipped"].format(n=2)]                             # 浮動留言上也說（人在遊戲裡）
+        assert not [m for m in service.messages if m["original"] in ("두 번째", "세 번째")]       # 畫面上沒有留下半則
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+
+def test_wrapped_lines_are_joined_and_repeats_are_new(monkeypatch):
+    """讀螢幕：一則訊息換成兩三行的接回一則再翻；有人又說了一次一樣的話要算新的一則；
+    聊天框收起來又打開、舊訊息重新出現時不重翻；換行訊息的上半捲出畫面之後，剩下的幾行不重翻。"""
+    import numpy as np
+
+    from livelingo.core import watcher as watcher_mod
+    from livelingo.core.ocr import Line
+    from livelingo.core.watcher import ScreenWatcher, SeenLines, join_wrapped, new_from, text_edge
+
+    def row(text, y, w, x=10, h=20):
+        return Line(text, x, y, h, 0.95, w)
+
+    # ---- 換行：上一行寫到最右邊，而且下一行的第一個詞本來就放不進去
+    seen = SeenLines()
+    rows = [row("오늘 저녁에 같이 게임 할 사람 있으면", 0, 470), row("디스코드로 들어와", 26, 220), row("ㅇㅋ 갈게", 52, 110)]
+    known, edge = text_edge(rows, 500)
+    assert (known, edge) == (480.0, 480.0)
+    joined = join_wrapped(rows, seen, edge)
+    assert [ln.text for ln, _ in joined] == ["오늘 저녁에 같이 게임 할 사람 있으면 디스코드로 들어와", "ㅇㅋ 갈게"]
+    assert joined[0][1] == ["오늘 저녁에 같이 게임 할 사람 있으면", "디스코드로 들어와"] and joined[0][0].w == 470
+    # 中文沒有空白：接的時候不加空白
+    zh = [row("我們今天晚上要不要一起打排位我剛剛看了一下", 0, 470), row("時間應該可以", 26, 150)]
+    assert [ln.text for ln, _ in join_wrapped(zh, SeenLines(), 480.0)] == ["我們今天晚上要不要一起打排位我剛剛看了一下時間應該可以"]
+    # 短短的兩則各自一行：下一則的第一個詞放得進上一行，是另一則訊息，不接
+    short = [row("안녕", 0, 60), row("뭐해 지금", 26, 120)]
+    assert len(join_wrapped(short, SeenLines(), 480.0)) == 2
+    # 還不知道文字最右邊在哪裡（最長的一行還不到區域六成寬）：不接
+    assert text_edge(short, 500) == (130.0, 0.0) and len(join_wrapped(rows, SeenLines(), 0.0)) == 3
+    # 沒有對齊同一個左邊、行距太大、沒有寬度的：不接
+    assert len(join_wrapped([rows[0], row("디스코드로 들어와", 26, 220, x=60)], SeenLines(), 480.0)) == 2
+    assert len(join_wrapped([rows[0], row("디스코드로 들어와", 90, 220)], SeenLines(), 480.0)) == 2
+    assert len(join_wrapped([Line(rows[0].text, 10, 0, 20, 0.9), rows[1]], SeenLines(), 480.0)) == 2
+    # 以前單獨讀到過的那一行是一則獨立的訊息：之後下面來了新的一行，不會被接上去
+    alone = SeenLines()
+    alone.add(rows[0].text)
+    assert len(join_wrapped(rows[:2], alone, 480.0)) == 2
+
+    # ---- 上一次和這一次怎麼對
+    assert new_from(["a1", "b2", "gg"], ["b2", "gg", "gg"]) == 2          # 往上捲了一行，下面多了一則 gg
+    assert new_from(["a1", "b2", "gg"], ["a1", "b2", "gg"]) == 3          # 沒變
+    assert new_from(["gg", "gg"], ["gg", "gg", "gg"]) == 2
+    assert new_from([], ["a1"]) is None and new_from(["a1"], []) is None
+    assert new_from(["a1", "b2", "c3", "d4"], ["d4", "x1", "y2", "z3"]) is None      # 只對得上一行，不到一半：不算數
+    assert new_from(["a1", "b2", "c3"], ["x1", "y2"]) is None
+
+    # ---- 整條：盯著螢幕的那一條線
+    pages = {
+        10: [row("안녕하세요 반갑습니다", 0, 200), row("빨리 와", 26, 80)],
+        60: [row("안녕하세요 반갑습니다", 0, 200), row("빨리 와", 26, 80), row("빨리 와", 52, 80)],             # 又說了一次
+        110: [row("빨리 와", 0, 80), row("빨리 와", 26, 80),
+              row("오늘 저녁에 같이 게임 할 사람 있으면", 52, 470), row("디스코드로 들어와", 78, 220)],           # 一則換行的
+        160: [],                                                                                               # 聊天框收起來
+        210: [row("빨리 와", 0, 80), row("빨리 와", 26, 80),
+              row("오늘 저녁에 같이 게임 할 사람 있으면", 52, 470), row("디스코드로 들어와", 78, 220)],           # 又打開：都是舊的
+        250: [row("디스코드로 들어와", 0, 220), row("지금 갈게 기다려", 26, 200)],                               # 換行那則的上半捲出去了
+    }
+    monkeypatch.setattr(watcher_mod, "message_lines", lambda shade: pages[shade])
+
+    class FakeOcr:
+        def read(self, bgr):
+            return int(bgr[0, 0, 0])
+
+    got = []
+    watcher = ScreenWatcher(FakeOcr(), lambda text, lang, score, region: got.append(text), source_langs={"ko"})
+    watcher.set_regions([{"id": "a", "left": 0, "top": 0, "width": 500, "height": 200}])
+    slot = watcher._slots[0]
+    for shade in pages:
+        frame = np.full((200, 500, 3), shade, dtype=np.uint8)
+        watcher._look(slot, lambda place: frame)      # 第一次：畫面剛變，等它停下來
+        watcher._look(slot, lambda place: frame)      # 第二次：停下來了，辨識
+    assert got == ["안녕하세요 반갑습니다", "빨리 와", "빨리 와", "오늘 저녁에 같이 게임 할 사람 있으면 디스코드로 들어와", "지금 갈게 기다려"]
+    assert slot.stats["sent"] == 5 and slot.stats["scans"] == 6
+
+
+def test_engine_that_stops_is_restarted(tmp_path):
+    """翻譯引擎用到一半自己停了：自動重開，剛好在翻的那一句補翻（不算失敗）；十分鐘內停太多次就不再試；
+    顯示卡模式一直停就改用標準模式。"""
+    from livelingo import hotkeys
+    from livelingo import service as service_mod
+    from livelingo.service import Service
+
+    class Proc:
+        def __init__(self):
+            self.returncode = None
+
+        def poll(self):
+            return self.returncode
+
+    made = []
+
+    class FakeEngine:
+        def __init__(self, ok=True):
+            self.proc, self.ok, self.url, self.stopped = Proc(), ok, f"http://engine/{len(made)}", False
+            self.key = f"key-{len(made)}"
+            made.append(self)
+
+        def start(self):
+            if not self.ok:
+                raise RuntimeError("cannot start")
+
+        def wait_ready(self, timeout):
+            return True
+
+        def stop(self):
+            self.stopped = True
+
+    class Model:
+        tone, url, key = "casual", "", ""
+
+        def translate(self, text, target, source=None, context=None):
+            if service.engine.proc.poll() is not None:
+                raise ConnectionError("connection refused")
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, ui_lang="zh-TW")
+    service.translator = Model()
+    service.phase = "ready"
+    service.engine = FakeEngine()
+    service._new_engine = lambda: FakeEngine()
+    (tmp_path / "engine.log").write_text("out of memory\n", encoding="utf-8")
+    notices, notes, phases = [], [], []
+    service.notice = lambda code, **more: notices.append(code)
+    service.overlay.note = notes.append
+    service.set_phase = lambda phase, **detail: (phases.append(phase), setattr(service, "phase", phase))
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 8
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        assert not service._engine_gone()
+        service.engine.proc.returncode = -9                       # 引擎被關掉了
+        assert service._engine_gone()
+        first = service.submit("typed", "我現在過去", "zh")
+        wait(lambda: any(m["id"] == first and m["translated"] for m in service.messages))
+        done = next(m for m in service.messages if m["id"] == first)
+        assert done["translated"] == "<ko>我現在過去" and not done["error"]          # 補翻成功，沒有顯示失敗
+        assert notices == ["engine_restarting", "engine_back"]
+        assert notes == [hotkeys.NOTES["zh-TW"]["engine_restarting"], hotkeys.NOTES["zh-TW"]["engine_back"]]
+        assert len(made) == 2 and made[0].stopped and service.engine is made[1] and service.translator.url == made[1].url
+        assert service.translator.key == made[1].key      # 新的引擎有新的金鑰，翻譯那邊要跟著換
+        assert (tmp_path / "engine-stopped.log").read_text(encoding="utf-8") == "out of memory\n"      # 留一份，才看得到為什麼停
+        assert service._engine_ok.is_set() and service.phase == "ready" and service.usage.summary()["today"]["failed"] == 0
+        made_report = service.report_make()["text"]
+        assert "翻譯引擎上次自己停掉之前的紀錄" in made_report and "out of memory" in made_report      # 問題報告裡看得到它停之前寫了什麼
+
+        # 一直停：重開到上限就不再試，照「引擎開不起來」處理，之後的句子才顯示失敗
+        for _ in range(service_mod.REVIVE_TIMES - 1):
+            service.engine.proc.returncode = 1
+            assert service._revive_engine() is True
+        service.engine.proc.returncode = 1
+        assert service._revive_engine() is False and phases == ["error"] and not service._engine_gone()
+        second = service.submit("typed", "等我一下", "zh")
+        wait(lambda: any(m["id"] == second and m["error"] for m in service.messages))
+
+        # 重開的那一個開不起來：也是照「開不起來」處理
+        phases.clear()
+        service._revivals.clear()
+        service.phase, service.engine = "ready", FakeEngine()
+        service.engine.proc.returncode = 1
+        service._new_engine = lambda: FakeEngine(ok=False)
+        assert service._revive_engine() is False and phases == ["error"] and made[-1].stopped
+
+        # 顯示卡模式停到上限：改用標準模式重來（跟開程式時顯示卡開不起來一樣）
+        phases.clear()
+        notices.clear()
+        prepared = []
+        service._prepare = lambda: prepared.append(dict(fallback=service.fallback))
+        service.mode = {"model": "12b", "engine": "cuda", "quality": "high"}
+        service.phase, service.engine = "ready", FakeEngine()
+        service.engine.proc.returncode = 1
+        service._revive_engine()
+        assert prepared == [{"fallback": True}] and "gpu_fallback" in notices and phases == []
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+
+def test_unhandled_errors_are_logged_and_shown(tmp_path):
+    """沒有人接住的錯誤：寫進紀錄檔、畫面上說一聲（一分鐘最多一次）；翻譯那條線遇到意外的錯也不會停。"""
+    import sys
+
+    from livelingo.service import Service
+
+    service = Service(tmp_path)
+    notices = []
+    service.notice = lambda code, **more: notices.append(code)
+    old = sys.excepthook, threading.excepthook
+    try:
+        service.watch_errors()
+
+        def boom():
+            raise ValueError("it broke here")
+
+        for _ in range(2):
+            t = threading.Thread(target=boom, name="some-part")
+            t.start()
+            t.join()
+        log = (tmp_path / "app.log").read_text(encoding="utf-8")
+        assert log.count("unhandled error in thread some-part") == 2 and "ValueError: it broke here" in log
+        assert notices == ["part_failed"]      # 連續兩次只說一次
+        sys.excepthook(KeyboardInterrupt, KeyboardInterrupt(), None)      # 使用者自己中斷的不算
+        assert notices == ["part_failed"]
+    finally:
+        sys.excepthook, threading.excepthook = old
+
+    # 翻譯那條線：排隊那邊丟出意外的錯，寫進紀錄之後繼續翻下一句
+    class Echo:
+        tone = "casual"
+
+        def translate(self, text, target, source=None, context=None):
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service.translator = Echo()
+    service.cfg.set(back_translate=False)
+    real, calls = service.jobs.get, []
+
+    def flaky(timeout=0.5):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("queue hiccup")
+        return real(timeout)
+
+    service.jobs.get = flaky
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        mine = service.submit("typed", "我現在過去", "zh")
+        end = time.time() + 5
+        while time.time() < end and not any(m["id"] == mine and m["translated"] for m in service.messages):
+            time.sleep(0.02)
+        assert any(m["id"] == mine and m["translated"] == "<ko>我現在過去" for m in service.messages)
+        assert "queue hiccup" in (tmp_path / "app.log").read_text(encoding="utf-8") and worker.is_alive()
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+
+def test_engine_needs_a_key(tmp_path, monkeypatch):
+    """本機的翻譯引擎每次啟動有一把隨機的金鑰：用環境變數交給它（不放指令列），翻譯的請求要帶著。"""
+    import io
+    import subprocess
+
+    from livelingo.core import engine as engine_mod
+    from livelingo.core.engine import Engine
+
+    exe, model = tmp_path / "llama-server.exe", tmp_path / "model.gguf"
+    exe.write_bytes(b"x")
+    model.write_bytes(b"x")
+    started = {}
+
+    class Proc:
+        pid = 4321
+
+        def poll(self):
+            return None
+
+    def popen(cmd, **kw):
+        started.update(cmd=cmd, env=kw.get("env"))
+        return Proc()
+
+    monkeypatch.setattr(engine_mod.subprocess, "Popen", popen)
+    monkeypatch.delenv("LLAMA_SERVER", raising=False)
+    first, second = Engine(exe, model, tmp_path / "engine.log"), Engine(exe, model, tmp_path / "engine.log")
+    assert len(first.key) >= 24 and first.key != second.key                        # 每次都不一樣
+    first.start()
+    assert started["env"]["LLAMA_API_KEY"] == first.key and "PATH" in started["env"]
+    assert not any(first.key in part for part in started["cmd"]) and "--api-key" not in started["cmd"]
+    assert ["--host", "127.0.0.1"] == started["cmd"][started["cmd"].index("--host"):][:2]      # 還是只聽這台電腦
+
+    sent = []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def urlopen(req, timeout=0):
+        sent.append(dict(req.header_items()))
+        return Reply(json.dumps({"choices": [{"text": "안녕"}]}).encode())
+
+    from livelingo.core import translate as translate_mod
+
+    monkeypatch.setattr(translate_mod.urllib.request, "urlopen", urlopen)
+    translator = Translator("http://127.0.0.1:1")
+    translator.translate("你好", "ko", "zh")
+    assert "Authorization" not in sent[-1]                                          # 沒有金鑰（測試、自己接的引擎）就不帶
+    translator.key = first.key
+    translator.clear_cache()
+    translator.translate("你好", "ko", "zh")
+    assert sent[-1]["Authorization"] == f"Bearer {first.key}"
+
+
+def test_every_package_is_pinned():
+    """套件全部鎖在確切的版本：requirements.txt 和 constraints.txt 對得上，自動打包兩段都照著裝，裝完還會核對一次。"""
+    import importlib.util
+    import re
+    from pathlib import Path
+
+    import pytest
+
+    root = Path(__file__).resolve().parent.parent
+    spec = importlib.util.spec_from_file_location("check_pins", root / "packaging" / "check_pins.py")
+    check = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(check)
+
+    direct = check.read_pins(root.joinpath("requirements.txt").read_text(encoding="utf-8"))
+    pins = check.read_pins(root.joinpath("constraints.txt").read_text(encoding="utf-8"))
+    assert len(direct) == 11 and len(pins) > 50
+    assert all(pins.get(name) == version for name, version in direct.items())
+    for tool in ("pyinstaller", "pytest", "opencv-python-headless", "ctranslate2", "onnxruntime"):
+        assert tool in pins, tool                                  # 打包工具和帶進來的大套件也要鎖
+    for loose in ("numpy", "numpy>=2", "pillow~=13.0", "mss==10.*"):
+        with pytest.raises(ValueError):
+            check.read_pins(loose)
+    assert check.read_pins("# note\nPyYAML==6.0.4  # why\n\ncharset_normalizer==3.5.2\n") == {"pyyaml": "6.0.4", "charset-normalizer": "3.5.2"}
+
+    # 核對：從直接要的套件一路找下去，沒鎖的、版本不同的都抓出來；這個平台沒裝的不算
+    world = {"app": ("1.0", ["lib>=1", "winonly; sys_platform == 'win32'", "extra-thing; extra == 'gui'"]),
+             "lib": ("2.1", ["deep"]), "deep": ("0.3", ["app"])}
+    wanted = lambda req: None if ";" in req else re.split(r"[<>=!~ ]", req)[0]
+    look = lambda name: world.get(name)
+    assert check.problems(["App", "missing"], {"app": "1.0", "lib": "2.1", "deep": "0.3"}, look, wanted) == []
+    assert check.problems(["app"], {"app": "1.0", "lib": "2.0"}, look, wanted) == [
+        "deep 0.3 is installed but not pinned in constraints.txt", "lib: constraints.txt says 2.0, installed is 2.1"]
+    assert check._wanted("colorama>=0.4; sys_platform == 'nowhere'") is None and check._wanted("idna (>=3.4)") == "idna"
+    assert check._wanted("socks>=1; extra == 'socks'") is None
+
+    build = root.joinpath(".github", "workflows", "build.yml").read_text(encoding="utf-8")
+    installs = [line for line in build.splitlines() if "pip install" in line]
+    assert len(installs) == 2 and all("-c constraints.txt" in line for line in installs)
+    assert build.count("python packaging/check_pins.py") == 2
+    assert "-c constraints.txt" in root.joinpath("README.md").read_text(encoding="utf-8")
+
+
+def test_numbers_are_checked_after_translating(tmp_path):
+    """原文的數字翻完要還在：不見了就換寫法重翻，還是不行就在那一則下面提醒使用者核對。"""
+    from pathlib import Path
+
+    from livelingo.core.translate import numbers, numbers_lost
+    from livelingo.service import Service
+
+    assert numbers("０６:５１ 1,000 gold 3.5") == ["6", "51", "1000", "3", "5"]      # 全形、千分位、開頭的 0
+    assert numbers("666 太強了 88", "zh") == [] and numbers("gr8 m8 see u in 5", "en") == ["5"]      # 網路用語不是數量
+    same = [("3分鐘後到", "3분 후에 도착해", "ko"), ("15分開龍", "십오 분에 용 잡자", "ko"), ("2명 더 와", "再來兩個人", "zh-TW"),
+            ("10시에 봐", "十點見", "zh-TW"), ("10000골드", "1萬金", "zh-TW"), ("meet at 7:30", "7點半見", "zh-TW"),
+            ("我有2個", "I have two", "en"), ("1등 했어", "拿第一名了", "zh-TW"), ("25분", "二十五分鐘", "zh-TW"), ("666", "대박", "ko"),
+            ("세 명 왔어", "來了 3 個人", "zh-TW"), ("第3波", "第3波", "zh-CN")]
+    for original, out, target in same:
+        assert numbers_lost(original, out, target) == [], original
+    assert numbers_lost("3分鐘後到", "5분 후에 도착해", "ko") == ["3"]
+    assert numbers_lost("10시에 봐", "九點見", "zh-TW") == ["10"]
+    assert numbers_lost("meet at 7:30", "8點見", "zh-TW") == ["7", "30"]
+    assert numbers_lost("25분 남았어", "還剩二十分鐘", "zh-TW") == ["25"]
+    assert numbers_lost("3 3 3", "3 3", "ko", "en") == ["3"]                      # 同一個數出現三次，譯文只有兩次
+
+    tr = _FakeModel({"full": "5분 후에 도착해.", "short": "3분 후에 도착해."})
+    assert tr.translate("3分鐘後到", "ko", "zh") == "3분 후에 도착해." and [a[1] for a in tr.asked] == ["full", "short"]
+    tr = _FakeModel({"full": "5분 후에 도착해.", "short": "곧 도착해.", "plain": "삼 분 후에 도착해."})
+    assert tr.translate("3分鐘後到", "ko", "zh") == "삼 분 후에 도착해." and [a[1] for a in tr.asked] == ["full", "short", "plain"]
+    tr = _FakeModel("곧 도착해.")                                                   # 怎麼翻都沒有：留第一次的
+    assert tr.translate("3分鐘後到", "ko", "zh") == "곧 도착해." and len(tr.asked) == 3
+    tr = _FakeModel("3분 후에 도착해.")
+    assert tr.translate("3分鐘後到", "ko", "zh") == "3분 후에 도착해." and len(tr.asked) == 1      # 數字都在就不多翻
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", friend_lang="ko")
+    service.translator = _FakeModel(lambda text, style, context: "곧 도착해." if "3" in text else "20분 뒤에 봐.")
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        service.submit("typed", "3分鐘後到", "zh")
+        service.submit("typed", "20分鐘後見", "zh")
+        end = time.time() + 5
+        while time.time() < end and len([m for m in service.messages if not m.get("pending")]) < 2:
+            time.sleep(0.02)
+        done = {m["original"]: m for m in service.messages}
+        assert done["3分鐘後到"]["lost"] == ["3"] and done["3分鐘後到"]["translated"] == "곧 도착해."
+        assert done["20分鐘後見"]["lost"] == []
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    assert 't("numbers_lost", { numbers: m.lost.join(' in ui.joinpath("app.js").read_text(encoding="utf-8")
+    assert ".msg .lost {" in ui.joinpath("style.css").read_text(encoding="utf-8")
+    assert ui.joinpath("i18n.js").read_text(encoding="utf-8").count("numbers_lost: ") == 5
+
+
+def test_long_text_is_split_not_cut():
+    """超過 500 個字的訊息以前只翻前 500 個字。現在切成幾段分開翻再接起來，一個字都不能少。"""
+    from pathlib import Path
+
+    from livelingo.core.translate import MAX_TEXT, split_long
+
+    assert split_long("短短的一句。", 500) == ["短短的一句。"]
+    text = "這是其中的一句，講的是今天打的那一場。" * 60                          # 一千多個字
+    parts = split_long(text, 500)
+    assert len(parts) == 3 and all(len(p) <= 500 for p in parts) and "".join(parts) == text
+    assert all(p.endswith("。") for p in parts)                                   # 切在句子結尾，不切在句子中間
+    english = " ".join(f"Sentence number {i} is about version 2.5 of the game." for i in range(40))
+    parts = split_long(english, 500)
+    assert all(len(p) <= 500 and p.endswith(".") for p in parts) and " ".join(parts) == english      # 2.5 的小數點不是句尾
+    assert split_long("字" * 1200, 500) == ["字" * 500, "字" * 500, "字" * 200]      # 完全沒有標點：只好硬切，但不丟字
+    comma = "，".join(["沒有句號只有逗號的一長串"] * 60)
+    assert all(len(p) <= 500 for p in split_long(comma, 500)) and "".join(split_long(comma, 500)) == comma
+
+    tr = _FakeModel(lambda sent, style, context: f"[{len(sent)}]")
+    out = tr.translate(text, "ko", "zh", context=["前一句"])
+    assert out == " ".join(f"[{len(p)}]" for p in split_long(text, 500))           # 每一段都翻了，照順序接起來
+    assert tr.contexts[0] == ["前一句"] and tr.contexts[1] == []                    # 前文只給第一段
+    assert sum(len(a[0]) for a in tr.asked) == len(text)
+    tr = _FakeModel("好")
+    assert tr.translate("Hello there. " * 100, "zh-TW", "en") == "好" * 3           # 翻成中文、日文時段落之間不加空白
+    tr = _FakeModel("가")
+    tr.translate("".join(chr(0x4E00 + i) for i in range(5000)), "ko", "zh")        # 五千個不一樣的字
+    assert sum(len(a[0].rstrip("。")) for a in tr.asked) == MAX_TEXT == 2000        # 再長就真的不收了（輸入框也只收這麼多）
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    assert f'id="say" autocomplete="off" maxlength="{MAX_TEXT}"' in ui.joinpath("index.html").read_text(encoding="utf-8")
+    assert f'class="edit-src" rows="2" maxlength="{MAX_TEXT}"' in ui.joinpath("app.js").read_text(encoding="utf-8")
+
+
+def test_long_sentences_stay_longer_on_the_overlay():
+    """浮動留言停留的時間：設定的秒數是最少的，長的句子照閱讀時間多留，但有上限；程式的短提示和「不會消失」不受影響。"""
+    from livelingo import overlay
+
+    life = overlay.Overlay._life
+    assert overlay.read_seconds("가자") == 0.4 and overlay.read_seconds("hello there") == 10 / 15
+    assert life({"text": "가자"}, 15) == 15                                  # 短句：照設定
+    long_ko = "지금 바텀에 정글이 오고 있으니까 조심하고 용 나오기 전에 와드 좀 박아 줘"
+    assert 15 < life({"text": long_ko * 2}, 15) < 50                          # 長句：多留一下
+    assert life({"text": long_ko}, 5) == 3 + 1.5 * overlay.read_seconds(long_ko) > 5
+    assert life({"text": long_ko * 20}, 5) == 20                             # 再長也有上限（三倍再加 5 秒）
+    assert life({"text": long_ko * 20}, 0) == 0                              # 設成不會消失：不變
+    assert life({"text": long_ko * 20, "life": 3.0}, 15) == 3.0              # 程式自己的短提示：照它自己的
+    assert life({"text": "a few short words"}, 8) == 8
+
+
+def test_uninstall_asks_before_removing_personal_data():
+    """卸載：自己累積的設定、詞彙表、歷史要先問要不要留；模型和引擎一律刪。安靜模式照舊全部刪，自動測試兩種都走一次。"""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    iss = root.joinpath("packaging", "installer.iss").read_text(encoding="utf-8")
+    code = iss[iss.index("[Code]"):]
+    assert "SuppressibleMsgBox(CustomMessage('KeepData'), mbConfirmation, MB_YESNO, IDNO) = IDYES" in code
+    assert "{param:KEEPDATA|0}" in code and "not UninstallSilent" in code
+    keep = code[code.index("if KeepData then"):code.index("DelTree(data, True, True, True)")]
+    assert [name for name in ("models", "engine", "update", "webview") if f"data + '\\{name}'" in keep] == ["models", "engine", "update", "webview"]
+    assert "config" not in keep and "history" not in keep                       # 留下來的那一邊不能碰到設定和歷史
+    messages = iss[iss.index("[CustomMessages]"):iss.index("[Tasks]")]
+    assert messages.count("KeepData=") == 5                                    # 預設（英文）加四種語言
+    for lang, flag in (("zhtw", "HasZhTW"), ("zhcn", "HasZhCN"), ("ko", "HasKo"), ("ja", "HasJa")):
+        assert f"#ifdef {flag}\n{lang}.KeepData=" in messages and iss.count(f"#define {flag}") >= 1, lang
+    ci = root.joinpath("packaging", "ci_install_test.py").read_text(encoding="utf-8")
+    assert '"/KEEPDATA=1"' in ci and "glossary-kept-by-test.json" in ci and ci.count("unins000.exe\"), *SILENT") == 2
+    main_src = root.joinpath("livelingo", "__main__.py").read_text(encoding="utf-8")
+    assert 'kept.pop("store_dir", None)' in main_src                           # 留下來的設定不能還指著刪掉的資料夾
+    assert "會全部刪除" not in root.joinpath("README.md").read_text(encoding="utf-8")
+    help_text = root.joinpath("livelingo", "data", "help.json").read_text(encoding="utf-8")
+    assert "卸載時會一起刪掉" not in help_text and "removed when you uninstall" not in help_text
+
+
+def test_black_capture_is_reported(tmp_path):
+    """遊戲用「全螢幕」時抓到的畫面是全黑的：黑了幾秒就說一聲、健康檢查亮黃燈；畫面回來就恢復。切換畫面黑一下不算。"""
+    import numpy as np
+
+    from livelingo.core import watcher as watcher_mod
+    from livelingo.core.watcher import ScreenWatcher
+    from livelingo.service import Service
+
+    class NoText:
+        def read(self, bgr):
+            return []
+
+    frames = {"a": np.zeros((60, 200, 3), np.uint8), "b": np.full((60, 200, 3), 40, np.uint8)}
+    told = []
+    w = ScreenWatcher(NoText(), on_message=lambda *a: None, grab=lambda place: frames[place["id"]], on_black=told.append)
+    w.set_regions([{"id": "a", "left": 0, "top": 0, "width": 200, "height": 60}, {"id": "b", "left": 0, "top": 0, "width": 200, "height": 60}])
+    clock = [100.0]
+    real = watcher_mod.time.monotonic
+    watcher_mod.time.monotonic = lambda: clock[0]
+    try:
+        look = lambda: [w._look(slot, w.grab) for slot in list(w._slots)]
+        look()
+        assert told == [] and w.black() == []                 # 才剛黑：先不說
+        clock[0] += 3
+        look()
+        assert told == []
+        clock[0] += 3
+        look()
+        assert told == [["a"]] and w.black() == ["a"]         # 黑了六秒：只有全黑的那一區
+        look()
+        assert told == [["a"]]                                # 不會一直說
+        frames["a"] = np.full((60, 200, 3), 200, np.uint8)
+        look()
+        assert told == [["a"], []] and w.black() == []        # 畫面回來了
+        frames["a"] = np.zeros((60, 200, 3), np.uint8)
+        look()
+        clock[0] += 2
+        frames["a"] = np.full((60, 200, 3), 90, np.uint8)     # 只黑了兩秒（切換畫面）：不算
+        look()
+        assert told == [["a"], []]
+    finally:
+        watcher_mod.time.monotonic = real
+
+    service = Service(tmp_path)
+    notices = []
+    service.notice = lambda code, **more: notices.append(code)
+    service.cfg.set(regions=[{"id": "a", "name": "", "left": 0, "top": 0, "width": 200, "height": 60, "on": True, "app": "", "anchor": None}])
+    service.sources["screen"]["on"] = True
+    light = lambda: next(i for i in service.health()["items"] if i["id"] == "screen")
+    assert light()["code"] == "screen_ok"
+    service._screen_black(["a"])
+    service._screen_black(["a"])
+    assert notices == ["screen_black"]                        # 同一區只說一次
+    assert (light()["state"], light()["code"]) == ("warn", "screen_black")
+    service._screen_black([])
+    assert light()["code"] == "screen_ok"
+    service._screen_black(["a"])
+    service._stop_watcher()
+    assert service._black_regions == set() and notices == ["screen_black", "screen_black"]
+
+
+def test_failed_translation_says_why_and_can_be_retried(tmp_path):
+    """翻譯失敗：用看得懂的話說原因（五種語言），電腦回報的原文只當補充；失敗的那一則可以按「重試」再翻。"""
+    import socket
+    import urllib.error
+    from pathlib import Path
+
+    from livelingo.core.translate import why
+    from livelingo.service import Service
+
+    assert why(urllib.error.URLError(ConnectionRefusedError(10061, "refused"))) == "engine_down"
+    assert why(ConnectionResetError("reset")) == "engine_down"
+    assert why(socket.timeout("timed out")) == "timeout" and why(urllib.error.URLError("timed out")) == "timeout"
+    http = lambda code: urllib.error.HTTPError("http://x", code, "x", {}, None)
+    assert why(http(401)) == "engine_key" and why(http(503)) == "engine_busy" and why(http(500)) == "engine_reply"
+    assert why(KeyError("choices")) == "engine_reply" and why(RuntimeError("?")) == "other"
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    i18n, app = ui.joinpath("i18n.js").read_text(encoding="utf-8"), ui.joinpath("app.js").read_text(encoding="utf-8")
+    for code in ("engine_down", "timeout", "engine_key", "engine_busy", "engine_reply"):
+        assert i18n.count(f"err_{code}: ") == len(UI_LANGS), code
+    assert 't("err_" + m.why)' in app and 'data-act="again"' in app and 'post("/api/again"' in app
+
+    class Flaky:
+        tone, fail = "casual", True
+
+        def translate(self, text, target, source=None, context=None):
+            if self.fail:
+                raise urllib.error.URLError(ConnectionRefusedError(10061, "refused"))
+            return "안녕"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False)
+    service.translator = Flaky()
+    service._engine_gone = lambda: False               # 引擎還在，只是這一次沒回應
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    try:
+        mid = service.submit("typed", "你好", "zh")
+        get = lambda: next(m for m in service.messages if m["id"] == mid)
+        wait(lambda: get()["error"])
+        assert get()["why"] == "engine_down" and not get()["pending"]
+        assert service.again(mid + 99) is False
+        service.translator.fail = False
+        assert service.again(mid) is True
+        wait(lambda: get()["translated"] == "안녕")
+        assert get()["error"] == "" and get()["why"] == "" and service.again(mid) is False      # 翻好的不能再按
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+    # 引擎一直自己停、不再重開的那個畫面：也用看得懂的話說，紀錄檔指向停之前留下來的那一份
+    lost = Service(tmp_path / "lost")
+    assert lost._engine_lost(RuntimeError("the translation engine keeps stopping"), code="keeps_stopping") is False
+    assert lost.phase == "error" and lost.detail["code"] == "keeps_stopping" and lost.detail["log"].endswith("engine-stopped.log")
+    assert i18n.count("err_restart_failed: ") == len(UI_LANGS) and 'code="restart_failed"' in ui.parent.joinpath("service.py").read_text(encoding="utf-8")
+    assert i18n.count("err_keeps_stopping: ") == len(UI_LANGS) and 'd.code ? t("err_" + d.code) : (d.message || "")' in app
+    lost._engine_lost(RuntimeError("boom"))
+    assert lost.detail["code"] == "" and lost.detail["message"] == "boom" and lost.detail["log"].endswith("engine.log")
+
+
+def test_lost_audio_device_is_reconnected(tmp_path, monkeypatch):
+    """收音裝置用到一半斷線：自己重新連接（隔幾秒試一次），連上了說一聲；一開始就打不開的照舊馬上顯示錯誤；
+    等的時候使用者關掉就不再試；試完還是不行才顯示錯誤。"""
+    import queue
+    from pathlib import Path
+
+    from livelingo import service as service_mod
+    from livelingo.service import Service
+
+    monkeypatch.setattr(service_mod, "RECONNECT_WAITS", (0.05, 0.05, 0.05))
+    made = []
+
+    class FakeCapture:
+        def __init__(self, kind, on_error, on_open):
+            self.kind, self.on_error, self.on_open, self.q, self.alive = kind, on_error, on_open, queue.Queue(), True
+            made.append(self)
+
+        def start(self):
+            pass
+
+        def stop(self):
+            self.alive = False
+
+        def is_alive(self):
+            return self.alive
+
+    class FakeAudio:
+        def capture(self, kind, device, on_error=None, on_open=None):
+            return FakeCapture(kind, on_error, on_open)
+
+    class FakeRecognizer:
+        beam = 1
+
+    class FakePipeline:      # 真的那個要語音模型的套件；這裡只測斷線重連，換成假的，沒裝那個套件的地方也能跑
+        def __init__(self, capture, *a, **kw):
+            self.capture, self.stay = capture, 1.0
+
+        def start(self):
+            self.capture.start()
+
+        def stop(self):
+            self.capture.stop()
+
+    from livelingo.core import speech
+    monkeypatch.setattr(speech, "SpeechPipeline", FakePipeline)
+
+    def wait(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    service = Service(tmp_path)
+    service.audio, service.recognizer, service.phase = FakeAudio(), FakeRecognizer(), "ready"
+    notices = []
+    service.notice = lambda code, **more: notices.append(code)
+    mic = service.sources["mic"]
+    try:
+        # 一開始就打不開：不重試，馬上顯示錯誤
+        service.cfg.set(sources={"screen": False, "listen": False, "mic": True})
+        service._start_voice("mic")
+        made[-1].on_error("mic", RuntimeError("no microphone found"))
+        assert mic["on"] is False and mic["error"] == "no microphone found" and not mic["lost"] and len(made) == 1 and notices == []
+
+        # 開起來之後才斷：自己重新連接
+        service._start_voice("mic")
+        made[-1].on_open("mic", "USB Headset")
+        assert mic["on"] and mic["device"] == "USB Headset"
+        made[-1].on_error("mic", RuntimeError("device unplugged"))
+        assert mic["on"] and mic["lost"] and mic["error"] == "" and notices == ["device_lost"]
+        light = lambda: next(i for i in service.health()["items"] if i["id"] == "mic")
+        wait(lambda: len(made) == 3)                          # 等了一下，再開一次
+        made[-1].on_error("mic", RuntimeError("audio device not found"))      # 還沒接回去
+        assert mic["lost"] and notices == ["device_lost"]     # 只說一次
+        wait(lambda: len(made) == 4)
+        made[-1].on_open("mic", "Laptop Microphone")          # 連上了（換成另一支也算）
+        assert mic["on"] and not mic["lost"] and mic["device"] == "Laptop Microphone"
+        assert notices == ["device_lost", "device_back"] and service._voice_tries == {}
+
+        # 等的時候使用者自己關掉：不再試
+        made[-1].on_error("mic", RuntimeError("device unplugged"))
+        assert mic["lost"]
+        service.set_source("mic", False)
+        assert not mic["on"] and not mic["lost"]
+        count = len(made)
+        time.sleep(0.3)
+        assert len(made) == count
+
+        # 試完全部還是不行：顯示錯誤
+        service.set_source("mic", True)
+        wait(lambda: len(made) == count + 1 and mic["on"])
+        made[-1].on_open("mic", "USB Headset")
+        made[-1].on_error("mic", RuntimeError("device unplugged"))
+        for n in range(3):
+            wait(lambda: len(made) == count + 2 + n)
+            wait(lambda: not mic["busy"])
+            made[-1].on_error("mic", RuntimeError("audio device not found"))
+        assert not mic["on"] and not mic["lost"] and mic["error"] == "audio device not found"
+    finally:
+        service.closing.set()
+        for capture in made:
+            capture.alive = False
+
+    source = (Path(service_mod.__file__).parent / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'if (s.lost) return t("src_lost");' in source
+    i18n = (Path(service_mod.__file__).parent / "ui" / "i18n.js").read_text(encoding="utf-8")
+    for key in ("src_lost", "n_device_lost", "n_device_back", "h_mic_lost", "h_listen_lost"):
+        assert i18n.count(f"{key}: ") == len(UI_LANGS), key
+
+
+def test_update_check_can_be_turned_off(tmp_path, monkeypatch):
+    """「開啟時檢查有沒有新版本」可以關：關了就不連網路去問，也不會出現更新的畫面。預設是開的。"""
+    from pathlib import Path
+
+    from livelingo.config import DEFAULTS, EDITABLE
+    from livelingo.service import Service
+
+    assert DEFAULTS["update_check"] is True and "update_check" in EDITABLE
+    asked = []
+    monkeypatch.setenv("LIVELINGO_UPDATE_API", "http://127.0.0.1:9/none")      # 讓「會自動更新」成立
+    monkeypatch.delenv("LIVELINGO_NO_UPDATE", raising=False)
+    monkeypatch.setattr(updater, "check", lambda: asked.append(1) or None)
+    service = Service(tmp_path)
+    phases = []
+    service.set_phase = lambda phase, **more: phases.append(phase)
+    assert service._update_if_needed() is False and asked == [1] and phases == ["updating"]      # 開著：會去問
+    assert service.update_config({"update_check": False})["changed"] == ["update_check"]
+    assert service._update_if_needed() is False and asked == [1] and phases == ["updating"]      # 關了：沒有再問
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    assert 'switchRow("update_check", t("update_check"), t("update_check_desc"))' in ui.joinpath("app.js").read_text(encoding="utf-8")
+    i18n = ui.joinpath("i18n.js").read_text(encoding="utf-8")
+    for key in ("update_check", "update_check_desc", "about_update_off"):
+        assert i18n.count(f"    {key}: ") + i18n.count(f", {key}: ") == len(UI_LANGS), key
+
+
+def test_translation_streams_out_while_it_is_made(tmp_path, monkeypatch):
+    """即時：譯文一邊翻一邊出現，不用等整句翻完。最後那一則才是整理過、核對過的。"""
+    import json as _json
+    from pathlib import Path
+
+    import pytest
+
+    import livelingo.service as service_mod
+    from livelingo.core import translate as tr_mod
+    from livelingo.service import Service
+
+    # 一、跟引擎要「一邊翻一邊回」，一行一筆地讀（用一個真的本機小伺服器當引擎）
+    import http.server
+
+    seen = {"gone": threading.Event(), "wait": 0.0, "status": 200, "chunked": False}
+
+    class FakeEngine(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            seen["body"] = _json.loads(self.rfile.read(int(self.headers["Content-Length"])).decode("utf-8"))
+            seen["auth"] = self.headers.get("Authorization")
+            time.sleep(seen["wait"])      # 像引擎在讀原文：還沒有任何回應
+            def send(data: bytes) -> None:      # 真的引擎是一塊一塊送的（chunked），而且一塊不一定剛好是一行
+                if seen["chunked"]:
+                    for part in (data[:7], data[7:]):
+                        if part:
+                            self.wfile.write(f"{len(part):x}\r\n".encode() + part + b"\r\n")
+                else:
+                    self.wfile.write(data)
+                self.wfile.flush()
+
+            try:
+                self.send_response(seen["status"])
+                self.send_header("Content-Type", "text/event-stream")
+                if seen["chunked"]:
+                    self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                send(b": keep-alive\n\n")
+                for piece in ("3", "분 후에", " 도착해.", ""):
+                    send(("data: " + _json.dumps({"choices": [{"text": piece}]}, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                    time.sleep(0.05)
+                send(b"data: [DONE]\n\n")
+                if seen["chunked"]:
+                    self.wfile.write(b"0\r\n\r\n")
+            except OSError:
+                seen["gone"].set()
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), FakeEngine)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        tr = Translator(f"http://127.0.0.1:{server.server_address[1]}")
+        tr.key = "k1"
+        parts = []
+        assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append) == "3분 후에 도착해."
+        assert seen["body"]["stream"] is True and seen["auth"] == "Bearer k1" and parts == ["3", "3분 후에", "3분 후에 도착해."]
+
+        seen["chunked"] = True
+        parts.clear()
+        assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append) == "3분 후에 도착해." and parts == ["3", "3분 후에", "3분 후에 도착해."]
+        seen["chunked"] = False
+
+        def boom(text):
+            raise RuntimeError("screen is gone")
+
+        assert tr._ask("3分鐘後到。", "zh", "ko", [], on_part=boom) == "3분 후에 도착해."      # 畫面那邊出錯，翻譯照樣完成
+        with pytest.raises(tr_mod.Stopped):
+            tr._ask("3分鐘後到。", "zh", "ko", [], on_part=lambda text: False)                  # 畫面說不用翻完了
+        assert "do not finish" not in seen["body"]["prompt"].lower()      # 整句的問法裡沒有「還沒說完」那一段
+
+        # 「停」：引擎還在讀原文、一個字都還沒回的時候也要馬上停，不能等它
+        seen["wait"], stop, started = 3.0, tr_mod.Stop(), time.time()
+        threading.Timer(0.2, stop.stop).start()
+        with pytest.raises(tr_mod.Stopped):
+            tr.translate("3分鐘後到", "ko", "zh", on_part=parts.append, unfinished=True, stop=stop)
+        assert time.time() - started < 1.5 and not tr.busy()
+        assert seen["gone"].wait(5)      # 引擎那邊看得到連線關了（真的引擎會因此停下那一次的工作）
+        with pytest.raises(tr_mod.Stopped):
+            tr.translate("5分鐘後到", "ko", "zh", unfinished=True, stop=stop)      # 已經按過停的：不會去問引擎
+        seen["wait"] = 0.0
+        assert tr.translate("3分鐘後到", "ko", "zh", unfinished=True, stop=tr_mod.Stop()) == "3분 후에 도착해."
+        assert "Do not finish or guess the rest" in seen["body"]["prompt"] and seen["body"]["prompt"].rstrip().endswith("3分鐘後到<end_of_turn>\n<start_of_turn>model")
+
+        seen["status"] = 401
+        with pytest.raises(Exception) as bad:
+            tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append)
+        assert tr_mod.why(bad.value) == "engine_key"      # 出錯的原因照樣分得出來
+    finally:
+        server.shutdown()
+        server.server_close()
+    with pytest.raises(Exception) as bad:
+        tr._ask("3分鐘後到。", "zh", "ko", [], on_part=parts.append)
+    assert tr_mod.why(bad.value) == "engine_down"
+
+    # 二、translate() 把還沒翻完的字整理過再給畫面（簡轉繁）；沒有要即時的時候，問法跟以前一樣
+    tr = _FakeModel("这个队伍很强。")
+    parts = []
+    assert tr.translate("이 팀 진짜 세다", "zh-TW", "ko", on_part=parts.append) == "這個隊伍很強。"
+    assert parts[0] == "這" and parts[-1] == "這個隊伍很強。" and all("这" not in p and "队" not in p for p in parts)
+    parts.clear()
+    assert tr.translate("이 팀 진짜 세다", "zh-TW", "ko", on_part=parts.append) == "這個隊伍很強。" and parts == []      # 記得的：直接給整句
+    long_text = "。".join(f"第{chr(0x4E00 + i)}句話要翻譯" for i in range(120))
+    tr = _FakeModel(lambda text, style, context: "가" * 3)
+    parts = []
+    out = tr.translate(long_text, "ko", "zh", on_part=parts.append)
+    assert len(tr.asked) > 1 and parts[-1] == out and all(len(a) <= len(b) for a, b in zip(parts, parts[1:]))      # 分段翻的：前面翻好的不會消失
+
+    # 三、服務把還沒翻完的字送給主畫面（partial）和浮動字幕（只有對方說的話）
+    monkeypatch.setattr(service_mod, "PARTIAL_EVERY", 0.0)
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", friend_lang="ko")
+    service.translator = _FakeModel(lambda text, style, context: "我們去打龍吧。" if "용" in text else "용 잡으러 가자.")
+    events, shown = [], []
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, data=None: (events.append((kind, data)), old_publish(kind, data))[1])
+    monkeypatch.setattr(service.overlay, "push", lambda *a, **kw: shown.append((a, kw)))
+    service.cfg.set(overlay=True)
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        service.submit("heard", "용 잡으러 가자", "ko")
+        service.submit("typed", "我們去打龍吧", "zh")
+        end = time.time() + 5
+        while time.time() < end and len([m for m in service.messages if not m.get("pending")]) < 2:
+            time.sleep(0.02)
+        by = {m["original"]: m for m in service.messages}
+        heard, typed = by["용 잡으러 가자"], by["我們去打龍吧"]
+        assert heard["translated"] == "我們去打龍吧。" and typed["translated"] == "용 잡으러 가자."
+        got = [d["text"] for k, d in events if k == "partial" and d["id"] == heard["id"]]
+        assert got and got[0] == "我" and got[-1] == "我們去打龍吧。"
+        assert [d["text"] for k, d in events if k == "partial" and d["id"] == typed["id"]][-1] == "용 잡으러 가자."
+        kinds = [k for k, d in events if (k == "partial" and d["id"] == heard["id"]) or (k == "message" and d.get("id") == heard["id"] and not d.get("pending"))]
+        assert kinds[-1] == "message" and set(kinds[:-1]) == {"partial"}      # 整句最後才到，蓋掉還沒翻完的
+        texts = [a[1] for a, kw in shown if kw.get("key") == heard["id"]]
+        assert texts[0] == "我" and texts[-1] == "我們去打龍吧。" and len(texts) > 2      # 浮動字幕也是一個字一個字出來
+        assert not [1 for a, kw in shown if kw.get("key") == typed["id"] and a[1] != "용 잡으러 가자."]      # 自己打的字不先出半句
+    finally:
+        service.closing.set()
+
+    ui = Path("livelingo/ui")
+    js, css = (ui / "app.js").read_text(encoding="utf-8"), (ui / "style.css").read_text(encoding="utf-8")
+    assert "partial: (d)" in js and "part-${m.id}" in js and ".text.streaming" in css and "prefers-reduced-motion" in css
+
+
+def test_live_captions_while_the_other_person_is_still_talking(tmp_path, monkeypatch):
+    """即時字幕：對方還在說，就先辨識目前聽到的、先翻；說完由整句接手同一則。半句不進歷史、字幕檔、使用數字。"""
+    import queue
+
+    import numpy as np
+    import pytest
+
+    import livelingo.service as service_mod
+    from livelingo import jobs as jobs_mod
+    from livelingo.core.audio import SR
+    from livelingo.core.speech import LivePacer, SpeechPipeline
+    from livelingo.service import Service
+
+    # 一、節奏：說了一陣子才先辨識；多聽到一些才再做；辨識得慢的電腦自動做得少；辨識器在忙就不做
+    pacer = LivePacer(first=1.5, grow=0.6, rest=1.0)
+    assert not pacer.due(1.0, 100.0) and pacer.due(1.6, 100.0) and not pacer.due(1.6, 100.0, busy=True)
+    pacer.done(1.6, 101.5, spent=1.5)
+    assert not pacer.due(2.0, 101.6)                      # 才多聽到 0.4 秒
+    assert not pacer.due(2.6, 102.5) and pacer.due(2.6, 103.1)      # 上一次花了 1.5 秒：至少休息 1.5 秒
+    pacer.done(2.6, 103.2, spent=0.1)
+    assert pacer.due(3.3, 103.35)                         # 辨識很快（顯示卡）：多聽到一點就再做
+    pacer.reset()
+    assert pacer.due(1.5, 0.0)
+
+    # 二、管線：先顯示、說完前通知、整句接手；沒結果就收回
+    calls, state = [], {"interim": ("안녕하세", "ko", False), "final": ("안녕하세요 여러분", "ko", False), "live": True, "busy": False}
+
+    class Seg:
+        speaking, emit, audio = False, [], np.zeros(SR * 2, dtype=np.float32)
+
+        def feed(self, audio):
+            out, self.emit = self.emit, []
+            return out
+
+        def so_far(self):
+            return self.audio if self.speaking else None
+
+    class Rec:
+        asked = []
+
+        def busy(self):
+            return False
+
+        def transcribe(self, audio, langs, stay=1.0, quick=False):
+            self.asked.append(quick)
+            return state["interim"] if quick else state["final"]
+
+    pipe = SpeechPipeline.__new__(SpeechPipeline)
+    pipe.capture = type("C", (), {"kind": "loopback"})()
+    pipe.segmenter, pipe.recognizer, pipe.langs, pipe.stay = Seg(), Rec(), ["ko"], 1.0
+    pipe.on_text = lambda kind, text, lang, seconds, unsure: calls.append(("text", text))
+    pipe.on_partial = lambda kind, text, lang: calls.append(("part", text))
+    pipe.live, pipe.busy, pipe.pacer = (lambda: state["live"]), (lambda: state["busy"]), LivePacer(rest=0.0, grow=0.5)
+    block = np.zeros(1600, dtype=np.float32)
+    pipe._hear(block)
+    assert calls == []                                    # 沒有人在說話
+    pipe.segmenter.speaking = True
+    state["live"] = False
+    pipe._hear(block)
+    state["live"], state["busy"] = True, True
+    pipe._hear(block)
+    assert calls == []                                    # 設定關著、或電腦正在忙：不做
+    state["busy"] = False
+    pipe._hear(block)
+    assert calls == [("part", "안녕하세")] and Rec.asked == [True]      # 用快的算法
+    pipe.segmenter.audio = np.zeros(SR * 3, dtype=np.float32)
+    pipe._hear(block)
+    assert calls == [("part", "안녕하세")]                 # 聽到的字沒變：不重複送
+    pipe.segmenter.speaking, pipe.segmenter.emit = False, [np.zeros(SR * 3, dtype=np.float32)]
+    pipe._hear(block)
+    assert calls[1:] == [("part", ""), ("text", "안녕하세요 여러분")]      # 先說「說完了」，再給整句
+    calls.clear()
+    pipe.segmenter.speaking, pipe.segmenter.audio = True, np.zeros(SR * 2, dtype=np.float32)
+    pipe._hear(block)
+    state["final"] = None                                 # 這一句最後被當成雜音
+    pipe.segmenter.speaking, pipe.segmenter.emit = False, [np.zeros(SR * 2, dtype=np.float32)]
+    pipe._hear(block)
+    assert calls == [("part", "안녕하세"), ("part", ""), ("part", None)]      # 先顯示的要收回
+    plain = SpeechPipeline.__new__(SpeechPipeline)        # 沒有要即時字幕的（聽我說話）：完全不先辨識
+    plain.capture, plain.segmenter, plain.recognizer, plain.langs, plain.stay = pipe.capture, Seg(), Rec(), ["ko"], 1.0
+    plain.on_text = lambda *a: None
+    plain.segmenter.speaking, before = True, len(Rec.asked)
+    plain._hear(block)
+    assert len(Rec.asked) == before
+
+    # 三、排隊：半句排最後，每個來源只留最新的一份
+    q = jobs_mod.Jobs()
+    q.put_live({"via": "heard", "original": "a"})
+    q.put_live({"via": "heard", "original": "ab"})
+    q.put({"via": "screen", "original": "s"})
+    q.put({"back_of": 3})
+    assert q.waiting() == 2
+    assert [q.get(0.01)[0].get("original", "back") for _ in range(3)] == ["s", "back", "ab"]
+    with pytest.raises(queue.Empty):
+        q.get(0.01)
+    q.put_live({"via": "heard", "original": "abc"})
+    q.drop_live("heard")
+    with pytest.raises(queue.Empty):
+        q.get(0.01)                                       # 說完了：半句不翻了
+
+    # 四、服務：同一則訊息從半句變成整句
+    monkeypatch.setattr(service_mod, "PARTIAL_EVERY", 0.0)
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False)
+    assert service.cfg["live_captions"] is True
+    answers = {"용 잡으러": "去打龍", "용 잡으러 가자 지금": "現在去打龍吧", "용 잡으러 가자 지금 빨리": "現在快去打龍吧。"}
+    model = service.translator = _FakeModel(lambda text, style, context: answers.get(text.rstrip("."), "？"))
+    events, shown, kept = [], [], []
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, data=None: (events.append((kind, data)), old_publish(kind, data))[1])
+    monkeypatch.setattr(service.overlay, "push", lambda *a, **kw: shown.append((a, kw)))
+    monkeypatch.setattr(service.history, "add", lambda msg: kept.append(dict(msg)) or False)
+    counted = []
+    monkeypatch.setattr(service, "_count", lambda msg, failed=False: counted.append(msg["id"]))
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait_for(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    def live():
+        return [m for m in service.messages if m.get("live")]
+
+    try:
+        service._on_live("loopback", "용 잡으러", "ko")
+        wait_for(lambda: live() and live()[0].get("partial") == "去打龍")
+        first = live()[0]
+        assert first["pending"] and first["who"] == "them" and first["via"] == "heard" and first["original"] == "용 잡으러"
+        assert model.unfinished == [True] and model.asked[0][0] == "용 잡으러"      # 跟模型說這是半句，也不幫它補句號
+        service._on_live("loopback", "용 잡으러 가자 지금", "ko")
+        wait_for(lambda: live() and live()[0].get("partial") == "現在去打龍吧")
+        assert [m["id"] for m in service.messages] == [first["id"]]      # 還是同一則
+        texts = [d["text"] for k, d in events if k == "partial"]
+        assert "去打龍" in texts and texts[-1] == "現在去打龍吧"
+        assert [a[1] for a, kw in shown if kw.get("key") == first["id"]][-1] == "現在去打龍吧"      # 浮動字幕也跟著長
+        assert kept == [] and counted == [] and not service.transcript.on      # 半句不進歷史、不算使用次數
+        service._on_live("loopback", "", None)            # 說完了，整句正在辨識
+        assert live()[0]["closing"] and live()[0]["partial"] == "現在去打龍吧"
+        service._on_speech("loopback", "용 잡으러 가자 지금 빨리", "ko", 0.4)
+        wait_for(lambda: service.messages and not service.messages[0].get("pending"))
+        done = service.messages[0]
+        assert len(service.messages) == 1 and done["id"] == first["id"] and done["at"] == first["at"]
+        assert done["translated"] == "現在快去打龍吧。" and not done.get("live") and "partial" not in done
+        assert model.unfinished[-1] is False and model.asked[-1][0] == "용 잡으러 가자 지금 빨리."      # 整句照平常的方式翻
+        assert counted == [first["id"]] and kept and kept[-1]["translated"] == "現在快去打龍吧。" and not service._live
+        pending = [d for k, d in events if k == "message" and d["id"] == first["id"] and d.get("pending") and not d.get("live")]
+        assert pending and pending[0]["partial"] == "現在去打龍吧"      # 整句翻好之前，畫面上留著先翻的半句
+
+        # 最後沒有結果：收回；回音、關掉收音、清除對話也都不會留下半則
+        service._on_live("loopback", "아 진짜", "ko")
+        wait_for(lambda: bool(live()))
+        gone = live()[0]["id"]
+        service._on_live("loopback", None, None)
+        assert not live() and ("message_removed", {"id": gone}) in events
+        service._on_live("loopback", "아 진짜", "ko")
+        service._stop_voice("listen")
+        assert not live() and not service._live
+        service._on_live("loopback", "아 진짜", "ko")
+        service.clear_messages()
+        assert not service._live and list(service.messages) == []
+        service._on_live("loopback", "", None)
+        service._on_live("loopback", None, None)          # 沒有先顯示過的：什麼事都不會發生
+        assert list(service.messages) == []
+
+        # 翻譯和辨識都用處理器的電腦：正在翻的時候先不辨識半句（兩個一起跑會互搶，都慢好幾倍）
+        service.mode = {"model": "4b", "engine": "cpu", "quality": "standard"}
+        assert service._live_wait() is False
+        with model._lock:
+            assert service._live_wait() is True
+        service.jobs.put({"via": "screen", "original": "x", "id": 999, "lang": "ko", "who": "them"})
+        assert service._live_wait() is True
+        service.mode = {"model": "12b", "engine": "cuda", "quality": "high"}
+        assert service._live_wait() is False              # 翻譯用顯示卡：不用等
+    finally:
+        service.closing.set()
+
+    from pathlib import Path
+
+    ui = Path("livelingo/ui")
+    js, css = (ui / "app.js").read_text(encoding="utf-8"), (ui / "style.css").read_text(encoding="utf-8")
+    assert 'switchRow("live_captions"' in js and "m.live" in js and ".orig.hearing" in css
+    source = Path("livelingo/service.py").read_text(encoding="utf-8")
+    assert 'on_partial=self._on_live if key == "listen" else None' in source      # 只給對方說的話
+
+
+def test_speakers_are_told_apart(tmp_path, monkeypatch):
+    """分辨說話者：照聲紋把對方分成說話者 1、2、3，各有顏色、可以取名字；聲紋和名字只在記憶體裡，不進設定、歷史、問題報告。"""
+    import json as json_mod
+    from pathlib import Path
+
+    import numpy as np
+
+    import livelingo.core.voices as voices_mod
+    from livelingo import chatpaint, storage, transcript
+    from livelingo.core.audio import SR
+    from livelingo.core.speech import LivePacer, SpeechPipeline
+    from livelingo.core.voices import MAYBE, SAME, Speakers, Voiceprint, fbank
+    from livelingo.service import Service
+
+    def voice(*parts):      # 做一個方向固定的聲紋：(第幾維, 多少) …
+        v = np.zeros(256, dtype=np.float32)
+        for i, x in parts:
+            v[i] = x
+        return v / np.linalg.norm(v)
+
+    # 一、分人的規則
+    a, b, c = voice((0, 1)), voice((1, 1)), voice((2, 1))
+    people = Speakers()
+    assert people.who(None, 3.0) is None and people.who(a, 0.5) is None      # 沒有聲紋、太短：不分
+    assert people.who(a, 1.0) is None and people.people() == []             # 誰都不像，但太短：不拿來認識新的人
+    assert people.who(a, 3.0) == 1 and people.who(b, 3.0) == 2 and people.who(a, 2.0) == 1
+    near = voice((0, 0.47), (5, (1 - 0.47 ** 2) ** 0.5))                  # 跟 1 號有點像，又不夠像
+    assert MAYBE <= float(near @ a) < SAME
+    before = people._sums[0].copy()
+    assert people.who(near, 3.0) == 1 and np.array_equal(people._sums[0], before)      # 標給他，但不拿去改他的聲紋
+    alike = voice((0, 0.9), (6, (1 - 0.81) ** 0.5))
+    assert people.who(alike, 0.8) == 1 and np.array_equal(people._sums[0], before)     # 夠像但很短：也不改
+    assert people.who(alike, 2.0) == 1 and not np.array_equal(people._sums[0], before)
+    assert people.people() == [{"id": 1, "count": 5}, {"id": 2, "count": 1}]
+    few = Speakers(limit=2)
+    assert [few.who(v, 3.0) for v in (a, b, c)] == [1, 2, None]             # 人數到上限：不再多分
+    people.forget()
+    assert people.people() == [] and people.who(b, 3.0) == 1                # 全部重來：從 1 開始
+
+    # 二、聲音特徵的形狀；太短的聲音不送進模型
+    feats = fbank(np.random.default_rng(1).standard_normal(SR).astype(np.float32) * 0.1)
+    assert feats.shape == (98, 80) and feats.dtype == np.float32 and abs(float(feats.mean(axis=0).max())) < 1e-3
+    assert fbank(np.zeros(100, dtype=np.float32)).shape == (0, 80)
+    assert Voiceprint.__new__(Voiceprint).embed(np.zeros(int(SR * 0.5), dtype=np.float32)) is None
+
+    # 三、語音那邊：有分出是誰才多交一個 speaker；分的時候出錯，字幕照出
+    got, state = [], {"who": 2}
+
+    class Seg:
+        speaking, emit = False, []
+
+        def feed(self, audio):
+            out, self.emit = self.emit, []
+            return out
+
+        def so_far(self):
+            return None
+
+    class Rec:
+        def busy(self):
+            return False
+
+        def transcribe(self, audio, langs, stay=1.0, quick=False):
+            return ("안녕하세요", "ko", False)
+
+    class Who:
+        def who(self, audio):
+            if state["who"] == "boom":
+                raise RuntimeError("model broke")
+            return state["who"]
+
+    pipe = SpeechPipeline.__new__(SpeechPipeline)
+    pipe.capture = type("C", (), {"kind": "loopback"})()
+    pipe.segmenter, pipe.recognizer, pipe.langs, pipe.stay = Seg(), Rec(), ["ko"], 1.0
+    pipe.on_text = lambda kind, text, lang, seconds, unsure, **kw: got.append(kw)
+    pipe.live, pipe.busy, pipe.pacer = (lambda: False), (lambda: False), LivePacer()
+    pipe.voices = lambda: Who()
+    for who in (2, None, "boom"):
+        state["who"] = who
+        pipe.segmenter.emit = [np.zeros(SR * 2, dtype=np.float32)]
+        pipe._hear(np.zeros(1600, dtype=np.float32))
+    pipe.voices = lambda: None                            # 功能沒開
+    pipe.segmenter.emit = [np.zeros(SR * 2, dtype=np.float32)]
+    pipe._hear(np.zeros(1600, dtype=np.float32))
+    assert got == [{"speaker": 2}, {}, {}, {}]
+
+    # 四、服務：模型在背景準備，失敗看得到、可以再試
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False, ui_lang="zh-TW")
+    assert service.cfg["tell_speakers"] is False and service.speakers_state()["on"] is False
+    assert service._voices_now() is None and service.state()["speakers"]["state"] == "off"
+    events = []
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, data=None: (events.append((kind, data)), old_publish(kind, data))[1])
+
+    class FakeVoices:
+        def __init__(self, path=None):
+            self.speakers = Speakers()
+
+        def who(self, audio):
+            return 1
+
+    plan = {"fail": True}
+
+    def fake_get(store, progress=None, cancel=None):
+        if plan["fail"]:
+            raise OSError("no network")
+        progress(50, 100)
+        return Path(store) / "voice.onnx"
+
+    monkeypatch.setattr("livelingo.assets.get_voice", fake_get)
+    monkeypatch.setattr("livelingo.assets.has_voice", lambda store: False)
+    monkeypatch.setattr(voices_mod, "Voices", FakeVoices)
+
+    def wait_for(test):
+        end = time.time() + 5
+        while time.time() < end and not test():
+            time.sleep(0.02)
+        assert test()
+
+    service.speakers_load()
+    assert service.speakers["state"] == "off"            # 沒開：什麼都不下載
+    service.cfg.set(tell_speakers=True)
+    service.speakers_load()
+    wait_for(lambda: service.speakers["state"] == "failed")
+    assert "no network" in service.speakers["error"] and service._voices_now() is None
+    service.speakers_load()
+    assert service.speakers["state"] == "failed"         # 不會自己一直重試
+    plan["fail"] = False
+    service.speakers_load(retry=True)
+    wait_for(lambda: service.speakers["state"] == "ready")
+    assert isinstance(service.voices, FakeVoices) and service._voices_now() is service.voices
+    assert any(k == "speakers" and d["state"] == "downloading" and d["percent"] == 50 for k, d in events)
+    assert service._storage_used()["voice"] is True
+
+    # 五、訊息帶著是誰說的；取名字；全部重來
+    hold, waiting = threading.Event(), threading.Event()      # hold 沒放開的時候，翻譯會停在半路
+    hold.set()
+
+    def answer(text, style, context):
+        waiting.set()
+        hold.wait(5)
+        return "你好"
+
+    service.translator = _FakeModel(answer)
+    shown = []
+    monkeypatch.setattr(service.overlay, "push", lambda *args, **kw: shown.append((args, kw)))
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        service.voices.speakers.who(a, 3.0)
+        service.voices.speakers.who(b, 3.0)
+        service.transcript.start()
+        service._on_speech("loopback", "안녕", "ko", 0.2, speaker=1)
+        service._on_speech("loopback", "반가워", "ko", 0.2, speaker=2)
+        service._on_speech("mic", "大家好", "zh", 0.2, speaker=1)      # 我自己說的不分
+        service._on_speech("loopback", "뭐해", "ko", 0.2)              # 這一句分不出來
+        wait_for(lambda: len(service.messages) == 4 and not any(m.get("pending") for m in service.messages))
+        first, second, mine, unknown = list(service.messages)
+        assert (first["speaker"], first["speaker_run"], first["voice"]) == (1, 1, "") and second["speaker"] == 2
+        assert "speaker" not in mine and "speaker" not in unknown
+        assert service.speaker_tag(first) == (1, "") and service.speaker_tag(mine) is None
+        assert [kw.get("who") for args, kw in shown if kw.get("key") == second["id"]][-1] == (2, "")      # 浮動字幕也知道是誰
+        secret = "阿哲Zq7"
+        assert service.speaker_rename(1, f"  {secret}  ") == {"ok": True, "name": secret}
+        assert service.speaker_rename(9, "x") == {"ok": False}      # 沒有這個人
+        assert service.messages[0]["voice"] == secret and service.speaker_tag(service.messages[0]) == (1, secret)
+        state = service.speakers_state()
+        assert state["people"][0]["name"] == secret and state["people"][1]["name"] == "" and state["run"] == 1
+        assert len(service.speaker_rename(2, "x" * 60)["name"]) == 24
+        assert service.speaker_rename(2, "")["name"] == "" and 2 not in service._speaker_names
+        service._on_speech("loopback", "가자", "ko", 0.2, speaker=1)
+        wait_for(lambda: len(service.messages) == 5 and not service.messages[-1].get("pending"))
+        assert service.messages[-1]["voice"] == secret              # 之後的句子直接帶著名字
+
+        # 字幕記錄（使用者自己要存的檔）寫的是那個人的名字
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert f"{secret}：안녕" in text and "說話者 2：반가워" in text and "對方：뭐해" in text and "我：大家好" in text
+
+        # 設定檔、歷史、問題報告裡都沒有名字，也沒有聲紋
+        from livelingo import history as history_mod
+        assert not {"speaker", "voice", "speaker_run"} & set(history_mod.FIELDS)
+        saved = (tmp_path / history_mod.FILE).read_text(encoding="utf-8")
+        assert "가자" in saved and secret not in saved and "speaker" not in saved
+        assert secret not in (tmp_path / "config.json").read_text(encoding="utf-8")
+        assert secret not in service.report_make()["text"]
+        assert not any(tmp_path.rglob("*.npy")) and secret.encode("utf-8") not in b"".join(
+            p.read_bytes() for p in tmp_path.rglob("*") if p.is_file())
+
+        # 還在翻的時候改名字：翻好之後名字不能被送去翻譯時的那一份蓋回去（畫面、浮動字幕、字幕檔都一樣）
+        hold.clear()
+        service._on_speech("loopback", "기다려", "ko", 0.2, speaker=2)
+        wait_for(lambda: len(service.messages) == 6 and waiting.is_set())
+        assert service.messages[-1]["pending"] and service.speaker_rename(2, "小美")["ok"]
+        hold.set()
+        wait_for(lambda: not service.messages[-1].get("pending"))
+        assert service.messages[-1]["voice"] == "小美" and service.messages[-1]["translated"] == "你好"
+        assert [kw.get("who") for args, kw in shown if kw.get("key") == service.messages[-1]["id"]][-1] == (2, "小美")
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert "小美：기다려" in text and "小美：반가워" in text
+
+        # 關掉功能：不再標；再打開，原來的還在
+        service.cfg.set(tell_speakers=False)
+        assert service.speaker_tag(service.messages[0]) is None and service._voices_now() is None
+        service.cfg.set(tell_speakers=True)
+        assert service.speaker_tag(service.messages[0]) == (1, secret)
+
+        # 全部重新分辨：人和名字都忘掉，之前的句子不再標是誰，字幕記錄也不再寫
+        assert service.speakers_forget() == {"ok": True}
+        assert service.speakers_state()["people"] == [] and service.speakers_state()["run"] == 2
+        assert service.speaker_tag(service.messages[0]) is None and not service._speaker_names
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert secret not in text and "小美" not in text and "對方：안녕" in text
+        # 還在翻的時候按了重新分辨：那一句翻好之後也不再標是誰（不然舊的 1 號會和新的 1 號混在一起）
+        waiting.clear()
+        hold.clear()
+        service.voices.speakers.who(a, 3.0)
+        service._on_speech("loopback", "잠깐", "ko", 0.2, speaker=1)
+        wait_for(lambda: len(service.messages) == 7 and waiting.is_set())
+        service.speakers_forget()
+        hold.set()
+        wait_for(lambda: not service.messages[-1].get("pending"))
+        assert service.speaker_tag(service.messages[-1]) is None and service.messages[-1]["voice"] == ""
+        text = transcript.render(list(service.transcript._items.values()), "zh-TW", time.time(), time.time())
+        assert "對方：잠깐" in text and "說話者" not in text
+    finally:
+        service.closing.set()
+
+    # 六、名字和顏色：五種語言、六個顏色輪著用，介面上的圓點跟浮動字幕同一組顏色
+    assert set(chatpaint.SPEAKER) == set(UI_LANGS)
+    assert chatpaint.speaker_name(3, "ko") == "화자 3" and chatpaint.speaker_name(3, "ko", " 민수 ") == "민수"
+    assert chatpaint.speaker_color(1) == chatpaint.speaker_color(7) != chatpaint.speaker_color(2)
+    assert chatpaint.NAME_COLORS["me"] not in chatpaint.SPEAKER_COLORS and chatpaint.NAME_COLORS["screen"] not in chatpaint.SPEAKER_COLORS
+    plain = chatpaint.paint_message("heard", "說話者 2", "你好", 400, 22)
+    tinted = chatpaint.paint_message("heard", "說話者 2", "你好", 400, 22, name_color=chatpaint.speaker_color(2))
+    assert plain.size == tinted.size and plain.tobytes() != tinted.tobytes()
+    ui = Path("livelingo/ui")
+    js, css = (ui / "app.js").read_text(encoding="utf-8"), (ui / "style.css").read_text(encoding="utf-8")
+    dots = css[css.index(".spk-dot {"):css.index(".msg .meta .spk {")].upper()
+    for i, color in enumerate(chatpaint.SPEAKER_COLORS):
+        assert "#%02X%02X%02X" % color in dots, i
+    assert "spk-c${(m.speaker - 1) % 6}" in js and len(chatpaint.SPEAKER_COLORS) == 6
+    assert "speakers: (d) =>" in js and 'switchRow("tell_speakers"' in js and "m.speaker_run === sp.run" in js
+
+    # 七、儲存空間：模型列得出來，功能關著才可以刪
+    store = tmp_path / "store"
+    path = assets.voice_path(store)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"x" * 2048)
+    row = [r for r in storage.items(tmp_path, store, {"voice": True}) if r["id"] == "voice"][0]
+    assert row["bytes"] == 2048 and row["used"] and not row["removable"]
+    row = [r for r in storage.items(tmp_path, store, {"voice": False}) if r["id"] == "voice"][0]
+    assert row["removable"] and storage.remove_item(tmp_path, store, "voice") and not path.exists()
+    source = Path("livelingo/service.py").read_text(encoding="utf-8")
+    assert 'voices=self._voices_now if key == "listen" else None' in source      # 只分對方說的話
+
+
+def test_used_installers_are_removed_after_updating(tmp_path, monkeypatch):
+    """更新完，用過的安裝檔（一個一百多 MB）要刪掉，不能一直留在 update 資料夾；下載好還沒裝的不能碰。"""
+    import json as _json
+    from pathlib import Path
+
+    import livelingo.service as service_mod
+    from livelingo import __version__, updater
+    from livelingo.service import Service
+
+    parts = updater.parse_version(__version__)
+    newer = ".".join(str(n) for n in (*parts[:2], parts[2] + 1))
+    newest = ".".join(str(n) for n in (*parts[:2], parts[2] + 2))
+    data = tmp_path / "data"
+    folder = data / "update"
+    folder.mkdir(parents=True)
+    assert updater.tidy(tmp_path / "nowhere") == (0, [])      # 沒有那個資料夾也不會出事
+
+    def fill():
+        files = {f"LiveLingo-Setup-{__version__}.exe": 1000, "LiveLingo-Setup-2.2.1.exe": 900, "LiveLingo-Setup-2.2.1.exe.part": 50,
+                 f"LiveLingo-Setup-{newer}.exe": 800, f"LiveLingo-Setup-{newest}.exe.part": 70,
+                 "install.log": 10, "LiveLingo-Setup-notes.txt": 5, "LiveLingo-Setup-abc.exe": 5}
+        for name, size in files.items():
+            (folder / name).write_bytes(b"x" * size)
+        (folder / f"LiveLingo-Setup-{__version__}.exe.d").mkdir(exist_ok=True)      # 不是檔案的不碰
+
+    def names():
+        return sorted(p.name for p in folder.iterdir())
+
+    # 剛從 2.2.1 更新上來：這一版和更舊的安裝檔刪掉；比現在新的（下載好還沒裝、下載到一半）和別的檔都留著
+    fill()
+    (data / "update.json").write_text(_json.dumps({"version": __version__, "at": 1.0, "from": "2.2.1"}), encoding="utf-8")
+    freed, left = updater.tidy(data)
+    assert (freed, left) == (1950, [])
+    assert names() == sorted([f"LiveLingo-Setup-{newer}.exe", f"LiveLingo-Setup-{newest}.exe.part", "install.log", "LiveLingo-Setup-notes.txt",
+                              "LiveLingo-Setup-abc.exe", f"LiveLingo-Setup-{__version__}.exe.d"])
+    assert (data / "update.json").exists() and updater.previous(data) is None      # 2.2.1 太舊，本來就不能退；紀錄檔沒被動到
+    assert updater.tidy(data) == (0, [])
+
+    # 剛從 newer 退回來：被退掉的那一版不會再裝，它的安裝檔也刪
+    fill()
+    (data / "update.json").write_text(_json.dumps({"version": __version__, "at": 1.0, "from": newer, "skip": newer, "rollback": True}), encoding="utf-8")
+    assert updater.tidy(data)[0] == 1950 + 800 and f"LiveLingo-Setup-{newer}.exe" not in names() and f"LiveLingo-Setup-{newest}.exe.part" in names()
+    (data / "update.json").unlink()
+
+    # 程式一開就清；安裝程式還沒結束、它自己那個檔刪不掉的話，過一下再試，刪掉了儲存空間頁要跟著更新
+    monkeypatch.setattr(service_mod, "INSTALLER_RETRY", (0.05, 0.05, 0.05))
+    fill()
+    busy = {"on": True, "tries": 0}
+    mine, real_unlink = folder / f"LiveLingo-Setup-{__version__}.exe", Path.unlink
+
+    def unlink(self, *args, **kw):
+        if self == mine and busy["on"]:
+            busy["tries"] += 1
+            raise PermissionError(13, "in use")
+        return real_unlink(self, *args, **kw)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    service = Service(data)
+    logs, events = [], []
+    service.log = lambda text: logs.append(text)
+    old_publish = service.hub.publish
+    monkeypatch.setattr(service.hub, "publish", lambda kind, payload=None: (events.append(kind), old_publish(kind, payload))[1])
+    try:
+        service.phase = "updating"                        # 正在更新或退回的時候不能碰 update 資料夾
+        service._installers_cleanup()
+        assert mine.exists() and not (folder / "LiveLingo-Setup-2.2.1.exe").exists() and (folder / f"LiveLingo-Setup-{newer}.exe").exists()
+        assert busy["tries"] == 1 and logs == ["removed used installers: 0 MB"]
+        time.sleep(0.12)
+        assert mine.exists() and busy["tries"] == 1
+        service.phase = "ready"
+        busy["on"] = False
+        deadline = time.time() + 5
+        while mine.exists() and time.time() < deadline:
+            time.sleep(0.02)
+        assert not mine.exists() and (folder / f"LiveLingo-Setup-{newer}.exe").exists()
+        deadline = time.time() + 2
+        while "storage" not in events and time.time() < deadline:
+            time.sleep(0.02)
+        assert "storage" in events
+    finally:
+        service.closing.set()
+    source = Path("livelingo/service.py").read_text(encoding="utf-8")
+    boot = source[source.index("    def _boot(self)"):source.index("    def _boot(self)") + 400]
+    assert boot.index("self._installers_cleanup()") < boot.index("self._update_if_needed()")      # 先清，再看要不要更新
+    assert "up_back_kept" not in Path("livelingo/ui/i18n.js").read_text(encoding="utf-8")      # 介面不再說「安裝檔還留著」
+
+
+def test_named_voices_are_remembered(tmp_path, monkeypatch):
+    """記住取過名字的人：開了才存（voices.json），下次開一開口就認得；清空名字、關掉開關、卸載都會刪。別的地方都不能有名字和聲紋。"""
+    import json as json_mod
+    from pathlib import Path
+
+    import numpy as np
+
+    import livelingo.core.voices as voices_mod
+    import livelingo.service as service_mod
+    from livelingo import voicebook
+    from livelingo.core.voices import Speakers
+    from livelingo.service import Service
+
+    def voice(*parts):
+        v = np.zeros(256, dtype=np.float32)
+        for i, x in parts:
+            v[i] = x
+        return v / np.linalg.norm(v)
+
+    a, b, c = voice((0, 1)), voice((1, 1)), voice((2, 1))
+
+    # 一、存檔：存進去讀得回來；壞掉的、別的模型存的、長度不對的，都當作沒有；一個人都沒有就不留檔案
+    book = tmp_path / "book"
+    book.mkdir()
+    assert voicebook.load(book) == [] and voicebook.count(book) == 0
+    assert voicebook.save(book, [{"name": "  阿哲  Zq7 ", "voice": a * 3, "weight": 500.0}, {"name": "", "voice": b, "weight": 2.0},
+                                 {"name": "壞的", "voice": np.zeros(256), "weight": 2.0}, {"name": "短的", "voice": np.ones(8), "weight": 2.0}])
+    got = voicebook.load(book)
+    assert len(got) == 1 and got[0]["name"] == "阿哲 Zq7" and got[0]["weight"] == voicebook.MAX_WEIGHT      # 太重的壓到上限：下次還跟得上新的聲音
+    assert abs(float(got[0]["voice"] @ a) - 1.0) < 1e-5 and not (book / (voicebook.FILE + ".tmp")).exists()
+    saved = json_mod.loads((book / voicebook.FILE).read_text(encoding="utf-8"))
+    assert saved["kind"] == voicebook.KIND and saved["model"] == voicebook.MODEL and voicebook.DIM == 256
+    assert voicebook.save(book, [{"name": f"p{i}", "voice": voice((i, 1)), "weight": 5.0} for i in range(30)])
+    assert voicebook.count(book) == voicebook.MAX_PEOPLE
+    for bad in ("not json", json_mod.dumps({**saved, "model": "some-other-model"}), json_mod.dumps({**saved, "people": "x"}),
+                json_mod.dumps({**saved, "people": [{"name": "x", "voice": "AAAA", "weight": 1}, {"voice": 3}, 7]})):
+        (book / voicebook.FILE).write_text(bad, encoding="utf-8")
+        assert voicebook.load(book) == [], bad[:30]
+    assert voicebook.save(book, []) and not (book / voicebook.FILE).exists()
+    voicebook.clear(book)      # 沒有檔案也不會出事
+
+    # 二、分人：記住的人先放進去，一開口就是他；他們不佔「最多分幾個人」的名額
+    people = Speakers(limit=1)
+    assert people.seed(a, 10.0) == 1 and people.seed(b, 10.0) == 2 and people.people() == [{"id": 1, "count": 0}, {"id": 2, "count": 0}]
+    assert people.who(voice((1, 0.9), (7, 0.3)), 2.0) == 2 and people.who(c, 3.0) == 3 and people.who(voice((3, 1)), 3.0) is None
+    got = people.voice_of(2)
+    assert abs(float(np.linalg.norm(got[0])) - 1.0) < 1e-5 and 11.0 < got[1] <= 12.0 and people.voice_of(9) is None and people.voice_of(0) is None
+    people.forget()
+    assert people.people() == [] and people.who(c, 3.0) == 1 and people.who(a, 3.0) is None      # 忘掉之後名額照原本的算
+
+    # 三、服務
+    class FakeVoices:
+        def __init__(self, path=None):
+            self.speakers = Speakers()
+
+    monkeypatch.setattr("livelingo.assets.get_voice", lambda store, progress=None, cancel=None: Path(store) / "voice.onnx")
+    monkeypatch.setattr("livelingo.assets.has_voice", lambda store: True)
+    monkeypatch.setattr(voices_mod, "Voices", FakeVoices)
+    monkeypatch.setattr(service_mod, "VOICES_SAVE_EVERY", 0.0)
+    data = tmp_path / "data"
+    file = data / voicebook.FILE
+
+    def open_app():
+        service = Service(data)
+        service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False, ui_lang="zh-TW", tell_speakers=True)
+        service.translator = _FakeModel("你好")
+        threading.Thread(target=service._translate_worker, daemon=True).start()
+        service.speakers_load()
+        end = time.time() + 5
+        while service.speakers["state"] != "ready" and time.time() < end:
+            time.sleep(0.02)
+        assert service.speakers["state"] == "ready"
+        return service
+
+    def hear(service, vec, text, seconds=3.0):
+        n = service.voices.speakers.who(vec, seconds)
+        service._on_speech("loopback", text, "ko", 0.2, speaker=n)
+        end = time.time() + 5
+        while (not service.messages or service.messages[-1].get("pending")) and time.time() < end:
+            time.sleep(0.02)
+        return service.messages[-1]
+
+    secret = "阿哲Zq7"
+    first = open_app()
+    try:
+        assert first.cfg["remember_speakers"] is False and first.speakers_state()["remember"] is False
+        assert hear(first, a, "안녕")["speaker"] == 1 and hear(first, b, "반가워")["speaker"] == 2
+        assert first.speaker_rename(1, secret)["ok"]
+        assert not file.exists() and first.speakers_state()["people"][0]["known"] is False      # 沒開：取了名字也不存
+        assert first.update_config({"remember_speakers": True})["changed"] == ["remember_speakers"]
+        rows = voicebook.load(data)
+        assert [r["name"] for r in rows] == [secret] and float(rows[0]["voice"] @ a) > 0.99      # 只記取過名字的；2 號沒有名字，不記
+        state = first.speakers_state()
+        assert state["remember"] and [p["known"] for p in state["people"]] == [True, False]
+        # 設定檔、匯出的設定、歷史、問題報告裡沒有名字；報告只說記了幾個
+        assert secret not in (data / "config.json").read_text(encoding="utf-8") and secret not in json_mod.dumps(first._settings_now(), ensure_ascii=False)
+        report = first.report_make()["text"]
+        assert secret not in report and "remembered_voices_count: 1" in report
+        from livelingo import history as history_mod
+        assert secret not in (data / history_mod.FILE).read_text(encoding="utf-8")
+        assert [p.name for p in data.rglob("*") if p.is_file() and secret.encode("utf-8") in p.read_bytes()] == [voicebook.FILE]
+        # 他又說了幾句（聲音有一點不一樣）：聲紋跟著調整，也存進去
+        hear(first, voice((0, 0.95), (9, 0.31)), "가자")
+        assert float(voicebook.load(data)[0]["voice"][9]) > 0.01
+        first.speaker_rename(2, "小美")
+    finally:
+        first.shutdown()
+    assert sorted(r["name"] for r in voicebook.load(data)) == sorted([secret, "小美"])
+
+    second = open_app()      # 下次開程式
+    try:
+        state = second.speakers_state()
+        assert [(p["id"], p["name"], p["count"], p["known"]) for p in state["people"]] == [(1, secret, 0, True), (2, "小美", 0, True)]
+        said = hear(second, voice((1, 0.97), (8, 0.24)), "나야")      # 小美一開口就認得
+        assert (said["speaker"], said["voice"]) == (2, "小美") and second.speaker_tag(said) == (2, "小美")
+        assert hear(second, c, "누구세요")["speaker"] == 3 and second.messages[-1]["voice"] == ""      # 沒聽過的人是新的「說話者 3」
+        # 全部重新分辨：這一次分出來的沒名字的人忘掉，記住的人還在
+        assert second.speakers_forget()["ok"]
+        state = second.speakers_state()
+        assert [(p["name"], p["count"]) for p in state["people"]] == [(secret, 0), ("小美", 0)] and state["run"] == 2
+        assert sorted(r["name"] for r in voicebook.load(data)) == sorted([secret, "小美"])
+        # 把名字清空：忘掉那個人
+        assert second.speaker_rename(1, "")["ok"] and [r["name"] for r in voicebook.load(data)] == ["小美"]
+        # 聲紋模型還沒準備好的時候（還不知道以前記了誰）不能把檔案洗掉
+        loaded, second.voices = second.voices, None
+        second._voices_save()
+        assert [r["name"] for r in voicebook.load(data)] == ["小美"]
+        second.voices = loaded
+        # 關掉開關：存的刪掉，這一次開啟期間的名字還在；再打開就再存
+        assert second.update_config({"remember_speakers": False})["changed"] and not file.exists()
+        assert second.speakers_state()["people"][1]["name"] == "小美" and second.speakers_state()["people"][1]["known"] is False
+        assert second.update_config({"remember_speakers": True})["changed"] and [r["name"] for r in voicebook.load(data)] == ["小美"]
+        second.update_config({"remember_speakers": False})
+    finally:
+        second.shutdown()
+    assert not file.exists()      # 關著的時候，關程式也不會存
+
+    third = open_app()
+    try:
+        assert third.speakers_state()["people"] == []      # 沒有記住任何人
+    finally:
+        third.shutdown()
+
+    # 四、卸載：選「留下設定」的時候，記住的聲音也要刪（它不是設定）；介面有開關，而且說清楚存在哪、怎麼刪
+    root = Path(voicebook.__file__).parent
+    iss = (root.parent / "packaging" / "installer.iss").read_text(encoding="utf-8")
+    keep = iss[iss.index("if KeepData then"):iss.index("DelTree(data, True, True, True)")]
+    assert f"DeleteFile(data + '\\{voicebook.FILE}')" in keep
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'switchRow("remember_speakers"' in js and "p.known" in js and "spk_forgot_kept" in js
+    config_src = (root / "config.py").read_text(encoding="utf-8")
+    assert '"remember_speakers": False' in config_src      # 預設關：要使用者自己打開才會存別人的聲紋
+    source = (root / "service.py").read_text(encoding="utf-8")
+    boot = source[source.index("    def _boot(self)"):source.index("    def _boot(self)") + 700]
+    assert "self.speakers_load()" in boot      # 一開程式就準備好，不用等到開始收音才看得到記住的人

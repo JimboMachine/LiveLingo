@@ -208,6 +208,7 @@
   function sourceHint(key) {
     const s = S.sources[key] || {};
     const names = shortNames();
+    if (s.lost) return t("src_lost");
     if (s.busy) return t("src_busy");
     if (s.error && !s.on) return t("src_error");
     if (key === "screen") return s.on ? t("screen_on") : t("screen_off");
@@ -356,17 +357,22 @@
   }
 
   function bubbleHTML(m) {
-    let body = `<div class="orig">${esc(m.original)}</div>`;
+    // 對方還在說、先顯示出來的那一則（即時字幕）：原文後面有「…」，說完會換成整句
+    let body = `<div class="orig${m.live ? " hearing" : ""}">${esc(m.original)}</div>`;
     // 辨識的時候沒什麼把握：標出來，按下去可以把原文改對再重翻
     const unsure = m.unsure && !m.pending
       ? `<button class="unsure" data-act="fix" data-id="${m.id}">${ICON.info}<span>${esc(t(m.via === "screen" ? "unsure_seen" : "unsure_heard"))}</span></button>` : "";
     if (m.error) {
-      body += `<div class="text failed">${esc(t("failed", { error: m.error }))}</div>`;
+      // 先用看得懂的話說原因；電腦回報的原文放在提示裡（滑鼠移上去看得到），不知道原因的才直接顯示
+      body += `<div class="text failed" title="${esc(m.error)}">${esc(m.why && m.why !== "other" ? t("err_" + m.why) : t("failed", { error: m.error }))}</div>` +
+        `<div class="actions"><button data-act="again" data-id="${m.id}">${esc(t("retry"))}</button></div>`;
     } else if (m.pending) {
-      body += `<div class="text pending">${esc(t("translating"))}</div>`;
+      // 翻到一半的譯文先顯示（一個字一個字出來）；還沒有字的時候才寫「翻譯中」
+      body += m.partial ? `<div class="text streaming" id="part-${m.id}">${esc(m.partial)}</div>` : `<div class="text pending" id="part-${m.id}">${esc(t("translating"))}</div>`;
     } else {
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
       body += unsure + `<div class="text">${esc(m.translated)}</div>`;
+      if (m.lost && m.lost.length) body += `<div class="lost">${ICON.info}<span>${esc(t("numbers_lost", { numbers: m.lost.join(" · ") }))}</span></div>`;
       if (m.back && S.cfg.back_translate) body += `<div class="back">${ICON.back}<span>${esc(t("back", { text: m.back }))}</span></div>`;
       if (m.pron && S.cfg.show_pronunciation) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
       if (m.copied) body += `<div class="copied">${ICON.check}<span>${esc(t("copied_hint"))}</span></div>`;
@@ -381,7 +387,35 @@
     // 語音的句子：後面標從說完到翻好花了幾秒
     const took = m.took > 0 && !m.pending ? ` · <span class="took" title="${esc(t("took_hint"))}">${esc(t("took", { s: Number(m.took).toFixed(1) }))}</span>` : "";
     const place = m.place ? ` · ${esc(m.place)}` : "";      // 同時讀好幾個聊天區時，標是哪一個讀到的
-    return `${icon}<span>${esc(t("who_" + m.who))} · ${esc(t("via_" + m.via))}${place}${took}</span>`;
+    // 有分出是誰說的：「對方」換成那個人（顏色的點加名字），點下去可以去改名字
+    const sp = S.speakers || {};
+    const tagged = m.speaker && S.cfg.tell_speakers && m.speaker_run === sp.run;
+    const who = tagged ? `<button class="spk" data-act="spk-open" title="${esc(t("spk_open"))}"><span class="spk-dot spk-c${(m.speaker - 1) % 6}"></span>${esc(speakerLabel(m.speaker))}</button>` : esc(t("who_" + m.who));
+    return `${icon}<span>${who} · ${esc(t("via_" + m.via))}${place}${took}</span>`;
+  }
+
+  // ---- 分辨說話者
+  function speakerLabel(n) {
+    const p = ((S.speakers || {}).people || []).find((x) => x.id === n);
+    return (p && p.name) || t("spk_n", { n });
+  }
+  function speakersHTML() {
+    const sp = S.speakers || {};
+    let more = "";
+    if (S.cfg.tell_speakers) {
+      if (sp.state === "downloading") more = `<div class="note">${ICON.info}<span id="spk-percent">${esc(t("spk_downloading", { mb: sp.mb, percent: sp.percent || 0 }))}</span></div>`;
+      else if (sp.state === "loading") more = `<div class="note">${ICON.info}<span>${esc(t("spk_loading"))}</span></div>`;
+      else if (sp.state === "failed") more = `<div class="note warn">${ICON.info}<span>${esc(t("spk_failed", { error: sp.error || "" }))}</span>
+        <button class="primary small" data-act="spk-retry">${esc(t("retry"))}</button></div>`;
+      else if (sp.state === "ready" && !(sp.people || []).length) more = `<div class="note">${ICON.info}<span>${esc(t("spk_none"))}</span></div>`;
+      else if (sp.state === "ready") more = `<div class="sub">${esc(t(sp.remember ? "spk_list_kept" : "spk_list"))}</div>` + sp.people.map((p) => `
+        <div class="setting-row spk-row"><label for="spk-name-${p.id}"><span class="spk-dot spk-c${(p.id - 1) % 6}"></span><span>${esc(t("spk_n", { n: p.id }))}</span><span class="desc">${esc(p.known && !p.count ? t("spk_known") : t("spk_count", { n: p.count }) + (p.known ? " · " + t("spk_kept") : ""))}</span></label>
+          <input type="text" id="spk-name-${p.id}" data-speaker="${p.id}" value="${esc(p.name || "")}" maxlength="24" placeholder="${esc(t("spk_name"))}"></div>`).join("") +
+        `<div class="btn-row"><button class="ghost small" data-act="spk-forget">${esc(t("spk_forget"))}</button></div>`;
+      more = switchRow("remember_speakers", t("remember_speakers"), t("remember_speakers_desc")) + more;      // 要不要把取過名字的人記到下次
+    }
+    return `<section><div><h2>${esc(t("spk_title"))}</h2><div class="sub">${esc(t("spk_hint"))}</div></div>
+        ${switchRow("tell_speakers", t("tell_speakers"), t("tell_speakers_desc"))}${more}</section>`;
   }
 
   function fixHTML(m) {
@@ -392,7 +426,7 @@
     // 語音和螢幕上讀來的句子：可能是原文就辨識錯了，先讓他改原文
     const edit = m.via === "typed" ? "" : `
       <label class="dim small" for="edit-${m.id}">${esc(t(m.via === "screen" ? "edit_label_seen" : "edit_label_heard"))}</label>
-      <textarea id="edit-${m.id}" class="edit-src" rows="2" maxlength="500">${esc(m.original)}</textarea>
+      <textarea id="edit-${m.id}" class="edit-src" rows="2" maxlength="2000">${esc(m.original)}</textarea>
       <button class="primary" data-act="edit-save" data-id="${m.id}">${esc(t("edit_save"))}</button>`;
     return `<div class="fix" data-id="${m.id}">${edit}
       <label class="dim small ${edit ? "teach-label" : ""}" for="fix-src-${m.id}">${esc(t("fix_label"))}</label>
@@ -538,10 +572,12 @@
         ${rangeRow("end_silence", t("end_silence"), 0.3, 1.5, 0.1, RANGE_TEXT.end_silence)}
       </section>
       <section>
+        ${switchRow("live_captions", t("live_captions"), t("live_captions_desc"))}
         ${switchRow("drop_echo", t("drop_echo"), t("drop_echo_desc"))}
         ${switchRow("ptt", t("ptt"), t("ptt_desc"))}
         ${S.cfg.ptt ? choiceRow("ptt_key", t("ptt_key"), (S.pttKeys || []).map((k) => [k, keyName(k)])) : ""}
-      </section>`;
+      </section>
+      ${speakersHTML()}`;
   }
 
   function paintLevels() {
@@ -894,6 +930,7 @@
         ${bar ? "" : choiceRow("overlay_grow", t("ov_grow"), [["up", t("ov_grow_up")], ["down", t("ov_grow_down")]])}
         ${bar ? "" : rangeRow("overlay_lines", t("ov_lines"), 0, 12, 1, RANGE_TEXT.overlay_lines)}
         ${rangeRow("overlay_seconds", t("ov_seconds"), 0, 60, 1, RANGE_TEXT.overlay_seconds)}
+        <div class="sub">${esc(t("ov_seconds_hint"))}</div>
         ${switchRow("overlay_original", t("ov_original"))}
         ${switchRow("overlay_mine", t("ov_mine"))}
       </section>
@@ -1277,7 +1314,7 @@
         <button data-act="rollback-yes">${esc(t("up_back_yes"))}</button><button class="ghost" data-act="rollback-no">${esc(t("cancel"))}</button></div>`;
     } else if (p) {
       html += `<div class="setting-row store-row" id="up-back"><div class="health-text"><div>${esc(t("up_back_row", { version: p.version }))}</div>
-        <div class="desc">${esc(t(p.kept ? "up_back_kept" : "up_back_fetch"))}</div></div>
+        <div class="desc">${esc(t("up_back_fetch"))}</div></div>
         <button class="ghost" data-act="rollback">${esc(t("up_back", { version: p.version }))}</button></div>`;
     }
     return html ? `<section id="about-update">${html}</section>` : "";
@@ -1293,7 +1330,8 @@
       <section>
         ${fact("shield", t("about_local_title"), t("about_local"))}
         ${fact("quality", t("about_engine_title"), t("about_engine"))}
-        ${fact("info", t("about_update_title"), t("about_update"))}
+        ${fact("info", t("about_update_title"), t(S.cfg.update_check ? "about_update" : "about_update_off"))}
+        ${switchRow("update_check", t("update_check"), t("update_check_desc"))}
       </section>
       ${rollbackHTML()}
       ${aboutChangesHTML()}`;
@@ -1473,7 +1511,7 @@
             <div class="btn-row center"><button class="ghost" data-act="update-cancel">${esc(t("cancel"))}</button></div>` : "");
       }
     } else if (S.phase === "error") {
-      html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.message || "")}</p>` +
+      html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.code ? t("err_" + d.code) : (d.message || ""))}</p>` +
         (d.log ? `<p>${esc(t("err_log", { path: d.log }))}</p>` : "") +
         `<button class="primary" data-act="retry">${esc(t("retry"))}</button>`;
     } else if (S.view !== "wizard" && S.phase === "need_download") {
@@ -1584,6 +1622,7 @@
       const r = await post("/api/teach", { id: Number(el.dataset.id), text });
       if (r.ok) { box.parentElement.innerHTML = ""; toast(t("n_taught")); }
     },
+    again: (el) => post("/api/again", { id: Number(el.dataset.id) }),
     copy: async (el) => { const r = await post("/api/copy", { id: Number(el.dataset.id) }); if (r.ok) toast(t("copied"), 1600); },
     tab: (el) => openTab(el.dataset.tab),
     "try-one": () => { const say = $("say"); say.value = t("say_placeholder").replace(/^[^：:]*[：:]\s*/, ""); say.focus(); },
@@ -1612,6 +1651,9 @@
     "apps-refresh": () => loadApps(),
     "sgpu-download": () => post("/api/speech_gpu", { download: true }),
     "sgpu-cancel": () => post("/api/speech_gpu", { cancel: true }),
+    "spk-retry": () => post("/api/speakers", { action: "retry" }),
+    "spk-forget": async () => { const r = await post("/api/speakers", { action: "forget" }); if (r && r.ok) toast(t((S.speakers || {}).remember ? "spk_forgot_kept" : "spk_forgot"), 4200); },
+    "spk-open": () => { S.ui.tab = "audio"; setView("settings"); setTimeout(() => { const el = document.querySelector('[data-key="tell_speakers"]'); if (el) el.scrollIntoView({ block: "center" }); }, 60); },
     "lib-export": async () => {
       const r = await post("/api/library", { export: true });
       toast(r.ok ? t("lib_exported", r) : t("lib_export_failed", { error: r.error || "" }), 9000, r.ok ? "info" : "warn");
@@ -1919,6 +1961,13 @@
   });
 
   document.addEventListener("change", (e) => {
+    if (e.target.dataset && e.target.dataset.speaker) {      // 幫說話者取名字：改完（離開輸入框或按 Enter）就存
+      const input = e.target;
+      post("/api/speakers", { action: "rename", id: Number(input.dataset.speaker), name: input.value }).then((r) => {
+        if (r && r.ok) { input.value = r.name; flashSaved("#" + input.id); } else toast(t("n_save_failed", { error: "" }), 6000, "error");
+      });
+      return;
+    }
     if (e.target.id === "set-file") {      // 匯入設定檔：在這裡讀檔，內容交給程式檢查
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -2083,7 +2132,7 @@
       const before = S.sources[d.key] || {};
       S.sources[d.key] = d;
       renderSources();
-      if (before.on !== d.on || before.error !== d.error || before.quiet !== d.quiet) healthSoon();
+      if (before.on !== d.on || before.error !== d.error || before.quiet !== d.quiet || before.lost !== d.lost) healthSoon();
       if (d.key === "mic" && (d.quiet || "") !== (before.quiet || "") && S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
       if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000, "error");
     },
@@ -2097,6 +2146,13 @@
         const slot = document.querySelector(".wz-result");
         if (slot) slot.innerHTML = `<div class="msg me" style="max-width:100%;align-items:flex-start"><div class="bubble">${bubbleHTML(m).replace(/<div class="actions">.*?<\/div>/, "")}</div></div>`;
       }
+    },
+    partial: (d) => {      // 譯文邊翻邊來：只換那一行字，不重畫整則
+      const m = S.messages.find((x) => x.id === d.id);
+      if (!m || !m.pending) return;
+      m.partial = d.text;
+      const el = $("part-" + d.id);
+      if (el) { el.textContent = d.text; el.className = "text streaming"; }
     },
     message_removed: (d) => {
       S.messages = S.messages.filter((x) => x.id !== d.id);
@@ -2131,6 +2187,16 @@
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
+    speakers: (d) => {      // 分辨說話者：模型的狀態、多了一個人、有人改了名字
+      const before = S.speakers || {};
+      S.speakers = d;
+      const percent = $("spk-percent");
+      if (percent && d.state === "downloading" && before.state === "downloading") { percent.textContent = t("spk_downloading", { mb: d.mb, percent: d.percent || 0 }); return; }
+      const typing = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.speaker;      // 正在打名字：不要重畫把字洗掉
+      if (S.view === "settings" && S.ui.tab === "audio" && !S.ui.live && !typing) renderSettingsPage();
+      const sign = (x) => JSON.stringify([x.on, x.run, (x.people || []).map((p) => [p.id, p.name])]);
+      if (sign(before) !== sign(d)) renderMessages();
+    },
     speech_gpu: (d) => {
       const before = S.speechGpu || {};
       S.speechGpu = d;
@@ -2199,7 +2265,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
-    S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
+    S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.update = st.update || {};
     if (st.updated_from) {      // 剛自動更新（或退回）完第一次開：說一次

@@ -10,7 +10,7 @@ IS_WIN = sys.platform == "win32"
 
 
 def data_dir() -> Path:
-    """設定、詞彙表、模型、翻譯引擎、紀錄檔。卸載時整個資料夾會一起刪掉。"""
+    """設定、詞彙表、模型、翻譯引擎、紀錄檔。卸載時會問要不要把設定、詞彙表、歷史留下來；模型和引擎一律刪掉。"""
     if os.environ.get("LIVELINGO_DATA"):
         p = Path(os.environ["LIVELINGO_DATA"])
     elif IS_WIN:

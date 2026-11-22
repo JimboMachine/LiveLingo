@@ -228,11 +228,22 @@ input::placeholder { color: var(--faint); }
 .msg { display: flex; flex-direction: column; gap: 4px; max-width: 88%; }
 .msg .meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
 .msg .meta .took { color: var(--faint); }
+.spk-dot { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 50%; background: #C494FF; box-shadow: 0 0 0 1px var(--line); }
+.spk-c1 { background: #7CE38B; } .spk-c2 { background: #FF8FB3; } .spk-c3 { background: #7FA8FF; } .spk-c4 { background: #F2E36B; } .spk-c5 { background: #FF8A73; }
+.msg .meta .spk { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.msg .meta .spk:hover { text-decoration: underline; }
+.spk-row label { display: flex; align-items: center; gap: 8px; }
+.spk-row input { flex: 0 1 220px; min-width: 120px; }
 .msg .meta svg { width: 13px; height: 13px; }
 .msg .bubble { background: var(--surface-2); border-radius: 4px 14px 14px 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
 .msg .orig { font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
 .msg .text { font-size: 17px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
 .msg .text.pending { color: var(--dim); font-size: 14px; font-weight: 400; }
+.msg .orig.hearing::after { content: " …"; opacity: 0.7; }
+.msg .text.streaming { opacity: 0.72; }
+.msg .text.streaming::after { content: "▍"; margin-left: 2px; opacity: 0.6; animation: caret 1s steps(2) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .msg .text.streaming::after { animation: none; } }
 .msg .text.failed { color: var(--danger); font-size: 13px; font-weight: 400; }
 .msg .pron, .msg .copied { font-size: 12px; color: var(--me-dim); }
 .msg .back { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--dim); animation: view-in 0.18s ease-out; }
@@ -244,6 +255,8 @@ input::placeholder { color: var(--faint); }
 .pack[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .pack[aria-pressed="true"] .name svg { opacity: 1; color: var(--accent); }
 .msg .unsure { display: inline-flex; align-items: center; gap: 5px; margin: 2px 0 4px; padding: 2px 8px 2px 6px; border: 1px solid var(--me-line); border-radius: 10px; background: var(--me-bg); color: var(--me); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.msg .lost { display: flex; align-items: flex-start; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--me); }
+.msg .lost svg { flex: none; width: 13px; height: 13px; margin-top: 2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .msg .unsure svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .msg .back svg { flex: none; margin-top: 3px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .msg .copied { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 2px; }

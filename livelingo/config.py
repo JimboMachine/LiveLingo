@@ -34,6 +34,9 @@ DEFAULTS = {
     "speech_device": "cpu",      # 語音辨識用 cpu 處理器 / gpu 顯示卡（要另外下載 cuDNN，不行會自動退回處理器）
     "speech_mode": "fast",       # 語音辨識：fast 比較快 / accurate 比較準（慢大約一倍）
     "drop_echo": True,           # 麥克風收到喇叭播出來的對方聲音時，不要當成我說的話
+    "live_captions": True,       # 即時字幕：對方還在說，就先把目前聽到的顯示出來、先翻（整句說完再換成正式的）
+    "remember_speakers": False,      # 記住取過名字的說話者：名字和聲紋存在這台電腦上（voices.json），下次開就認得。關掉會把存的刪掉
+    "tell_speakers": False,      # 分辨不同的說話者（好幾個人在同一個語音頻道時，照聲音分成說話者 1、2、3）；第一次打開會下載一個小模型
     "ptt": False,                # 按住才說話：只有按著 ptt_key 的時候麥克風才收音
     "ptt_key": "F8",             # oswin.PTT_KEYS 裡的一個
     "region": None,              # 舊版只有一個聊天區的時候用的；開程式時會搬進 regions，之後都是 None
@@ -45,6 +48,7 @@ DEFAULTS = {
     "on_top": True,
     "show_pronunciation": True,  # 韓文下面顯示唸法
     "copy_spoken": True,         # 我用說的翻出來的句子也自動複製
+    "update_check": True,        # 開啟時檢查有沒有新版本（關掉的話，模型都下載好之後 LiveLingo 完全不連網路）
     "setup_done": False,
     "history_keep": True,        # 對話歷史存在這台電腦上（history.jsonl）；關掉就不再記新的
     "history_days": 30,          # 歷史保留幾天（history.DAYS：7、30、90，0 = 不限）
@@ -88,8 +92,8 @@ DEFAULTS = {
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
-            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep",
+            "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

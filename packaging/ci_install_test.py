@@ -4,7 +4,8 @@
   2. 裝好的程式自我檢查通過（視窗開得起來）
   3. 更新：假裝 GitHub 上有 99.0.0，程式會先問（問的時候帶著這一版改了什麼、要下載多大）；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
   3c. 回上一版：用留著的安裝檔退一次（核對雜湊、自己關掉、安靜地裝、再打開）
-  4. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
+  4a. 卸載時選擇留下設定（/KEEPDATA=1）：程式、捷徑、模型、引擎都刪掉，設定和詞彙表留著，之後再裝一次
+  4b. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
 """
 
@@ -12,7 +13,6 @@ import ctypes
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -157,7 +157,8 @@ class Release(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         base = f"http://127.0.0.1:{self.server.server_address[1]}"
-        body = json.dumps({"tag_name": "v99.0.0", "assets": [
+        tag = "v0.9.0" if "/tags/" in self.path else "v99.0.0"      # /tags/…：回上一版時查的那一版；其他：最新版
+        body = json.dumps({"tag_name": tag, "assets": [
             {"name": "LiveLingo-Setup.exe", "size": SETUP.stat().st_size, "digest": "sha256:" + digest,
              "browser_download_url": f"{base}/LiveLingo-Setup.exe"},
             {"name": "changes.json", "size": 100, "browser_download_url": f"{base}/changes.json"}]}).encode()
@@ -254,19 +255,22 @@ req = urllib.request.Request(f"{base}/api/quit?t={run_info['token']}", data=b"{}
 urllib.request.urlopen(req, timeout=20)
 wait_for("the app to quit when asked", lambda: not running(), 60)
 print("app log:\n" + ((data / "app.log").read_text(encoding="utf-8", errors="replace")[-2000:] if (data / "app.log").exists() else "(empty)"))
-httpd.shutdown()
 
-# 3c. 回上一版：用留著的安裝檔，裝好自己重新開啟。這裡留著的其實是同一版的安裝檔（手上只有這一個），
-#     看的是整條路走不走得通：核對雜湊、程式自己關掉、安靜地裝、再打開、記下不要再問的版本
-step("roll back with the kept installer")
-kept = data / "update" / "LiveLingo-Setup-0.9.0.exe"
-kept.parent.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(SETUP, kept)
-(data / "update.json").write_text(json.dumps({"version": state["version"], "at": time.time(), "from": "0.9.0",
-                                              "from_sha256": digest, "told": True}), encoding="utf-8")
+# 3c. 回上一版：重新下載上一版的安裝檔（用過的安裝檔不留著），裝好自己重新開啟。下載到的其實是同一版的安裝檔
+#     （手上只有這一個），看的是整條路走不走得通：查那一版、下載、核對雜湊、程式自己關掉、安靜地裝、再打開、
+#     記下不要再問的版本。順便看用過的安裝檔有沒有被刪掉：一開程式就刪舊的，剛跑完的那一個等安裝程式結束再刪。
+step("roll back by downloading the previous installer; used installers are removed")
+used = data / "update" / "LiveLingo-Setup-0.9.0.exe"       # 回上一版時會下載成這個名字
+stale = data / "update" / "LiveLingo-Setup-0.0.9.exe"      # 假裝是更早以前留下來的
+stale.parent.mkdir(parents=True, exist_ok=True)
+stale.write_bytes(b"x" * 4096)
+(data / "update.json").write_text(json.dumps({"version": state["version"], "at": time.time(), "from": "0.9.0", "told": True}),
+                                  encoding="utf-8")
 (data / "run.json").unlink(missing_ok=True)
+Release.hits.clear()
 env_back = {k: v for k, v in env.items() if k != "LIVELINGO_UPDATE_API"}
-env_back.update(LIVELINGO_NO_UPDATE="1", LIVELINGO_ROLLBACK_FLOOR="0.0.1")
+env_back.update(LIVELINGO_NO_UPDATE="1", LIVELINGO_ROLLBACK_FLOOR="0.0.1",
+                LIVELINGO_RELEASE_API=f"http://127.0.0.1:{httpd.server_address[1]}/tags/v{{version}}")
 third = subprocess.Popen([str(APP)], env=env_back)
 print("started pid", third.pid)
 
@@ -282,8 +286,10 @@ def settled():
 run = wait_for("the app to be ready for rolling back", settled, 240)
 offered = api(run, "/api/state")["update"]
 print("roll back offered:", offered)
-if not offered.get("previous") or offered["previous"].get("version") != "0.9.0" or not offered["previous"].get("kept"):
-    fail("the kept installer of the previous version was not recognised")
+if not offered.get("previous") or offered["previous"].get("version") != "0.9.0":
+    fail("rolling back to the previous version was not offered")
+if stale.exists():
+    fail("an old installer was still in the update folder after the app started")
 answer = api(run, "/api/update", {"rollback": True})
 print("roll back answer:", answer)
 if not answer.get("ok"):
@@ -299,11 +305,59 @@ if record.get("version") != "0.9.0" or record.get("skip") != state["version"] or
 pids = wait_for("the installer to reopen the app after rolling back", lambda: [p for p in running() if p != third.pid], 600)
 run = wait_for("the reopened app to answer", settled, 240)
 print("reopened after roll back, pid", pids, "phase", api(run, "/api/state")["phase"])
+if "/tags/v0.9.0" not in Release.hits or len([h for h in Release.hits if h.endswith(".exe")]) != 1:
+    fail(f"the previous installer was not downloaded exactly once: {Release.hits}")
+wait_for("the used installer to be removed once the installer has finished", lambda: not used.exists(), 150)
+print("used installer removed; update folder now holds:", sorted(p.name for p in used.parent.iterdir()))
+httpd.shutdown()
 api(run, "/api/quit", {})
 wait_for("the app to quit after the roll back check", lambda: not running(), 60)
 
-# ---------------------------------------------------------------- 4. 卸載
-step("uninstall")
+# ---------------------------------------------------------------- 4a. 卸載，但把自己的設定留下來
+step("uninstall, keeping settings and history")
+DATA.mkdir(parents=True, exist_ok=True)
+for name in ("models", "engine", "update", "webview"):
+    (DATA / name).mkdir(exist_ok=True)
+    (DATA / name / "big-file.bin").write_bytes(b"x" * 1000)
+(DATA / "glossary-kept-by-test.json").write_text("{}", encoding="utf-8")
+KEPT_OTHER = Path(tempfile.mkdtemp(prefix="ll-other-drive-"))
+KEPT_MOVED = KEPT_OTHER / "LiveLingo"
+(KEPT_MOVED / "models").mkdir(parents=True)
+(KEPT_MOVED / "models" / "moved-model.bin").write_bytes(b"x" * 1000)
+(KEPT_MOVED / ".livelingo-files").write_text("LiveLingo\n", encoding="utf-8")
+saved = json.loads((DATA / "config.json").read_text(encoding="utf-8")) if (DATA / "config.json").exists() else {}
+saved.update(store_dir=str(KEPT_MOVED), my_lang="zh-TW")
+(DATA / "config.json").write_text(json.dumps(saved), encoding="utf-8")
+code = subprocess.run([str(APP_DIR / "unins000.exe"), *SILENT, "/KEEPDATA=1"], timeout=600).returncode
+print("uninstaller exit code", code)
+wait_for("the program folder to be removed", lambda: not APP.exists() and not (APP_DIR / "_internal").exists(), 180)
+# 資料夾是卸載的最後一步才刪的（程式檔刪完之後），所以要再等一下
+wait_for("the large files to be removed", lambda: not any((DATA / n).exists() for n in ("models", "engine", "update", "webview")), 120)
+for path in (DESKTOP, START, KEPT_MOVED, DATA / "models", DATA / "engine", DATA / "update", DATA / "webview"):
+    print(f"{path}: {'still there' if path.exists() else 'removed'}")
+    if path.exists():
+        fail(f"{path} was left behind after uninstalling")
+for path in (DATA / "config.json", DATA / "glossary-kept-by-test.json"):
+    print(f"{path}: {'kept' if path.exists() else 'GONE'}")
+    if not path.exists():
+        fail(f"{path} was removed although the user asked to keep their data")
+kept = json.loads((DATA / "config.json").read_text(encoding="utf-8"))
+if kept.get("my_lang") != "zh-TW" or kept.get("store_dir"):
+    fail(f"the kept settings are wrong: my_lang={kept.get('my_lang')!r} store_dir={kept.get('store_dir')!r}")
+if registered():
+    fail("the uninstall entry is still in the registry")
+print("program and large files removed; settings kept and no longer pointing at the removed folder")
+
+step("install again over the kept settings")
+code = subprocess.run([str(SETUP), *SILENT, f"/LOG={log}"], timeout=900).returncode
+if code != 0 or not APP.exists() or not registered():
+    print(log.read_text(errors="replace")[-4000:] if log.exists() else "(no log)")
+    fail(f"installing again failed (exit code {code})")
+if running():
+    fail("the app was started by a plain silent install")
+
+# ---------------------------------------------------------------- 4b. 卸載，全部刪掉
+step("uninstall, removing everything")
 DATA.mkdir(parents=True, exist_ok=True)
 (DATA / "models").mkdir(exist_ok=True)
 (DATA / "models" / "fake-model.bin").write_bytes(b"x" * 1000)
@@ -322,6 +376,7 @@ saved["store_dir"] = str(MOVED)
 code = subprocess.run([str(APP_DIR / "unins000.exe"), *SILENT], timeout=600).returncode
 print("uninstaller exit code", code)
 wait_for("the program folder to be removed", lambda: not APP.exists() and not (APP_DIR / "_internal").exists(), 180)
+wait_for("the data folder to be removed", lambda: not DATA.exists(), 120)
 for path in (DESKTOP, START, DATA, MOVED):
     print(f"{path}: {'still there' if path.exists() else 'removed'}")
     if path.exists():

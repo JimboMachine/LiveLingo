@@ -4,7 +4,7 @@ import threading
 import time
 from pathlib import Path
 
-from .chatpaint import NAMES
+from .chatpaint import NAMES, speaker_name
 
 TITLES = {
     "zh-TW": "字幕記錄", "zh-CN": "字幕记录", "en": "Subtitle log", "ko": "자막 기록", "ja": "字幕の記録",
@@ -28,6 +28,8 @@ def render(items: list[dict], ui_lang: str, started: float, ended: float, with_o
              f"{day} ~ {time.strftime('%H:%M', time.localtime(ended))}", ""]
     for it in items:
         who = names["me"] if it["who"] == "me" else names["screen" if it["via"] == "screen" else "heard"]
+        if it.get("speaker") and it["who"] != "me":      # 有分出是誰說的：寫那個人的名字
+            who = speaker_name(it["speaker"], ui_lang, it.get("voice") or "")
         stamp = time.strftime("%H:%M:%S", time.localtime(it["at"]))
         original, translated = it["original"].strip(), (it.get("translated") or "").strip()
         same = not translated or translated == original
@@ -65,7 +67,22 @@ class Transcript:
             self._items[msg["id"]] = {"who": msg["who"], "via": msg["via"], "original": msg["original"],
                                       "translated": "" if msg.get("error") else msg.get("translated", ""),
                                       "pending": bool(msg.get("pending")),
-                                      "at": old["at"] if old else time.time()}
+                                      "at": old["at"] if old else time.time(),
+                                      # 分辨說話者：第幾個人、使用者幫他取的名字（只寫進使用者自己要存的這個檔）
+                                      "speaker": int(msg.get("speaker") or 0), "voice": str(msg.get("voice") or "")}
+
+    def name_speaker(self, speaker: int, name: str) -> None:
+        """使用者幫第幾個說話者改了名字：已經記下來的句子也跟著改。"""
+        with self._lock:
+            for it in self._items.values():
+                if it.get("speaker") == speaker:
+                    it["voice"] = name
+
+    def forget_speakers(self) -> None:
+        """按了「全部重新分辨」：之前的編號不算數了，已經記下來的句子不再寫是誰（不然新的 1 號和舊的 1 號會混在一起）。"""
+        with self._lock:
+            for it in self._items.values():
+                it["speaker"], it["voice"] = 0, ""
 
     def drop(self, msg_id: int) -> None:
         with self._lock:
