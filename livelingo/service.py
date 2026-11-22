@@ -15,7 +15,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, chatpaint, gpu, oswin, updater
+from . import __version__, apps, assets, chatpaint, gpu, oswin, storage, updater
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -42,8 +42,8 @@ VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也�
 VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
-# 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著。匯出、匯入、恢復預設都不碰
-SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "region", "sources")
+# 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
+SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "region", "sources", "store_dir", "store_leftover")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
 RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir")
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64)}
@@ -132,6 +132,10 @@ class Service:
         self.hub = hub or EventHub()
         self.cfg = Config(data)
         self.cfg.on_fail = lambda error: self.notice("save_failed", error=error)      # 設定檔寫不進去要讓使用者知道
+        self.store = storage.store_dir(data, self.cfg["store_dir"])      # 大檔案（模型、翻譯引擎）放的地方，可以搬到別的磁碟
+        self._move: dict | None = None      # 正在搬大檔案：{"to", "done", "total"}
+        self._move_cancel = threading.Event()
+        self._move_lock = threading.Lock()
         self.glossary = Glossary(data)
         self.lessons = Lessons(data)      # 使用者教過的整句翻法
         self.terms = TermPack(self.cfg["term_packs"])
@@ -271,6 +275,7 @@ class Service:
                 return
             self.overlay.apply()
             self.start_hotkeys()
+            self._storage_cleanup()
             self.gpu = gpu.detect()
             self._speech_engine()      # 先把「語音辨識用顯示卡」現在的狀態算好，介面才知道要不要顯示下載
             self._prepare()
@@ -348,7 +353,7 @@ class Service:
         self.mode = gpu.choose_mode("standard" if self.fallback else self.cfg["quality"], self.gpu)
         if self.fallback:
             self.mode = {"model": "4b", "engine": "cpu", "quality": "standard"}
-        need = assets.missing(self.data, self.mode)
+        need = assets.missing(self.store, self.mode)
         if need:
             self.set_phase("need_download", items=need, total_mb=sum(i["mb"] for i in need))
             return
@@ -357,20 +362,23 @@ class Service:
     def start_download(self) -> None:
         if self.phase != "need_download":
             return
-        items = self.detail.get("items") or assets.missing(self.data, self.mode)
+        if self._move:      # 大檔案正在搬：現在下載的話會下載到舊的位置，搬完就不見了
+            self.notice("store_busy")
+            return
+        items = self.detail.get("items") or assets.missing(self.store, self.mode)
         self._download_cancel.clear()
         self.set_phase("downloading", key=items[0]["key"], done_mb=0, total_mb=sum(i["mb"] for i in items),
                        index=0, count=len(items))
 
         def work():
             try:
-                assets.download_all(self.data, items, lambda p: self.set_phase("downloading", **p),
+                assets.download_all(self.store, items, lambda p: self.set_phase("downloading", **p),
                                     self._download_cancel.is_set)
                 self._start_engine()
             except Exception as ex:  # noqa: BLE001
                 self.log(traceback.format_exc())
-                self.set_phase("need_download", items=assets.missing(self.data, self.mode),
-                               total_mb=sum(i["mb"] for i in assets.missing(self.data, self.mode)),
+                self.set_phase("need_download", items=assets.missing(self.store, self.mode),
+                               total_mb=sum(i["mb"] for i in assets.missing(self.store, self.mode)),
                                error=str(ex))
 
         threading.Thread(target=work, daemon=True, name="download").start()
@@ -381,8 +389,8 @@ class Service:
             self.engine.stop()
         gpu_mode = self.mode["engine"] == "cuda"
         self.engine = Engine(
-            exe=assets.find_server(assets.engine_dir(self.data, self.mode["engine"])),
-            model=assets.model_path(self.data, self.mode["model"]),
+            exe=assets.find_server(assets.engine_dir(self.store, self.mode["engine"])),
+            model=assets.model_path(self.store, self.mode["model"]),
             log_path=self.data / "engine.log", threads=int(self.cfg["threads"]),
             gpu_layers=99 if gpu_mode else 0)
         self.translator.url = self.engine.url
@@ -997,6 +1005,119 @@ class Service:
         self.hub.publish("history", state)
         return {"ok": not state["error"], "removed": removed, "error": state["error"]}
 
+    # ------------------------------------------------------------------ 儲存空間
+
+    def _storage_used(self) -> dict:
+        """現在要用到哪些大檔案（這些不能刪）：正在用的，加上設定本來要用的（暫時退回標準模式時，高品質的模型還是要留著）。"""
+        modes = [m for m in (self.mode, gpu.choose_mode(self.cfg["quality"], self.gpu) if self.gpu else None) if m]
+        speech_gpu = self.cfg["speech_device"] == "gpu"      # 語音辨識用顯示卡：要 cuDNN，也要顯示卡版引擎帶來的 CUDA 檔案
+        return {"models": {m["model"] for m in modes}, "engines": {m["engine"] for m in modes} | ({"cuda"} if speech_gpu else set()),
+                "cudnn": speech_gpu, "updating": self.phase == "updating"}
+
+    def storage_state(self) -> dict:
+        """大小都是位元組。lost：設定裡記的資料夾找不到了（外接硬碟沒插？），暫時用回原本的位置。"""
+        rows = storage.items(self.data, self.store, self._storage_used())
+        saved = self.cfg["store_dir"]
+        return {"folder": str(self.store), "default": str(self.data), "moved": self.store != self.data,
+                "lost": saved if saved and self.store == self.data else "",
+                "free": storage.free_bytes(self.store), "total": sum(r["bytes"] for r in rows), "items": rows,
+                "moving": dict(self._move) if self._move else None,
+                "can_pick": bool(self.window and hasattr(self.window, "choose_folder"))}
+
+    def _storage_changed(self) -> None:
+        self.hub.publish("storage", self.storage_state())
+
+    def storage_choose(self) -> dict:
+        """用 Windows 的視窗選要搬去哪個資料夾，選好就開始搬。"""
+        if not self.window or not hasattr(self.window, "choose_folder"):
+            return {"ok": False, "error": "store_no_window"}
+        picked = self.window.choose_folder("")
+        return self.storage_move(picked) if picked else {"ok": False, "error": ""}
+
+    def storage_move(self, folder: str = "", back: bool = False) -> dict:
+        """把大檔案搬到 folder 裡的 LiveLingo 資料夾（back：搬回原本的位置）。
+        先複製，全部複製好才換過去、再刪舊的，所以搬的時候照常可以用，中途取消或失敗也不會少東西。"""
+        with self._move_lock:
+            if self._move or self.phase not in ("ready", "need_download", "error"):
+                return {"ok": False, "error": "store_busy"}
+            folder = str(folder or "").strip()
+            if not back and not (folder and Path(folder).is_absolute()):
+                return {"ok": False, "error": "store_not_writable"}
+            target = self.data if back else storage.target_for(Path(folder))
+            error, more = storage.check_target(self.store, target)
+            if error:
+                return {"ok": False, "error": error, **more}
+            self._move_cancel.clear()
+            self._move = {"to": str(target), "done": 0, "total": 0}
+        threading.Thread(target=self._storage_move_work, args=(target,), daemon=True, name="storage-move").start()
+        self._storage_changed()
+        return {"ok": True, "to": str(target)}
+
+    def storage_cancel(self) -> dict:
+        self._move_cancel.set()
+        return {"ok": bool(self._move)}
+
+    def _storage_move_work(self, target: Path) -> None:
+        old, last = self.store, [0.0]
+
+        def progress(done: int, total: int) -> None:
+            self._move.update(done=done, total=total)
+            if time.time() - last[0] > 0.4:
+                last[0] = time.time()
+                self.hub.publish("storage_move", dict(self._move))
+
+        def stop(code: str, **more) -> None:
+            self._move = None
+            self._storage_changed()
+            self.notice(code, **more)
+
+        try:
+            storage.copy_parts(old, target, progress, self._move_cancel.is_set, mark=target != self.data)
+        except storage.Cancelled:
+            return stop("store_cancelled")
+        except Exception as ex:  # noqa: BLE001  磁碟滿了、隨身碟被拔掉…：複製到一半的已經清掉，原本的沒動
+            self.log(f"moving the large files to {target} failed: {ex!r}")
+            return stop("store_failed", error=str(ex))
+        if not self.cfg.set(store_dir="" if target == self.data else str(target)):      # 新位置記不下來：當作沒搬
+            if target != self.data:
+                storage.remove_parts(target)
+            return stop("store_failed", error="config")
+        self.store = target
+        self.log(f"large files moved from {old} to {target}")
+        if self.phase == "ready":      # 翻譯引擎還開著舊位置的模型：重開，換成讀新位置（幾秒鐘）
+            self._start_engine()
+        left = storage.remove_parts(old)      # 還開著的檔案（Windows 上刪不掉）留到下次開程式再刪
+        self.cfg.set(store_leftover=[str(old)] if left else [])
+        stop("store_moved_later" if left else "store_moved", folder=str(target))
+
+    def _storage_cleanup(self) -> None:
+        """上次搬完刪不掉的舊檔案（那時候還開著），現在刪。只碰有記號檔的資料夾，或原本的資料夾。"""
+        left = []
+        for name in self.cfg["store_leftover"] or []:
+            p = Path(str(name))
+            if p == self.store or not (p == self.data or (p / storage.MARK).exists()):
+                continue
+            if storage.remove_parts(p):
+                left.append(str(p))
+        if left != list(self.cfg["store_leftover"] or []):
+            self.cfg.set(store_leftover=left)
+
+    def storage_remove(self, item_id: str) -> dict:
+        """刪掉一樣沒在用的東西（另一個品質的模型、另一種引擎、下載過的更新檔、沒下載完的檔案）。"""
+        if self._move or self.phase in ("downloading", "loading"):
+            return {"ok": False, "error": "store_busy"}
+        row = next((r for r in storage.items(self.data, self.store, self._storage_used()) if r["id"] == item_id), None)
+        if not row or not row["removable"]:
+            return {"ok": False, "error": "store_in_use"}
+        ok = storage.remove_item(self.data, self.store, item_id)
+        self.log(f"storage: removed {item_id} ({row['bytes']} bytes), clean={ok}")
+        self._storage_changed()
+        return {"ok": ok, "freed": row["bytes"], "error": "" if ok else "store_remove_failed"}
+
+    def storage_open(self) -> dict:
+        oswin.open_path(self.store)
+        return {"ok": True}
+
     # ------------------------------------------------------------------ 全域快速鍵、快速輸入框
 
     def hotkeys_state(self) -> dict:
@@ -1307,7 +1428,7 @@ class Service:
 
         family = LANGS[self.cfg["their_lang"]]["family"]
         if self.ocr is None or self.ocr.family != family:
-            self.ocr = OcrEngine(self.data / "models" / "ocr", scale=float(self.cfg["ocr_scale"]), family=family)
+            self.ocr = OcrEngine(self.store / "models" / "ocr", scale=float(self.cfg["ocr_scale"]), family=family)
         return self.ocr
 
     def _regions_on(self) -> list[dict]:
@@ -1553,7 +1674,7 @@ class Service:
             from .core.speech import Recognizer, SpeechPipeline
 
             if self.recognizer is None:
-                model_dir = self.data / "models" / "whisper"
+                model_dir = self.store / "models" / "whisper"
                 if not (model_dir / "model.bin").exists():
                     raise RuntimeError("the speech model is missing")
                 device, compute = self._speech_engine()
@@ -1631,8 +1752,8 @@ class Service:
 
     def _speech_gpu_files(self) -> list | None:
         """用顯示卡辨識需要的兩個資料夾（CUDA、cuDNN）；有缺就回傳 None。"""
-        runtime = assets.cuda_runtime_dir(self.data)
-        return [runtime, assets.cudnn_dir(self.data)] if runtime and assets.has_cudnn(self.data) else None
+        runtime = assets.cuda_runtime_dir(self.store)
+        return [runtime, assets.cudnn_dir(self.store)] if runtime and assets.has_cudnn(self.store) else None
 
     def _speech_engine(self) -> tuple[str, str]:
         """語音辨識現在該用什麼跑：（"cuda", "float16"）或（"cpu", "int8"）。順便更新給介面看的狀態。"""
@@ -1643,7 +1764,7 @@ class Service:
             return "cpu", "int8"
         folders = self._speech_gpu_files()
         if not folders:
-            if assets.has_cudnn(self.data):      # cuDNN 有了，缺的是顯示卡版翻譯引擎帶來的 CUDA 檔案：下載也沒用
+            if assets.has_cudnn(self.store):      # cuDNN 有了，缺的是顯示卡版翻譯引擎帶來的 CUDA 檔案：下載也沒用
                 self._speech_gpu(state="failed", active=False,
                                  error="the graphics card version of the translation engine is not installed")
             else:
@@ -1681,7 +1802,7 @@ class Service:
 
         def work():
             try:
-                assets.get_cudnn(self.data, lambda done, total: self._speech_gpu(
+                assets.get_cudnn(self.store, lambda done, total: self._speech_gpu(
                     percent=int(done * 100 / total) if total else 0), self._speech_gpu_cancel.is_set)
             except Exception as ex:  # noqa: BLE001
                 self.log(f"cuDNN download failed: {ex!r}")

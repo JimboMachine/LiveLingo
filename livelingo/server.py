@@ -103,6 +103,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.health())
+                if url.path == "/api/storage":      # 儲存空間：放在哪、每一樣佔多少、還剩多少
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.storage_state())
                 if url.path == "/api/history":      # 對話歷史：q 搜尋的字、offset 從第幾則開始、limit 幾則（最新的在前）
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -230,6 +234,20 @@ class Server:
                         if body.get("undo") or body.get("forget"):
                             return self._json(service.settings_undo(forget=bool(body.get("forget"))))
                         return self._json(service.settings_import(body.get("data")))
+                    if route == "/api/storage":      # 搬大檔案、取消、刪掉沒在用的、打開資料夾
+                        if body.get("choose"):      # 跳出選資料夾的視窗，會等使用者選完
+                            return self._json(service.storage_choose())
+                        if body.get("back"):
+                            return self._json(service.storage_move(back=True))
+                        if body.get("move"):
+                            return self._json(service.storage_move(str(body["move"])))
+                        if body.get("cancel"):
+                            return self._json(service.storage_cancel())
+                        if body.get("remove"):
+                            return self._json(service.storage_remove(str(body["remove"])))
+                        if body.get("open"):
+                            return self._json(service.storage_open())
+                        return self._json({"ok": False})
                     if route == "/api/history":
                         if body.get("clear"):
                             return self._json(service.history_clear())

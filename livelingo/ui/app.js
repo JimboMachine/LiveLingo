@@ -124,6 +124,7 @@
     chat: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h3M10 7h10M4 12h3M10 12h7M4 17h3M10 17h9"/></svg>',
     swap: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>',
     bubble: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>',
+    disk: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>',
     shield: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   };
   const MARK = window.BRAND.mark;      // 品牌標誌和名字都在 brand.js
@@ -574,6 +575,7 @@
     if (S.ui.tab === "overlay") loadScreens();
     if (S.ui.tab === "history") { S.ui.hist = null; loadHistory(); }
     if (S.ui.tab === "health") loadHealth();
+    if (S.ui.tab === "storage") { S.ui.storeAsk = ""; loadStorage(); }
   }
 
   async function loadApps() {
@@ -588,7 +590,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["health", "nav_health", "shield"], ["about", "nav_about", "info"]];
+  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
@@ -960,6 +962,53 @@
         ${rows}
       </section>`;
   }
+  // 儲存空間：大檔案放在哪、各佔多少、搬到別的磁碟、刪掉沒在用的
+  function storagePage() {
+    const st = S.ui.storage;
+    const head = `<div><h2>${esc(t("sto_title"))}</h2><div class="sub">${esc(t("sto_hint"))}</div></div>`;
+    if (!st) return `<section>${head}<div class="hist-none">…</div></section>`;
+    const m = st.moving;
+    const moving = m ? `<div class="note" id="store-moving">${ICON.disk}<span class="store-progress"><span id="store-moving-text">${esc(t("sto_moving", { folder: m.to, done: sizeText(m.done), total: m.total ? sizeText(m.total) : "…" }))}</span>
+        <div class="bar"><span id="store-moving-bar" style="width:${m.total ? Math.round(100 * m.done / m.total) : 0}%"></span></div></span>
+        <button class="ghost" data-act="store-cancel">${esc(t("cancel"))}</button></div>` : "";
+    const lost = st.lost ? `<div class="note warn" id="store-lost">${ICON.info}<span>${esc(t("sto_lost", { folder: st.lost }))}</span></div>` : "";
+    const pick = st.can_pick ? `<button class="ghost" data-act="store-choose" ${m ? "disabled" : ""}>${esc(t("sto_move"))}</button>` : "";
+    const typed = st.can_pick ? "" : `<form class="btn-row" id="store-form"><input type="text" id="store-path" name="path" maxlength="240" placeholder="${esc(t("sto_path"))}" aria-label="${esc(t("sto_path"))}" ${m ? "disabled" : ""}>
+        <button class="ghost" type="submit" ${m ? "disabled" : ""}>${esc(t("sto_path_go"))}</button></form>`;
+    const rows = st.items.map((it) => {
+      const name = t("sto_i_" + it.id);
+      if (S.ui.storeAsk === it.id && it.removable) {
+        return `<div class="note warn" id="store-ask">${ICON.info}<span>${esc(t("sto_remove_ask", { name, size: sizeText(it.bytes) }))}</span>
+          <button class="danger" data-act="store-remove-yes" data-id="${it.id}">${esc(t("sto_remove"))}</button><button class="ghost" data-act="store-remove-no" data-id="${it.id}">${esc(t("cancel"))}</button></div>`;
+      }
+      return `<div class="setting-row store-row" id="store-${it.id}">
+        <div class="health-text"><div>${esc(name)}${it.id === "records" ? "" : ` <span class="store-state" data-used="${it.used}">${esc(t(it.used ? "sto_used" : "sto_unused"))}</span>`}</div>
+          <div class="desc">${esc(t("sto_d_" + it.id, { folder: st.default }))}</div></div>
+        <span class="store-size">${esc(sizeText(it.bytes))}</span>
+        ${it.removable ? `<button class="ghost" data-act="store-remove" data-id="${it.id}" ${m ? "disabled" : ""}>${esc(t("sto_remove"))}</button>` : ""}</div>`;
+    }).join("");
+    return `
+      <section>${head}${lost}
+        <div class="setting-row"><div class="health-text"><div>${esc(t("sto_where"))}</div><div class="desc path" id="store-folder">${esc(st.folder)}</div>
+          <div class="desc" id="store-total">${esc(t("sto_total", { size: sizeText(st.total) }))} · ${esc(t("sto_free", { size: sizeText(st.free) }))}</div></div></div>
+        ${moving}
+        <div class="btn-row" id="store-buttons"><button class="ghost" data-act="store-open">${esc(t("sto_open"))}</button>${pick}
+          ${st.moved ? `<button class="ghost" data-act="store-back" ${m ? "disabled" : ""}>${esc(t("sto_back"))}</button>` : ""}</div>
+        ${typed}
+        <div class="sub">${esc(t("sto_move_hint"))}</div>
+      </section>
+      <section><div><h2>${esc(t("sto_items"))}</h2></div>${rows}</section>`;
+  }
+  async function loadStorage() {
+    const r = await get("/api/storage");
+    if (!r || r.error) return;
+    S.ui.storage = r;
+    if (S.view === "settings" && S.ui.tab === "storage") renderSettingsPage();
+  }
+  function storeAnswer(r) {      // 搬、刪的要求被擋下來：說原因
+    if (r && !r.ok && r.error) toast(t("n_" + r.error, r), 8000, "warn");
+  }
+
   function settingsApplied(r, key) {      // 匯入、恢復預設、復原之後：說結果、記下還能不能復原、把畫面換成新的設定
     if (!r || !r.ok) { toast(t(r && r.error === "not_settings" ? "set_bad" : "n_save_failed", { error: "" }), 8000, "warn"); return; }
     S.settingsBackup = r.backup || null;
@@ -983,7 +1032,8 @@
   // 對話歷史：存在這台電腦上的句子。搜尋和「載入更多」只換清單那一塊，不重畫整頁（正在打的字不會被打斷）
   function sizeText(bytes) {
     const b = Number(bytes) || 0;
-    return b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(b ? 1 : 0, Math.round(b / 1024)) + " KB";
+    if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB";
+    return b >= 1048576 ? (b / 1048576).toFixed(b >= 104857600 ? 0 : 1) + " MB" : Math.max(b ? 1 : 0, Math.round(b / 1024)) + " KB";
   }
   function histListHTML() {
     const h = S.ui.hist;
@@ -1132,13 +1182,14 @@
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "history") page.innerHTML = historyPage();
     else if (S.ui.tab === "health") page.innerHTML = healthPage();
+    else if (S.ui.tab === "storage") page.innerHTML = storagePage();
     else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + voiceTuningHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
     else if (S.ui.tab === "about") page.innerHTML = aboutPage();
     else page.innerHTML = generalPage();
-    if (S.ui.tab !== "about" && S.ui.tab !== "health") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
+    if (S.ui.tab !== "about" && S.ui.tab !== "health" && S.ui.tab !== "storage") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
     typed.forEach(([id, value]) => { const el = $(id); if (el && value && !el.value) el.value = value; });
     page.scrollTop = scroll;
     const again = focus && page.querySelector(focus);
@@ -1490,6 +1541,19 @@
     },
     "set-undo": async () => settingsApplied(await post("/api/settings", { undo: true }), "set_undone"),
     "set-forget": async () => { const r = await post("/api/settings", { forget: true }); if (r && r.ok) S.settingsBackup = null; renderSettingsPage(); },
+    "store-open": () => post("/api/storage", { open: true }),
+    "store-choose": async () => storeAnswer(await post("/api/storage", { choose: true })),
+    "store-back": async () => storeAnswer(await post("/api/storage", { back: true })),
+    "store-cancel": () => post("/api/storage", { cancel: true }),
+    "store-remove": (el) => { S.ui.storeAsk = el.dataset.id; renderSettingsPage(); const b = document.querySelector('[data-act="store-remove-no"]'); if (b) b.focus(); },
+    "store-remove-no": (el) => { S.ui.storeAsk = ""; renderSettingsPage(); const b = document.querySelector(`[data-act="store-remove"][data-id="${el.dataset.id}"]`); if (b) b.focus(); },
+    "store-remove-yes": async (el) => {
+      const r = await post("/api/storage", { remove: el.dataset.id });
+      S.ui.storeAsk = "";
+      if (r && r.ok) toast(t("sto_removed", { size: sizeText(r.freed) }), 6000);
+      else storeAnswer(r);
+      await loadStorage();
+    },
     "health-again": async () => { await loadHealth(); const b = document.querySelector('[data-act="health-again"]'); if (b) b.focus(); },
     "hist-more": () => loadHistory(true),
     "hist-export": async () => {
@@ -1765,6 +1829,10 @@
       if (S.phase !== "ready") { toast(t("n_not_ready"), 4200, "warn"); return; }
       input.value = "";
       post("/api/send", { text });
+    } else if (form.id === "store-form") {      // 沒有視窗可以選資料夾的時候（用瀏覽器開）：直接打路徑
+      const path = form.elements.path.value.trim();
+      if (!path) { form.elements.path.focus(); return; }
+      storeAnswer(await post("/api/storage", { move: path }));
     } else if (form.id === "layout-form") {
       const name = form.elements.name.value.trim();
       if (!name) { toast(t("lay_need_name"), 4200, "warn"); form.elements.name.focus(); return; }
@@ -1798,6 +1866,7 @@
     });
     if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();      // 還在問「確定嗎」：Esc 就是不要
     if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();
+    if (S.ui.storeAsk && S.view === "settings") actions["store-remove-no"]({ dataset: { id: S.ui.storeAsk } });
   });
 
   // ---------------------------------------------------------------- 背景送來的事件
@@ -1895,6 +1964,13 @@
       if (S.view !== "settings" || S.ui.tab !== "history") return;
       clearTimeout(histTimer);
       histTimer = setTimeout(() => loadHistory(), 600);
+    },
+    storage: (d) => { S.ui.storage = d; if (S.view === "settings" && S.ui.tab === "storage") renderSettingsPage(); },
+    storage_move: (d) => {      // 搬的進度：只改數字和進度條，不重畫整頁
+      if (S.ui.storage) S.ui.storage.moving = d;
+      const text = $("store-moving-text"), bar = $("store-moving-bar");
+      if (text) text.textContent = t("sto_moving", { folder: d.to, done: sizeText(d.done), total: d.total ? sizeText(d.total) : "…" });
+      if (bar) bar.style.width = (d.total ? Math.round(100 * d.done / d.total) : 0) + "%";
     },
     hotkeys: (d) => { healthSoon(); S.hotkeys = d; if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage(); },
     saved: (d) => flashSaved(d.what === "region" && d.id ? "#region-" + d.id : d.what),

@@ -3,7 +3,7 @@
   1. 安靜安裝後程式在、桌面和開始功能表捷徑在、「新增或移除程式」裡有登記
   2. 裝好的程式自我檢查通過（視窗開得起來）
   3. 更新：假裝 GitHub 上有 99.0.0，程式會先問；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
-  4. 卸載後程式、捷徑、資料都清乾淨
+  4. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
 """
 
@@ -243,13 +243,28 @@ step("uninstall")
 DATA.mkdir(parents=True, exist_ok=True)
 (DATA / "models").mkdir(exist_ok=True)
 (DATA / "models" / "fake-model.bin").write_bytes(b"x" * 1000)
+# 大檔案搬到別的地方的情況：那邊的也要刪掉，但是同一個資料夾裡別人的東西不能動
+OTHER = Path(tempfile.mkdtemp(prefix="ll-other-drive-"))
+MOVED = OTHER / "LiveLingo"
+(MOVED / "models").mkdir(parents=True)
+(MOVED / "engine" / "cpu").mkdir(parents=True)
+(MOVED / "models" / "moved-model.bin").write_bytes(b"x" * 1000)
+(MOVED / "engine" / "cpu" / "moved-engine.dll").write_bytes(b"x" * 1000)
+(MOVED / ".livelingo-files").write_text("LiveLingo\n", encoding="utf-8")
+(OTHER / "not-ours.txt").write_text("someone else's file\n", encoding="utf-8")
+saved = json.loads((DATA / "config.json").read_text(encoding="utf-8")) if (DATA / "config.json").exists() else {}
+saved["store_dir"] = str(MOVED)
+(DATA / "config.json").write_text(json.dumps(saved), encoding="utf-8")
 code = subprocess.run([str(APP_DIR / "unins000.exe"), *SILENT], timeout=600).returncode
 print("uninstaller exit code", code)
 wait_for("the program folder to be removed", lambda: not APP.exists() and not (APP_DIR / "_internal").exists(), 180)
-for path in (DESKTOP, START, DATA):
+for path in (DESKTOP, START, DATA, MOVED):
     print(f"{path}: {'still there' if path.exists() else 'removed'}")
     if path.exists():
         fail(f"{path} was left behind after uninstalling")
+if not (OTHER / "not-ours.txt").exists():
+    fail("uninstalling removed a file that is not LiveLingo's")
+print("moved large files removed; the neighbouring file was left alone")
 if registered():
     fail("the uninstall entry is still in the registry")
 print("\nALL INSTALL / UPDATE / UNINSTALL CHECKS PASSED", flush=True)

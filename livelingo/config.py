@@ -48,6 +48,8 @@ DEFAULTS = {
     "setup_done": False,
     "history_keep": True,        # 對話歷史存在這台電腦上（history.jsonl）；關掉就不再記新的
     "history_days": 30,          # 歷史保留幾天（history.DAYS：7、30、90，0 = 不限）
+    "store_dir": "",             # 大檔案（模型、翻譯引擎）搬到哪個資料夾；空的 = 跟設定放一起（storage.py）
+    "store_leftover": [],        # 搬完之後還刪不掉的舊資料夾（當時檔案還開著），下次開程式再刪
     # 全域快速鍵（hotkeys.ACTIONS）：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框。空字串 = 不用
     "hotkeys": {"overlay": "Ctrl+Alt+S", "mic": "Ctrl+Alt+M", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Alt+T"},
     "window": {"w": 980, "h": 720, "x": None, "y": None},

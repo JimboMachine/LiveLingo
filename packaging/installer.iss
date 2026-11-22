@@ -73,6 +73,10 @@ Filename: "{app}\LiveLingo.exe"; Description: "{cm:LaunchProgram,LiveLingo}"; Fl
 ; 自動更新時（安靜模式）裝完直接把 LiveLingo 再打開
 Filename: "{app}\LiveLingo.exe"; Flags: nowait; Check: IsUpdate
 
+[UninstallRun]
+; 大檔案（模型、翻譯引擎）搬到別的磁碟的話，那邊的也一起刪。只刪有 LiveLingo 記號檔的資料夾，不會動到別的東西
+Filename: "{app}\LiveLingo.exe"; Parameters: "--remove-store"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveMovedFiles"
+
 [UninstallDelete]
 ; 卸載時連下載的模型、設定和紀錄一起刪乾淨
 Type: filesandordirs; Name: "{localappdata}\LiveLingo"

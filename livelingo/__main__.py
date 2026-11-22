@@ -28,6 +28,19 @@ def main() -> int:
 
         ask(Path(_arg("--quick-input")), _arg("--lang", "zh-TW"))
         return 0
+    if "--remove-store" in sys.argv:      # 卸載程式叫的：大檔案搬到別的磁碟的話，那邊的也刪掉（只刪有記號檔的資料夾）
+        import json
+
+        from . import storage
+        from .paths import data_dir
+
+        data = data_dir()
+        try:
+            saved = json.loads((data / "config.json").read_text(encoding="utf-8")).get("store_dir") or ""
+        except (OSError, ValueError):
+            saved = ""
+        storage.remove_moved(data, str(saved))
+        return 0
     if "--selftest" in sys.argv:
         from .selftest import run as selftest
 

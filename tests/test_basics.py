@@ -2685,3 +2685,202 @@ def test_keyboard_only_paths():
     assert 'if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();' in js
     assert 'if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();' in js
     assert "/^[1-9]$/.test(e.key)" in js
+
+
+def test_storage_sizes_move_and_remove_unused(tmp_path, monkeypatch):
+    """第 45 項：大檔案放在哪、各佔多少、搬到別的資料夾、刪掉沒在用的。卸載時搬出去的也會刪，但只刪有記號的資料夾。"""
+    import json as _json
+    from pathlib import Path
+
+    from livelingo import assets, storage
+    from livelingo.config import DEFAULTS, EDITABLE
+    from livelingo.service import SETTINGS_SKIP, Service
+
+    assert DEFAULTS["store_dir"] == "" and DEFAULTS["store_leftover"] == []
+    assert not {"store_dir", "store_leftover"} & EDITABLE and {"store_dir", "store_leftover"} <= set(SETTINGS_SKIP)      # 介面不能直接改，匯出匯入也不帶
+
+    data = tmp_path / "data"
+    files = {"models/translategemma-4b.gguf": 5000, "models/translategemma-12b.gguf": 9000, "models/whisper/model.bin": 3000,
+             "models/ocr/det.onnx": 200, "engine/cpu/llama-server": 100, "engine/cuda/llama-server": 700, "engine/cuda/cublas64_12.dll": 300,
+             "engine/cudnn/cudnn64_9.dll": 400, "models/translategemma-12b.gguf.part": 50, "update/LiveLingo-Setup.exe": 800,
+             "app.log": 120}
+    for rel, size in files.items():
+        if size:
+            (data / rel).parent.mkdir(parents=True, exist_ok=True)
+            (data / rel).write_bytes(b"x" * size)
+
+    # 純函式
+    assert storage.store_dir(data, "") == data and storage.store_dir(data, str(tmp_path / "gone")) == data      # 記的資料夾不見了：回原本的
+    assert storage.target_for(tmp_path / "D" / "Games") == tmp_path / "D" / "Games" / "LiveLingo"
+    assert storage.target_for(tmp_path / "D" / "livelingo") == tmp_path / "D" / "livelingo"      # 選的就是空的 LiveLingo 資料夾
+    (tmp_path / "busy" / "LiveLingo").mkdir(parents=True)
+    (tmp_path / "busy" / "LiveLingo" / "save.dat").write_bytes(b"1")
+    assert storage.target_for(tmp_path / "busy" / "LiveLingo") == tmp_path / "busy" / "LiveLingo" / "LiveLingo"      # 同名但有別人的東西：再開一層
+    assert storage.size_bytes(data / "models") == 5000 + 9000 + 3000 + 200 + 50
+    assert storage.check_target(data, data)[0] == "store_same"
+    assert storage.check_target(data, data / "models" / "x" / "LiveLingo")[0] == "store_inside"
+    monkeypatch.setattr(storage, "free_bytes", lambda folder: 1000)
+    code, more = storage.check_target(data, tmp_path / "small" / "LiveLingo")
+    assert code == "store_no_space" and more["free"] == 0.0 and not (tmp_path / "small").exists()
+    monkeypatch.undo()
+
+    opened, notices = [], []
+    monkeypatch.setattr("livelingo.service.oswin.open_path", lambda p: opened.append(Path(p)))
+    service = Service(data)
+    service.notice = lambda code, **more: notices.append((code, more))
+    events = []
+    service.hub.publish = (lambda old: lambda kind, payload=None: (events.append((kind, payload)), old(kind, payload))[1])(service.hub.publish)
+    started = []
+    service._start_engine = lambda: started.append(service.store)
+    try:
+        assert service.store == data
+        service.phase = "ready"
+        st = service.storage_state()
+        rows = {r["id"]: r for r in st["items"]}
+        assert st["folder"] == str(data) and not st["moved"] and st["lost"] == "" and st["free"] > 0 and st["moving"] is None and st["can_pick"] is False
+        assert rows["model_4b"] == {"id": "model_4b", "bytes": 5000, "used": True, "removable": False}      # 現在用的（標準、不用顯示卡）
+        assert rows["model_12b"]["removable"] and rows["engine_cuda"]["removable"] and rows["cudnn"]["removable"]
+        assert rows["engine_cpu"]["used"] and rows["engine_cuda"]["bytes"] == 1000
+        assert rows["whisper"]["used"] and not rows["whisper"]["removable"] and not rows["ocr"]["removable"]
+        assert rows["partial"] == {"id": "partial", "bytes": 50, "used": False, "removable": True}
+        assert rows["updates"]["bytes"] == 800 and rows["updates"]["removable"]
+        assert rows["records"]["bytes"] >= 120 and not rows["records"]["removable"]
+        assert st["total"] == sum(r["bytes"] for r in st["items"])
+        # 語音辨識用顯示卡：cuDNN 和顯示卡版引擎就不能刪
+        service.cfg.set(speech_device="gpu")
+        rows = {r["id"]: r for r in service.storage_state()["items"]}
+        assert rows["cudnn"]["used"] and rows["engine_cuda"]["used"] and not rows["engine_cuda"]["removable"]
+        service.cfg.set(speech_device="cpu")
+        # 設定是高品質、這台也跑得動，只是暫時退回標準：兩個模型都要留
+        service.gpu = {"name": "RTX", "vram_mb": 16000, "tier": "high"}
+        service.cfg.set(quality="auto")
+        rows = {r["id"]: r for r in service.storage_state()["items"]}
+        assert rows["model_12b"]["used"] and rows["model_4b"]["used"]
+        service.gpu = {"name": None, "vram_mb": 0, "tier": "cpu"}
+
+        # 刪掉沒在用的；在用的刪不掉
+        assert service.storage_remove("model_4b") == {"ok": False, "error": "store_in_use"}
+        assert service.storage_remove("whisper")["error"] == "store_in_use" and service.storage_remove("records")["error"] == "store_in_use"
+        assert service.storage_remove("nothing")["error"] == "store_in_use"
+        assert (data / "models" / "translategemma-4b.gguf").exists() and (data / "models" / "whisper" / "model.bin").exists()
+        assert service.storage_remove("model_12b") == {"ok": True, "freed": 9000, "error": ""}
+        assert not (data / "models" / "translategemma-12b.gguf").exists() and (data / "models" / "translategemma-12b.gguf.part").exists()
+        assert service.storage_remove("partial")["ok"] and not (data / "models" / "translategemma-12b.gguf.part").exists()
+        assert service.storage_remove("updates")["freed"] == 800 and not (data / "update").exists()
+        assert service.storage_remove("cudnn")["ok"] and not (data / "engine" / "cudnn").exists()
+        assert [k for k, _ in events].count("storage") == 4
+        service.phase = "downloading"
+        assert service.storage_remove("engine_cuda")["error"] == "store_busy" and service.storage_move(str(tmp_path / "D"))["error"] == "store_busy"
+        service.phase = "ready"
+
+        # 搬：不能搬的情況
+        assert service.storage_move("")["error"] == "store_not_writable" and service.storage_move("relative/folder")["error"] == "store_not_writable"
+        assert service.storage_choose() == {"ok": False, "error": "store_no_window"}
+
+        # 搬到別的資料夾（使用者選的是 D/Games，實際放在 D/Games/LiveLingo）
+        picked = tmp_path / "D" / "Games"
+        picked.mkdir(parents=True)
+        (picked / "other-game.sav").write_bytes(b"keep")
+        service.window = type("W", (), {"choose_folder": lambda self, start="": str(picked)})()
+        assert service.storage_state()["can_pick"] is True
+        r = service.storage_choose()
+        new = picked / "LiveLingo"
+        assert r == {"ok": True, "to": str(new)}
+        deadline = time.time() + 10
+        while service._move and time.time() < deadline:
+            time.sleep(0.02)
+        assert service._move is None and service.store == new and service.cfg["store_dir"] == str(new)
+        assert (new / storage.MARK).exists() and (new / "models" / "translategemma-4b.gguf").stat().st_size == 5000
+        assert (new / "engine" / "cuda" / "cublas64_12.dll").exists() and (new / "models" / "whisper" / "model.bin").exists()
+        assert not (data / "models").exists() and not (data / "engine").exists()      # 舊的刪掉了
+        assert (data / "config.json").exists() and (data / "app.log").exists()      # 設定和歷史留在原本的地方
+        assert started == [new]      # 翻譯引擎重開，讀新位置的模型
+        assert notices[-1] == ("store_moved", {"folder": str(new)}) and service.cfg["store_leftover"] == []
+        assert any(k == "storage_move" and p["total"] == 5000 + 3000 + 200 + 100 + 1000 for k, p in events)
+        st = service.storage_state()
+        assert st["moved"] and st["folder"] == str(new) and st["default"] == str(data)
+        assert assets.missing(new, service.mode, need_engine=False)[0]["key"] == "ocr"      # 缺的只有測試沒放的 OCR 檔，模型找得到
+        service.storage_open()
+        assert opened[-1] == new
+        assert _json.loads((data / "config.json").read_text(encoding="utf-8"))["store_dir"] == str(new)
+
+        # 重開程式：照記下來的位置；匯出的設定不帶這個位置
+        again = Service(data)
+        try:
+            assert again.store == new and "store_dir" not in again._settings_now()
+        finally:
+            again.shutdown()
+
+        # 搬到一半取消：新的地方清乾淨，原本的沒動
+        slow = tmp_path / "E"
+        slow.mkdir()
+        real_copy = storage.copy_parts
+
+        def cancelling(store, target, progress=None, cancel=None, mark=True):
+            service.storage_cancel()
+            return real_copy(store, target, progress, cancel, mark)
+
+        monkeypatch.setattr(storage, "copy_parts", cancelling)
+        assert service.storage_move(str(slow))["ok"]
+        deadline = time.time() + 10
+        while service._move and time.time() < deadline:
+            time.sleep(0.02)
+        assert notices[-1][0] == "store_cancelled" and service.store == new and not (slow / "LiveLingo" / "models").exists()
+        assert (new / "models" / "translategemma-4b.gguf").exists()
+        monkeypatch.setattr(storage, "copy_parts", real_copy)
+
+        # 搬回原本的位置；舊的那邊有刪不掉的（還開著）就記下來，下次開程式再刪
+        real_remove = storage.remove_parts
+        monkeypatch.setattr(storage, "remove_parts", lambda folder: [str(folder / "engine")] if folder == new else real_remove(folder))
+        assert service.storage_move(back=True) == {"ok": True, "to": str(data)}
+        deadline = time.time() + 10
+        while service._move and time.time() < deadline:
+            time.sleep(0.02)
+        assert service.store == data and service.cfg["store_dir"] == "" and not (data / storage.MARK).exists()
+        assert (data / "models" / "translategemma-4b.gguf").exists() and notices[-1][0] == "store_moved_later"
+        assert service.cfg["store_leftover"] == [str(new)] and (new / "models").exists()
+        monkeypatch.setattr(storage, "remove_parts", real_remove)
+        service._storage_cleanup()
+        assert service.cfg["store_leftover"] == [] and not new.exists() and (picked / "other-game.sav").read_bytes() == b"keep"
+        # 清單裡混進沒有記號的資料夾：不碰
+        (tmp_path / "stranger" / "models").mkdir(parents=True)
+        service.cfg.set(store_leftover=[str(tmp_path / "stranger")])
+        service._storage_cleanup()
+        assert (tmp_path / "stranger" / "models").exists() and service.cfg["store_leftover"] == []
+
+        # 正在搬的時候不能下載（會下載到舊的位置）
+        service._move = {"to": "x", "done": 0, "total": 0}
+        service.phase = "need_download"
+        service.start_download()
+        assert service.phase == "need_download" and notices[-1][0] == "store_busy"
+        service._move = None
+    finally:
+        service.shutdown()
+
+    # 卸載時：搬出去的也刪；沒有記號的資料夾、原本的資料夾都不碰
+    moved = tmp_path / "F" / "LiveLingo"
+    (moved / "models").mkdir(parents=True)
+    (moved / "models" / "m.bin").write_bytes(b"x")
+    (tmp_path / "F" / "mine.txt").write_text("mine", encoding="utf-8")
+    assert storage.remove_moved(data, str(moved)) is False and (moved / "models" / "m.bin").exists()      # 沒有記號：不刪
+    (moved / storage.MARK).write_text("x", encoding="utf-8")
+    assert storage.remove_moved(data, "") is False and storage.remove_moved(data, str(data)) is False
+    assert storage.remove_moved(data, str(moved)) is True and not moved.exists() and (tmp_path / "F" / "mine.txt").exists()
+    main_src = (Path(storage.__file__).parent / "__main__.py").read_text(encoding="utf-8")
+    assert '"--remove-store" in sys.argv' in main_src and "storage.remove_moved(data, str(saved))" in main_src
+    iss = (Path(storage.__file__).parents[1] / "packaging" / "installer.iss").read_text(encoding="utf-8")
+    assert 'Parameters: "--remove-store"' in iss and "[UninstallRun]" in iss
+    assert iss.index("[UninstallRun]") < iss.index("[UninstallDelete]")
+    ci = (Path(storage.__file__).parents[1] / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
+    assert storage.MARK in ci and "not-ours.txt" in ci      # 真的安裝、卸載的那個檢查也看這件事
+    # 服務裡找模型、引擎一律用 self.store；每一個會回給介面的原因代碼都有五種語言的句子
+    import re
+    svc = (Path(storage.__file__).parent / "service.py").read_text(encoding="utf-8")
+    assert not re.search(r"assets\.\w+\(self\.data", svc) and 'self.data / "models"' not in svc and 'self.data / "engine"' not in svc
+    i18n = (Path(storage.__file__).parent / "ui" / "i18n.js").read_text(encoding="utf-8")
+    codes = set(re.findall(r'"(store_[a-z_]+)"', svc + Path(storage.__file__).read_text(encoding="utf-8"))) - {"store_dir", "store_leftover"}
+    assert {"store_same", "store_inside", "store_no_space", "store_not_writable", "store_busy", "store_in_use", "store_moved"} <= codes
+    for code in codes:
+        assert i18n.count(f"n_{code}:") == 5, code
+    for row in ("model_4b", "model_12b", "engine_cpu", "engine_cuda", "cudnn", "whisper", "ocr", "updates", "partial", "records"):
+        assert i18n.count(f"sto_i_{row}:") == 5 and i18n.count(f"sto_d_{row}:") == 5, row
