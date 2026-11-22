@@ -478,7 +478,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["overlay", "nav_overlay", "chat"], ["general", "nav_general", "globe"], ["about", "nav_about", "info"]];
+  const TABS = [["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
