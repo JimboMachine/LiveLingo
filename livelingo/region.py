@@ -12,10 +12,18 @@ HINTS = {
     "en": "Hold the left mouse button and drag a box around the chat messages (Esc to cancel)\nKeyboard: arrow keys move, Shift + arrow keys resize, Enter confirms",
     "ko": "마우스 왼쪽 버튼을 누른 채로 채팅 메시지가 보이는 영역을 드래그하세요 (Esc: 취소)\n키보드: 방향키로 이동, Shift+방향키로 크기 조절, Enter로 확정",
     "ja": "マウスの左ボタンを押したまま、チャットのメッセージが出る範囲を囲んでください（Esc でキャンセル）\nキーボード：矢印キーで移動、Shift＋矢印キーでサイズ変更、Enter で決定",
+    "vi": "Giữ chuột trái và kéo một khung quanh tin nhắn chat (Esc để hủy)\nBàn phím: phím mũi tên để di chuyển, Shift + phím mũi tên để đổi kích thước, Enter để xác nhận",
+    "th": "กดเมาส์ซ้ายค้างไว้แล้วลากกรอบรอบข้อความแชท (Esc เพื่อยกเลิก)\nแป้นพิมพ์: ปุ่มลูกศรเพื่อย้าย Shift + ปุ่มลูกศรเพื่อปรับขนาด Enter เพื่อยืนยัน",
+    "id": "Tahan tombol kiri mouse dan seret kotak di sekitar pesan chat (Esc untuk batal)\nKeyboard: tombol panah untuk memindahkan, Shift + panah untuk mengubah ukuran, Enter untuk konfirmasi",
+    "es": "Mantén pulsado el botón izquierdo y arrastra un recuadro alrededor de los mensajes del chat (Esc para cancelar)\nTeclado: las flechas mueven, Shift + flechas cambian el tamaño, Enter confirma",
+    "pt": "Segure o botão esquerdo do mouse e arraste um quadro em volta das mensagens do chat (Esc para cancelar)\nTeclado: setas movem, Shift + setas mudam o tamanho, Enter confirma",
+    "ru": "Удерживая левую кнопку мыши, обведите рамкой сообщения чата (Esc для отмены)\nКлавиатура: стрелки перемещают, Shift + стрелки меняют размер, Enter подтверждает",
+    "de": "Linke Maustaste gedrückt halten und einen Rahmen um die Chat-Nachrichten ziehen (Esc zum Abbrechen)\nTastatur: Pfeiltasten verschieben, Shift + Pfeiltasten ändern die Größe, Enter bestätigt",
+    "fr": "Maintenez le bouton gauche de la souris et tracez un cadre autour des messages du chat (Esc pour annuler)\nClavier : les flèches déplacent, Shift + flèches redimensionnent, Enter valide",
 }
 STEP = 20                 # 方向鍵按一下動幾個像素
 SMALLEST = (60, 30)       # 用鍵盤縮小的時候，框最小這麼大
-FONTS = {"zh-TW": "Microsoft JhengHei UI", "zh-CN": "Microsoft YaHei UI", "ko": "Malgun Gothic", "ja": "Yu Gothic UI", "en": "Segoe UI"}
+FONTS = {"zh-TW": "Microsoft JhengHei UI", "zh-CN": "Microsoft YaHei UI", "ko": "Malgun Gothic", "ja": "Yu Gothic UI", "en": "Segoe UI", "vi": "Segoe UI", "th": "Leelawadee UI", "id": "Segoe UI", "es": "Segoe UI", "pt": "Segoe UI", "ru": "Segoe UI", "de": "Segoe UI", "fr": "Segoe UI"}
 
 
 ACCENT, PANEL, TEXT = "#4ADE9A", "#171A1E", "#F2F4F6"      # 跟主程式一樣的顏色

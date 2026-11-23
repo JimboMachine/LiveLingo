@@ -8,6 +8,7 @@ from .chatpaint import NAMES, speaker_name
 
 TITLES = {
     "zh-TW": "字幕記錄", "zh-CN": "字幕记录", "en": "Subtitle log", "ko": "자막 기록", "ja": "字幕の記録",
+    "vi": "Nhật ký phụ đề", "th": "บันทึกซับไตเติล", "id": "Log subtitle", "es": "Registro de subtítulos", "pt": "Registro de legendas", "ru": "Журнал субтитров", "de": "Untertitel-Protokoll", "fr": "Journal des sous-titres",
 }
 COLON = {"zh-TW": "：", "zh-CN": "：", "ja": "："}
 

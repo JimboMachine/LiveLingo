@@ -1,4 +1,105 @@
 {
+  "2.5.0": {
+    "zh-TW": [
+      "翻譯語言多了 8 種：越南文、泰文、印尼文、西班牙文、葡萄牙文、俄文、德文、法文。對方和自己都可以選，聽對方說話、聽我說話、讀螢幕、打字都能用，自動偵測也認得這些語言。",
+      "介面也多了這 8 種語言；選語言的地方改成整齊的格子，語言變多也不會擠。",
+      "讀螢幕需要另外三個小的文字辨識模型（共約 27 MB），更新後第一次開啟會先下載。越南文的聲調符號目前讀螢幕時會讀掉，聽聲音和打字不受影響。"
+    ],
+    "zh-CN": [
+      "翻译语言多了 8 种：越南语、泰语、印尼语、西班牙语、葡萄牙语、俄语、德语、法语。对方和自己都可以选，听对方说话、听我说话、读屏幕、打字都能用，自动检测也认得这些语言。",
+      "界面也多了这 8 种语言；选语言的地方改成整齐的格子，语言变多也不会挤。",
+      "读屏幕需要另外三个小的文字识别模型（共约 27 MB），更新后第一次打开会先下载。越南语的声调符号目前读屏幕时会丢失，听声音和打字不受影响。"
+    ],
+    "en": [
+      "Eight more translation languages: Vietnamese, Thai, Indonesian, Spanish, Portuguese, Russian, German and French, for either side. Hearing, speaking, screen reading, typing and auto-detect all work with them.",
+      "The interface is also available in these eight languages, and the language picker is now a tidy grid that stays uncrowded.",
+      "Screen reading needs three small extra text models (about 27 MB in total), downloaded once on the first launch after updating. Vietnamese tone marks are lost when reading the screen for now; voice and typing are fine."
+    ],
+    "ko": [
+      "번역 언어가 8개 늘었습니다: 베트남어, 태국어, 인도네시아어, 스페인어, 포르투갈어, 러시아어, 독일어, 프랑스어. 상대와 나 모두 고를 수 있고, 듣기, 말하기, 화면 읽기, 입력, 자동 감지 모두 됩니다.",
+      "화면 언어에도 이 8개 언어가 추가되었고, 언어 선택은 깔끔한 격자로 바뀌어 언어가 많아도 복잡하지 않습니다.",
+      "화면 읽기에는 작은 문자 인식 모델 세 개(모두 약 27 MB)가 더 필요하며, 업데이트 후 처음 열 때 한 번 내려받습니다. 지금은 화면을 읽을 때 베트남어 성조 부호가 빠집니다. 음성과 입력은 영향이 없습니다."
+    ],
+    "ja": [
+      "翻訳できる言語が 8 つ増えました：ベトナム語、タイ語、インドネシア語、スペイン語、ポルトガル語、ロシア語、ドイツ語、フランス語。相手にも自分にも選べ、聞き取り、自分の声、画面読み取り、入力、自動判別のすべてで使えます。",
+      "画面の言語にもこの 8 つが加わりました。言語の選択は整った格子になり、言語が増えても窮屈になりません。",
+      "画面読み取りには小さな文字認識モデルが 3 つ（合計約 27 MB）追加で必要で、更新後の初回起動時に一度だけダウンロードします。今のところ画面読み取りではベトナム語の声調記号が落ちます。音声と入力には影響しません。"
+    ],
+    "vi": [
+      "Thêm 8 ngôn ngữ dịch: tiếng Việt, tiếng Thái, tiếng Indonesia, tiếng Tây Ban Nha, tiếng Bồ Đào Nha, tiếng Nga, tiếng Đức và tiếng Pháp, chọn được cho cả hai bên. Nghe, nói, đọc màn hình, gõ chữ và tự nhận diện đều dùng được.",
+      "Giao diện cũng có thêm 8 ngôn ngữ này, và chỗ chọn ngôn ngữ giờ là một lưới gọn gàng, không bị chật.",
+      "Đọc màn hình cần thêm ba mô hình nhận dạng chữ nhỏ (tổng khoảng 27 MB), tải một lần khi mở lần đầu sau cập nhật. Hiện khi đọc màn hình sẽ mất dấu thanh tiếng Việt; giọng nói và gõ chữ không bị ảnh hưởng."
+    ],
+    "th": [
+      "เพิ่มภาษาแปลอีก 8 ภาษา: เวียดนาม ไทย อินโดนีเซีย สเปน โปรตุเกส รัสเซีย เยอรมัน และฝรั่งเศส เลือกได้ทั้งสองฝ่าย ใช้ได้กับการฟัง การพูด การอ่านหน้าจอ การพิมพ์ และการตรวจจับอัตโนมัติ",
+      "หน้าจอแอปก็มี 8 ภาษานี้แล้ว และที่เลือกภาษาเปลี่ยนเป็นตารางที่เป็นระเบียบ ภาษาเยอะก็ไม่แน่น",
+      "การอ่านหน้าจอต้องใช้โมเดลรู้จำตัวอักษรขนาดเล็กเพิ่มอีกสามตัว (รวมประมาณ 27 MB) ดาวน์โหลดครั้งเดียวตอนเปิดครั้งแรกหลังอัปเดต ตอนนี้การอ่านหน้าจอภาษาเวียดนามยังอ่านเครื่องหมายวรรณยุกต์ไม่ได้ เสียงและการพิมพ์ไม่ได้รับผลกระทบ"
+    ],
+    "id": [
+      "Tambah 8 bahasa terjemahan: Vietnam, Thai, Indonesia, Spanyol, Portugis, Rusia, Jerman, dan Prancis, bisa dipilih untuk kedua pihak. Mendengar, berbicara, membaca layar, mengetik, dan deteksi otomatis semuanya bisa.",
+      "Antarmuka juga tersedia dalam 8 bahasa ini, dan pemilih bahasa sekarang berupa kisi yang rapi dan tidak sesak.",
+      "Membaca layar perlu tiga model pengenal teks kecil tambahan (total sekitar 27 MB), diunduh sekali saat pertama dibuka setelah pembaruan. Kini tanda nada bahasa Vietnam hilang saat membaca layar; suara dan ketikan tidak terpengaruh."
+    ],
+    "es": [
+      "Ocho idiomas de traducción más: vietnamita, tailandés, indonesio, español, portugués, ruso, alemán y francés, para cualquiera de los dos lados. Escuchar, hablar, leer la pantalla, escribir y la detección automática funcionan.",
+      "La interfaz también está en estos ocho idiomas, y el selector de idioma ahora es una cuadrícula ordenada que no se amontona.",
+      "Leer la pantalla necesita tres modelos de texto pequeños más (unos 27 MB), que se descargan una vez al abrir tras actualizar. Por ahora, al leer la pantalla se pierden los tonos del vietnamita; la voz y lo escrito no cambian."
+    ],
+    "pt": [
+      "Oito idiomas de tradução a mais: vietnamita, tailandês, indonésio, espanhol, português, russo, alemão e francês, para qualquer um dos lados. Ouvir, falar, ler a tela, digitar e a detecção automática funcionam.",
+      "A interface também está nesses oito idiomas, e o seletor de idioma agora é uma grade organizada que não fica apertada.",
+      "Ler a tela precisa de três modelos de texto pequenos a mais (uns 27 MB), baixados uma vez ao abrir depois de atualizar. Por enquanto, ao ler a tela os sinais de tom do vietnamita se perdem; voz e digitação não mudam."
+    ],
+    "ru": [
+      "Добавлено 8 языков перевода: вьетнамский, тайский, индонезийский, испанский, португальский, русский, немецкий и французский, для любой из сторон. Слух, речь, чтение экрана, ввод и автоопределение работают.",
+      "Интерфейс тоже доступен на этих восьми языках, а выбор языка теперь аккуратная сетка, где не тесно.",
+      "Для чтения экрана нужны ещё три небольшие модели текста (около 27 МБ), они скачиваются один раз при первом запуске после обновления. Пока при чтении экрана теряются тоны вьетнамского; голос и ввод не затронуты."
+    ],
+    "de": [
+      "Acht weitere Übersetzungssprachen: Vietnamesisch, Thailändisch, Indonesisch, Spanisch, Portugiesisch, Russisch, Deutsch und Französisch, für beide Seiten. Hören, Sprechen, Bildschirmlesen, Tippen und Auto-Erkennung gehen.",
+      "Die Oberfläche gibt es auch in diesen acht Sprachen, und die Sprachauswahl ist jetzt ein ordentliches Raster, das nicht überladen wirkt.",
+      "Bildschirmlesen braucht drei kleine Textmodelle mehr (etwa 27 MB), die beim ersten Start nach dem Update einmal geladen werden. Vorerst fehlen beim Bildschirmlesen vietnamesische Tonzeichen; Sprache und Tippen sind nicht betroffen."
+    ],
+    "fr": [
+      "Huit langues de traduction en plus : vietnamien, thaï, indonésien, espagnol, portugais, russe, allemand et français, pour les deux côtés. Écoute, parole, lecture d'écran, saisie et détection automatique fonctionnent.",
+      "L'interface existe aussi dans ces huit langues, et le choix de langue est maintenant une grille bien rangée qui ne déborde pas.",
+      "La lecture d'écran demande trois petits modèles de texte en plus (environ 27 Mo), téléchargés une fois au premier lancement après la mise à jour. Pour l'instant, elle perd les tons du vietnamien ; la voix et la saisie ne changent pas."
+    ]
+  },
+  "2.4.2": {
+    "zh-TW": [
+      "沒在用的東西會自動放掉：兩邊收音都關著兩分鐘，語音辨識模型（約 1 GB）就釋放；翻譯引擎可以在「翻譯品質」選多久沒翻譯就休息（不休息、10 分鐘、30 分鐘、1 小時，預設 30 分鐘），休息後的第一句會多等約 10 秒叫醒它。"
+    ],
+    "zh-CN": [
+      "没在用的东西会自动释放：两边收音都关着两分钟，语音识别模型（约 1 GB）就释放；翻译引擎可以在“翻译质量”选多久没翻译就休息（不休息、10 分钟、30 分钟、1 小时，默认 30 分钟），休息后的第一句会多等约 10 秒唤醒它。"
+    ],
+    "en": [
+      "Unused parts free memory: the speech model (about 1 GB) is released when listening has been off for 2 minutes, and the translation engine can rest when idle (choose in Translation quality; 30 min by default). Waking it takes about 10 s."
+    ],
+    "ko": [
+      "쓰지 않는 부분이 메모리를 돌려줍니다. 양쪽 듣기를 2분간 끄면 음성 인식 모델(약 1 GB)을 해제하고, ‘번역 품질’에서 번역 엔진이 쉬는 시점(쉬지 않음, 10분, 30분, 1시간, 기본 30분)을 고를 수 있습니다. 쉰 뒤 첫 문장은 엔진을 깨우느라 약 10초 더 기다립니다."
+    ],
+    "ja": [
+      "使っていない部分がメモリを手放すようになりました。両方の聞き取りを 2 分間オフにすると音声認識モデル（約 1 GB）を解放し、「翻訳品質」で翻訳エンジンが休む時間（休ませない・10 分・30 分・1 時間、標準は 30 分）を選べます。休止後の最初の文は、起動のため約 10 秒余分に待ちます。"
+    ]
+  },
+  "2.4.1": {
+    "zh-TW": [
+      "翻譯引擎不再把翻過的句子另外存在電腦記憶體裡：以前開久了最多會多吃 8 GB 記憶體，現在不會了，玩遊戲時電腦比較不會卡。"
+    ],
+    "zh-CN": [
+      "翻译引擎不再把翻过的句子另外存在电脑内存里：以前开久了最多会多占 8 GB 内存，现在不会了，玩游戏时电脑比较不会卡。"
+    ],
+    "en": [
+      "The translation engine no longer keeps an extra copy of past sentences in your PC's memory: after running for a while it could use up to 8 GB more RAM. Games run smoother alongside it."
+    ],
+    "ko": [
+      "번역 엔진이 지난 문장을 컴퓨터 메모리에 따로 쌓아 두지 않습니다. 오래 켜 두면 메모리를 최대 8 GB 더 쓰던 문제가 사라져 게임과 함께 써도 덜 버벅입니다."
+    ],
+    "ja": [
+      "翻訳エンジンが過去の文をパソコンのメモリに別に溜め込まなくなりました。長く使うとメモリを最大 8 GB 余分に使っていた問題がなくなり、ゲームと一緒でも重くなりにくくなりました。"
+    ]
+  },
   "2.4.0": {
     "zh-TW": [
       "即時字幕：對方還在說話，字幕和翻譯就先出來，說完再換成整句；譯文也改成一個字一個字出現，不用等整句翻完。",

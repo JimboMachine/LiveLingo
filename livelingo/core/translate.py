@@ -15,13 +15,33 @@ LANGS = {
     "ko": {"name": "韓文", "en": "Korean", "family": "ko"},
     "en": {"name": "英文", "en": "English", "family": "en"},
     "ja": {"name": "日文", "en": "Japanese", "family": "ja"},
+    "vi": {"name": "越南文", "en": "Vietnamese", "family": "vi"},
+    "th": {"name": "泰文", "en": "Thai", "family": "th"},
+    "id": {"name": "印尼文", "en": "Indonesian", "family": "id"},
+    "es": {"name": "西班牙文", "en": "Spanish", "family": "es"},
+    "pt": {"name": "葡萄牙文", "en": "Portuguese", "family": "pt"},
+    "ru": {"name": "俄文", "en": "Russian", "family": "ru"},
+    "de": {"name": "德文", "en": "German", "family": "de"},
+    "fr": {"name": "法文", "en": "French", "family": "fr"},
 }
 SOURCES = {
     "zh": ("Chinese", "zh"),
     "ko": ("Korean", "ko"),
     "en": ("English", "en"),
     "ja": ("Japanese", "ja"),
+    "vi": ("Vietnamese", "vi"),
+    "th": ("Thai", "th"),
+    "id": ("Indonesian", "id"),
+    "es": ("Spanish", "es"),
+    "pt": ("Portuguese", "pt"),
+    "ru": ("Russian", "ru"),
+    "de": ("German", "de"),
+    "fr": ("French", "fr"),
 }
+# 用拉丁字母寫的語言：只看文字種類分不出來，要再看常用字（見 latin_language）
+LATIN = ("en", "es", "pt", "fr", "de", "id", "vi")
+# 字和字之間不空格的語言：切長句、接回來的時候不用補空格
+NO_SPACES = ("zh", "ja", "th")
 
 # 保險用：模型偶爾會冒出簡體字，中文輸出一律再轉成台灣繁體用語
 _to_traditional = OpenCC("s2twp")
@@ -63,12 +83,21 @@ BUILTIN_EXAMPLES = {
 EXAMPLES_INTRO = "The user wants messages like these translated this way (source => translation):\n"
 # 每個語言「朋友之間」和「有禮貌」各是哪一種說法（韓文、日文有明確的敬語體系，中文用「您、請」）
 REGISTER = {
-    "casual": {"ko": " (in Korean use informal 반말)", "ja": " (in Japanese use casual plain form, タメ口, not です/ます)"},
+    "casual": {"ko": " (in Korean use informal 반말)", "ja": " (in Japanese use casual plain form, タメ口, not です/ます)",
+               "es": " (in Spanish address the reader as tú)", "pt": " (in Portuguese address the reader as você, casual Brazilian style)",
+               "fr": " (in French address the reader as tu)", "de": " (in German address the reader as du)",
+               "ru": " (in Russian address the reader as ты)", "th": " (in Thai use casual speech without ครับ/ค่ะ)",
+               "vi": " (in Vietnamese use casual speech between friends)", "id": " (in Indonesian use casual chat style)"},
     "polite": {"ko": " (in Korean use polite 해요체)", "ja": " (in Japanese use polite です/ます form)",
                "zh-TW": " (in Chinese use polite wording such as 您 and 請)",
-               "zh-CN": " (in Chinese use polite wording such as 您 and 请)"},
+               "zh-CN": " (in Chinese use polite wording such as 您 and 请)",
+               "es": " (in Spanish address the reader as usted)", "pt": " (in Portuguese use polite wording)",
+               "fr": " (in French address the reader as vous)", "de": " (in German address the reader as Sie)",
+               "ru": " (in Russian address the reader as Вы)", "th": " (in Thai use polite particles ครับ/ค่ะ)",
+               "vi": " (in Vietnamese use polite wording)", "id": " (in Indonesian use polite wording)"},
 }
-SHORT_REGISTER = {"ko": ", so use informal Korean (반말)", "ja": ", so use casual plain Japanese (タメ口)"}
+SHORT_REGISTER = {"ko": ", so use informal Korean (반말)", "ja": ", so use casual plain Japanese (タメ口)",
+                  "es": ", so use tú", "fr": ", so use tu", "de": ", so use du", "ru": ", so use ты"}
 # 前面幾句對話（原文）。只給模型參考代名詞、省略的主詞在說誰，不翻它們
 CONTEXT_INTRO = ("For context only, these are the previous messages of the conversation. Do not translate them "
                  "and do not repeat them; use them only to understand what the new message refers to:\n")
@@ -134,9 +163,50 @@ def _same_sentence(a: str, b: str) -> bool:
     return norm(a) == norm(b)
 
 
+# 拉丁字母的語言靠常用字分辨（聊天的句子很短，看常用字比看字母頻率準）。分不出來時當成英文。
+_LATIN_WORDS = {
+    "en": "the and is are you i to a of it that in we go my me lets let's what this yes ok have be for with on not can just they "
+          "he she im i'm gg was will do don't dont your our there no",
+    "es": "que el la los las y es por para con una un está esta estoy vamos pero como muy bien ya aquí aqui eso esto jaja "
+          "también tambien qué tengo hay yo tú mi del al se lo le si sí nada ahora vale oye",
+    "pt": "que o os não nao é eu você voce vc uma um com para pra mas muito tá ta isso aqui ele ela vamos bora kkk kkkk mano "
+          "cara tem tô to também tambem do da no na meu minha agora sim beleza",
+    "fr": "le la les des et est je tu il on pas ne un une que qui c'est j'ai pour avec mais oui non très tres ça ca vous nous "
+          "mdr allez du au sur suis y'a fait bien",
+    "de": "der die das und ist ich du nicht ein eine zu mit auf den dem es wir ihr ja nein aber mal schon auch noch was wie "
+          "geht gut bitte danke bin hab habe los jetzt",
+    "id": "yang dan di ke ini itu aku kamu gw gue lu tidak gak ga nggak sudah udah ada mau bisa ayo dong sih aja juga apa "
+          "wkwk wkwkwk banget lagi sama buat kita mana nih deh kok",
+    "vi": "không khong ko đi di tôi toi bạn ban là co có này nay thì thi rồi roi nhé nhe ơi oi mình minh dc được duoc vs "
+          "với voi anh em chưa chua đâu dau lên len đánh danh thôi thoi đó do",
+}
+_LATIN_WORDS = {k: set(v.split()) for k, v in _LATIN_WORDS.items()}
+# 只有那個語言才會用到的字母，看到一個就很有把握
+_LATIN_LETTERS = {"es": "ñ¿¡", "pt": "ãõ", "fr": "œèëîïÿ", "de": "äöüß", "vi": "ơưăđ"}
+
+
+def latin_language(text: str) -> str:
+    """拉丁字母寫的句子是哪一種語言：en / es / pt / fr / de / id / vi。看不出來就當英文。"""
+    low = text.lower()
+    if any(0x1EA0 <= ord(ch) <= 0x1EF9 for ch in low):      # 越南文的聲調字母（ạ ả ế ộ …）
+        return "vi"
+    words = re.findall(r"[a-zà-ÿœßăđơư']+", low)
+    score = {k: sum(1 for w in words if w in v) for k, v in _LATIN_WORDS.items()}
+    for k, letters in _LATIN_LETTERS.items():
+        score[k] += 3 * sum(low.count(ch) for ch in letters)
+    if "ç" in low:
+        score["pt"] += 1
+        score["fr"] += 1
+    best = max(score.values())
+    if best == 0:
+        return "en"
+    order = ["en"] + [k for k in score if k != "en"]      # 平手時英文優先
+    return max(order, key=lambda k: score[k])
+
+
 def detect_language(text: str) -> str | None:
-    """用文字種類判斷語言：回傳 zh / ko / ja / en；None 表示沒有可翻譯的文字。"""
-    hangul = kana = han = latin = 0
+    """用文字種類判斷語言：回傳 LANGS 裡的 family（zh / ko / ja / th / ru / en / es …）；None 表示沒有可翻譯的文字。"""
+    hangul = kana = han = latin = thai = cyrillic = 0
     for ch in text:
         o = ord(ch)
         if 0xAC00 <= o <= 0xD7A3 or 0x1100 <= o <= 0x11FF or 0x3130 <= o <= 0x318F:
@@ -145,7 +215,11 @@ def detect_language(text: str) -> str | None:
             kana += 1
         elif 0x4E00 <= o <= 0x9FFF or 0x3400 <= o <= 0x4DBF:
             han += 1
-        elif ch.isalpha() and o < 0x250:
+        elif 0x0E00 <= o <= 0x0E7F:
+            thai += 1
+        elif 0x0400 <= o <= 0x04FF:
+            cyrillic += 1
+        elif ch.isalpha() and (o < 0x250 or 0x1E00 <= o <= 0x1EFF):
             latin += 1
     if hangul and hangul >= kana:
         return "ko"
@@ -153,8 +227,12 @@ def detect_language(text: str) -> str | None:
         return "ja"
     if han:
         return "zh"
+    if thai >= 2:
+        return "th"
+    if cyrillic >= 2:
+        return "ru"
     if latin >= 2:
-        return "en"
+        return latin_language(text)
     return None
 
 
@@ -166,7 +244,7 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
     """
     if target:
         family = LANGS[target]["family"]
-        glossary = {k: v for k, v in glossary.items() if detect_language(v) in (None, "en", family)}
+        glossary = {k: v for k, v in glossary.items() if detect_language(v) in (None, family) or detect_language(v) in LATIN}
     if not glossary:
         return text, []
     lower = {k.lower(): v for k, v in glossary.items()}
@@ -240,21 +318,34 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
     return f"<start_of_turn>user\n{body}<end_of_turn>\n<start_of_turn>model\n"
 
 
+def _script(family: str) -> str:
+    """這個語言用哪一種文字寫：hangul / cjk（漢字、假名）/ thai / cyrillic / latin。"""
+    return {"ko": "hangul", "zh": "cjk", "ja": "cjk", "th": "thai", "ru": "cyrillic"}.get(family, "latin")
+
+
+def _in_script(ch: str, script: str) -> bool:
+    o = ord(ch)
+    if script == "hangul":
+        return 0xAC00 <= o <= 0xD7A3
+    if script == "cjk":
+        return 0x4E00 <= o <= 0x9FFF or 0x3400 <= o <= 0x4DBF or 0x3040 <= o <= 0x30FF
+    if script == "thai":
+        return 0x0E00 <= o <= 0x0E7F
+    if script == "cyrillic":
+        return 0x0400 <= o <= 0x04FF
+    return False      # 拉丁字母：專有名詞、遊戲用語本來就會留著，不能拿來判斷有沒有翻
+
+
 def _leftover(out: str, source: str, target: str) -> int:
     """譯文裡還留著幾個原文的字（韓文翻成別的語言卻還有韓文字，之類的）。"""
-    family = LANGS[target]["family"]
-    if source == "ko" and family != "ko":
-        return sum(1 for ch in out if 0xAC00 <= ord(ch) <= 0xD7A3)
-    if source in ("zh", "ja") and family in ("ko", "en"):
-        return sum(1 for ch in out if 0x4E00 <= ord(ch) <= 0x9FFF or 0x3040 <= ord(ch) <= 0x30FF)
-    return 0
+    have, want = _script(source), _script(LANGS[target]["family"])
+    if have == want:
+        return 0
+    return sum(1 for ch in out if _in_script(ch, have))
 
 
 def _is_source_char(ch: str, source: str) -> bool:
-    o = ord(ch)
-    if source == "ko":
-        return 0xAC00 <= o <= 0xD7A3
-    return 0x4E00 <= o <= 0x9FFF or 0x3400 <= o <= 0x4DBF or 0x3040 <= o <= 0x30FF
+    return _in_script(ch, _script(source))
 
 
 def salvage(out: str, source: str, target: str) -> str | None:
@@ -279,8 +370,10 @@ def salvage(out: str, source: str, target: str) -> str | None:
     return rest
 
 
-_KO_LAUGH = [(re.compile(r"\s*[ㅋㅎ]{2,}"), {"zh-TW": " 哈哈", "zh-CN": " 哈哈", "en": " haha", "ja": " www"}),
-             (re.compile(r"\s*[ㅠㅜ]{2,}"), {"zh-TW": " 嗚嗚", "zh-CN": " 呜呜", "en": " T_T", "ja": " 泣"})]
+_KO_LAUGH = [(re.compile(r"\s*[ㅋㅎ]{2,}"), {"zh-TW": " 哈哈", "zh-CN": " 哈哈", "en": " haha", "ja": " www", "vi": " haha", "th": " 555",
+                                            "id": " wkwk", "es": " jaja", "pt": " kkkk", "ru": " ахах", "de": " haha", "fr": " mdr"}),
+             (re.compile(r"\s*[ㅠㅜ]{2,}"), {"zh-TW": " 嗚嗚", "zh-CN": " 呜呜", "en": " T_T", "ja": " 泣", "vi": " T_T", "th": " T_T",
+                                            "id": " T_T", "es": " T_T", "pt": " T_T", "ru": " T_T", "de": " T_T", "fr": " T_T"})]
 
 
 def tidy(out: str, target: str) -> str:
@@ -335,6 +428,28 @@ _EN = {0: ("zero", "no"), 1: ("one", "first", "a", "an", "once"), 2: ("two", "se
        8: ("eight", "eighth"), 9: ("nine", "ninth"), 10: ("ten", "tenth"), 11: ("eleven",), 12: ("twelve",), 20: ("twenty",)}
 
 
+# 其他語言常見的小數字寫法（譯文寫成文字也算有翻到）：0 到 10、20、30（半）、100、1000
+_WORDS_RAW = {
+    "es": "cero,nada|uno,una,un,primer,primero|dos,segundo,ambos|tres,tercer|cuatro|cinco|seis|siete|ocho|nueve|diez|veinte|"
+          "treinta,media|cien,ciento|mil",
+    "pt": "zero,nada|um,uma,primeiro|dois,duas,segundo,ambos|três,tres|quatro|cinco|seis|sete|oito|nove|dez|vinte|trinta,meia|"
+          "cem,cento|mil",
+    "fr": "zéro,zero,aucun|un,une,premier,première|deux,second,deuxième|trois|quatre|cinq|six|sept|huit|neuf|dix|vingt|"
+          "trente,demi,demie|cent|mille",
+    "de": "null,kein,keine|eins,ein,eine,einen,erste,ersten|zwei,zweite,beide|drei,dritte|vier|fünf|sechs|sieben|acht|neun|"
+          "zehn|zwanzig|dreißig,halbe,halb|hundert|tausend",
+    "ru": "ноль,нет|один,одна,одно,первый|два,две,второй,оба|три,третий|четыре|пять|шесть|семь|восемь|девять|десять|"
+          "двадцать|тридцать,полчаса,пол|сто|тысяча,тысячу",
+    "id": "nol,tidak|satu,se,pertama|dua,kedua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh|dua puluh|"
+          "tiga puluh,setengah|seratus|seribu",
+    "vi": "không|một,mot,nhất|hai|ba|bốn,bon,tư|năm,nam|sáu,sau|bảy,bay|tám,tam|chín,chin|mười,muoi|hai mươi|"
+          "ba mươi,rưỡi,nửa|trăm|nghìn,ngàn",
+    "th": "ศูนย์,ไม่มี|หนึ่ง,แรก|สอง|สาม|สี่|ห้า|หก|เจ็ด|แปด|เก้า|สิบ|ยี่สิบ|สามสิบ,ครึ่ง|ร้อย|พัน",
+}
+_WORDS = {lang: dict(zip((0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 100, 1000), (tuple(p.split(",")) for p in raw.split("|"))))
+          for lang, raw in _WORDS_RAW.items()}
+
+
 def numbers(text: str, source: str | None = None) -> list[str]:
     """文字裡用阿拉伯數字寫的數（全形算半形、1,000 算 1000、06 算 6）。「666」「gr8」這種用語不算。"""
     text = unicodedata.normalize("NFKC", text)
@@ -370,6 +485,8 @@ def _spelled(n: int, target: str) -> list[str]:
             out += [f"{n // 1000}천", "천"]
         if n >= 10000 and n % 10000 == 0:
             out.append(f"{n // 10000}만")
+    elif family in _WORDS:
+        out += _WORDS[family].get(n, ())
     else:
         out += _EN.get(n, ())
         out += {30: ["half"], 100: ["hundred"], 1000: ["thousand"]}.get(n, [])
@@ -635,7 +752,7 @@ class Translator:
             return to_script(text, target)
         if len(text) > self.max_chars:
             # 太長：以前是悄悄只翻前 500 個字，後面的不見了也沒人知道。現在切成幾段分開翻，再接起來
-            parts, joiner, outs = split_long(text, self.max_chars), "" if LANGS[target]["family"] in ("zh", "ja") else " ", []
+            parts, joiner, outs = split_long(text, self.max_chars), "" if LANGS[target]["family"] in NO_SPACES else " ", []
             for i, part in enumerate(parts):
                 done = joiner.join(outs)
                 outs.append(self.translate(part, target, source, context if i == 0 else None, unfinished=unfinished, stop=stop,

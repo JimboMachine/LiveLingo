@@ -27,7 +27,7 @@
     return text;
   }
   const lk = (code) => (code === "zh-TW" ? "zh" : (code === "zh-CN" ? "zhcn" : code));
-  const PAIR_LANGS = ["zh-TW", "zh-CN", "ko", "en", "ja"];      // 可以選的翻譯語言
+  const PAIR_LANGS = ["zh-TW", "zh-CN", "ko", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr"];      // 可以選的翻譯語言
   const langName = (code) => t("lang_" + lk(code));
   const isChinese = (code) => code.startsWith("zh");
   // 卡片和輸入框上用的短名字：繁體和簡體都只寫「中文」，免得字太多擠成好幾行；兩邊都是中文時才寫清楚是哪一種
@@ -134,7 +134,7 @@
   // ---------------------------------------------------------------- 固定文字
 
   function applyI18n() {
-    const htmlLang = { "zh-TW": "zh-Hant", "zh-CN": "zh-Hans", en: "en", ko: "ko", ja: "ja" }[S.cfg.ui_lang] || "en";
+    const htmlLang = { "zh-TW": "zh-Hant", "zh-CN": "zh-Hans", en: "en", ko: "ko", ja: "ja", vi: "vi", th: "th", id: "id", es: "es", pt: "pt", ru: "ru", de: "de", fr: "fr" }[S.cfg.ui_lang] || "en";
     document.documentElement.lang = htmlLang;
     document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll("[data-i18n-label]").forEach((el) => {
@@ -685,6 +685,8 @@
           </button>
         </div>
         <div class="note ${S.fallback ? "warn" : ""}">${ICON.info}<span>${esc(S.fallback ? t("gpu_fallback") : gpuLine)}</span></div>
+        ${choiceRow("engine_rest", t("engine_rest"), ["0", "10", "30", "60"].map((m) => [m, t("engine_rest_" + m)]))}
+        <div class="dnote">${esc(t("engine_rest_desc"))}</div>
       </section>
       <section>
         <h2>${esc(tk("tone_title"))}</h2>
@@ -1003,7 +1005,7 @@
   }
 
   function uiLangsHTML() {
-    const natives = [["zh-TW", "繁體中文"], ["zh-CN", "简体中文"], ["en", "English"], ["ko", "한국어"], ["ja", "日本語"]];
+    const natives = [["zh-TW", "繁體中文"], ["zh-CN", "简体中文"], ["en", "English"], ["ko", "한국어"], ["ja", "日本語"], ["vi", "Tiếng Việt"], ["th", "ไทย"], ["id", "Bahasa Indonesia"], ["es", "Español"], ["pt", "Português"], ["ru", "Русский"], ["de", "Deutsch"], ["fr", "Français"]];
     return `<div class="pills ui-langs">${natives.map(([id, native]) => {      // 一排小按鈕：語言再多也只是多一顆，不會把版面擠開
       const on = S.cfg.ui_lang === id;
       return `<button class="pill tall" data-act="ui-lang" data-code="${id}" aria-pressed="${on}" title="${esc(on ? t("using") : t("click_switch"))}">${native}</button>`;

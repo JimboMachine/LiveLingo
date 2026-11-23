@@ -77,10 +77,11 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
           $languages = Join-Path (Split-Path $iscc) "Languages"
-          foreach ($name in "ChineseTraditional", "ChineseSimplified") {
-            if (Test-Path "$languages\$name.isl") { Write-Host "$name installer texts: built into this Inno Setup."; continue }
+          foreach ($name in "ChineseTraditional", "ChineseSimplified", "Unofficial/Vietnamese", "Unofficial/Indonesian") {
+            $file = Split-Path $name -Leaf
+            if (Test-Path "$languages\$file.isl") { Write-Host "$file installer texts: built into this Inno Setup."; continue }
             try {
-              Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/$name.isl" -OutFile "packaging\$name.isl" -TimeoutSec 60
+              Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/$name.isl" -OutFile "packaging\$file.isl" -TimeoutSec 60
               Write-Host "$name installer texts: downloaded."
             } catch { Write-Host "$name installer texts are unavailable ($($_.Exception.Message)); the installer will use English for that language." }
           }
