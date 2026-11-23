@@ -5242,3 +5242,98 @@ def test_engine_keeps_no_extra_ram_cache(tmp_path, monkeypatch):
         assert args[args.index("--cache-ram") + 1] == "0", layers
         assert args.count("--cache-ram") == 1
         assert ("-ngl" in args) == (layers > 0)
+
+
+def test_idle_engine_rests_and_wakes(tmp_path):
+    """幾分鐘沒翻譯：翻譯引擎休息（關掉，放掉記憶體）；下一句來了先叫醒再翻，不算失敗、不被當成「自己停了」重開。
+    兩邊收音都關著一段時間：語音辨識模型也放掉。"""
+    from livelingo import service as service_mod
+    from livelingo.service import Service
+
+    class Proc:
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+    made = []
+
+    class FakeEngine:
+        def __init__(self):
+            self.proc, self.url, self.key, self.stopped = Proc(), f"http://engine/{len(made)}", f"k{len(made)}", False
+            made.append(self)
+
+        def start(self):
+            pass
+
+        def wait_ready(self, timeout):
+            return True
+
+        def stop(self):
+            self.stopped = True
+            self.proc.returncode = 0
+
+    class Model:
+        tone, url, key = "casual", "", ""
+
+        def translate(self, text, target, source=None, context=None):
+            if service.engine.proc.poll() is not None:
+                raise ConnectionError("connection refused")
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    service = Service(tmp_path)
+    service.cfg.set(back_translate=False, ui_lang="zh-TW")
+    assert service.cfg["engine_rest"] == 30 and 30 in service_mod.ENGINE_REST
+    assert service.update_config({"engine_rest": "10"})["changed"] == ["engine_rest"] and service.cfg["engine_rest"] == 10
+    assert service.update_config({"engine_rest": 7})["changed"] == [] and service.update_config({"engine_rest": "x"})["changed"] == []
+    service.translator = Model()
+    service.phase = "ready"
+    service.engine = FakeEngine()
+    service._new_engine = lambda: FakeEngine()
+    notes, notices = [], []
+    service.overlay.note = notes.append
+    service.notice = lambda code, **more: notices.append(code)
+
+    service._last_use = time.monotonic() - 9 * 60
+    service._maybe_rest()
+    assert not service._resting and not made[0].stopped          # 還沒到 10 分鐘
+    service._last_use = time.monotonic() - 11 * 60
+    service._maybe_rest()
+    assert service._resting and made[0].stopped and not service._engine_ok.is_set()
+    assert not service._engine_gone()                            # 休息不是「自己停了」，守衛不會去重開
+
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+    try:
+        first = service.submit("typed", "我現在過去", "zh")
+        end = time.time() + 8
+        while time.time() < end and not any(m["id"] == first and m["translated"] for m in service.messages):
+            time.sleep(0.02)
+        done = next(m for m in service.messages if m["id"] == first)
+        assert done["translated"] and not done.get("error")
+        assert not service._resting and service._engine_ok.is_set() and len(made) == 2 and service.engine is made[1]
+        assert service.translator.url == made[1].url and service.translator.key == made[1].key
+        assert any("休息" in n for n in notes) and not notices    # 浮動留言說一聲，不算錯誤
+
+        service.update_config({"engine_rest": 0})                 # 不休息
+        service._last_use = time.monotonic() - 10 * 3600
+        service._maybe_rest()
+        assert not service._resting and not made[1].stopped
+    finally:
+        service.closing.set()
+        worker.join(2)
+
+    # 語音辨識模型：兩邊收音都關著超過 SPEECH_REST 秒才放掉；有收音開著就不放
+    service.recognizer = object()
+    service.pipelines = {"listen": object()}
+    service._maybe_free_speech()
+    assert service.recognizer is not None and service._voice_off_since is None
+    service.pipelines = {}
+    service._maybe_free_speech()
+    assert service.recognizer is not None
+    service._voice_off_since = time.monotonic() - service_mod.SPEECH_REST - 1
+    service._maybe_free_speech()
+    assert service.recognizer is None

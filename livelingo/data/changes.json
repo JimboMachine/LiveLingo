@@ -1,4 +1,21 @@
 {
+  "2.4.2": {
+    "zh-TW": [
+      "沒在用的東西會自動放掉：兩邊收音都關著兩分鐘，語音辨識模型（約 1 GB）就釋放；翻譯引擎可以在「翻譯品質」選多久沒翻譯就休息（不休息、10 分鐘、30 分鐘、1 小時，預設 30 分鐘），休息後的第一句會多等約 10 秒叫醒它。"
+    ],
+    "zh-CN": [
+      "没在用的东西会自动释放：两边收音都关着两分钟，语音识别模型（约 1 GB）就释放；翻译引擎可以在“翻译质量”选多久没翻译就休息（不休息、10 分钟、30 分钟、1 小时，默认 30 分钟），休息后的第一句会多等约 10 秒唤醒它。"
+    ],
+    "en": [
+      "Unused parts now let go of memory: with both listening sources off for two minutes the speech model (about 1 GB) is released, and under “Translation quality” you can choose when the translation engine rests (never, 10 min, 30 min, 1 hour; 30 min by default). The first sentence after a rest waits about 10 seconds while it wakes up."
+    ],
+    "ko": [
+      "쓰지 않는 부분이 메모리를 돌려줍니다. 양쪽 듣기를 2분간 끄면 음성 인식 모델(약 1 GB)을 해제하고, ‘번역 품질’에서 번역 엔진이 쉬는 시점(쉬지 않음, 10분, 30분, 1시간, 기본 30분)을 고를 수 있습니다. 쉰 뒤 첫 문장은 엔진을 깨우느라 약 10초 더 기다립니다."
+    ],
+    "ja": [
+      "使っていない部分がメモリを手放すようになりました。両方の聞き取りを 2 分間オフにすると音声認識モデル（約 1 GB）を解放し、「翻訳品質」で翻訳エンジンが休む時間（休ませない・10 分・30 分・1 時間、標準は 30 分）を選べます。休止後の最初の文は、起動のため約 10 秒余分に待ちます。"
+    ]
+  },
   "2.4.1": {
     "zh-TW": [
       "翻譯引擎不再把翻過的句子另外存在電腦記憶體裡：以前開久了最多會多吃 8 GB 記憶體，現在不會了，玩遊戲時電腦比較不會卡。"
