@@ -161,6 +161,30 @@ begin
   Result := CheckForMutexes('LiveLingoRunning');
 end;
 
+function PsText(Text: String): String;
+begin
+  Result := Text;
+  StringChangeEx(Result, , '', True);
+  Result :=  + Result + ;
+end;
+
+// 還載入著程式資料夾（或翻譯引擎資料夾）裡任何一個檔案的程式，全部關掉。
+// 不只 LiveLingo.exe：LiveLingo 異常結束時，留在背景的翻譯引擎（llama-server.exe）也可能佔著 _internal 裡的 DLL。
+procedure KillFileHolders(Dir: String);
+var
+  code: Integer;
+  cmd: String;
+begin
+  cmd := '$dirs = @(' + PsText(AddBackslash(Dir)) + ', ' + PsText(ExpandConstant('{localappdata}\LiveLingo\engine\')) + '); ' +
+    'Get-Process | Where-Object { try { $p = $_; $p.Id -ne $PID -and @($p.Modules | Where-Object { $f = $_.FileName; ' +
+    '$f -and @($dirs | Where-Object { $f.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0 }).Count -gt 0 } ' +
+    'catch { $false } } | ForEach-Object { Write-Output (''closing '' + $_.ProcessName + '' '' + $_.Id); $_ } | ' +
+    'Stop-Process -Force -ErrorAction SilentlyContinue';
+  Log('LiveLingo: closing programs that use files in ' + Dir);
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' + cmd + '"', '', SW_HIDE, ewWaitUntilTerminated, code);
+end;
+
 procedure KillLiveLingo(WithChildren: Boolean);
 var
   code: Integer;
@@ -228,7 +252,7 @@ begin
   end;
   if not DirExists(AppFile('_internal')) then
     Exit;       // 第一次安裝
-  // LiveLingo 放掉「我還開著」的記號之後，可能還要幾秒才真的結束；等它，等太久就強制關閉，再等一下
+  // LiveLingo 放掉「我還開著」的記號之後，可能還要幾秒才真的結束；等它，等不到就把佔著檔案的程式關掉，再等一下
   for i := 1 to 120 do
   begin
     if RenameFile(AppFile('_internal'), AppFile('_internal.old')) then
@@ -236,10 +260,12 @@ begin
       BackedUp := True;
       Break;
     end;
-    if (i = 40) or (i = 80) then
+    // 記號已經沒了還佔著：通常是程式正在結束（等幾秒），或是留在背景的翻譯引擎（不會自己結束）
+    if (i = 10) or (i = 60) or (i = 100) then
     begin
-      Note('program files still in use; closing LiveLingo');
+      Note('program files still in use; closing what holds them');
       KillLiveLingo(False);
+      KillFileHolders(AppDir);
     end;
     Sleep(500);
   end;
@@ -322,6 +348,7 @@ begin
   if (not KeepData) and (not UninstallSilent) then
     KeepData := SuppressibleMsgBox(CustomMessage('KeepData'), mbConfirmation, MB_YESNO, IDNO) = IDYES;
   StopLiveLingo(True);
+  KillFileHolders(ExpandConstant('{app}'));
   Result := True;
 end;
 

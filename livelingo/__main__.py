@@ -89,7 +89,16 @@ def main() -> int:
     service.watch_errors()      # 沒被接住的錯誤寫進紀錄檔，並在畫面上說一聲
 
     def exit_now():
-        service.shutdown()
+        # 收尾出錯也一定要結束，而且翻譯引擎一定要關：留在背景的話會佔住程式檔，更新換不掉
+        try:
+            service.shutdown()
+        except Exception:  # noqa: BLE001
+            service.log(traceback.format_exc())
+        try:
+            if service.engine:
+                service.engine.stop()
+        except Exception:  # noqa: BLE001
+            pass
         (data / "run.json").unlink(missing_ok=True)
         # 「我還開著」的記號不在這裡放掉：留給 Windows 在程式真的結束時收。安裝程式看到記號消失就開始換檔，
         # 先放掉的話程式其實還要幾秒才結束，檔案還被佔著（2.4.2 那次更新就這樣把程式裝壞了）

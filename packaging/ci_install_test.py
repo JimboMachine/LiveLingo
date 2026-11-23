@@ -4,7 +4,7 @@
   2. 裝好的程式自我檢查通過（視窗開得起來）
   3. 更新：假裝 GitHub 上有 99.0.0，程式會先問（問的時候帶著這一版改了什麼、要下載多大）；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
   3c. 回上一版：用留著的安裝檔退一次（核對雜湊、自己關掉、安靜地裝、再打開）
-  3d. 程式檔還被佔著時更新：等它放開再裝；一直放不開就不裝；不管哪種，程式都打得開
+  3d. 程式檔還被佔著時更新：等它放開再裝；留在背景載入程式 DLL 的程式要被關掉；一直放不開就不裝；不管哪種，程式都打得開
   4a. 卸載時選擇留下設定（/KEEPDATA=1）：程式、捷徑、模型、引擎都刪掉，設定和詞彙表留著，之後再裝一次
   4b. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
@@ -346,6 +346,25 @@ def update_while_held(seconds: float) -> int:
 code = update_while_held(8)
 if code != 0:
     fail("the installer did not wait for the program files to be free")
+# 留在背景、載入了程式資料夾裡 DLL 的別的程式（像 LiveLingo 異常結束後留下的翻譯引擎）：安裝程式要把它關掉再裝
+DLL = APP_DIR / "_internal" / "msvcp140.dll"
+holder = subprocess.Popen([sys.executable, "-c", f"import ctypes, time; ctypes.WinDLL({str(DLL)!r}); print('loaded', flush=True); time.sleep(900)"],
+                          stdout=subprocess.PIPE, text=True)
+if holder.stdout.readline().strip() != "loaded":
+    fail("the test could not load a DLL from the program folder")
+orphan_log = Path(tempfile.gettempdir()) / "livelingo-orphan.log"
+LOGS.append(orphan_log)
+code = subprocess.run([str(SETUP), *SILENT, f"/LOG={orphan_log}"], timeout=900).returncode
+print("left-behind program holding a DLL: installer exit code", code, "holder", "closed" if holder.poll() is not None else "STILL RUNNING")
+for line in orphan_log.read_text(encoding="utf-8", errors="replace").splitlines():
+    if "LiveLingo:" in line:
+        print("   ", line.strip())
+if holder.poll() is None:
+    holder.kill()
+    fail("the installer did not close a program that held a DLL from the program folder")
+if code != 0:
+    fail("the installer did not finish after closing the program that held a DLL")
+selftest("after closing a left-behind program")
 # 一直佔著（比安裝程式願意等的久）：可以不更新，但程式不能壞
 code = update_while_held(100)
 print("long hold:", "installed anyway" if code == 0 else "nothing was changed")
