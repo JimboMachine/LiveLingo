@@ -118,16 +118,38 @@ def release_single_instance() -> None:
         _mutex = None
 
 
-def exclude_from_capture(hwnd: int) -> None:
-    """讓這個視窗不會被自己的螢幕擷取拍進去（Windows 10 2004 以上）。"""
+def exclude_from_capture(hwnd: int, hide: bool = True) -> None:
+    """
+    hide=True：這個視窗不會被任何螢幕擷取拍到（Discord 分享螢幕、OBS 直播、錄影都看不到它；Windows 10 2004 以上）。
+    hide=False：照常讓擷取拍得到。讀螢幕的功能自己會把字幕蓋住的地方遮掉（service.capture_mask），不會讀到自己顯示的字。
+    """
     if not IS_WIN or not hwnd:
         return
     try:
         import ctypes
 
-        ctypes.windll.user32.SetWindowDisplayAffinity(ctypes.c_void_p(hwnd), 0x11)   # WDA_EXCLUDEFROMCAPTURE
+        ctypes.windll.user32.SetWindowDisplayAffinity(ctypes.c_void_p(hwnd), 0x11 if hide else 0)   # WDA_EXCLUDEFROMCAPTURE / WDA_NONE
     except Exception:  # noqa: BLE001
         pass
+
+
+def window_rect_of(hwnd: int) -> list[int] | None:
+    """這個視窗現在在螢幕上的 [左, 上, 寬, 高]；看不見（隱藏、縮小）就是 None。"""
+    if not IS_WIN or not hwnd:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        u32 = ctypes.windll.user32
+        if not u32.IsWindowVisible(wintypes.HWND(hwnd)) or u32.IsIconic(wintypes.HWND(hwnd)):
+            return None
+        r = wintypes.RECT()
+        if not u32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(r)):
+            return None
+        return [r.left, r.top, r.right - r.left, r.bottom - r.top]
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def style_title_bar(hwnd: int, caption: str = "#171A1E", text: str = "#F2F4F6", dark: bool = True) -> bool:

@@ -905,6 +905,7 @@
           <span class="head"><span class="name">${esc(t("mode_" + id))}</span></span><span class="desc">${esc(t("mode_" + id + "_desc"))}</span></button>`).join("")}</div>
         <div class="btn-row"><button class="ghost" data-act="overlay-test" ${on ? "" : "disabled"}>${esc(t("ov_test"))}</button></div>
         ${on ? `<div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>` : ""}
+        ${switchRow("share_visible", t("share_visible"), t("share_visible_desc"))}
       </section>
       ${mapHTML()}
       <section><div><h2>${esc(t("ov_presets"))}</h2><div class="sub">${esc(t("ov_presets_hint"))}</div></div>

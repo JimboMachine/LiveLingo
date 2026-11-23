@@ -148,7 +148,8 @@ def _run_webview(url: str, service, on_loaded=None, quit_event: threading.Event 
             ctl.set_chrome(*service.chrome)
             service.tray.start()      # 系統匣圖示：有它，關視窗才能收到系統匣而不是結束程式
             try:
-                oswin.exclude_from_capture(int(win.native.Handle.ToInt32()))
+                service.main_hwnd = int(win.native.Handle.ToInt32())
+                oswin.exclude_from_capture(service.main_hwnd, not service.cfg["share_visible"])
             except Exception as ex:  # noqa: BLE001
                 service.log(f"exclude_from_capture failed: {ex!r}")
 

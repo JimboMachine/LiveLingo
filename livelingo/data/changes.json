@@ -1,4 +1,21 @@
 {
+  "2.4.3": {
+    "zh-TW": [
+      "浮動字幕和 LiveLingo 視窗現在能被 Discord 分享螢幕、OBS 直播和錄影拍到（以前一律藏起來，朋友什麼都看不到）。想只給自己看，到「顯示與字幕」關掉「讓分享螢幕、直播看得到字幕」。"
+    ],
+    "zh-CN": [
+      "浮动字幕和 LiveLingo 窗口现在能被 Discord 共享屏幕、OBS 直播和录制拍到（以前一律藏起来，朋友什么都看不到）。想只给自己看，到“显示与字幕”关掉“让共享屏幕、直播看得到字幕”。"
+    ],
+    "en": [
+      "Floating subtitles and the LiveLingo window now appear in Discord screen sharing, OBS streams and recordings (they used to be hidden). To keep them private, turn off “Show subtitles in screen sharing and streams” under Display."
+    ],
+    "ko": [
+      "떠 있는 자막과 LiveLingo 창이 이제 Discord 화면 공유, OBS 방송, 녹화에 보입니다(전에는 모두 숨겨졌습니다). 나에게만 보이게 하려면 ‘표시 및 자막’에서 ‘화면 공유·방송에도 자막 표시’를 끄세요."
+    ],
+    "ja": [
+      "浮動字幕と LiveLingo のウィンドウが、Discord の画面共有・OBS の配信・録画に映るようになりました（以前はすべて隠されていました）。自分だけに見せたい場合は「表示と字幕」で「画面共有・配信にも字幕を表示」をオフにしてください。"
+    ]
+  },
   "2.4.2": {
     "zh-TW": [
       "沒在用的東西會自動放掉：兩邊收音都關著兩分鐘，語音辨識模型（約 1 GB）就釋放；翻譯引擎可以在「翻譯品質」選多久沒翻譯就休息（不休息、10 分鐘、30 分鐘、1 小時，預設 30 分鐘），休息後的第一句會多等約 10 秒叫醒它。"

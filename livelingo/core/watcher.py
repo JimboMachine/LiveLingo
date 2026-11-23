@@ -186,6 +186,20 @@ class _Slot:
                 region.get("app") or "", tuple(region.get("anchor") or ()))
 
 
+def blank_covers(bgr: np.ndarray, place: dict, covers: list) -> np.ndarray:
+    """把 covers（螢幕上的 [左, 上, 寬, 高]）和這次擷取的位置 place 重疊的部分塗成黑色。回傳新的圖，原本的不動。"""
+    out = None
+    h, w = bgr.shape[:2]
+    for left, top, width, height in covers:
+        x0, y0 = max(0, int(left) - int(place["left"])), max(0, int(top) - int(place["top"]))
+        x1, y1 = min(w, int(left) + int(width) - int(place["left"])), min(h, int(top) + int(height) - int(place["top"]))
+        if x1 > x0 and y1 > y0:
+            if out is None:
+                out = bgr.copy()
+            out[y0:y1, x0:x1] = 0
+    return bgr if out is None else out
+
+
 class ScreenWatcher(threading.Thread):
     """
     每隔一下子看一次螢幕上框選的區域，有新的一行就交給 on_message。可以同時看好幾個區域，各自記各自看過的句子。
@@ -194,8 +208,10 @@ class ScreenWatcher(threading.Thread):
 
     def __init__(self, ocr: OcrEngine, on_message, on_status=None, interval: float = 0.7,
                  source_langs: set[str] | None = None, first_scan_keep: int = 4, grab=None, locate=None, on_stats=None,
-                 on_black=None):
+                 on_black=None, mask=None):
         super().__init__(daemon=True)
+        # mask()：現在有哪些東西蓋在螢幕上（LiveLingo 自己的字幕和視窗）[[左, 上, 寬, 高], ...]。擷取時先塗黑，才不會把自己顯示的字又讀進來翻一次
+        self.mask = mask or (lambda: [])
         self.ocr = ocr
         self.on_message = on_message          # on_message(原文, 語言代碼, 辨識分數 0~1, 區域)
         self.on_status = on_status or (lambda s: None)
@@ -303,6 +319,12 @@ class ScreenWatcher(threading.Thread):
             slot.prev = None      # 視窗回來之後等畫面停下來再讀
             return
         bgr = np.ascontiguousarray(grab(place))
+        try:
+            covers = self.mask()
+        except Exception:  # noqa: BLE001
+            covers = []
+        if covers:
+            bgr = blank_covers(bgr, place, covers)
         # 整塊全黑：遊戲用「全螢幕」（不是無邊框）時，抓到的畫面就是這樣。黑了幾秒就告訴使用者，不然只會看到「什麼都沒翻」
         dark = bool(bgr.size) and int(bgr.max()) < 12
         slot.dark_since = (slot.dark_since or time.monotonic()) if dark else None

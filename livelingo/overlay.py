@@ -132,10 +132,14 @@ class MemoryWindow:
         self.frames = 0
         self.scale = 1.0
         self.hwnd = 0
+        self.hidden = False      # 是不是不讓螢幕分享拍到
 
     def start(self, rect) -> bool:
         self.rect = list(rect)
         return True
+
+    def set_hidden(self, hidden: bool) -> None:
+        self.hidden = bool(hidden)
 
     def paint(self, image, rect) -> None:
         self.image, self.rect = image, list(rect)
@@ -256,6 +260,7 @@ if oswin.IS_WIN:
             self.scale = 1.0
             self.frames = 0
             self.error = ""
+            self.hidden = False
             self._pending = None
             self._lock = threading.Lock()
             self._ready = threading.Event()
@@ -280,6 +285,11 @@ if oswin.IS_WIN:
         def set_edit(self, on: bool) -> None:
             if self.hwnd:
                 _u32.PostMessageW(self.hwnd, WM_SET_EDIT, 1 if on else 0, 0)
+
+        def set_hidden(self, hidden: bool) -> None:
+            self.hidden = bool(hidden)
+            if self.hwnd:
+                oswin.exclude_from_capture(self.hwnd, self.hidden)
 
         def close(self) -> None:
             if self.hwnd:
@@ -317,7 +327,7 @@ if oswin.IS_WIN:
                     self.scale = max(1.0, _u32.GetDpiForWindow(wintypes.HWND(hwnd)) / 96.0)
                 except Exception:  # noqa: BLE001  （Windows 10 很舊的版本沒有這個函式）
                     self.scale = 1.0
-                oswin.exclude_from_capture(hwnd)      # 讀螢幕的功能不要讀到自己顯示的字
+                oswin.exclude_from_capture(hwnd, self.hidden)      # 預設讓螢幕分享拍得到；讀螢幕的功能自己會把這塊遮掉
                 _u32.ShowWindow(hwnd, 4)              # SW_SHOWNOACTIVATE
             except Exception as ex:  # noqa: BLE001
                 self.error = repr(ex)
@@ -490,6 +500,19 @@ class Overlay:
         self._last = None
         self._wake.set()
 
+    def apply_share(self) -> None:
+        """「讓分享螢幕看得到」改了：開著的視窗馬上換。"""
+        if self.window:
+            self.window.set_hidden(not self.service.cfg["share_visible"])
+
+    def covers(self) -> list[int] | None:
+        """現在有留言蓋在螢幕上的哪裡 [左, 上, 寬, 高]（讀螢幕時要把這塊遮掉）；沒有就是 None。"""
+        with self._lock:
+            shown = bool(self.items)
+        if self.window and self.rect and (shown or self.editing):
+            return list(self.rect)
+        return None
+
     @property
     def bar(self) -> bool:
         return self.service.cfg["overlay_form"] == "bar"
@@ -532,6 +555,7 @@ class Overlay:
     def _open(self) -> None:
         self.rect = self._home()
         window = self.window_class(on_rect=self._moved, on_done=lambda: self.set_edit(False))
+        window.hidden = not self.service.cfg["share_visible"]      # 視窗建好（start）的時候就要用到
         if not window.start(self.rect):
             self.service.log(f"floating chat window failed: {getattr(window, 'error', '')}")
             self.service.cfg.set(overlay=False)
