@@ -4,6 +4,7 @@
   2. 裝好的程式自我檢查通過（視窗開得起來）
   3. 更新：假裝 GitHub 上有 99.0.0，程式會先問（問的時候帶著這一版改了什麼、要下載多大）；按「這次先不要」照常使用，按「現在更新」會自己下載、安裝、重新開啟，而且不會無限重裝
   3c. 回上一版：用留著的安裝檔退一次（核對雜湊、自己關掉、安靜地裝、再打開）
+  3d. 程式檔還被佔著時更新：等它放開再裝；一直放不開就不裝；不管哪種，程式都打得開
   4a. 卸載時選擇留下設定（/KEEPDATA=1）：程式、捷徑、模型、引擎都刪掉，設定和詞彙表留著，之後再裝一次
   4b. 卸載後程式、捷徑、資料都清乾淨；大檔案搬到別的資料夾的話那邊也清掉，但不動別人的檔案
 用法：python packaging/ci_install_test.py dist\\LiveLingo-Setup.exe
@@ -312,6 +313,46 @@ print("used installer removed; update folder now holds:", sorted(p.name for p in
 httpd.shutdown()
 api(run, "/api/quit", {})
 wait_for("the app to quit after the roll back check", lambda: not running(), 60)
+
+# ---------------------------------------------------------------- 3d. 更新時程式檔還被佔著
+# 2.4.2 那次：LiveLingo 放掉「我還開著」的記號以後還沒真的結束，安裝程式先刪舊檔、換檔失敗、中止，
+# 留下一個沒有 python312.dll、打不開的程式。現在不管怎樣，安裝程式跑完之後程式都要打得開。
+step("update while program files are still in use")
+HELD = APP_DIR / "_internal" / "python312.dll"
+
+
+def update_while_held(seconds: float) -> int:
+    """佔住 python312.dll 幾秒（像一個還在結束的 LiveLingo），同時跑更新，回傳安裝程式的結束碼。"""
+    if not HELD.exists():
+        fail(f"{HELD} is missing before the test")
+    handle = open(HELD, "rb")       # Python 開檔不給 FILE_SHARE_DELETE：刪不掉，資料夾也改不了名
+    threading.Timer(seconds, handle.close).start()
+    held_log = Path(tempfile.gettempdir()) / f"livelingo-held-{int(seconds)}.log"
+    LOGS.append(held_log)
+    started = time.time()
+    code = subprocess.run([str(SETUP), *SILENT, f"/LOG={held_log}"], timeout=900).returncode
+    print(f"held {seconds:.0f}s: installer exit code {code} after {time.time() - started:.0f}s")
+    for line in held_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        if "LiveLingo:" in line or "DeleteFile" in line or "Rolling back" in line:
+            print("   ", line.strip())
+    time.sleep(max(0.0, seconds - (time.time() - started)) + 1)      # 佔住的檔案放開了再檢查
+    if not HELD.exists() or not APP.exists():
+        fail(f"held {seconds:.0f}s: the program was left without {HELD.name if not HELD.exists() else APP.name}")
+    selftest(f"after an update with files held for {seconds:.0f}s")
+    return code
+
+
+# 佔幾秒就放開：安裝程式要等它，然後正常裝好
+code = update_while_held(8)
+if code != 0:
+    fail("the installer did not wait for the program files to be free")
+# 一直佔著（比安裝程式願意等的久）：可以不更新，但程式不能壞
+code = update_while_held(100)
+print("long hold:", "installed anyway" if code == 0 else "nothing was changed")
+if running():
+    fail("a plain silent install started the app")
+if (APP_DIR / "_internal.old").exists() and code != 0:
+    fail("the old program files were left as _internal.old after a failed update")
 
 # ---------------------------------------------------------------- 4a. 卸載，但把自己的設定留下來
 step("uninstall, keeping settings and history")

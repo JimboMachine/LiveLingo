@@ -91,7 +91,8 @@ def main() -> int:
     def exit_now():
         service.shutdown()
         (data / "run.json").unlink(missing_ok=True)
-        oswin.release_single_instance()
+        # 「我還開著」的記號不在這裡放掉：留給 Windows 在程式真的結束時收。安裝程式看到記號消失就開始換檔，
+        # 先放掉的話程式其實還要幾秒才結束，檔案還被佔著（2.4.2 那次更新就這樣把程式裝壞了）
         os._exit(0)
 
     service.exit_now = exit_now
