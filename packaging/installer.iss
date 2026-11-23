@@ -164,8 +164,8 @@ end;
 function PsText(Text: String): String;
 begin
   Result := Text;
-  StringChangeEx(Result, , '', True);
-  Result :=  + Result + ;
+  StringChangeEx(Result, '''', '''''', True);
+  Result := '''' + Result + '''';
 end;
 
 // 還載入著程式資料夾（或翻譯引擎資料夾）裡任何一個檔案的程式，全部關掉。
@@ -178,8 +178,7 @@ begin
   cmd := '$dirs = @(' + PsText(AddBackslash(Dir)) + ', ' + PsText(ExpandConstant('{localappdata}\LiveLingo\engine\')) + '); ' +
     'Get-Process | Where-Object { try { $p = $_; $p.Id -ne $PID -and @($p.Modules | Where-Object { $f = $_.FileName; ' +
     '$f -and @($dirs | Where-Object { $f.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0 }).Count -gt 0 } ' +
-    'catch { $false } } | ForEach-Object { Write-Output (''closing '' + $_.ProcessName + '' '' + $_.Id); $_ } | ' +
-    'Stop-Process -Force -ErrorAction SilentlyContinue';
+    'catch { $false } } | Stop-Process -Force -ErrorAction SilentlyContinue';
   Log('LiveLingo: closing programs that use files in ' + Dir);
   Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' + cmd + '"', '', SW_HIDE, ewWaitUntilTerminated, code);
