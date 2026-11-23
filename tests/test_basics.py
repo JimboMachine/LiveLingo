@@ -5229,3 +5229,16 @@ def test_named_voices_are_remembered(tmp_path, monkeypatch):
     source = (root / "service.py").read_text(encoding="utf-8")
     boot = source[source.index("    def _boot(self)"):source.index("    def _boot(self)") + 700]
     assert "self.speakers_load()" in boot      # 一開程式就準備好，不用等到開始收音才看得到記住的人
+
+
+def test_engine_keeps_no_extra_ram_cache(tmp_path, monkeypatch):
+    """llama-server 預設會在電腦記憶體裡另外存最多 8 GB 的舊句子快取，開久了真的會長到那麼大
+    （顯示卡模式跑一晚：引擎 9.5 GB）。顯示卡和處理器兩種都要用 --cache-ram 0 關掉。"""
+    from livelingo.core.engine import Engine
+
+    monkeypatch.delenv("LLAMA_SERVER", raising=False)
+    for layers in (0, 99):
+        args = Engine(tmp_path / "llama-server.exe", tmp_path / "m.gguf", tmp_path / "engine.log", gpu_layers=layers).command()
+        assert args[args.index("--cache-ram") + 1] == "0", layers
+        assert args.count("--cache-ram") == 1
+        assert ("-ngl" in args) == (layers > 0)
