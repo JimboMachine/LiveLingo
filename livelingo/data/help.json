@@ -58,7 +58,8 @@
      "聽錯或看錯：可以改那一句的原文，改好會重新翻譯。",
      "翻法不喜歡：可以教它整句應該怎麼翻，之後同一句都會照你教的翻。",
      "遊戲用語、朋友的暱稱：加進「我的詞彙表」，翻譯時會固定用你指定的說法。",
-     "在「翻譯品質」可以選語氣（朋友之間或有禮貌）和翻譯品質。"
+     "在「翻譯品質」可以選語氣（朋友之間或有禮貌）和翻譯品質。",
+     "同一句話翻過一次就會記住，下次直接用，不用再等。在「翻譯品質」的「翻過的句子」可以匯出分享檔給朋友，朋友匯入後同樣的句子就不用重翻；不想用別人的翻法，關掉「使用匯入的翻譯」就好。"
     ]
    },
    {
@@ -161,7 +162,8 @@
      "听错或看错：可以改那一句的原文，改好会重新翻译。",
      "翻法不喜欢：可以教它整句应该怎么翻，之后同一句都会照你教的翻。",
      "游戏用语、朋友的昵称：加进“我的词汇表”，翻译时会固定用你指定的说法。",
-     "在“翻译质量”可以选语气（朋友之间或有礼貌）和翻译质量。"
+     "在“翻译质量”可以选语气（朋友之间或有礼貌）和翻译质量。",
+     "同一句话翻过一次就会记住，下次直接用，不用再等。在「翻译质量」的「翻过的句子」可以导出分享文件给朋友，朋友导入后同样的句子就不用重翻；不想用别人的翻法，关掉「使用导入的翻译」就好。"
     ]
    },
    {
@@ -264,7 +266,8 @@
      "Misheard or misread: edit the original text of that line and it is translated again.",
      "You prefer another wording: teach it how the whole sentence should be translated, and that sentence is translated your way from then on.",
      "Game terms and friends’ nicknames: add them to “My glossary” and they are always translated the way you set.",
-     "In “Translation quality” you can choose the tone (casual or polite) and the quality."
+     "In “Translation quality” you can choose the tone (casual or polite) and the quality.",
+     "A sentence translated once is remembered and used right away next time. Under \"Translated sentences\" in \"Translation quality\" you can export a share file for a friend, and after importing it the same sentences are not translated again. To ignore other people's versions, turn off \"Use imported translations\"."
     ]
    },
    {
@@ -367,7 +370,8 @@
      "잘못 듣거나 잘못 읽은 경우: 그 줄의 원문을 고치면 다시 번역합니다.",
      "번역 표현이 마음에 들지 않을 때: 문장 전체를 어떻게 번역할지 가르치면, 그 문장은 앞으로 가르친 대로 번역합니다.",
      "게임 용어나 친구 별명: ‘내 단어장’에 추가하면 항상 정해 둔 표현으로 번역합니다.",
-     "‘번역 품질’에서 말투(친구 사이 또는 공손하게)와 번역 품질을 고를 수 있습니다."
+     "‘번역 품질’에서 말투(친구 사이 또는 공손하게)와 번역 품질을 고를 수 있습니다.",
+     "한 번 번역한 문장은 기억해 두었다가 다음에 바로 씁니다. 「번역 품질」의 「번역한 문장」에서 공유 파일을 친구에게 내보낼 수 있고, 친구가 가져오면 같은 문장을 다시 번역하지 않습니다. 다른 사람의 번역을 쓰고 싶지 않으면 「가져온 번역 사용」을 끄면 됩니다."
     ]
    },
    {
@@ -470,7 +474,8 @@
      "聞き間違いや読み間違い：その行の原文を直すと、もう一度翻訳します。",
      "訳し方が気に入らないとき：文全体をどう訳すか教えると、その文は以後、教えたとおりに訳されます。",
      "ゲーム用語や友だちのあだ名：「自分の用語集」に追加すると、いつも決めた言い方で訳されます。",
-     "「翻訳の品質」で口調（友だち同士か丁寧か）と翻訳の品質を選べます。"
+     "「翻訳の品質」で口調（友だち同士か丁寧か）と翻訳の品質を選べます。",
+     "一度翻訳した文は覚えておき、次からはすぐに使います。「翻訳の品質」の「翻訳した文」で共有ファイルを友達に書き出せ、友達が読み込むと同じ文は翻訳し直しません。ほかの人の訳を使いたくないときは「読み込んだ翻訳を使う」をオフにします。"
     ]
    },
    {

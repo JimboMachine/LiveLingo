@@ -436,14 +436,18 @@ class Stop:
 
 
 class Translator:
-    def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None):
+    def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None,
+                 memory=None):
         """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
-        lessons：呼叫後回傳使用者教過的句子 [{"src", "dst", "lang", "target"}]。"""
+        lessons：呼叫後回傳使用者教過的句子 [{"src", "dst", "lang", "target"}]；
+        memory：翻過的句子（livelingo.memory.Memory），翻過的直接用、翻好的記下來；None = 不用。"""
         self.url = url.rstrip("/")
         self.key = ""                     # 翻譯引擎這一次啟動的金鑰（Engine.key）；空的就不帶
         self.glossary = glossary or (lambda: {})
         self.hints = hints or (lambda text, source, target: [])
         self.lessons = lessons or (lambda: [])
+        self.memory = memory
+        self.model = ""                   # 現在用哪個模型（"4b"／"12b"）：記住的翻法比現在的模型差就重翻
         self.tone = tone
         self.hint_intro = HINT_INTRO      # 用語提示前面那句話（照選了哪些用語包換）
         self.max_chars = max_chars
@@ -617,13 +621,14 @@ class Translator:
         return best
 
     def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None,
-                  on_part=None, unfinished: bool = False, stop: Stop | None = None) -> str:
+                  on_part=None, unfinished: bool = False, stop: Stop | None = None, remember: str | None = None) -> str:
         """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
         context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。
         on_part(目前的譯文)：翻的時候一邊出字一邊叫（只是先給人看；最後回傳的才是整理過、核對過的譯文）。
         on_part 回傳 False 就停下來不翻了，丟出 Stopped（對方還在說、這半句已經過時的時候用）。
         unfinished：還沒說完的半句（即時字幕）。只翻一次、不補句尾、不核對；結果另外記，不會被當成整句的譯文。
-        stop：一個 Stop；別的地方呼叫它的 stop() 就馬上中斷這一次（丟出 Stopped）。"""
+        stop：一個 Stop；別的地方呼叫它的 stop() 就馬上中斷這一次（丟出 Stopped）。
+        remember：這句話從哪來的（訊息的 via）；有給的話，翻好的會記進翻過的句子（memory），下次同一句不用重翻。"""
         text = text.strip()[:MAX_TEXT]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
@@ -634,6 +639,7 @@ class Translator:
             for i, part in enumerate(parts):
                 done = joiner.join(outs)
                 outs.append(self.translate(part, target, source, context if i == 0 else None, unfinished=unfinished, stop=stop,
+                                       remember=remember,
                                            on_part=(lambda t, done=done: on_part((done + joiner if done else "") + t)) if on_part else None))
             return joiner.join(o for o in outs if o)
         context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
@@ -644,6 +650,16 @@ class Translator:
         if exact:
             return exact
         hints = self.hints(text, source, target)
+        terms = ""
+        if self.memory is not None and not unfinished:
+            from ..memory import terms_print
+
+            words = self.glossary()
+            terms = terms_print([(k, v) for k, v in words.items() if k and k in text] + [tuple(h) for h in hints])
+            known = self.memory.lookup(text, source, target, self.tone, self.model, terms)
+            if known:
+                self._cache[key] = known
+                return known
         kind = sentence_kind(text, source)
         sent = text if unfinished else with_end_mark(text, source, kind)
         show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
@@ -678,4 +694,8 @@ class Translator:
         if len(self._cache) > 500:
             self._cache.clear()
         self._cache[key] = out
+        if (remember is not None and self.memory is not None and out and out.strip() != text
+                and not numbers_lost(sent, out, target, source) and not _leftover(out, source, target)):
+            # 只記沒問題的：數字對得上、沒有留著原文的字。有問題的下次再翻一次
+            self.memory.store(text, source, target, self.tone, out, self.model, terms, remember)
         return out
