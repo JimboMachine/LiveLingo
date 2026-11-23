@@ -16,7 +16,7 @@ NAME_COLORS = {"heard": (196, 148, 255), "screen": (255, 196, 92), "me": (92, 22
 NOTE_NAME = "LiveLingo"
 # 分辨說話者：第 1、2、3… 個人的名字顏色（輪著用）。避開「我」的青色和「聊天」的橘色，免得看錯是誰。
 SPEAKER_COLORS = [(196, 148, 255), (124, 227, 139), (255, 143, 179), (127, 168, 255), (242, 227, 107), (255, 138, 115)]
-SPEAKER = {"zh-TW": "說話者 {n}", "zh-CN": "说话者 {n}", "en": "Speaker {n}", "ko": "화자 {n}", "ja": "話者 {n}"}
+SPEAKER = {"zh-TW": "說話者 {n}", "zh-CN": "说话者 {n}", "en": "Speaker {n}", "ko": "화자 {n}", "ja": "話者 {n}", "vi": "Người nói {n}", "th": "ผู้พูด {n}", "id": "Pembicara {n}", "es": "Hablante {n}", "pt": "Falante {n}", "ru": "Говорящий {n}", "de": "Sprecher {n}", "fr": "Intervenant {n}"}
 
 
 def speaker_name(n: int, ui_lang: str, given: str = "") -> str:
@@ -35,6 +35,14 @@ NAMES = {
     "en": {"heard": "Them", "screen": "Chat", "me": "Me"},
     "ko": {"heard": "상대", "screen": "채팅", "me": "나"},
     "ja": {"heard": "相手", "screen": "チャット", "me": "自分"},
+    "vi": {"heard": "Họ", "screen": "Chat", "me": "Tôi"},
+    "th": {"heard": "อีกฝ่าย", "screen": "แชท", "me": "ฉัน"},
+    "id": {"heard": "Mereka", "screen": "Chat", "me": "Aku"},
+    "es": {"heard": "Ellos", "screen": "Chat", "me": "Yo"},
+    "pt": {"heard": "Eles", "screen": "Chat", "me": "Eu"},
+    "ru": {"heard": "Они", "screen": "Чат", "me": "Я"},
+    "de": {"heard": "Andere", "screen": "Chat", "me": "Ich"},
+    "fr": {"heard": "Eux", "screen": "Chat", "me": "Moi"},
 }
 HINTS = {
     "zh-TW": "拖曳移動，拖邊緣調整大小。在 LiveLingo 按「完成」或在這裡點兩下結束。",
@@ -42,6 +50,14 @@ HINTS = {
     "en": "Drag to move, drag the edges to resize. Press Done in LiveLingo or double-click here to finish.",
     "ko": "드래그해서 옮기고, 가장자리를 끌어 크기를 조절하세요. LiveLingo에서 완료를 누르거나 여기를 더블클릭하면 끝납니다.",
     "ja": "ドラッグで移動、端をドラッグでサイズ変更。LiveLingo の「完了」を押すか、ここをダブルクリックで終了します。",
+    "vi": "Kéo để di chuyển, kéo mép để đổi kích thước. Nhấn Xong trong LiveLingo hoặc nhấp đúp vào đây để kết thúc.",
+    "th": "ลากเพื่อย้าย ลากขอบเพื่อปรับขนาด กด เสร็จ ใน LiveLingo หรือดับเบิลคลิกที่นี่เพื่อจบ",
+    "id": "Seret untuk memindahkan, seret tepinya untuk mengubah ukuran. Tekan Selesai di LiveLingo atau klik dua kali di sini untuk selesai.",
+    "es": "Arrastra para mover, arrastra los bordes para cambiar el tamaño. Pulsa Listo en LiveLingo o haz doble clic aquí para terminar.",
+    "pt": "Arraste para mover, arraste as bordas para mudar o tamanho. Clique em Concluir no LiveLingo ou dê um clique duplo aqui para terminar.",
+    "ru": "Перетащите, чтобы переместить, потяните за края, чтобы изменить размер. Нажмите «Готово» в LiveLingo или дважды щёлкните здесь, чтобы закончить.",
+    "de": "Ziehen zum Verschieben, an den Rändern ziehen zum Ändern der Größe. In LiveLingo auf Fertig klicken oder hier doppelklicken, um abzuschließen.",
+    "fr": "Faites glisser pour déplacer, tirez les bords pour redimensionner. Cliquez sur Terminé dans LiveLingo ou double-cliquez ici pour finir.",
 }
 SAMPLES = {
     "zh-TW": [("heard", "打野來一下下路，對面沒有閃現"), ("screen", "這隻蟲的求生慾好強"), ("me", "좋아, 지금 갈게")],
@@ -50,6 +66,14 @@ SAMPLES = {
            ("me", "좋아, 지금 갈게")],
     "ko": [("heard", "정글 봇 한 번만 와줘, 상대 점멸 없어"), ("screen", "저 벌레 생존력 진짜 좋네"), ("me", "好，我現在過去")],
     "ja": [("heard", "ジャングル、ボットに来て。相手フラッシュないよ"), ("screen", "あの虫、しぶといな"), ("me", "좋아, 지금 갈게")],
+    "vi": [("heard", "Đi rừng ơi xuống bot giúp cái, bên kia không có Tốc Biến"), ("screen", "Con bọ đó lì thật"), ("me", "좋아, 지금 갈게")],
+    "th": [("heard", "ป่ามาบอทหน่อย ฝั่งนั้นไม่มีแฟลช"), ("screen", "แมลงตัวนั้นอึดจริงๆ"), ("me", "좋아, 지금 갈게")],
+    "id": [("heard", "Jungle, ke bot dong. Lawan nggak ada Flash."), ("screen", "Serangga itu bandel banget"), ("me", "좋아, 지금 갈게")],
+    "es": [("heard", "Jungla, ven a bot. No tienen Flash."), ("screen", "Ese bicho no se quiere morir"), ("me", "좋아, 지금 갈게")],
+    "pt": [("heard", "Jungle, vem bot. Eles estão sem Flash."), ("screen", "Esse bicho não quer morrer de jeito nenhum"), ("me", "좋아, 지금 갈게")],
+    "ru": [("heard", "Лесник, приходи на бот. У них нет флеша."), ("screen", "Этот жук никак не хочет умирать"), ("me", "좋아, 지금 갈게")],
+    "de": [("heard", "Jungle, komm bot. Die haben kein Flash."), ("screen", "Der Käfer will einfach nicht sterben"), ("me", "좋아, 지금 갈게")],
+    "fr": [("heard", "Jungle, viens bot. Ils n'ont pas de Flash."), ("screen", "Cet insecte ne veut vraiment pas mourir"), ("me", "좋아, 지금 갈게")],
 }
 
 _WINDOWS_FONTS = {
@@ -60,6 +84,7 @@ _WINDOWS_FONTS = {
         "sc": ["msyhbd.ttc", "msyh.ttc", "msjhbd.ttc", "msjh.ttc"],      # 簡體字用微軟雅黑，繁體字它也都有
         "ko": ["malgunbd.ttf", "malgun.ttf", "msjhbd.ttc"],
         "latin": ["segoeuib.ttf", "arialbd.ttf", "msjhbd.ttc"],
+        "th": ["LeelaUIb.ttf", "leelawdb.ttf", "tahomabd.ttf"],      # 泰文：微軟正黑體、Segoe UI 都沒有泰文字
     },
     ("sans", False): {
         "cjk": ["msjh.ttc", "msyh.ttc", "YuGothM.ttc", "meiryo.ttc"],
@@ -67,6 +92,7 @@ _WINDOWS_FONTS = {
         "sc": ["msyh.ttc", "msjh.ttc"],
         "ko": ["malgun.ttf", "msjh.ttc"],
         "latin": ["segoeui.ttf", "arial.ttf", "msjh.ttc"],
+        "th": ["LeelawUI.ttf", "leelawad.ttf", "tahoma.ttf"],
     },
     ("serif", False): {
         "cjk": ["mingliub.ttc", "mingliu.ttc", "simsun.ttc"],
@@ -74,6 +100,7 @@ _WINDOWS_FONTS = {
         "sc": ["simsun.ttc", "mingliub.ttc"],
         "ko": ["batang.ttc"],
         "latin": ["georgia.ttf", "times.ttf"],
+        "th": [],
     },
     ("kai", False): {
         "cjk": ["kaiu.ttf", "simkai.ttf"],
@@ -81,6 +108,7 @@ _WINDOWS_FONTS = {
         "sc": ["simkai.ttf", "kaiu.ttf"],
         "ko": [],
         "latin": [],
+        "th": [],
     },
 }
 FAMILIES = ("sans", "serif", "kai")
@@ -92,6 +120,9 @@ _OTHER_FONTS = [
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
     "/System/Library/Fonts/PingFang.ttc",
 ]
+# 不是 Windows 時，泰文另外找有泰文字的字型（開發、測試用）
+_OTHER_THAI = ["/usr/share/fonts/truetype/noto/NotoSansThai-Bold.ttf", "/usr/share/fonts/truetype/noto/NotoSansThai-Regular.ttf",
+               "/usr/share/fonts/opentype/tlwg/Loma-Bold.otf", "/usr/share/fonts/opentype/tlwg/Loma.otf"]
 
 
 def _font_path(kind: str, family: str = "sans", bold: bool = True) -> str | None:
@@ -105,7 +136,7 @@ def _font_path(kind: str, family: str = "sans", bold: bool = True) -> str | None
                 if (folder / name).is_file():
                     return str(folder / name)
         return None
-    return next((p for p in _OTHER_FONTS if os.path.isfile(p)), None)
+    return next((p for p in (_OTHER_THAI if kind == "th" else []) + _OTHER_FONTS if os.path.isfile(p)), None)
 
 
 @lru_cache(maxsize=None)
@@ -174,11 +205,15 @@ def _kind(ch: str, han: str) -> str:
         return "ko"
     if code >= 0x2E80:
         return han
+    if 0x0E00 <= code <= 0x0E7F:
+        return "th"
     return "latin"
 
 
 _NO_LINE_START = set("。，、！？；：,.!?;:)]）」』】…~％%")      # 這些標點不會被擠到下一行的開頭
-_TOKEN = re.compile(r"[A-Za-z0-9À-ɏ가-힣'’\-_.,!?:;%()]+|\s+|.", re.S)      # 英文和韓文以「詞」為單位換行
+# 英文、韓文、俄文、越南文以「詞」為單位換行；泰文詞和詞之間不空格，以一個字（連同上面、下面的母音和聲調符號）為單位
+_TOKEN = re.compile(r"[A-Za-z0-9À-ɏЀ-ӿ\u0300-\u036fḀ-ỿ가-힣'’\-_.,!?:;%()]+|[\u0e00-\u0e7f][\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]*|\s+|.",
+                    re.S)
 
 
 def _wrap(parts: list[tuple[str, tuple]], size: int, width: int, han: str = "cjk", family: str = "sans",

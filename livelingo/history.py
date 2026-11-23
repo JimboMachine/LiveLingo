@@ -16,6 +16,7 @@ from .transcript import COLON
 
 TITLES = {
     "zh-TW": "對話歷史", "zh-CN": "对话历史", "en": "Conversation history", "ko": "대화 기록", "ja": "会話の履歴",
+    "vi": "Lịch sử hội thoại", "th": "ประวัติการสนทนา", "id": "Riwayat percakapan", "es": "Historial de conversación", "pt": "Histórico de conversa", "ru": "История разговора", "de": "Gesprächsverlauf", "fr": "Historique des conversations",
 }
 FILE = "history.jsonl"
 MAX_ITEMS = 20000                  # 最多留這麼多則，再多就丟掉最舊的

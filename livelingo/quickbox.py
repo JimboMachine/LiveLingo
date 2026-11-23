@@ -17,6 +17,14 @@ HINTS = {
     "en": "Enter: translate and copy  ·  Esc: cancel",
     "ko": "Enter: 번역 후 복사  ·  Esc: 취소",
     "ja": "Enter：翻訳してコピー　·　Esc：キャンセル",
+    "vi": "Enter: dịch và sao chép  ·  Esc: hủy",
+    "th": "Enter: แปลและคัดลอก  ·  Esc: ยกเลิก",
+    "id": "Enter: terjemahkan dan salin  ·  Esc: batal",
+    "es": "Enter: traducir y copiar  ·  Esc: cancelar",
+    "pt": "Enter: traduzir e copiar  ·  Esc: cancelar",
+    "ru": "Enter: перевести и скопировать  ·  Esc: отмена",
+    "de": "Enter: übersetzen und kopieren  ·  Esc: abbrechen",
+    "fr": "Enter : traduire et copier  ·  Esc : annuler",
 }
 DIM = "#9AA3AE"
 SIZE = (640, 96)

@@ -24,21 +24,33 @@ def has_hangul(s: str) -> bool:
     return any(0xAC00 <= ord(c) <= 0xD7A3 for c in s)
 
 
+# 每一種語言用哪一個文字辨識模型（ocr 資料夾裡 <名字>_rec.onnx、<名字>_dict.txt）。沒列的（中文、日文、英文）用 RapidOCR 內建的。
+# 越南文的聲調字母（ạ ế ộ …）沒有模型認得，先用拉丁字母的模型：讀得到字，但聲調會少掉一些。
+MODELS = {"ko": "korean", "es": "latin", "pt": "latin", "fr": "latin", "de": "latin", "id": "latin", "vi": "latin",
+          "ru": "eslav", "th": "thai"}
+
+
+def model_of(family: str) -> str:
+    """family 這個語言用的文字辨識模型名稱；內建的多語言模型叫 builtin。"""
+    return MODELS.get(family, "builtin")
+
+
 class OcrEngine:
     def __init__(self, model_dir: Path | None, scale: float = 1.5, family: str = "ko"):
-        """family：要讀的語言。韓文用另外下載的韓文模型；中文、日文、英文用內建的多語言模型。"""
+        """family：要讀的語言。韓文、拉丁字母、俄文、泰文用另外下載的模型；中文、日文、英文用內建的多語言模型。"""
         from rapidocr import RapidOCR  # 延後載入，啟動比較快
 
         self.scale = scale
         self.family = family
+        self.model = model_of(family)
         params = {"Global.use_cls": False, "Global.log_level": "error"}
-        if family == "ko":
+        if self.model != "builtin":
             if model_dir is None:
-                raise RuntimeError("Korean OCR model folder is missing")
+                raise RuntimeError(f"OCR model folder for {self.model} is missing")
             params.update({
                 "Det.model_path": str(model_dir / "det.onnx"),
-                "Rec.model_path": str(model_dir / "korean_rec.onnx"),
-                "Rec.rec_keys_path": str(model_dir / "korean_dict.txt"),
+                "Rec.model_path": str(model_dir / f"{self.model}_rec.onnx"),
+                "Rec.rec_keys_path": str(model_dir / f"{self.model}_dict.txt"),
             })
         self.engine = RapidOCR(params=params)
 
