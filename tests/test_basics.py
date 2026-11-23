@@ -356,7 +356,8 @@ def test_first_run_follows_the_windows_language(monkeypatch):
 
     monkeypatch.setattr(config.os, "name", "posix")
     for name, expected in (("zh_CN", "zh-CN"), ("zh_SG", "zh-CN"), ("zh_TW", "zh-TW"), ("zh_HK", "zh-TW"),
-                           ("ko_KR", "ko"), ("ja_JP", "ja"), ("de_DE", "en")):
+                           ("ko_KR", "ko"), ("ja_JP", "ja"), ("de_DE", "de"), ("pt_BR", "pt"), ("vi_VN", "vi"),
+                           ("th_TH", "th"), ("id_ID", "id"), ("ru_RU", "ru"), ("nl_NL", "en")):
         monkeypatch.setattr(locale, "getlocale", lambda name=name: (name, "UTF-8"))
         assert config.system_ui_lang() == expected, name
 
@@ -705,7 +706,7 @@ def test_update_asks_first(tmp_path, monkeypatch):
 
 def test_auto_detect_their_language(tmp_path):
     from livelingo.core.speech import Recognizer
-    from livelingo.service import Service
+    from livelingo.service import VOICE_FAMILIES, Service
 
     pick = Recognizer.pick_language
     probs = [("en", 0.05), ("ko", 0.40), ("ja", 0.45), ("zh", 0.05), ("fr", 0.9)]
@@ -721,7 +722,7 @@ def test_auto_detect_their_language(tmp_path):
     assert service._voice_langs("listen") == ["ko"] and service._screen_langs() == {"ko"}
     service.update_config({"their_auto": True})
     assert service.cfg["their_auto"] is True and service.cfg["their_lang"] == "ko"
-    assert service._voice_langs("listen") == ["ko", "zh", "en", "ja"]
+    assert service._voice_langs("listen") == list(VOICE_FAMILIES) and VOICE_FAMILIES[:4] == ("ko", "zh", "en", "ja")
     assert service._voice_langs("mic") == ["zh", "ko"]
 
     service._on_speech("loopback", "はい", "ja")                # 短短一句：先不換
@@ -731,7 +732,7 @@ def test_auto_detect_their_language(tmp_path):
     assert service.cfg["their_lang"] == "ko"
     service._on_speech("loopback", "行こう", "ja")              # 連續兩句都是日文：換
     assert service.cfg["their_lang"] == "ja" and notices[-1] == ("their_switched", {"lang": "ja"})
-    assert service._voice_langs("listen") == ["ja", "ko", "zh", "en"]
+    assert service._voice_langs("listen") == ["ja", "ko", "zh", "en", *VOICE_FAMILIES[4:]]
     assert service._voice_langs("mic") == ["zh", "ja"]
     assert service._screen_langs() == {"ja"}                    # 我用中文：螢幕上的中文不用翻
     assert service._target_for({"who": "me", "lang": "zh"}) == "ja"
@@ -745,6 +746,13 @@ def test_auto_detect_their_language(tmp_path):
     assert service._screen_langs() == {"en", "zh", "ja"}        # 中文、日文、英文同一個文字模型：都收
     service._on_speech("loopback", "我們現在去打龍，快點過來", "zh")
     assert service.cfg["their_lang"] == "zh-TW"
+
+    service.update_config({"my_lang": "zh-TW", "their_lang": "es"})
+    assert service._screen_langs() == {"es", "pt", "fr", "de", "id", "vi"}      # 拉丁字母的語言同一個文字模型：都收
+    service._on_speech("loopback", "да", "ru")                               # 俄文短短一句：先不換
+    assert service.cfg["their_lang"] == "es"
+    service._on_speech("loopback", "Идём на дракона, у них нет флеша", "ru")  # 夠長：換過去，螢幕改用俄文的模型
+    assert service.cfg["their_lang"] == "ru" and service._screen_langs() == {"ru"}
 
     service.update_config({"their_lang": "ja", "their_auto": False})      # 自己選了語言：不再自動換
     service._on_speech("loopback", "지금 용 잡으러 가자 빨리 와", "en")
@@ -850,7 +858,7 @@ def test_tray_setting(tmp_path):
     from livelingo.service import Service
     from livelingo.tray import TEXT, Tray, texts
 
-    assert set(TEXT) == {"zh-TW", "zh-CN", "en", "ko", "ja"}
+    assert set(TEXT) == set(UI_LANGS)
     assert all(set(v) == set(TEXT["zh-TW"]) for v in TEXT.values())
     assert texts("xx") == TEXT["en"]
 
@@ -868,7 +876,7 @@ def test_tray_setting(tmp_path):
 def test_dependencies_hold():
     """
     docs/dependencies.md 那張相依圖裡「靠名字對上、改壞了也不會報錯」的地方，在這裡自動檢查：
-    設定名稱、五種語言的文字表、API 路徑、事件名稱、提醒代碼、介面檔案、圖示檔、安裝檔的名字。
+    設定名稱、每種介面語言的文字表、API 路徑、事件名稱、提醒代碼、介面檔案、圖示檔、安裝檔的名字。
     新增一種這類的對應時，這裡和相依圖要一起補。
     """
     import re
@@ -892,7 +900,7 @@ def test_dependencies_hold():
         assert accent == "mint" or f'[data-accent="{accent}"]' in css, accent
         assert f"{accent}:" in app, accent
 
-    # 文字：視窗外面的每一張文字表（系統匣、浮動留言、框選、字幕檔）五種語言都有，欄位一樣多
+    # 文字：視窗外面的每一張文字表（系統匣、浮動留言、框選、字幕檔）每種介面語言都有，欄位一樣多
     tables = {"tray.TEXT": tray.TEXT, "chatpaint.NAMES": chatpaint.NAMES, "chatpaint.HINTS": chatpaint.HINTS,
               "chatpaint.SAMPLES": chatpaint.SAMPLES, "region.HINTS": region.HINTS, "region.FONTS": region.FONTS,
               "transcript.TITLES": transcript.TITLES, "hotkeys.NOTES": hotkeys.NOTES, "quickbox.HINTS": quickbox.HINTS,
@@ -907,7 +915,7 @@ def test_dependencies_hold():
     served = set(re.findall(r'"(/api/[a-z_/]+)"', server))
     assert called and called <= served, called - served
 
-    # 事件：背景送出的每一種事件，介面都有接；每一種提醒都有五種語言的文字
+    # 事件：背景送出的每一種事件，介面都有接；每一種提醒都有每種介面語言的文字
     block = app[app.index("const handlers = {"):]
     handled = set(re.findall(r"^    ([a-z_]+): ", block[:block.index("\n  };")], re.M))
     published = set(re.findall(r'publish\("([a-z_]+)"', python))
@@ -2265,7 +2273,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     finally:
         other.shutdown()
 
-    # ---- 快速輸入框本身：五種語言都有提示，放在螢幕下方置中；這個小程式裡沒有任何「替人打字、貼上」的東西
+    # ---- 快速輸入框本身：每種介面語言都有提示，放在螢幕下方置中；這個小程式裡沒有任何「替人打字、貼上」的東西
     assert quickbox.place((0, 0, 1920, 1080)) == ((1920 - quickbox.SIZE[0]) // 2, int(1080 * 0.66))
     assert quickbox.place((1920, 0, 2560, 1440))[0] == 1920 + (2560 - quickbox.SIZE[0]) // 2
     root = Path(__file__).resolve().parent.parent / "livelingo"
@@ -2424,7 +2432,7 @@ def test_monitor_list_is_safe_from_several_threads(monkeypatch):
 def test_health_check_lights(tmp_path, monkeypatch):
     """
     健康檢查：翻譯引擎、顯示卡、麥克風、耳機、聊天區、快速鍵、設定存檔各一個燈（綠 ok／黃 warn／紅 bad／灰 off），
-    每一種狀況在五種語言裡都有一句話，而且檢查本身不會打開麥克風、不會改設定。
+    每一種狀況在每種介面語言裡都有一句話，而且檢查本身不會打開麥克風、不會改設定。
     """
     import re
     from pathlib import Path
@@ -2549,7 +2557,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         service.shutdown()
     assert before["sources"] == service.cfg["sources"]
 
-    # 每一個燈的名字、每一種狀態、每一個代碼，五種語言都有一句話
+    # 每一個燈的名字、每一種狀態、每一個代碼，每種介面語言都有一句話
     root = Path(__file__).resolve().parent.parent / "livelingo"
     source = (root / "service.py").read_text(encoding="utf-8")
     body = source[source.index("    def health(self)"):source.index("    # ------------------------------------------------------------------ 問題報告")]
@@ -2957,7 +2965,7 @@ def test_storage_sizes_move_and_remove_unused(tmp_path, monkeypatch):
     assert iss.startswith("\ufeff")      # 檔案裡有中文、韓文、日文的訊息：要有 BOM，安裝程式的編譯器才會當成 UTF-8
     ci = (Path(storage.__file__).parents[1] / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
     assert storage.MARK in ci and "not-ours.txt" in ci      # 真的安裝、卸載的那個檢查也看這件事
-    # 服務裡找模型、引擎一律用 self.store；每一個會回給介面的原因代碼都有五種語言的句子
+    # 服務裡找模型、引擎一律用 self.store；每一個會回給介面的原因代碼都有每種介面語言的句子
     import re
     svc = (Path(storage.__file__).parent / "service.py").read_text(encoding="utf-8")
     assert not re.search(r"assets\.\w+\(self\.data", svc) and 'self.data / "models"' not in svc and 'self.data / "engine"' not in svc
@@ -2965,9 +2973,9 @@ def test_storage_sizes_move_and_remove_unused(tmp_path, monkeypatch):
     codes = set(re.findall(r'"(store_[a-z_]+)"', svc + Path(storage.__file__).read_text(encoding="utf-8"))) - {"store_dir", "store_leftover"}
     assert {"store_same", "store_inside", "store_no_space", "store_not_writable", "store_busy", "store_in_use", "store_moved"} <= codes
     for code in codes:
-        assert i18n.count(f"n_{code}:") == 5, code
+        assert i18n.count(f"n_{code}:") == len(UI_LANGS), code
     for row in ("model_4b", "model_12b", "engine_cpu", "engine_cuda", "cudnn", "whisper", "ocr", "updates", "partial", "records"):
-        assert i18n.count(f"sto_i_{row}:") == 5 and i18n.count(f"sto_d_{row}:") == 5, row
+        assert i18n.count(f"sto_i_{row}:") == len(UI_LANGS) and i18n.count(f"sto_d_{row}:") == len(UI_LANGS), row
 
 
 def test_update_prompt_says_what_changed(tmp_path, monkeypatch):
@@ -2980,10 +2988,12 @@ def test_update_prompt_says_what_changed(tmp_path, monkeypatch):
 
     root = Path(changes.__file__).parent
     notes = changes.bundled()
-    # 現在這一版一定要寫改了什麼，五種語言都要有，而且句數一樣（少翻一句會被擋）
+    # 現在這一版一定要寫改了什麼，每種介面語言都要有，而且句數一樣（少翻一句會被擋）。
+    # 2.5.0 才加了越南文等八種介面；更早的版本只有原本五種，這八種介面看舊版說明時用英文
     assert __version__ in notes and list(notes)[0] == __version__
     for version, entry in notes.items():
-        assert set(entry) == set(UI_LANGS), version
+        need = set(UI_LANGS) if changes._key(version) >= (2, 5, 0) else {"zh-TW", "zh-CN", "en", "ko", "ja"}
+        assert set(entry) == need, version
         assert len({len(items) for items in entry.values()}) == 1 and 1 <= len(entry["en"]) <= changes.MAX_ITEMS, version
         for items in entry.values():
             assert all(0 < len(i) <= changes.MAX_CHARS for i in items)
@@ -4053,7 +4063,7 @@ def test_numbers_are_checked_after_translating(tmp_path):
     ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
     assert 't("numbers_lost", { numbers: m.lost.join(' in ui.joinpath("app.js").read_text(encoding="utf-8")
     assert ".msg .lost {" in ui.joinpath("style.css").read_text(encoding="utf-8")
-    assert ui.joinpath("i18n.js").read_text(encoding="utf-8").count("numbers_lost: ") == 5
+    assert ui.joinpath("i18n.js").read_text(encoding="utf-8").count("numbers_lost: ") == len(UI_LANGS)
 
 
 def test_long_text_is_split_not_cut():
@@ -4119,8 +4129,10 @@ def test_uninstall_asks_before_removing_personal_data():
     assert [name for name in ("models", "engine", "update", "webview") if f"data + '\\{name}'" in keep] == ["models", "engine", "update", "webview"]
     assert "config" not in keep and "history" not in keep                       # 留下來的那一邊不能碰到設定和歷史
     messages = iss[iss.index("[CustomMessages]"):iss.index("[Tasks]")]
-    assert messages.count("KeepData=") == 5                                    # 預設（英文）加四種語言
-    for lang, flag in (("zhtw", "HasZhTW"), ("zhcn", "HasZhCN"), ("ko", "HasKo"), ("ja", "HasJa")):
+    flags = (("zhtw", "HasZhTW"), ("zhcn", "HasZhCN"), ("ko", "HasKo"), ("ja", "HasJa"), ("es", "HasEs"), ("pt", "HasPt"), ("fr", "HasFr"),
+             ("de", "HasDe"), ("ru", "HasRu"), ("vi", "HasVi"), ("id", "HasId"))      # 泰文 Inno Setup 沒有安裝文字，用英文
+    assert messages.count("KeepData=") == 1 + len(flags)                         # 預設（英文）加其他語言
+    for lang, flag in flags:
         assert f"#ifdef {flag}\n{lang}.KeepData=" in messages and iss.count(f"#define {flag}") >= 1, lang
     ci = root.joinpath("packaging", "ci_install_test.py").read_text(encoding="utf-8")
     assert '"/KEEPDATA=1"' in ci and "glossary-kept-by-test.json" in ci and ci.count("unins000.exe\"), *SILENT") == 2
@@ -5337,3 +5349,29 @@ def test_idle_engine_rests_and_wakes(tmp_path):
     service._voice_off_since = time.monotonic() - service_mod.SPEECH_REST - 1
     service._maybe_free_speech()
     assert service.recognizer is None
+
+
+def test_more_languages_are_told_apart():
+    """加進來的語言（越南、泰、印尼、西、葡、俄、德、法）：文字判斷得出來、螢幕上的句子收得到、數字核對得到。"""
+    from livelingo.core.ocr import model_of
+    from livelingo.core.translate import LANGS, SOURCES, numbers_lost, tidy
+    from livelingo.service import VOICE_FAMILIES
+
+    for text, lang in (("¿Vamos a la base? Necesito comprar", "es"), ("Bora pro dragão, não tem flash", "pt"),
+                       ("Wir gehen jetzt zum Drachen", "de"), ("On va au dragon, c'est très bien", "fr"),
+                       ("Ayo ke naga, musuh gak ada flash", "id"), ("Đi đánh rồng thôi", "vi"), ("di danh rong thoi khong", "vi"),
+                       ("Идём на дракона", "ru"), ("ไปมังกรกันเถอะ", "th"), ("that was really close lol", "en"),
+                       ("gank mid pls", "en")):
+        assert detect_language(text) == lang, text
+    assert wanted("Di dánh rông thôi, dich không có tôc biên", {"vi"}) == "vi"      # OCR 少了聲調，看起來像法文也照收
+    assert wanted("vamos al dragón ahora", {"es", "en"}) == "es"
+    assert wanted("ok lets go now", {"es", "en"}) == "en"
+    assert wanted("Идём на дракона сейчас", {"ru"}) == "ru" and wanted("Идём на дракона", {"es"}) is None
+    assert wanted("ไปมังกรกันเถอะ", {"th"}) == "th"
+    for code, info in LANGS.items():
+        assert info["family"] in SOURCES and info["family"] in VOICE_FAMILIES, code
+    assert {model_of(f) for f in ("es", "pt", "fr", "de", "id", "vi")} == {"latin"}
+    assert model_of("ru") == "eslav" and model_of("th") == "thai" and model_of("zh") == model_of("en") == "builtin"
+    assert numbers_lost("come in 3 minutes", "ven en tres minutos", "es", "en") == []
+    assert numbers_lost("come in 3 minutes", "ven en 5 minutos", "es", "en") == ["3"]
+    assert numbers_lost("빨리 와 ㅋㅋㅋ", "Vem logo", "pt", "ko") == [] and tidy("Vem logo ㅋㅋㅋ", "pt") == "Vem logo kkkk"

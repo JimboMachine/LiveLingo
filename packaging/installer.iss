@@ -59,6 +59,35 @@ Name: "ko"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl"
 #define HasJa
 #endif
+#if FileExists(AddBackslash(CompilerPath) + "Languages\Spanish.isl")
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+#define HasEs
+#endif
+#if FileExists(AddBackslash(CompilerPath) + "Languages\BrazilianPortuguese.isl")
+Name: "pt"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
+#define HasPt
+#endif
+#if FileExists(AddBackslash(CompilerPath) + "Languages\French.isl")
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+#define HasFr
+#endif
+#if FileExists(AddBackslash(CompilerPath) + "Languages\German.isl")
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+#define HasDe
+#endif
+#if FileExists(AddBackslash(CompilerPath) + "Languages\Russian.isl")
+Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+#define HasRu
+#endif
+; 越南文、印尼文的安裝文字是 Inno Setup 的非官方翻譯，建置時另外下載；泰文沒有，泰文的 Windows 會看到英文
+#if FileExists(AddBackslash(SourcePath) + "Vietnamese.isl")
+Name: "vi"; MessagesFile: "Vietnamese.isl"
+#define HasVi
+#endif
+#if FileExists(AddBackslash(SourcePath) + "Indonesian.isl")
+Name: "id"; MessagesFile: "Indonesian.isl"
+#define HasId
+#endif
 
 [CustomMessages]
 ; 卸載時問的那一句。沒有前綴的是預設（英文），其他語言有裝才加
@@ -74,6 +103,27 @@ ko.KeepData=설정, 용어집, 가르친 문장, 대화 기록을 이 컴퓨터�
 #endif
 #ifdef HasJa
 ja.KeepData=設定、用語集、教えた文、会話の履歴をこのパソコンに残しますか？%n%n「はい」：プログラムとダウンロードしたモデルだけを削除します。あとで LiveLingo を入れ直すと設定はそのまま使えます。%n「いいえ」：すべて削除します。
+#endif
+#ifdef HasEs
+es.KeepData=¿Conservar tus ajustes, glosario, frases enseñadas e historial de conversación en este PC?%n%nSí: solo se quitan el programa y los modelos descargados, y tus ajustes vuelven si instalas LiveLingo de nuevo.%nNo: se quita todo.
+#endif
+#ifdef HasPt
+pt.KeepData=Manter suas configurações, glossário, frases ensinadas e histórico de conversa neste PC?%n%nSim: só o programa e os modelos baixados são removidos, e suas configurações voltam se você instalar o LiveLingo de novo.%nNão: tudo é removido.
+#endif
+#ifdef HasFr
+fr.KeepData=Garder vos réglages, votre glossaire, vos phrases apprises et l'historique des conversations sur ce PC ?%n%nOui : seuls le programme et les modèles téléchargés sont supprimés, et vos réglages reviennent si vous réinstallez LiveLingo.%nNon : tout est supprimé.
+#endif
+#ifdef HasDe
+de.KeepData=Einstellungen, Glossar, beigebrachte Sätze und Gesprächsverlauf auf diesem PC behalten?%n%nJa: Nur das Programm und die heruntergeladenen Modelle werden entfernt, und deine Einstellungen sind wieder da, wenn du LiveLingo neu installierst.%nNein: Alles wird entfernt.
+#endif
+#ifdef HasRu
+ru.KeepData=Оставить на этом компьютере ваши настройки, глоссарий, выученные фразы и историю разговоров?%n%nДа: удаляются только программа и скачанные модели, а при повторной установке LiveLingo настройки вернутся.%nНет: удаляется всё.
+#endif
+#ifdef HasVi
+vi.KeepData=Giữ lại cài đặt, danh sách từ, các câu đã dạy và lịch sử hội thoại trên máy này?%n%nCó: chỉ xóa chương trình và các mô hình đã tải, cài lại LiveLingo thì cài đặt vẫn còn.%nKhông: xóa tất cả.
+#endif
+#ifdef HasId
+id.KeepData=Simpan pengaturan, glosarium, kalimat yang diajarkan, dan riwayat percakapan di PC ini?%n%nYa: hanya program dan model yang diunduh yang dihapus, dan pengaturanmu kembali kalau LiveLingo diinstal lagi.%nTidak: semuanya dihapus.
 #endif
 
 [Tasks]

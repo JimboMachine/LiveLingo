@@ -14,7 +14,7 @@
 2. `service.py`：update_config 裡的檢查，還有改了之後要馬上做的事
 3. `service.py`：匯出、匯入、恢復預設：這一項算不算設定（SETTINGS_SKIP）、恢復預設時要不要留著（RESET_KEEP）；介面改不到的項目要在 _apply_settings 另外檢查
 4. `app.js`：設定畫面的開關、存好的回饋、畫面有沒有跟著更新
-5. `i18n.js`：名稱和說明，五種語言
+5. `i18n.js`：名稱和說明，每種介面語言
 6. `overlay.py`、`tray.py`、`window.py`：真正讀這項設定的地方
 7. `test_basics.py`：補一個檢查
 
@@ -26,7 +26,7 @@
 2. `tray.py`、`chatpaint.py`、`region.py`、`transcript.py`：同一句話如果也出現在系統匣、浮動留言、框選畫面、字幕檔，那裡各有自己的文字表
 3. `app.js`：用到這個 key 的地方，版面會不會被較長的語言擠壞
 
-自動把關：測試會擋：五種語言的 key 不一致、簡體裡混進繁體字、視窗外的文字表少一種語言。
+自動把關：測試會擋：每種介面語言的 key 不一致、簡體裡混進繁體字、視窗外的文字表少一種語言。
 
 ### 新增一種語言
 
@@ -35,7 +35,7 @@
 3. `i18n.js`：整個語言區塊
 4. `tray.py`、`chatpaint.py`、`region.py`、`transcript.py`：各自的文字表和字型
 5. `speech.py`、`service.py`：語音辨識認不認得、自動偵測會不會切過去
-6. `ocr.py`、`assets.py`：螢幕文字的辨識模型
+6. `ocr.py`、`assets.py`：螢幕文字的辨識模型（ocr.MODELS：這種文字用哪一個模型）
 7. `installer.iss`、`build.yml`：安裝程式的語言檔
 8. `test_basics.py`：每種語言都有的檢查
 
@@ -53,7 +53,7 @@
 ### 改事件或留言的格式
 
 1. `service.py`：送出的事件和欄位（留言的 why：失敗原因的代碼；lost：譯文裡找不到的數字）
-2. `translate.py`：why() 多一種失敗原因時，介面要有對應的 err_代碼（五種語言）
+2. `translate.py`：why() 多一種失敗原因時，介面要有對應的 err_代碼（每種介面語言）
 3. `app.js`、`i18n.js`：接事件的地方、對話畫面；失敗的那一則的說明和「重試」（/api/again）
 4. `overlay.py`：浮動留言
 5. `transcript.py`：字幕檔
@@ -131,7 +131,7 @@
 3. `installer.iss`：安裝檔的版本和檔名
 4. `updater.py`：比較版本、下載、靜默安裝
 5. `service.py`、`config.py`、`app.js`、`README.md`、`guide.py`：開啟時要不要檢查更新是設定（update_check）；會連網路的地方變多或變少時，關於頁、README、說明頁那幾句要一起改
-6. `changes.py`：data/changes.json 要有新版本那一段，五種語言、句數一樣；更新提示、關於頁、GitHub 發行說明都讀它
+6. `changes.py`：data/changes.json 要有新版本那一段，每種介面語言、句數一樣；更新提示、關於頁、GitHub 發行說明都讀它
 7. `updater.py`、`service.py`、`build.yml`：用過的安裝檔不留著：新版一開就刪（updater.tidy、_installers_cleanup），剛跑完的那一個等安裝程式結束再試；比現在新的（還沒裝的更新）不能刪。Windows 安裝測試會真的看它有沒有被刪掉
 8. `updater.py`、`service.py`、`app.js`、`i18n.js`：回上一版：update.json 記「從哪一版來的」，退回時重新下載那一版、核對雜湊才裝（介面和儲存空間頁的說明要跟著這個說法）；新版加了舊版不認得的東西（像搬過位置的大檔案），退回之前要先處理（STORE_BEFORE）
 9. `installer.iss`：[Files] 要有 ignoreversion，裝舊版才換得掉新版的檔案
@@ -185,7 +185,7 @@
 ### 改健康檢查，或是新增一個會出狀況的地方
 
 1. `service.py`：health()：每一項怎麼判斷綠、黃、紅、灰
-2. `i18n.js`：每個代碼一句話（h_代碼），五種語言
+2. `i18n.js`：每個代碼一句話（h_代碼），每種介面語言
 3. `app.js`：健康檢查頁、狀態變了自動重查
 4. `audio.py`、`hotkeys.py`、`watcher.py`、`engine.py`、`gpu.py`、`config.py`、`history.py`：各自的狀態是從哪裡來的
 5. `watcher.py`、`service.py`：讀螢幕抓到全黑的畫面（on_black）：黑幾秒才算、提醒只說一次、停止讀螢幕時要清掉
@@ -203,11 +203,11 @@
 6. `i18n.js`：歷史頁的文字
 7. `test_basics.py`：歷史的檢查
 
-自動把關：測試會擋：關掉保存還在記、過期的沒刪、清除之後檔案還在、五種語言的標題。留言多一個欄位時，歷史、字幕記錄、匯出的文字三邊要一起看。
+自動把關：測試會擋：關掉保存還在記、過期的沒刪、清除之後檔案還在、每種介面語言的標題。留言多一個欄位時，歷史、字幕記錄、匯出的文字三邊要一起看。
 
 ### 改快速鍵或快速輸入框
 
-1. `hotkeys.py`：動作名稱（ACTIONS）、能用的鍵、短提示的五種語言
+1. `hotkeys.py`：動作名稱（ACTIONS）、能用的鍵、短提示的每種介面語言
 2. `config.py`：預設的組合
 3. `service.py`：檢查送來的組合、每個動作做什麼、設定頁等新組合時先停用
 4. `app.js`：動作清單、按鍵怎麼變成組合的寫法、狀態怎麼顯示
@@ -216,7 +216,7 @@
 7. `quickbox.py`、`__main__.py`：輸入框的參數和交回去的檔案
 8. `selftest.py`、`test_basics.py`：登記、按下、輸入框的檢查
 
-自動把關：測試會擋：組合鍵的寫法、兩個動作撞鍵、五種語言的提示、這兩個檔案裡出現替人打字或讀按鍵的函式。真的按下去有沒有反應、輸入框有沒有跑到遊戲上面，只能在 Windows 上試。
+自動把關：測試會擋：組合鍵的寫法、兩個動作撞鍵、每種介面語言的提示、這兩個檔案裡出現替人打字或讀按鍵的函式。真的按下去有沒有反應、輸入框有沒有跑到遊戲上面，只能在 Windows 上試。
 
 ### 改聊天區（可以好幾個、可以跟著程式視窗）
 
@@ -258,7 +258,7 @@
 1. `service.py`：找模型、引擎一律用 self.store，不是 self.data；設定和紀錄才用 self.data
 2. `storage.py`：新的大檔案要列進 items（佔多少、能不能刪）；會搬的只有 PARTS 裡的資料夾
 3. `assets.py`：新模型、新引擎的檔名和資料夾
-4. `app.js`：儲存空間頁每一項的名字和說明（sto_i_、sto_d_）要五種語言
+4. `app.js`：儲存空間頁每一項的名字和說明（sto_i_、sto_d_）要每種介面語言
 5. `installer.iss`、`__main__.py`、`build.yml`：卸載：搬出去的也要刪，只刪有記號檔的資料夾
 6. `installer.iss`、`build.yml`：卸載時選「留下設定」只刪 installer.iss 裡列的資料夾（models、engine、update、webview）：資料夾裡新增大的、可以重新產生的東西要加進那份清單和安裝檢查
 7. `README.md`、`guide.py`：卸載會留什麼、刪什麼的說明
@@ -270,7 +270,7 @@
 
 1. `service.py`：新的設定值如果是使用者自己打的字（名字、句子），在 _report_sections 裡拿掉，只留數量
 2. `service.py`：self.log 寫進紀錄檔的句子不能帶對話內容；裝置和程式的名稱可以
-3. `report.py`：新的段落要有五種語言的標題；路徑和帳號名稱一律過 scrub
+3. `report.py`：新的段落要有每種介面語言的標題；路徑和帳號名稱一律過 scrub
 4. `app.js`、`i18n.js`：畫面上說「裡面有什麼、沒有什麼」的那幾句要跟實際內容一樣（rep_hint、rep_part_…、報告開頭三行）
 5. `server.py`：/api/report 只有三件事：做出來、存檔、複製。不能加會送到外面的
 6. `test_basics.py`：test_problem_report_is_shown_first_and_never_sent
@@ -281,7 +281,7 @@
 
 1. `usage.py`：新的來源要加進 VIAS，不然那種句子不會被算到
 2. `service.py`：一句只算一次（_count 用訊息編號擋重翻）；翻譯失敗走 failed
-3. `app.js`、`i18n.js`：來源的分項那一句（use_split）要加新的來源，五種語言
+3. `app.js`、`i18n.js`：來源的分項那一句（use_split）要加新的來源，每種介面語言
 4. `report.py`：問題報告的使用數字那一段會自動帶新的來源
 5. `test_basics.py`：test_usage_numbers_are_local_counts_only
 
@@ -289,13 +289,13 @@
 
 ### 改頁面的名字、按鈕的名字、快速鍵、鍵盤操作，或加使用者會用到的新功能
 
-1. `guide.py`：data/help.json 五種語言一起改；引號裡的頁面和按鈕名字要和介面上的一模一樣
+1. `guide.py`：data/help.json 每種介面語言一起改；引號裡的頁面和按鈕名字要和介面上的一模一樣
 2. `i18n.js`：介面上的名字改了（nav_、src_ 開頭的），回去改說明裡引用它的句子
 3. `app.js`：視窗裡的鍵盤操作改了（Ctrl+數字、F1、Esc），說明的「快速鍵和鍵盤」那一段要跟著改
 4. `guide.py`：安裝方式或系統需求變了：給朋友那一頁的安裝步驟（friend.install）要改
 5. `test_basics.py`：test_help_page_and_the_page_for_a_friend
 
-自動把關：測試會擋：五種語言的說明結構不一樣、提到的按鍵不一樣、說明裡寫的視窗內按鍵程式裡沒有、給朋友的那一頁載入外部的東西。說明裡寫的頁面名字和做法還對不對，要自己讀一次。
+自動把關：測試會擋：每種介面語言的說明結構不一樣、提到的按鍵不一樣、說明裡寫的視窗內按鍵程式裡沒有、給朋友的那一頁載入外部的東西。說明裡寫的頁面名字和做法還對不對，要自己讀一次。
 
 ### 改「即時」：譯文邊翻邊出、對方還在說就先出字
 
@@ -306,7 +306,7 @@
 5. `service.py`：_translate 送 partial 事件，最快 PARTIAL_EVERY 秒一次；整句的 message 一定最後到，蓋掉半句；新的半句開頭跟畫面上一樣就先不換
 6. `service.py`：整句用同一個編號接手（submit 的 live）；回音、關掉收音、清除對話、辨識出錯都要把半則收回（_end_live）
 7. `service.py`：翻譯和辨識都用處理器時不能同時跑（_live_wait）；整句一來，正在翻的半句要馬上停（Stop），不然整句的辨識會慢好幾秒
-8. `config.py`、`app.js`、`i18n.js`：開關 live_captions，五種語言
+8. `config.py`、`app.js`、`i18n.js`：開關 live_captions，每種介面語言
 9. `overlay.py`：on_partial 只給對方說的話；螢幕讀到的要翻完才知道要不要顯示
 10. `app.js`、`style.css`：還在翻的那一則用 #part-編號 直接換字，不整塊重畫；游標閃動在「減少動態」時要停；還在說的原文後面有「…」
 11. `history.py`、`transcript.py`、`usage.py`：半句不進歷史、不進字幕檔、不算次數
@@ -323,7 +323,7 @@
 5. `service.py`、`report.py`、`history.py`：聲紋和取的名字平常只在記憶體：不寫進設定檔、匯出的設定、歷史、問題報告（報告只有記了幾個人）
 6. `voicebook.py`、`service.py`、`config.py`、`installer.iss`：記住取過名字的人（remember_speakers，預設關）：只有這個開著才寫 voices.json；關掉開關、清空名字、卸載（連「留下設定」也是）都要刪。全部重新分辨不會忘掉記住的人。換聲紋模型要改 voicebook.MODEL
 7. `overlay.py`、`chatpaint.py`、`transcript.py`：名字和顏色：浮動字幕、字幕檔都要用同一套（speaker_name、speaker_color）；改名字、全部重來的時候字幕檔裡已經記下的句子也要跟著（name_speaker、forget_speakers）
-8. `app.js`、`style.css`、`i18n.js`：顏色的點要和 chatpaint.SPEAKER_COLORS 同一組、同樣的順序；「說話者 n」五種語言在三個地方（i18n、chatpaint.SPEAKER）要一致
+8. `app.js`、`style.css`、`i18n.js`：顏色的點要和 chatpaint.SPEAKER_COLORS 同一組、同樣的順序；「說話者 n」每種介面語言在三個地方（i18n、chatpaint.SPEAKER）要一致
 9. `guide.py`：說明裡提到的頁面和開關名字
 10. `test_basics.py`：test_speakers_are_told_apart、test_named_voices_are_remembered
 
@@ -351,7 +351,7 @@
 | --- | --- | --- |
 | 畫面骨架 | `livelingo/ui/index.html` | `app.js`：區塊的 id、按鈕的 data-act（改壞不會報錯）<br>`server.py`：介面檔案（改壞不會報錯）<br>`livelingo.spec`：ui 和 data 資料夾（改壞不會報錯） |
 | 畫面行為 | `livelingo/ui/app.js` | `window.py`：標題列顏色、畫面模式（/api/chrome、/api/view）（改壞不會報錯） |
-| 五種語言的文字 | `livelingo/ui/i18n.js` | `app.js`：每一句文字的 key（改壞不會報錯） |
+| 每種介面語言的文字 | `livelingo/ui/i18n.js` | `app.js`：每一句文字的 key（改壞不會報錯） |
 | 樣式與主題 | `livelingo/ui/style.css` | `app.js`：class 名稱、主題顏色（改壞不會報錯）<br>`index.html`：class 名稱（改壞不會報錯） |
 | 標誌與圖示檔 | `livelingo/ui/brand.js`<br>`packaging/livelingo.ico`<br>`packaging/livelingo.png`<br>`livelingo/data/tray.png` | `app.js`：標誌（window.BRAND）（改壞不會報錯）<br>`index.html`：標誌的位置、載入順序（改壞不會報錯）<br>`style.css`：標誌的樣式（.mark）（改壞不會報錯）<br>`tray.py`：圖示 tray.png（改壞不會報錯）<br>`guide.py`：給朋友的那一頁用同一個標誌（從 brand.js 讀 markSmall）（改壞不會報錯）<br>`livelingo.spec`：程式圖示（改壞不會報錯）<br>`installer.iss`：安裝程式圖示（改壞不會報錯） |
 
@@ -370,11 +370,11 @@
 | 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字；留下設定時要刪的資料夾名字（models、engine）（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
-| 每一版改了什麼（五種語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
+| 每一版改了什麼（每種介面語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
 | 問題報告：先給使用者看，不自己送出 | `livelingo/report.py` | `service.py`：把狀態、設定、紀錄排成一份文字；存檔、複製用的是剛才給使用者看過的那一份（改壞會報錯）<br>`app.js`：預覽的欄位（text、lines、bytes）和存好之後的檔名（改壞不會報錯） |
 | 翻譯的排隊：我自己的句子先翻，螢幕上排太久的略過 | `livelingo/jobs.py` | `service.py`：翻譯的排隊：誰先翻、還在說的半句排最後而且只留最新的（put_live）、螢幕上排太久的略過（略過時用 hotkeys.NOTES 的 skipped 和介面的 n_skipped 說一聲）（改壞會報錯） |
 | 使用數字：每天幾句、失敗幾次、平均等多久（只有數字） | `livelingo/usage.py` | `service.py`：翻好一句（或翻失敗）就記一次；關程式時把還沒寫的寫進檔案（改壞會報錯）<br>`app.js`：健康檢查頁的三個數字和 14 天小圖（today、week、month、days）（改壞不會報錯）<br>`report.py`：問題報告裡放使用數字（只有次數）（改壞不會報錯）<br>`storage.py`：usage.json 算在「設定和紀錄」那一項的大小裡（改壞不會報錯） |
-| 說明頁，和一頁給朋友的快速上手（五種語言） | `livelingo/guide.py`<br>`livelingo/data/help.json` | `service.py`：說明頁的內容（填進現在的快速鍵）；把給朋友的一頁存成檔案（改壞會報錯）<br>`app.js`：說明頁的欄位（sections、items）和 [[鍵]] 的寫法；F1 開說明（改壞不會報錯） |
+| 說明頁，和一頁給朋友的快速上手（每種介面語言） | `livelingo/guide.py`<br>`livelingo/data/help.json` | `service.py`：說明頁的內容（填進現在的快速鍵）；把給朋友的一頁存成檔案（改壞會報錯）<br>`app.js`：說明頁的欄位（sections、items）和 [[鍵]] 的寫法；F1 開說明（改壞不會報錯） |
 
 ### 中樞（所有東西都經過這裡）
 
@@ -383,20 +383,20 @@
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
 | 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯） |
-| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：五種介面語言（UI_LANGS）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：五種語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：五種語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：五種語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、五種語言的短提示（改壞不會報錯）<br>`quickbox.py`：五種語言的提示（改壞不會報錯）<br>`transcript.py`：五種語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、五種語言的標題（改壞不會報錯）<br>`changes.py`：五種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明五種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`guide.py`：五種介面語言都要寫；給朋友的那一頁用預設快速鍵（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
+| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：介面語言清單（UI_LANGS，十三種）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：每種介面語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：每種介面語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：每種介面語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、每種介面語言的短提示（改壞不會報錯）<br>`quickbox.py`：每種介面語言的提示（改壞不會報錯）<br>`transcript.py`：每種介面語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、每種介面語言的標題（改壞不會報錯）<br>`changes.py`：每種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明每種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`guide.py`：每種介面語言都要寫；給朋友的那一頁用預設快速鍵（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
 
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
 | 看螢幕 | `livelingo/core/watcher.py` | `service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
-| 文字辨識 | `livelingo/core/ocr.py` | `service.py`：文字辨識（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
+| 文字辨識 | `livelingo/core/ocr.py` | `service.py`：文字辨識；對方的語言用哪一個辨識模型（model_of），讀螢幕自動偵測時同一個模型的語言都會一起讀（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
 | 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
 | 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字平常只在記憶體裡（改壞會報錯）<br>`voicebook.py`：聲紋的長度和模型（MODEL、DIM）要跟聲紋模型一致；換模型舊檔就作廢（改壞不會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
-| 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
+| 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言；拉丁字母的語言（LATIN）分不清時歸給唯一在讀的那一種（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
 | 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）；每次啟動把新的網址和金鑰交給翻譯（改壞會報錯）<br>`translate.py`：引擎每次啟動的金鑰（環境變數 LLAMA_API_KEY；請求要帶 Authorization: Bearer）（改壞不會報錯） |
 | 用語包（可多選） | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json`<br>`livelingo/data/terms_chat.json` | `service.py`：遊戲用語（改壞會報錯） |
 | 韓文唸法 | `livelingo/core/romanize.py` | `service.py`：韓文唸法（改壞會報錯） |
