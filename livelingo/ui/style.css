@@ -191,7 +191,9 @@ input::placeholder { color: var(--faint); }
 .chip[aria-expanded="true"] { border-color: var(--accent); }
 .lang-picker { padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 10px; }
 .lang-picker .group { display: flex; flex-direction: column; gap: 6px; }
-.lang-picker .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.lang-picker .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }      /* 十幾種語言排成整齊的格子，不會東一顆西一顆 */
+.lang-picker .opts .pill { height: auto; min-height: 34px; padding: 4px 6px; border-radius: 10px; line-height: 1.25; }
+.lang-picker .opts .pill[data-act="set-auto"] { grid-column: 1 / -1; }      /* 「自動偵測」自己一整排，和語言分開 */
 .lang-picker .foot { display: flex; justify-content: flex-end; }
 .lang-picker .primary { height: 36px; border-radius: 10px; font-size: 13px; padding: 0 16px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

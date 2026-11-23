@@ -40,6 +40,13 @@ OCR_FILES = [
     (_hf(*_OCR, "detection/v3/det.onnx"), "ocr/det.onnx", 3),
     (_hf(*_OCR, "languages/korean/rec.onnx"), "ocr/korean_rec.onnx", 13),
     (_hf(*_OCR, "languages/korean/dict.txt"), "ocr/korean_dict.txt", 1),
+    # 其他文字各一個辨識模型（中文、日文、英文用 RapidOCR 內建的）：拉丁字母（西、葡、法、德、印尼、越南）、俄文、泰文
+    (_hf(*_OCR, "languages/latin/rec.onnx"), "ocr/latin_rec.onnx", 8),
+    (_hf(*_OCR, "languages/latin/dict.txt"), "ocr/latin_dict.txt", 1),
+    (_hf(*_OCR, "languages/eslav/rec.onnx"), "ocr/eslav_rec.onnx", 8),
+    (_hf(*_OCR, "languages/eslav/dict.txt"), "ocr/eslav_dict.txt", 1),
+    (_hf(*_OCR, "languages/thai/rec.onnx"), "ocr/thai_rec.onnx", 8),
+    (_hf(*_OCR, "languages/thai/dict.txt"), "ocr/thai_dict.txt", 1),
 ]
 WHISPER_FILES = [(_hf(*_WHISPER, n), f"whisper/{n}", mb) for n, mb in (
     ("config.json", 1), ("preprocessor_config.json", 1), ("tokenizer.json", 3), ("vocabulary.json", 1),
@@ -54,6 +61,12 @@ CHECKS = {
     "ocr/det.onnx": (2429873, "ee40e80071ba3a320d4efda75f3e22047a7d049e9bf7bcaaf9daea23fc21b935"),
     "ocr/korean_rec.onnx": (13401252, "322f140154c820fcb83c3d24cfe42c9ec70dd1a1834163306a7338136e4f1eaa"),
     "ocr/korean_dict.txt": (47451, "a88071c68c01707489baa79ebe0405b7beb5cca229f4fc94cc3ef992328802d7"),
+    "ocr/latin_rec.onnx": (7862832, "614ffc2d6d3902d360fad7f1b0dd455ee45e877069d14c4e51a99dc4ef144409"),
+    "ocr/latin_dict.txt": (1634, "3c0a8a79b612653c25f765271714f71281e4e955962c153e272b7b8c1d2b13ff"),
+    "ocr/eslav_rec.onnx": (7870092, "dc6bf0e855247decce214ba6dae5bc135fa0ad725a5918a7fcfb59fad6c9cdee"),
+    "ocr/eslav_dict.txt": (1663, "3e95f1581557162870cacdba5af91a4c6be2890710d395b0c3c7578e7ee5e6eb"),
+    "ocr/thai_rec.onnx": (7873480, "2b6e56b1872200349e227574c25aeb0e0f9af9b8356e9ff5f75ac543a535669a"),
+    "ocr/thai_dict.txt": (1767, "57f5406f94bb6688fb7077f7be65f08bbd71cecf48c01ea26c522cb5c4836b7a"),
     "whisper/config.json": (2263, "b0253ea6c0d3bea6b1e19e91a02acfd3b53f4467362efcb5a3e6b16c9b3a9b7e"),
     "whisper/preprocessor_config.json": (340, "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"),
     "whisper/tokenizer.json": (2710337, "297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd"),
@@ -187,7 +200,8 @@ def missing(data: Path, mode: dict, need_engine: bool = True) -> list[dict]:
     if not model_path(data, mode["model"]).exists():
         out.append({"key": "model", "model": mode["model"], "mb": MODELS[mode["model"]][2]})
     if any(not (data / "models" / rel).exists() for _, rel, _ in OCR_FILES):
-        out.append({"key": "ocr", "mb": sum(mb for _, _, mb in OCR_FILES)})
+        # 只算還沒有的（從舊版更新上來時，只差後來加的幾個語言的模型）
+        out.append({"key": "ocr", "mb": sum(mb for _, rel, mb in OCR_FILES if not (data / "models" / rel).exists())})
     if any(not (data / "models" / rel).exists() for _, rel, _ in WHISPER_FILES):
         out.append({"key": "whisper", "mb": sum(mb for _, _, mb in WHISPER_FILES)})
     return out

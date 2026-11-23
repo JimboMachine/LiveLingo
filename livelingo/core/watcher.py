@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 from .ocr import Line, OcrEngine, has_hangul, message_lines
-from .translate import detect_language
+from .translate import LATIN, detect_language
 
 _NORM_RE = re.compile(r"[\W_]+", re.UNICODE)
 
@@ -144,7 +144,7 @@ def text_edge(rows: list[Line], width: int, known: float = 0.0) -> tuple[float, 
 
 
 def wanted(text: str, source_langs: set[str]) -> str | None:
-    """這一列要不要翻？回傳語言代碼（zh / ko / ja / en），不翻就回傳 None。"""
+    """這一列要不要翻？回傳語言代碼（zh / ko / ja / en / es …），不翻就回傳 None。"""
     if "ko" in source_langs and has_hangul(text):
         return "ko"
     lang = detect_language(text)
@@ -158,9 +158,18 @@ def wanted(text: str, source_langs: set[str]) -> str | None:
             return "zh"
         if "ja" in source_langs:
             return "ja"
-    if lang == "en" and "en" in source_langs:
-        if len(re.findall(r"[A-Za-z]{2,}", text)) >= 3:
-            return "en"
+    if lang in LATIN:
+        if len(re.findall(r"[^\W\d_]{2,}", text)) < 3:      # 太短的一列（名字、按鈕）不翻
+            return None
+        if lang in source_langs:
+            return lang
+        # 短句常常看不出是哪一種拉丁字母的語言：對方用的是拉丁字母的語言，就當成那一種
+        latin = [l for l in source_langs if l in LATIN and l != "en"]
+        if len(latin) == 1:
+            return latin[0]
+        return "en" if "en" in source_langs and not latin else None
+    if lang in ("th", "ru") and lang in source_langs:
+        return lang
     return None
 
 

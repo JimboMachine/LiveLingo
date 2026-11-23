@@ -38,7 +38,8 @@ from .usage import Usage
 
 VOICE_KIND = {"listen": "loopback", "mic": "mic"}
 SOURCE_OF = {"loopback": "listen", "mic": "mic"}
-VOICE_FAMILIES = ("ko", "zh", "en", "ja")      # 語音辨識認得、我們也翻得了的語言
+ALPHABETIC = ("en", "vi", "id", "es", "pt", "ru", "de", "fr")      # 一個字母不是一個字的語言：一句話要比較多字母才算夠長
+VOICE_FAMILIES = ("ko", "zh", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr")      # 語音辨識認得、我們也翻得了的語言
 
 
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
@@ -2093,18 +2094,22 @@ class Service:
     def _screen_langs(self) -> set[str]:
         my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
         langs = {their}
-        if self.cfg["their_auto"] and their != "ko":
-            # 自動偵測：中文和日文用同一個文字辨識模型，兩種都收（韓文是另一個模型，要等聲音判斷出韓文才會換過去）
-            langs |= {"zh", "ja"} - {my}
+        if self.cfg["their_auto"]:
+            # 自動偵測：同一個文字辨識模型讀得懂的語言都收（中文和日文同一個；西、葡、法、德、印尼、越南同一個）。
+            # 用別的模型的語言（例如韓文）要等聲音判斷出來才會換過去
+            from .core.ocr import model_of
+
+            model = model_of(their)
+            langs |= {f for f in VOICE_FAMILIES if model_of(f) == model and f != "en"} - {my}
         if self.cfg["also_english"] and my != "en":
             langs.add("en")
         return langs
 
     def _load_ocr(self):
-        from .core.ocr import OcrEngine
+        from .core.ocr import OcrEngine, model_of
 
         family = LANGS[self.cfg["their_lang"]]["family"]
-        if self.ocr is None or self.ocr.family != family:
+        if self.ocr is None or self.ocr.model != model_of(family):
             self.ocr = OcrEngine(self.store / "models" / "ocr", scale=float(self.cfg["ocr_scale"]), family=family)
         return self.ocr
 
@@ -2353,7 +2358,7 @@ class Service:
             self._their_guess = ""
             return
         letters = len(re.sub(r"[\W_]+", "", text))
-        solid = letters >= (16 if family == "en" else 6)
+        solid = letters >= (16 if family in ALPHABETIC else 6)
         if not solid and self._their_guess != family:
             self._their_guess = family
             return
