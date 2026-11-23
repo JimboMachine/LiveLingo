@@ -76,12 +76,15 @@ class Engine:
         # 這組參數是實測過的：--chat-template gemma 少了引擎會開不起來。
         # CPU：--swa-full 加上多個 slot 讓每種翻譯方向各留一份快取，翻譯約快一倍。
         # 顯示卡：本來就夠快，改用比較小的快取，把顯示記憶體留給遊戲。
+        # --cache-ram 0：兩種都要關。引擎預設會把翻過的句子的快取另外存在電腦記憶體裡，最多 8 GB，
+        # 開久了真的會慢慢長到 8 GB（Jimbo 的電腦用顯示卡跑了一晚，引擎吃掉 9.5 GB 記憶體）。
+        # 我們每句都很短，同一個 slot 自己的快取就夠用了，這份額外的快取幾乎用不到。
         args = [str(self.exe), "-m", str(self.model), "--chat-template", "gemma",
-                "--host", "127.0.0.1", "--port", str(self.port)]
+                "--host", "127.0.0.1", "--port", str(self.port), "--cache-ram", "0"]
         if self.gpu_layers > 0:
             args += ["-c", "4096", "-np", "2", "-ngl", str(self.gpu_layers)]
         else:
-            args += ["-c", "8192", "-np", "4", "--swa-full", "--cache-ram", "0"]
+            args += ["-c", "8192", "-np", "4", "--swa-full"]
         if self.threads > 0:
             args += ["-t", str(self.threads)]
         return args

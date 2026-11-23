@@ -685,6 +685,8 @@
           </button>
         </div>
         <div class="note ${S.fallback ? "warn" : ""}">${ICON.info}<span>${esc(S.fallback ? t("gpu_fallback") : gpuLine)}</span></div>
+        ${choiceRow("engine_rest", t("engine_rest"), ["0", "10", "30", "60"].map((m) => [m, t("engine_rest_" + m)]))}
+        <div class="dnote">${esc(t("engine_rest_desc"))}</div>
       </section>
       <section>
         <h2>${esc(tk("tone_title"))}</h2>

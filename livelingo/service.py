@@ -59,6 +59,8 @@ LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLin
 
 REVIVE_TIMES = 3            # 翻譯引擎自己停掉時，最多自動重開幾次……
 REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
+ENGINE_REST = (0, 10, 30, 60)    # 設定「幾分鐘沒翻譯就讓翻譯引擎休息」可以選的值，0 = 一直開著
+SPEECH_REST = 120.0         # 兩邊收音都關掉這麼多秒：把語音辨識模型（約 1 GB）放掉，下次開收音再載入
 
 
 class EventHub:
@@ -185,6 +187,10 @@ class Service:
         self._engine_ok = threading.Event()      # 沒亮 = 翻譯引擎掛了，正在自動重開（翻譯先等它）
         self._engine_ok.set()
         self._revive_lock = threading.Lock()
+        # 翻譯引擎休息：太久沒翻譯就把它關掉（放掉電腦記憶體和顯示卡記憶體），下一句來了再叫醒
+        self._resting = False
+        self._last_use = time.monotonic()
+        self._voice_off_since: float | None = time.monotonic()      # 兩邊收音都關著是從什麼時候開始（None = 有開著）
         self._revivals: list[float] = []         # 最近幾次自動重開的時間
         self._retries: dict[int, int] = {}       # 引擎掛掉時正在翻的句子：補翻過幾次
         self._error_told = 0.0                   # 上一次在畫面上說「有一部分出了錯」的時間
@@ -559,15 +565,80 @@ class Service:
 
     def _engine_gone(self) -> bool:
         engine = self.engine
-        return bool(self.phase == "ready" and engine and engine.proc is not None and engine.proc.poll() is not None)
+        return bool(self.phase == "ready" and not self._resting and engine and engine.proc is not None
+                    and engine.proc.poll() is not None)
 
     def _engine_guard(self) -> None:
         while not self.closing.wait(3):
             try:
                 if self._engine_gone():
                     self._revive_engine()
+                self._maybe_rest()
+                self._maybe_free_speech()
             except Exception:  # noqa: BLE001
                 self.log(traceback.format_exc())
+
+    # ---- 沒在用就放掉：翻譯引擎（使用者選幾分鐘）、語音辨識模型（兩邊收音都關著）
+
+    def _maybe_rest(self) -> None:
+        minutes = int(self.cfg["engine_rest"] or 0)
+        if minutes <= 0 or self._resting or self.phase != "ready" or not self.engine or self.engine.proc is None:
+            return
+        if time.monotonic() - self._last_use < minutes * 60:
+            return
+        with self._revive_lock:
+            if self._resting or self.phase != "ready" or time.monotonic() - self._last_use < minutes * 60:
+                return
+            self._resting = True
+            self._engine_ok.clear()      # 翻譯的那條線看到沒亮，會先叫醒引擎（_wake_engine）
+            self.engine.stop()
+            self.log(f"the translation engine is resting after {minutes} idle minutes (memory and graphics memory freed)")
+
+    def _wake_engine(self) -> None:
+        """有句子要翻：記下時間；引擎在休息的話叫醒它（等它好了才回來）。"""
+        self._last_use = time.monotonic()
+        if not self._resting:
+            return
+        with self._revive_lock:
+            if not self._resting or self.closing.is_set():
+                return
+            # 只在浮動留言說一聲（人在遊戲裡）；主視窗不跳通知，這不是出錯
+            table = HOTKEY_NOTES.get(self.cfg["ui_lang"], HOTKEY_NOTES["en"])
+            self.overlay.note(table["engine_waking"])
+            started = time.time()
+            engine = self._new_engine()
+            try:
+                engine.start()
+                if not engine.wait_ready(180):
+                    raise RuntimeError("the translation engine did not become ready in time")
+            except Exception as ex:  # noqa: BLE001
+                engine.stop()
+                self.engine, self._resting = engine, False
+                self._engine_ok.set()
+                self._engine_lost(ex, code="restart_failed")
+                return
+            self.engine, self._resting = engine, False
+            self.translator.url, self.translator.key = engine.url, engine.key
+            self._last_use = time.monotonic()
+            self._engine_ok.set()
+            self.log(f"the translation engine woke up in {time.time() - started:.1f} s")
+
+    def _maybe_free_speech(self) -> None:
+        if self.pipelines:
+            self._voice_off_since = None
+            return
+        now = time.monotonic()
+        if self._voice_off_since is None:
+            self._voice_off_since = now
+        if self.recognizer is not None and now - self._voice_off_since >= SPEECH_REST:
+            with self._lock:
+                if self.pipelines or self.recognizer is None:
+                    return
+                self.recognizer = None
+            import gc
+
+            gc.collect()
+            self.log("speech recognition model released (both voice sources are off)")
 
     def _revive_engine(self) -> bool:
         """引擎停了就重開一個。十分鐘內重開過 REVIVE_TIMES 次還是停：不再試，照「引擎開不起來」處理。回傳有沒有重開成功。"""
@@ -827,6 +898,7 @@ class Service:
             self._skipped += 1
             self._tell_skipped()
             return
+        self._wake_engine()      # 引擎在休息的話先叫醒
         if not self._engine_ok.is_set():
             self._engine_ok.wait(300)      # 翻譯引擎正在自動重開：等它回來再翻，不要每一句都報失敗
         if "back_of" in msg:
@@ -1912,6 +1984,14 @@ class Service:
                     changes[key] = max(low, min(high, int(changes[key])))
                 except (TypeError, ValueError):
                     changes.pop(key)
+        if "engine_rest" in changes:
+            try:
+                changes["engine_rest"] = int(changes["engine_rest"])
+            except (TypeError, ValueError):
+                changes.pop("engine_rest")
+            else:
+                if changes["engine_rest"] not in ENGINE_REST:
+                    changes.pop("engine_rest")
         if "history_days" in changes:
             try:
                 changes["history_days"] = int(changes["history_days"])
@@ -2281,6 +2361,7 @@ class Service:
         try:
             from .core.speech import Recognizer, SpeechPipeline
 
+            self._voice_off_since = time.monotonic()      # 正在開收音：語音辨識模型先不要被放掉
             if self.recognizer is None:
                 model_dir = self.store / "models" / "whisper"
                 if not (model_dir / "model.bin").exists():
@@ -2288,6 +2369,7 @@ class Service:
                 device, compute = self._speech_engine()
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]), device=device,
                                              compute_type=compute, on_fallback=self._speech_gpu_failed)
+            recognizer = self.recognizer
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
             capture = None
             if key == "listen" and self.cfg["listen_apps"] and not self._apps_audio_off and hasattr(self.audio, "capture_apps"):
@@ -2296,10 +2378,10 @@ class Service:
             self._source(key, apps=bool(capture))      # 介面要知道現在是「只聽指定程式」還是整台電腦
             if capture is None:
                 capture = self.audio.capture(kind, device, on_error=self._voice_error, on_open=self._voice_opened)
-            self.recognizer.beam = BEAMS[self.cfg["speech_mode"]]
+            recognizer.beam = BEAMS[self.cfg["speech_mode"]]
             if key == "listen":
                 self.speakers_load()      # 有開「分辨說話者」的話，模型在背景準備（還沒好之前字幕照出，只是不標是誰）
-            pipe = SpeechPipeline(capture, self.recognizer, self._voice_langs(key),
+            pipe = SpeechPipeline(capture, recognizer, self._voice_langs(key),
                                   on_text=self._on_speech, on_state=self._on_speaking,
                                   end_silence=float(self.cfg["end_silence"]), on_level=self._on_level,
                                   threshold=VAD_THRESHOLD[int(self.cfg["voice_sensitivity"])],
