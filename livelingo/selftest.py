@@ -206,6 +206,15 @@ def run(out: Path, window: bool = True) -> int:
             shot = np.asarray(sct.grab({"left": 0, "top": 0, "width": 200, "height": 100}))
         return list(shot.shape)
 
+    def affinity(hwnd: int) -> int:
+        """Windows 說這個視窗「能不能被螢幕擷取拍到」：0 = 拍得到，0x11 = 一律藏起來（分享螢幕、直播都看不到）。"""
+        import ctypes
+        from ctypes import wintypes
+
+        value = wintypes.DWORD(0xFFFF)
+        assert ctypes.windll.user32.GetWindowDisplayAffinity(wintypes.HWND(hwnd), ctypes.byref(value)), ctypes.WinError()
+        return int(value.value)
+
     def floating_chat():
         """浮動留言：畫得出來，而且（在 Windows 上）真的能開出透明、滑鼠會穿過去的視窗。"""
         from PIL import Image
@@ -237,6 +246,13 @@ def run(out: Path, window: bool = True) -> int:
         assert win.start(rect), win.error
         try:
             user32 = ctypes.windll.user32
+            # 分享螢幕：預設看得到字幕；「讓分享螢幕看得到」關掉就藏起來，再打開又看得到
+            info["share"] = [affinity(win.hwnd)]
+            win.set_hidden(True)
+            info["share"].append(affinity(win.hwnd))
+            win.set_hidden(False)
+            info["share"].append(affinity(win.hwnd))
+            assert info["share"] == [0, 0x11, 0], info["share"]
             user32.SetWindowDisplayAffinity(ctypes.c_void_p(win.hwnd), 0)      # 檢查時要拍得到自己
             solid = Image.new("RGBA", (rect[2], rect[3]), (255, 0, 255, 255))
             solid.alpha_composite(frame)
@@ -405,6 +421,13 @@ def run(out: Path, window: bool = True) -> int:
                 time.sleep(0.5)
                 info["has_window_ctl"] = service.window is not None
                 info["tray_running"] = bool(service.tray.running)      # 視窗出現時應該已經把系統匣圖示開起來
+                if sys.platform == "win32" and service.main_hwnd:
+                    # 主視窗：預設分享螢幕、直播拍得到；關掉「讓分享螢幕看得到」就藏起來，再打開又看得到
+                    info["share_main"] = [affinity(service.main_hwnd)]
+                    service.update_config({"share_visible": False})
+                    info["share_main"].append(affinity(service.main_hwnd))
+                    service.update_config({"share_visible": True})
+                    info["share_main"].append(affinity(service.main_hwnd))
                 if service.window:
                     info["size_before"] = service.window.geometry()
                     service.set_view("main")
@@ -455,7 +478,8 @@ def run(out: Path, window: bool = True) -> int:
         opened = window_mod._run_webview(srv.url, service, on_loaded)
         closed.set()
         ok = bool(opened and done.is_set() and "error" not in info and len(info.get("wizard_text", "")) > 20
-                  and info.get("cards") == len(UI_LANGS) and info.get("has_window_ctl"))
+                  and info.get("cards") == len(UI_LANGS) and info.get("has_window_ctl")
+                  and (sys.platform != "win32" or info.get("share_main") == [0, 0x11, 0]))
         results["window"] = {"ok": ok, "info": info, "opened": opened, "seconds": round(time.time() - started, 2)}
         if not ok and "error" in info:
             results["window"]["error"] = info["error"]
