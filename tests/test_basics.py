@@ -5506,3 +5506,63 @@ def test_more_languages_are_told_apart():
     assert numbers_lost("come in 3 minutes", "ven en tres minutos", "es", "en") == []
     assert numbers_lost("come in 3 minutes", "ven en 5 minutos", "es", "en") == ["3"]
     assert numbers_lost("빨리 와 ㅋㅋㅋ", "Vem logo", "pt", "ko") == [] and tidy("Vem logo ㅋㅋㅋ", "pt") == "Vem logo kkkk"
+def test_subtitles_can_be_seen_in_screen_sharing(tmp_path, monkeypatch):
+    """浮動字幕和主視窗以前一律對「分享螢幕、直播、錄影」隱藏（朋友在 Discord 什麼都看不到）。現在預設拍得到，可以關掉；
+    拍得到的時候，讀螢幕要先把字幕蓋住的地方塗黑，不然會把自己顯示的譯文又讀進來翻。"""
+    import numpy as np
+
+    from livelingo import oswin
+    from livelingo.config import DEFAULTS, EDITABLE
+    from livelingo.core.watcher import blank_covers
+    from livelingo.overlay import MemoryWindow
+    from livelingo.service import Service
+
+    assert DEFAULTS["share_visible"] is True and "share_visible" in EDITABLE
+    service = Service(tmp_path)
+    service.overlay.window_class = MemoryWindow
+    service.cfg.set(overlay=True)
+    service.overlay.apply()
+    window = service.overlay.window
+    assert window is not None and window.hidden is False              # 預設：開視窗的時候就是拍得到的
+    service.overlay.push("heard", "等一下", key=1)
+    assert service.overlay.covers() == list(service.overlay.rect)
+    assert service.capture_mask() == [list(service.overlay.rect)]
+    service.overlay.clear()
+    assert service.overlay.covers() is None and service.capture_mask() == []      # 沒有字幕就不遮，聊天框看得到
+
+    service.update_config({"share_visible": False})
+    assert window.hidden is True                                       # 開著的視窗馬上換
+    service.overlay.push("heard", "等一下", key=2)
+    assert service.capture_mask() == []                                # 拍不到的時候不用遮
+    service.update_config({"share_visible": True})
+    assert window.hidden is False and service.capture_mask() == [list(service.overlay.rect)]
+    service.overlay.stop()
+
+    # 塗黑：只動重疊的部分、不改原圖
+    img = np.full((100, 200, 3), 200, dtype=np.uint8)
+    place = {"left": 1000, "top": 500, "width": 200, "height": 100}
+    out = blank_covers(img, place, [[1150, 480, 400, 60], [0, 0, 10, 10]])      # 第一個蓋住右上，第二個完全不重疊
+    assert (out[:40, 150:] == 0).all() and (out[40:, :] == 200).all() and (out[:, :150] == 200).all()
+    assert (img == 200).all() and blank_covers(img, place, [[0, 0, 5, 5]]) is img
+    assert oswin.window_rect_of(0) is None
+
+    # 讀螢幕真的會用到它：OCR 收到的畫面裡，字幕蓋住的地方是黑的
+    import livelingo.core.watcher as watcher_mod
+    from livelingo.core.watcher import ScreenWatcher
+
+    seen = []
+
+    class Ocr:
+        family = "ko"
+
+        def read(self, bgr):
+            seen.append(bgr.copy())
+            return []
+
+    monkeypatch.setattr(watcher_mod, "message_lines", lambda lines: [])
+    w = ScreenWatcher(Ocr(), on_message=lambda *a: None, grab=lambda place: np.full((100, 200, 3), 200, np.uint8),
+                      mask=lambda: [[1100, 520, 100, 80]])
+    w.set_regions([{"id": "r1", "left": 1000, "top": 500, "width": 200, "height": 100}])
+    w._look(w._slots[0], w.grab)
+    w._look(w._slots[0], w.grab)      # 第二次畫面沒變：這時候才算停下來，會去辨識
+    assert seen and (seen[0][20:100, 100:] == 0).all() and (seen[0][:20] == 200).all() and (seen[0][:, :100] == 200).all()

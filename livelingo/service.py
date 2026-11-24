@@ -203,6 +203,7 @@ class Service:
         self._retries: dict[int, int] = {}       # 引擎掛掉時正在翻的句子：補翻過幾次
         self._error_told = 0.0                   # 上一次在畫面上說「有一部分出了錯」的時間
         self.window = None             # 視窗控制（window.py 會放進來）
+        self.main_hwnd = 0             # 主視窗的 Windows 視窗代碼（window.py 開好視窗後放進來）
         self.can_window = False        # 視窗可以由程式調整大小、置頂（用瀏覽器開的時候不行）
         self.view = "main"
         self.watcher = None
@@ -2099,6 +2100,10 @@ class Service:
             self._terms_changed()
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
+        if changed("share_visible"):
+            self.overlay.apply_share()
+            if self.main_hwnd:
+                oswin.exclude_from_capture(self.main_hwnd, not after["share_visible"])
         if changed("overlay", "overlay_form", "overlay_monitor", *OVERLAY_LOOK, "ui_lang", "my_lang", "their_lang"):
             self.overlay.apply()
             if changed("overlay"):
@@ -2187,6 +2192,23 @@ class Service:
         many = len(self._regions_on()) > 1      # 只有一個區域時不用標是哪裡讀到的
         self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "")
 
+    def capture_mask(self) -> list[list[int]]:
+        """
+        LiveLingo 自己蓋在螢幕上的東西（浮動字幕、主視窗）在哪裡。它們現在讓分享螢幕拍得到，
+        讀螢幕時也拍得到，所以要先塗黑，不然自己顯示的譯文會被讀進來又翻一次。
+        不讓分享拍到的時候（share_visible 關掉）擷取本來就拍不到它們，不用遮。
+        """
+        if not self.cfg["share_visible"]:
+            return []
+        out = []
+        cover = self.overlay.covers()
+        if cover:
+            out.append(cover)
+        main = oswin.window_rect_of(self.main_hwnd)
+        if main:
+            out.append(main)
+        return out
+
     def _locate(self, region: dict) -> dict | None:
         """這個區域現在實際在螢幕上的哪裡。跟著程式視窗的：視窗搬到哪就跟到哪，視窗沒開或縮小了就先不讀。"""
         place = {k: int(region[k]) for k in ("left", "top", "width", "height")}
@@ -2247,7 +2269,8 @@ class Service:
                     ocr, on_message=self._on_screen_line, on_status=self._screen_error,
                     interval=float(self.cfg["interval"]), source_langs=self._screen_langs(),
                     grab=getattr(self, "grab", None), locate=self._locate,
-                    on_stats=lambda stats: self.hub.publish("screen_stats", stats), on_black=self._screen_black)
+                    on_stats=lambda stats: self.hub.publish("screen_stats", stats), on_black=self._screen_black,
+                    mask=self.capture_mask)
                 self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
             self.watcher.paused = False
@@ -2372,7 +2395,11 @@ class Service:
                     bgr = np.ascontiguousarray(np.asarray(sct.grab(region))[:, :, :3])
             else:
                 bgr = np.ascontiguousarray(grab(region))
-            from .core.watcher import SeenLines, join_wrapped, text_edge
+            from .core.watcher import SeenLines, blank_covers, join_wrapped, text_edge
+
+            covers = self.capture_mask()
+            if covers:
+                bgr = blank_covers(bgr, region, covers)
 
             rows = message_lines(ocr.read(bgr))
             # 跟平常讀的時候一樣把換行的訊息接回一則，這裡看到的才是真的會拿去翻的樣子

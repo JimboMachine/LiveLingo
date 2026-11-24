@@ -1,4 +1,58 @@
 {
+  "2.5.2": {
+    "zh-TW": [
+      "浮動字幕和 LiveLingo 視窗現在能被 Discord 分享螢幕、OBS 直播和錄影拍到（以前一律藏起來，朋友什麼都看不到）。想只給自己看，到「顯示與字幕」關掉「讓分享螢幕、直播看得到字幕」。",
+      "翻過的句子會記住，同一句不用重翻；可以匯出分享檔給朋友，也可以匯入朋友的。"
+    ],
+    "zh-CN": [
+      "浮动字幕和 LiveLingo 窗口现在能被 Discord 共享屏幕、OBS 直播和录制拍到（以前一律藏起来，朋友什么都看不到）。想只给自己看，到“显示与字幕”关掉“让共享屏幕、直播看得到字幕”。",
+      "翻过的句子会记住，同一句不用重翻；可以导出分享文件给朋友，也可以导入朋友的。"
+    ],
+    "en": [
+      "Floating subtitles and the LiveLingo window now appear in Discord screen sharing, OBS streams and recordings (they used to be hidden). To keep them private, turn off “Show subtitles in screen sharing and streams” under Display.",
+      "Translated sentences are remembered, so the same sentence is not translated again. You can export a sharing file for friends and import theirs."
+    ],
+    "ko": [
+      "떠 있는 자막과 LiveLingo 창이 이제 Discord 화면 공유, OBS 방송, 녹화에 보입니다(전에는 모두 숨겨졌습니다). 나에게만 보이게 하려면 ‘표시 및 자막’에서 ‘화면 공유·방송에도 자막 표시’를 끄세요.",
+      "번역한 문장을 기억해 같은 문장을 다시 번역하지 않습니다. 친구에게 줄 공유 파일을 내보내고, 친구의 파일도 가져올 수 있습니다."
+    ],
+    "ja": [
+      "浮動字幕と LiveLingo のウィンドウが、Discord の画面共有・OBS の配信・録画に映るようになりました（以前はすべて隠されていました）。自分だけに見せたい場合は「表示と字幕」で「画面共有・配信にも字幕を表示」をオフにしてください。",
+      "翻訳した文を覚えておくので、同じ文を再翻訳しません。友達に渡す共有ファイルを書き出したり、友達のファイルを読み込んだりできます。"
+    ],
+    "vi": [
+      "Cửa sổ LiveLingo và phụ đề nổi giờ hiển thị khi chia sẻ màn hình Discord, phát trực tiếp OBS và ghi hình (trước đây bị ẩn). Muốn chỉ mình bạn thấy, hãy tắt “Hiện phụ đề khi chia sẻ màn hình và phát trực tiếp” ở mục Hiển thị.",
+      "Các câu đã dịch được ghi nhớ nên câu giống nhau không phải dịch lại. Bạn có thể xuất tệp chia sẻ cho bạn bè và nhập tệp của họ."
+    ],
+    "th": [
+      "คำบรรยายลอยและหน้าต่าง LiveLingo จะแสดงใน Discord แชร์หน้าจอ สตรีม OBS และการอัดวิดีโอแล้ว (ก่อนหน้านี้ถูกซ่อนไว้) หากต้องการให้เห็นเฉพาะคุณ ให้ปิด “แสดงคำบรรยายในการแชร์หน้าจอและสตรีม” ในหน้าการแสดงผล",
+      "ประโยคที่แปลแล้วจะถูกจดจำ ประโยคเดิมจึงไม่ต้องแปลซ้ำ คุณส่งออกไฟล์แชร์ให้เพื่อนและนำเข้าไฟล์ของเพื่อนได้"
+    ],
+    "id": [
+      "Subtitel melayang dan jendela LiveLingo kini tampil di berbagi layar Discord, siaran OBS, dan rekaman (sebelumnya disembunyikan). Agar hanya Anda yang melihatnya, matikan “Tampilkan subtitel saat berbagi layar dan siaran” di Tampilan.",
+      "Kalimat yang sudah diterjemahkan diingat, jadi kalimat yang sama tidak diterjemahkan ulang. Anda bisa mengekspor berkas berbagi untuk teman dan mengimpor berkas mereka."
+    ],
+    "es": [
+      "Los subtítulos flotantes y la ventana de LiveLingo ya se ven al compartir pantalla en Discord, en OBS y en grabaciones (antes estaban ocultos). Para verlos solo tú, desactiva «Mostrar subtítulos al compartir pantalla» en Pantalla.",
+      "Las frases traducidas se recuerdan, así que la misma frase no se vuelve a traducir. Puedes exportar un archivo para compartir con amigos e importar el suyo."
+    ],
+    "pt": [
+      "As legendas flutuantes e a janela do LiveLingo agora aparecem na partilha de ecrã do Discord, no OBS e em gravações (antes estavam ocultas). Para só você as ver, desative “Mostrar legendas na partilha de ecrã” em Exibição.",
+      "As frases traduzidas ficam guardadas, por isso a mesma frase não é traduzida de novo. Pode exportar um ficheiro para partilhar com amigos e importar o deles."
+    ],
+    "ru": [
+      "Плавающие субтитры и окно LiveLingo теперь видны при демонстрации экрана в Discord, в OBS и в записи (раньше были скрыты). Чтобы видели только вы, отключите «Субтитры при демонстрации экрана» в разделе «Отображение».",
+      "Переведённые фразы запоминаются, и одна и та же фраза не переводится заново. Можно экспортировать файл для друзей и импортировать их файлы."
+    ],
+    "de": [
+      "Schwebende Untertitel und das LiveLingo-Fenster sind jetzt in Discord-Bildschirmfreigabe, OBS-Streams und Aufnahmen sichtbar (vorher verborgen). Nur für dich? Schalte „Untertitel bei Bildschirmfreigabe zeigen“ unter Anzeige aus.",
+      "Übersetzte Sätze werden gemerkt, derselbe Satz wird nicht erneut übersetzt. Du kannst eine Datei für Freunde exportieren und ihre importieren."
+    ],
+    "fr": [
+      "Les sous-titres flottants et la fenêtre LiveLingo s'affichent dans le partage d'écran Discord, OBS et les enregistrements (masqués avant). Pour les garder privés, désactivez « Sous-titres dans le partage d'écran » dans Affichage.",
+      "Les phrases traduites sont mémorisées, une même phrase n'est donc pas retraduite. Vous pouvez exporter un fichier à partager avec des amis et importer le leur."
+    ]
+  },
   "2.5.1": {
     "zh-TW": [
       "修正：自動更新時如果 LiveLingo 還沒完全關掉，可能把程式裝壞、之後打不開（找不到 python312.dll）。",

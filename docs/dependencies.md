@@ -344,6 +344,15 @@
 
 自動把關：測試會擋：分人的規則變了（太短的不認新的人、像的歸同一個人）、聲紋被存檔或放進問題報告、重新分辨之後舊的標籤還在、介面沒有接 speakers、模型沒有鎖版本。門檻準不準，要用真的聲音量（乾淨的朗讀和 Discord 語音差很多）。
 
+### 改「字幕和視窗讓分享螢幕看得到」或任何會蓋在螢幕上的東西
+
+1. `oswin.py`：exclude_from_capture(hide)：hide=False 是 WDA_NONE；Windows 10 2004 以前沒有這個功能
+2. `overlay.py`、`window.py`：字幕視窗和主視窗開的時候都照 share_visible；新增任何蓋在螢幕上的視窗，都要讓 Service.capture_mask 知道它在哪
+3. `watcher.py`、`service.py`：讀螢幕（包括「試讀一次」）先用 capture_mask 塗黑自己的字幕，不然譯文會被讀進來再翻一次
+4. `config.py`、`app.js`、`i18n.js`：share_visible 的開關、名稱和說明五種語言
+
+自動把關：測試會擋：預設拍得到、設定改了開著的視窗馬上換、拍得到的時候讀螢幕會把字幕蓋住的地方塗黑、沒有字幕就不塗。Discord、OBS 真的拍不拍得到，要在 Windows 上實際分享一次才知道。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）

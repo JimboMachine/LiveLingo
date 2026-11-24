@@ -53,6 +53,7 @@ DEFAULTS = {
     "update_check": True,        # 開啟時檢查有沒有新版本（關掉的話，模型都下載好之後 LiveLingo 完全不連網路）
     "setup_done": False,
     "history_keep": True,        # 對話歷史存在這台電腦上（history.jsonl）；關掉就不再記新的
+    "share_visible": True,       # 浮動字幕和主視窗要不要讓「分享螢幕、直播、錄影」看得到；關掉就只有自己看得到
     "engine_rest": 30,           # 幾分鐘沒翻譯就讓翻譯引擎休息（放掉記憶體和顯示卡記憶體），0 = 一直開著（service.ENGINE_REST）
     "history_days": 30,          # 歷史保留幾天（history.DAYS：7、30、90，0 = 不限）
     "usage_keep": True,          # 使用數字（每天幾句、失敗幾次、平均等多久）記在這台電腦上（usage.json）；只有數字
@@ -97,7 +98,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
             "remember_translations", "use_shared",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
