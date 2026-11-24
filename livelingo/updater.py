@@ -83,21 +83,24 @@ def release_of(version: str, timeout: float = 8) -> dict | None:
     return info if info and parse_version(info["version"]) == parse_version(version) else None
 
 
-def fetch_notes(url: str, timeout: float = 6) -> dict:
-    """新版本改了什麼（跟安裝檔一起發行的 changes.json）。拿不到、太大、看不懂都回傳空的：沒有說明也照樣可以更新。"""
+def fetch_notes(url: str, timeout: float = 15, tries: int = 2) -> dict:
+    """新版本改了什麼（跟安裝檔一起發行的 changes.json）。拿不到、太大、看不懂都回傳空的：沒有說明也照樣可以更新。
+    網路慢的時候多等一下、再試一次：更新提示上沒有說明，使用者就不知道這次改了什麼。"""
     if not url:
         return {}
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "LiveLingo"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw = r.read(NOTES_LIMIT + 1)
-        if len(raw) > NOTES_LIMIT:
-            return {}
-        from .changes import clean
+    for _ in range(max(1, tries)):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "LiveLingo"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                raw = r.read(NOTES_LIMIT + 1)
+            if len(raw) > NOTES_LIMIT:
+                return {}
+            from .changes import clean
 
-        return clean(json.loads(raw.decode("utf-8")))
-    except Exception:  # noqa: BLE001
-        return {}
+            return clean(json.loads(raw.decode("utf-8")))
+        except Exception:  # noqa: BLE001
+            continue
+    return {}
 
 
 def just_updated(folder: Path) -> str:

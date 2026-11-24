@@ -1,110 +1,164 @@
 {
-  "2.5.2": {
+  "2.5.3": {
     "zh-TW": [
-      "浮動字幕和 LiveLingo 視窗現在能被 Discord 分享螢幕、OBS 直播和錄影拍到（以前一律藏起來，朋友什麼都看不到）。想只給自己看，到「顯示與字幕」關掉「讓分享螢幕、直播看得到字幕」。",
-      "翻過的句子會記住，同一句不用重翻；可以匯出分享檔給朋友，也可以匯入朋友的。"
+      "每次更新或重新安裝後，第一次開啟會用你的語言列出這次改了什麼（包含中間跳過的版本），按「知道了」才關掉，之後可以在「關於」再看。",
+      "更新提示如果一時拿不到說明，會告訴你更新後會顯示，不會什麼都沒說。"
     ],
     "zh-CN": [
-      "浮动字幕和 LiveLingo 窗口现在能被 Discord 共享屏幕、OBS 直播和录制拍到（以前一律藏起来，朋友什么都看不到）。想只给自己看，到“显示与字幕”关掉“让共享屏幕、直播看得到字幕”。",
-      "翻过的句子会记住，同一句不用重翻；可以导出分享文件给朋友，也可以导入朋友的。"
+      "每次更新或重新安装后，第一次打开会用你的语言列出这次改了什么（包含中间跳过的版本），点“知道了”才关闭，之后可以在“关于”再看。",
+      "更新提示如果一时拿不到说明，会告诉你更新后会显示，不会什么都没说。"
     ],
     "en": [
-      "Floating subtitles and the LiveLingo window now appear in Discord screen sharing, OBS streams and recordings (they used to be hidden). To keep them private, turn off “Show subtitles in screen sharing and streams” under Display.",
-      "Translated sentences are remembered, so the same sentence is not translated again. You can export a sharing file for friends and import theirs."
+      "After every update or reinstall, the first launch lists what changed in your language, including skipped versions, until you press “Got it”. You can read it again under About.",
+      "If the update prompt cannot load the notes, it now says they will be shown after updating."
     ],
     "ko": [
-      "떠 있는 자막과 LiveLingo 창이 이제 Discord 화면 공유, OBS 방송, 녹화에 보입니다(전에는 모두 숨겨졌습니다). 나에게만 보이게 하려면 ‘표시 및 자막’에서 ‘화면 공유·방송에도 자막 표시’를 끄세요.",
-      "번역한 문장을 기억해 같은 문장을 다시 번역하지 않습니다. 친구에게 줄 공유 파일을 내보내고, 친구의 파일도 가져올 수 있습니다."
+      "업데이트나 재설치 후 처음 열면 건너뛴 버전을 포함해 바뀐 내용을 내 언어로 보여 주고, ‘확인’을 눌러야 닫힙니다. ‘정보’에서 다시 볼 수 있습니다.",
+      "업데이트 안내에서 설명을 불러오지 못하면, 업데이트 후에 표시된다고 알려 줍니다."
     ],
     "ja": [
-      "浮動字幕と LiveLingo のウィンドウが、Discord の画面共有・OBS の配信・録画に映るようになりました（以前はすべて隠されていました）。自分だけに見せたい場合は「表示と字幕」で「画面共有・配信にも字幕を表示」をオフにしてください。",
-      "翻訳した文を覚えておくので、同じ文を再翻訳しません。友達に渡す共有ファイルを書き出したり、友達のファイルを読み込んだりできます。"
+      "更新や再インストールの後、最初の起動で、飛ばしたバージョンも含めて変更点を自分の言語で表示し、「了解」を押すまで閉じません。「情報」でいつでも見直せます。",
+      "更新の案内で説明を取得できないときは、更新後に表示すると伝えます。"
     ],
     "vi": [
-      "Cửa sổ LiveLingo và phụ đề nổi giờ hiển thị khi chia sẻ màn hình Discord, phát trực tiếp OBS và ghi hình (trước đây bị ẩn). Muốn chỉ mình bạn thấy, hãy tắt “Hiện phụ đề khi chia sẻ màn hình và phát trực tiếp” ở mục Hiển thị.",
-      "Các câu đã dịch được ghi nhớ nên câu giống nhau không phải dịch lại. Bạn có thể xuất tệp chia sẻ cho bạn bè và nhập tệp của họ."
+      "Sau mỗi lần cập nhật hoặc cài lại, lần mở đầu tiên liệt kê thay đổi bằng ngôn ngữ của bạn, gồm cả các phiên bản đã bỏ qua, đến khi bạn bấm “Đã hiểu”. Xem lại trong Giới thiệu.",
+      "Nếu hộp thoại cập nhật chưa tải được ghi chú, nó sẽ báo rằng ghi chú hiện sau khi cập nhật."
     ],
     "th": [
-      "คำบรรยายลอยและหน้าต่าง LiveLingo จะแสดงใน Discord แชร์หน้าจอ สตรีม OBS และการอัดวิดีโอแล้ว (ก่อนหน้านี้ถูกซ่อนไว้) หากต้องการให้เห็นเฉพาะคุณ ให้ปิด “แสดงคำบรรยายในการแชร์หน้าจอและสตรีม” ในหน้าการแสดงผล",
-      "ประโยคที่แปลแล้วจะถูกจดจำ ประโยคเดิมจึงไม่ต้องแปลซ้ำ คุณส่งออกไฟล์แชร์ให้เพื่อนและนำเข้าไฟล์ของเพื่อนได้"
+      "หลังอัปเดตหรือติดตั้งใหม่ทุกครั้ง การเปิดครั้งแรกจะแสดงสิ่งที่เปลี่ยนในภาษาของคุณ รวมเวอร์ชันที่ข้ามไป จนกว่าจะกด “เข้าใจแล้ว” อ่านซ้ำได้ในหน้า “เกี่ยวกับ”",
+      "หากหน้าอัปเดตโหลดบันทึกไม่ได้ จะแจ้งว่าบันทึกจะแสดงหลังอัปเดต"
     ],
     "id": [
-      "Subtitel melayang dan jendela LiveLingo kini tampil di berbagi layar Discord, siaran OBS, dan rekaman (sebelumnya disembunyikan). Agar hanya Anda yang melihatnya, matikan “Tampilkan subtitel saat berbagi layar dan siaran” di Tampilan.",
-      "Kalimat yang sudah diterjemahkan diingat, jadi kalimat yang sama tidak diterjemahkan ulang. Anda bisa mengekspor berkas berbagi untuk teman dan mengimpor berkas mereka."
+      "Setelah setiap pembaruan atau pemasangan ulang, pembukaan pertama menampilkan perubahan dalam bahasa Anda, termasuk versi yang terlewat, sampai Anda menekan “Mengerti”. Bisa dibaca lagi di Tentang.",
+      "Jika dialog pembaruan belum bisa memuat catatan, Anda diberi tahu catatan tampil setelah pembaruan."
     ],
     "es": [
-      "Los subtítulos flotantes y la ventana de LiveLingo ya se ven al compartir pantalla en Discord, en OBS y en grabaciones (antes estaban ocultos). Para verlos solo tú, desactiva «Mostrar subtítulos al compartir pantalla» en Pantalla.",
-      "Las frases traducidas se recuerdan, así que la misma frase no se vuelve a traducir. Puedes exportar un archivo para compartir con amigos e importar el suyo."
+      "Tras cada actualización o reinstalación, el primer arranque lista en tu idioma lo que cambió, incluidas las versiones omitidas, hasta que pulses «Entendido». Puedes releerlo en Acerca de.",
+      "Si el aviso de actualización no puede cargar las notas, avisa de que se mostrarán después."
     ],
     "pt": [
-      "As legendas flutuantes e a janela do LiveLingo agora aparecem na partilha de ecrã do Discord, no OBS e em gravações (antes estavam ocultas). Para só você as ver, desative “Mostrar legendas na partilha de ecrã” em Exibição.",
-      "As frases traduzidas ficam guardadas, por isso a mesma frase não é traduzida de novo. Pode exportar um ficheiro para partilhar com amigos e importar o deles."
+      "Após cada atualização ou reinstalação, a primeira abertura lista no seu idioma o que mudou, incluindo versões saltadas, até carregar em «Entendi». Pode reler em Sobre.",
+      "Se o aviso de atualização não carregar as notas, diz que serão mostradas depois de atualizar."
     ],
     "ru": [
-      "Плавающие субтитры и окно LiveLingo теперь видны при демонстрации экрана в Discord, в OBS и в записи (раньше были скрыты). Чтобы видели только вы, отключите «Субтитры при демонстрации экрана» в разделе «Отображение».",
-      "Переведённые фразы запоминаются, и одна и та же фраза не переводится заново. Можно экспортировать файл для друзей и импортировать их файлы."
+      "После каждого обновления или переустановки при первом запуске показывается список изменений на вашем языке, включая пропущенные версии, пока не нажмёте «Понятно». Его можно перечитать в «О программе».",
+      "Если окно обновления не смогло загрузить описание, оно сообщит, что его покажут после обновления."
     ],
     "de": [
-      "Schwebende Untertitel und das LiveLingo-Fenster sind jetzt in Discord-Bildschirmfreigabe, OBS-Streams und Aufnahmen sichtbar (vorher verborgen). Nur für dich? Schalte „Untertitel bei Bildschirmfreigabe zeigen“ unter Anzeige aus.",
-      "Übersetzte Sätze werden gemerkt, derselbe Satz wird nicht erneut übersetzt. Du kannst eine Datei für Freunde exportieren und ihre importieren."
+      "Nach jedem Update oder jeder Neuinstallation listet der erste Start in deiner Sprache auf, was sich geändert hat, auch übersprungene Versionen, bis du „Verstanden“ drückst. Nachlesen unter „Info“.",
+      "Kann der Update-Dialog die Hinweise nicht laden, sagt er, dass sie nach dem Update erscheinen."
     ],
     "fr": [
-      "Les sous-titres flottants et la fenêtre LiveLingo s'affichent dans le partage d'écran Discord, OBS et les enregistrements (masqués avant). Pour les garder privés, désactivez « Sous-titres dans le partage d'écran » dans Affichage.",
-      "Les phrases traduites sont mémorisées, une même phrase n'est donc pas retraduite. Vous pouvez exporter un fichier à partager avec des amis et importer le leur."
+      "Après chaque mise à jour ou réinstallation, le premier lancement liste dans votre langue ce qui a changé, versions ignorées comprises, jusqu'à « Compris ». Relisible dans À propos.",
+      "Si l'invite de mise à jour ne charge pas les notes, elle indique qu'elles s'afficheront après la mise à jour."
+    ]
+  },
+  "2.5.2": {
+    "zh-TW": [
+      "浮動字幕和 LiveLingo 視窗現在能被 Discord 分享螢幕、OBS 直播和錄影拍到（以前一律藏起來，朋友什麼都看不到）。想只給自己看，到「顯示與字幕」關掉「讓分享螢幕、直播看得到字幕」。"
+    ],
+    "zh-CN": [
+      "浮动字幕和 LiveLingo 窗口现在能被 Discord 共享屏幕、OBS 直播和录制拍到（以前一律藏起来，朋友什么都看不到）。想只给自己看，到“显示与字幕”关掉“让共享屏幕、直播看得到字幕”。"
+    ],
+    "en": [
+      "Floating subtitles and the LiveLingo window now appear in Discord screen sharing, OBS streams and recordings (they used to be hidden). To keep them private, turn off “Show subtitles in screen sharing and streams” under Display."
+    ],
+    "ko": [
+      "떠 있는 자막과 LiveLingo 창이 이제 Discord 화면 공유, OBS 방송, 녹화에 보입니다(전에는 모두 숨겨졌습니다). 나에게만 보이게 하려면 ‘표시 및 자막’에서 ‘화면 공유·방송에도 자막 표시’를 끄세요."
+    ],
+    "ja": [
+      "浮動字幕と LiveLingo のウィンドウが、Discord の画面共有・OBS の配信・録画に映るようになりました（以前はすべて隠されていました）。自分だけに見せたい場合は「表示と字幕」で「画面共有・配信にも字幕を表示」をオフにしてください。"
+    ],
+    "vi": [
+      "Cửa sổ LiveLingo và phụ đề nổi giờ hiển thị khi chia sẻ màn hình Discord, phát trực tiếp OBS và ghi hình (trước đây bị ẩn). Muốn chỉ mình bạn thấy, hãy tắt “Hiện phụ đề khi chia sẻ màn hình và phát trực tiếp” ở mục Hiển thị."
+    ],
+    "th": [
+      "คำบรรยายลอยและหน้าต่าง LiveLingo จะแสดงใน Discord แชร์หน้าจอ สตรีม OBS และการอัดวิดีโอแล้ว (ก่อนหน้านี้ถูกซ่อนไว้) หากต้องการให้เห็นเฉพาะคุณ ให้ปิด “แสดงคำบรรยายในการแชร์หน้าจอและสตรีม” ในหน้าการแสดงผล"
+    ],
+    "id": [
+      "Subtitel melayang dan jendela LiveLingo kini tampil di berbagi layar Discord, siaran OBS, dan rekaman (sebelumnya disembunyikan). Agar hanya Anda yang melihatnya, matikan “Tampilkan subtitel saat berbagi layar dan siaran” di Tampilan."
+    ],
+    "es": [
+      "Los subtítulos flotantes y la ventana de LiveLingo ya se ven al compartir pantalla en Discord, en OBS y en grabaciones (antes estaban ocultos). Para verlos solo tú, desactiva «Mostrar subtítulos al compartir pantalla» en Pantalla."
+    ],
+    "pt": [
+      "As legendas flutuantes e a janela do LiveLingo agora aparecem na partilha de ecrã do Discord, no OBS e em gravações (antes estavam ocultas). Para só você as ver, desative “Mostrar legendas na partilha de ecrã” em Exibição."
+    ],
+    "ru": [
+      "Плавающие субтитры и окно LiveLingo теперь видны при демонстрации экрана в Discord, в OBS и в записи (раньше были скрыты). Чтобы видели только вы, отключите «Субтитры при демонстрации экрана» в разделе «Отображение»."
+    ],
+    "de": [
+      "Schwebende Untertitel und das LiveLingo-Fenster sind jetzt in Discord-Bildschirmfreigabe, OBS-Streams und Aufnahmen sichtbar (vorher verborgen). Nur für dich? Schalte „Untertitel bei Bildschirmfreigabe zeigen“ unter Anzeige aus."
+    ],
+    "fr": [
+      "Les sous-titres flottants et la fenêtre LiveLingo s'affichent dans le partage d'écran Discord, OBS et les enregistrements (masqués avant). Pour les garder privés, désactivez « Sous-titres dans le partage d'écran » dans Affichage."
     ]
   },
   "2.5.1": {
     "zh-TW": [
       "修正：自動更新時如果 LiveLingo 還沒完全關掉，可能把程式裝壞、之後打不開（找不到 python312.dll）。",
-      "現在更新會先把舊版留著，等檔案真的放開才換；萬一沒裝好，會自動換回舊版並重新打開。"
+      "現在更新會先把舊版留著，等檔案真的放開才換；萬一沒裝好，會自動換回舊版並重新打開。",
+      "翻過的句子會記住，同一句不用重翻；可以匯出分享檔給朋友，也可以匯入朋友的。"
     ],
     "zh-CN": [
       "修复：自动更新时如果 LiveLingo 还没完全关闭，可能把程序装坏、之后打不开（找不到 python312.dll）。",
-      "现在更新会先把旧版留着，等文件真的释放才替换；万一没装好，会自动换回旧版并重新打开。"
+      "现在更新会先把旧版留着，等文件真的释放才替换；万一没装好，会自动换回旧版并重新打开。",
+      "翻过的句子会记住，同一句不用重翻；可以导出分享文件给朋友，也可以导入朋友的。"
     ],
     "en": [
       "Fixed: an automatic update could break the program if LiveLingo had not fully closed yet, so it no longer started (python312.dll not found).",
-      "Updates now keep the old version until its files are free, and if the install does not finish, the old version is put back and reopened."
+      "Updates now keep the old version until its files are free, and if the install does not finish, the old version is put back and reopened.",
+      "Translated sentences are remembered, so the same sentence is not translated again. You can export a sharing file for friends and import theirs."
     ],
     "ko": [
       "수정: 자동 업데이트 때 LiveLingo가 완전히 닫히기 전이면 프로그램이 망가져 열리지 않을 수 있었습니다(python312.dll을 찾을 수 없음).",
-      "이제 업데이트는 파일이 풀릴 때까지 이전 버전을 남겨 두고, 설치가 끝나지 않으면 이전 버전으로 되돌려 다시 엽니다."
+      "이제 업데이트는 파일이 풀릴 때까지 이전 버전을 남겨 두고, 설치가 끝나지 않으면 이전 버전으로 되돌려 다시 엽니다.",
+      "번역한 문장을 기억해 같은 문장을 다시 번역하지 않습니다. 친구에게 줄 공유 파일을 내보내고, 친구의 파일도 가져올 수 있습니다."
     ],
     "ja": [
       "修正：自動更新のとき LiveLingo がまだ完全に終了していないと、プログラムが壊れて起動しなくなることがありました（python312.dll が見つからない）。",
-      "更新はファイルが解放されるまで旧版を残し、インストールが終わらなかった場合は旧版に戻して起動し直します。"
+      "更新はファイルが解放されるまで旧版を残し、インストールが終わらなかった場合は旧版に戻して起動し直します。",
+      "翻訳した文を覚えておくので、同じ文を再翻訳しません。友達に渡す共有ファイルを書き出したり、友達のファイルを読み込んだりできます。"
     ],
     "vi": [
       "Đã sửa: cập nhật tự động có thể làm hỏng chương trình nếu LiveLingo chưa đóng hẳn, khiến nó không mở được (không tìm thấy python312.dll).",
-      "Giờ cập nhật giữ bản cũ cho đến khi các tệp được giải phóng; nếu cài chưa xong, bản cũ được khôi phục và mở lại."
+      "Giờ cập nhật giữ bản cũ cho đến khi các tệp được giải phóng; nếu cài chưa xong, bản cũ được khôi phục và mở lại.",
+      "Các câu đã dịch được ghi nhớ nên câu giống nhau không phải dịch lại. Bạn có thể xuất tệp chia sẻ cho bạn bè và nhập tệp của họ."
     ],
     "th": [
       "แก้ไข: การอัปเดตอัตโนมัติอาจทำให้โปรแกรมเสียจนเปิดไม่ได้ (หา python312.dll ไม่เจอ) ถ้า LiveLingo ยังปิดไม่สนิท",
-      "ตอนนี้การอัปเดตจะเก็บเวอร์ชันเก่าไว้จนกว่าไฟล์จะว่าง และถ้าติดตั้งไม่เสร็จ จะคืนเวอร์ชันเก่าแล้วเปิดใหม่ให้"
+      "ตอนนี้การอัปเดตจะเก็บเวอร์ชันเก่าไว้จนกว่าไฟล์จะว่าง และถ้าติดตั้งไม่เสร็จ จะคืนเวอร์ชันเก่าแล้วเปิดใหม่ให้",
+      "ประโยคที่แปลแล้วจะถูกจดจำ ประโยคเดิมจึงไม่ต้องแปลซ้ำ คุณส่งออกไฟล์แชร์ให้เพื่อนและนำเข้าไฟล์ของเพื่อนได้"
     ],
     "id": [
       "Diperbaiki: pembaruan otomatis bisa merusak program jika LiveLingo belum benar-benar tertutup, sehingga tidak bisa dibuka (python312.dll tidak ditemukan).",
-      "Sekarang pembaruan menyimpan versi lama sampai berkasnya bebas, dan jika pemasangan tidak selesai, versi lama dikembalikan dan dibuka lagi."
+      "Sekarang pembaruan menyimpan versi lama sampai berkasnya bebas, dan jika pemasangan tidak selesai, versi lama dikembalikan dan dibuka lagi.",
+      "Kalimat yang sudah diterjemahkan diingat, jadi kalimat yang sama tidak diterjemahkan ulang. Anda bisa mengekspor berkas berbagi untuk teman dan mengimpor berkas mereka."
     ],
     "es": [
       "Corregido: una actualización automática podía dañar el programa si LiveLingo aún no se había cerrado del todo, y ya no se abría (falta python312.dll).",
-      "Ahora la actualización conserva la versión anterior hasta que sus archivos queden libres; si la instalación no termina, se restaura y se vuelve a abrir."
+      "Ahora la actualización conserva la versión anterior hasta que sus archivos queden libres; si la instalación no termina, se restaura y se vuelve a abrir.",
+      "Las frases traducidas se recuerdan, así que la misma frase no se vuelve a traducir. Puedes exportar un archivo para compartir con amigos e importar el suyo."
     ],
     "pt": [
       "Corrigido: uma atualização automática podia estragar o programa se o LiveLingo ainda não tivesse fechado por completo, e ele não abria (falta python312.dll).",
-      "Agora a atualização mantém a versão anterior até os arquivos ficarem livres; se a instalação não terminar, ela é restaurada e aberta de novo."
+      "Agora a atualização mantém a versão anterior até os arquivos ficarem livres; se a instalação não terminar, ela é restaurada e aberta de novo.",
+      "As frases traduzidas ficam guardadas, por isso a mesma frase não é traduzida de novo. Pode exportar um ficheiro para partilhar com amigos e importar o deles."
     ],
     "ru": [
       "Исправлено: автообновление могло повредить программу, если LiveLingo ещё не закрылся полностью, и она не запускалась (не найден python312.dll).",
-      "Теперь обновление сохраняет старую версию, пока её файлы не освободятся, а если установка не завершилась, старая версия возвращается и открывается снова."
+      "Теперь обновление сохраняет старую версию, пока её файлы не освободятся, а если установка не завершилась, старая версия возвращается и открывается снова.",
+      "Переведённые фразы запоминаются, и одна и та же фраза не переводится заново. Можно экспортировать файл для друзей и импортировать их файлы."
     ],
     "de": [
       "Behoben: Ein automatisches Update konnte das Programm beschädigen, wenn LiveLingo noch nicht ganz beendet war, sodass es nicht mehr startete (python312.dll fehlt).",
-      "Updates behalten jetzt die alte Version, bis ihre Dateien frei sind; wird die Installation nicht fertig, wird die alte Version zurückgeholt und neu gestartet."
+      "Updates behalten jetzt die alte Version, bis ihre Dateien frei sind; wird die Installation nicht fertig, wird die alte Version zurückgeholt und neu gestartet.",
+      "Übersetzte Sätze werden gemerkt, derselbe Satz wird nicht erneut übersetzt. Du kannst eine Datei für Freunde exportieren und ihre importieren."
     ],
     "fr": [
       "Corrigé : une mise à jour automatique pouvait abîmer le programme si LiveLingo n'était pas encore complètement fermé, et il ne démarrait plus (python312.dll introuvable).",
-      "Les mises à jour gardent l'ancienne version tant que ses fichiers ne sont pas libérés ; si l'installation n'aboutit pas, elle est remise en place et rouverte."
+      "Les mises à jour gardent l'ancienne version tant que ses fichiers ne sont pas libérés ; si l'installation n'aboutit pas, elle est remise en place et rouverte.",
+      "Les phrases traduites sont mémorisées, une même phrase n'est donc pas retraduite. Vous pouvez exporter un fichier à partager avec des amis et importer le leur."
     ]
   },
   "2.5.0": {

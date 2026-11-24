@@ -1534,7 +1534,7 @@
         : (d.step === "installing" ? t("up_installing", { version: d.version }) : t("up_checking"));
       if (d.step === "ask") {
         html = `<h2>${esc(t("up_ask_title", { version: d.version }))}</h2><p>${esc(t("up_ask_text"))}${d.size ? " " + esc(t("up_size", { size: sizeText(d.size) })) : ""}</p>
-          ${(d.notes || []).length ? `<div class="changes" id="up-notes" tabindex="0" role="group" aria-label="${esc(t("up_notes_title"))}"><b>${esc(t("up_notes_title"))}</b>${changesHTML(d.notes, d.notes.length > 1)}</div>` : ""}
+          ${(d.notes || []).length ? `<div class="changes" id="up-notes" tabindex="0" role="group" aria-label="${esc(t("up_notes_title"))}"><b>${esc(t("up_notes_title"))}</b>${changesHTML(d.notes, d.notes.length > 1)}</div>` : `<div class="note" id="up-notes-missing">${ICON.info}<span>${esc(t("up_notes_missing"))}</span></div>`}
           <div class="btn-row center"><button class="primary" data-act="update-now">${esc(t("up_now"))}</button>
           <button class="ghost" data-act="update-later">${esc(t("up_later"))}</button></div>`;
       } else {
@@ -1554,6 +1554,10 @@
         (S.cfg.quality !== "standard" && S.mode.quality === "high" ? `<button class="link" data-act="quality" data-q="standard">${esc(t("q_standard"))}</button>` : "");
     } else if (S.view !== "wizard" && S.phase === "downloading") {
       html = `<h2>${esc(t("dl_title"))}</h2><p>${esc(downloadLine())}</p><div class="bar"><span style="width:${percent()}%"></span></div>`;
+    } else if (S.view !== "wizard" && S.phase === "ready" && (S.whatsNew || []).length) {      // 更新（或重新安裝）完第一次開：這一版和跳過的每一版改了什麼，按「知道了」才關
+      html = `<h2>${esc(t("wn_title", { version: S.version }))}</h2><p>${esc(t("wn_text"))}</p>
+        <div class="changes" id="wn-notes" tabindex="0" role="group" aria-label="${esc(t("up_notes_title"))}">${changesHTML(S.whatsNew, S.whatsNew.length > 1)}</div>
+        <div class="btn-row center"><button class="primary" id="wn-done" data-act="wn-done">${esc(t("wn_done"))}</button></div>`;
     }
     el.hidden = !html;
     el.innerHTML = html ? `<div class="panel" role="alertdialog" aria-modal="true">${html}</div>` : "";
@@ -1729,6 +1733,7 @@
     "rec-choose": () => post("/api/record", { choose: true }),
     "update-now": () => post("/api/update", { choice: "now" }),
     "update-later": () => post("/api/update", { choice: "later" }),
+    "wn-done": () => { S.whatsNew = []; renderOverlay(); post("/api/seen", { whats_new: true }); },
     "update-cancel": () => post("/api/update", { choice: "cancel" }),
     "find-cancel": () => post("/api/find_mic", { cancel: true }),
     "find-undo": () => {
@@ -2327,8 +2332,9 @@
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
+    S.whatsNew = st.whats_new || [];
     S.update = st.update || {};
-    if (st.updated_from) {      // 剛自動更新（或退回）完第一次開：說一次
+    if (st.updated_from && !S.whatsNew.length) {      // 剛自動更新（或退回）完第一次開：說一次
       toast(t(S.update.skipped === st.updated_from ? "up_back_done" : "up_done", { version: st.version }), 12000);
       post("/api/seen", { update: true });
     }

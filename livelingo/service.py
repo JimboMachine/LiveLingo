@@ -54,7 +54,7 @@ RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔�
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
-SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "region", "sources", "store_dir", "store_leftover")
+SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
 RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir")
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64)}
@@ -63,6 +63,7 @@ LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLin
 
 REVIVE_TIMES = 3            # 翻譯引擎自己停掉時，最多自動重開幾次……
 REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
+WHATS_NEW_FLOOR = "2.5.0"      # 沒有「上次看到哪一版」的紀錄（這個功能出現以前就裝好的）：把這一版以後錯過的改動一次說完
 ENGINE_REST = (0, 10, 30, 60)    # 設定「幾分鐘沒翻譯就讓翻譯引擎休息」可以選的值，0 = 一直開著
 SPEECH_REST = 120.0         # 兩邊收音都關掉這麼多秒：把語音辨識模型（約 1 GB）放掉，下次開收音再載入
 
@@ -153,6 +154,7 @@ class Service:
         self.updated_from = updater.just_updated(data)
         if self.updated_from:
             self.log(f"updated from {self.updated_from} to {__version__}")
+        self.whats_new = self._whats_new()
         self.store = storage.store_dir(data, self.cfg["store_dir"])      # 大檔案（模型、翻譯引擎）放的地方，可以搬到別的磁碟
         self._move: dict | None = None      # 正在搬大檔案：{"to", "done", "total"}
         self._move_cancel = threading.Event()
@@ -304,6 +306,7 @@ class Service:
             "history": self.history.state(),
             "settings_backup": self.settings_backup(),
             "changes": self.changes,                 # 每一版改了什麼（關於頁）
+            "whats_new": self.whats_new,             # 更新後第一次開要說的：[{"version", "items"}]，新的在前；空的 = 不用說
             "updated_from": self.updated_from,       # 剛自動更新（或退回）完第一次開：之前的版本號（只說一次）
             "update": self.update_state(),
         }
@@ -359,6 +362,35 @@ class Service:
         except Exception as ex:  # noqa: BLE001
             self.log(traceback.format_exc())
             self.set_phase("error", message=str(ex))
+
+    def _whats_new(self) -> list[dict]:
+        """
+        更新或重新安裝之後第一次開：這一版和中間跳過的每一版改了什麼（用程式裡那份 changes.json，不用上網），
+        使用者按了「知道了」才算看過。第一次安裝的人不用看；退回舊版也不用。
+        """
+        seen = str(self.cfg["seen_version"] or "")
+        if seen == __version__:
+            return []
+        if not seen and not self.cfg["setup_done"]:      # 全新安裝：第一次設定的畫面就是說明
+            self.cfg.set(seen_version=__version__)
+            return []
+        previous = seen or self.updated_from or ""
+        try:
+            if not seen:      # 沒有紀錄：不知道他上次看到哪一版，往回多說一點，免得漏掉
+                previous = min((previous or WHATS_NEW_FLOOR), WHATS_NEW_FLOOR, key=changes._key)
+            current = changes._key(__version__)
+            out = [e for e in changes.since(self.changes, previous) if changes._key(e["version"]) <= current]
+        except ValueError:
+            out = []
+        if not out:
+            self.cfg.set(seen_version=__version__)      # 退回舊版、或沒有說明可說
+        return out
+
+    def whats_new_seen(self) -> None:
+        """使用者按了「知道了」。"""
+        self.whats_new = []
+        self.cfg.set(seen_version=__version__)
+        self.hub.publish("config", self.cfg.snapshot())
 
     def update_choice(self, choice: str) -> None:
         """介面上按了「現在更新」（now）、「這次先不要」（later）或下載中的「取消」（cancel）。"""
