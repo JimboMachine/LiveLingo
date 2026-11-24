@@ -241,6 +241,15 @@ class Server:
                         if body.get("export"):
                             return self._json(service.export_library())
                         return self._json(service.import_library(body.get("data")))
+                    if route == "/api/memory":      # 翻過的句子：匯出分享檔、匯入朋友的、刪一包、清除我的
+                        action = body.get("action")
+                        if action == "export":
+                            return self._json(service.memory_export(str(body.get("range") or "all"), bool(body.get("with_mine"))))
+                        if action == "remove_pack":
+                            return self._json(service.memory_remove_pack(str(body.get("pack") or "")))
+                        if action == "forget":
+                            return self._json(service.memory_forget())
+                        return self._json(service.memory_import(body.get("data"), str(body.get("name") or "")[:120]))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
                     if route == "/api/settings":      # 設定的匯出、匯入、恢復預設、復原

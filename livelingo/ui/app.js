@@ -8,7 +8,7 @@
 
   const S = {
     cfg: null, phase: "starting", detail: {}, gpu: {}, mode: {}, fallback: false, version: "",
-    sources: {}, messages: [], glossary: [], lessons: [], canWindow: false, view: "main", overlay: { editing: false, running: false }, vu: {},
+    sources: {}, messages: [], glossary: [], lessons: [], memory: { mine: 0, fixed: 0, packs: [] }, canWindow: false, view: "main", overlay: { editing: false, running: false }, vu: {},
     record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
     hotkeys: { available: false, states: {}, defaults: {} },
     history: { count: 0, bytes: 0 },
@@ -713,6 +713,7 @@
         <div><h2>${esc(t("lessons_title"))}</h2><div class="sub">${esc(t("lessons_hint"))}</div></div>
         <div class="gloss"><div class="grow-head"><span>${esc(t("lessons_src"))}</span><span>${esc(t("lessons_dst"))}</span><span></span></div>${taught}</div>
       </section>
+      ${memorySection()}
       <section>
         <div><h2>${esc(t("lib_title"))}</h2><div class="sub">${esc(t("lib_hint"))}</div></div>
         <div class="btn-row">
@@ -720,6 +721,36 @@
           <button class="ghost" data-act="lib-import">${esc(t("lib_import"))}</button>
           <input type="file" id="lib-file" accept=".json,application/json" hidden>
         </div>
+      </section>`;
+  }
+
+  // 翻過的句子：同一句不用重翻；匯出分享檔給朋友、匯入朋友的（一包一包，可以整包刪）
+  function memorySection() {
+    const m = S.memory || { mine: 0, fixed: 0, packs: [] };
+    const range = S.ui.memRange || "2h";
+    const packs = (m.packs || []).length
+      ? m.packs.map((p) => `<div class="grow-row"><span>${esc(p.name)}</span><span>${esc(t("mem_pack_count", { n: p.count }))}</span>
+          <button data-act="mem-pack-remove" data-pack="${esc(p.id)}" aria-label="${esc(t("remove", { word: p.name }))}">${ICON.x}</button></div>`).join("")
+      : `<div class="none">${esc(t("mem_packs_empty"))}</div>`;
+    const forget = S.ui.memAsk
+      ? `<div class="note warn" id="mem-confirm">${ICON.info}<span>${esc(t("mem_forget_ask", { n: m.mine - m.fixed }))}</span>
+          <button class="danger" data-act="mem-forget-yes">${esc(t("mem_forget_yes"))}</button><button class="ghost" data-act="mem-forget-no">${esc(t("cancel"))}</button></div>`
+      : "";
+    return `<section id="mem-section">
+        <div><h2>${esc(t("mem_title"))}</h2><div class="sub">${esc(t("mem_hint"))}</div></div>
+        ${switchRow("remember_translations", t("mem_remember"), t("mem_count", { n: m.mine, fixed: m.fixed }))}
+        ${switchRow("use_shared", t("mem_shared"), t("mem_shared_desc"))}
+        <div class="setting-row choice"><div>${esc(t("mem_range"))}</div><div class="pills">${[["2h", "mem_r2h"], ["today", "mem_rtoday"], ["all", "mem_rall"]].map(([v, k]) =>
+          `<button class="pill" data-act="mem-range" data-value="${v}" aria-pressed="${range === v}">${esc(t(k))}</button>`).join("")}</div></div>
+        <div class="setting-row choice"><div><div>${esc(t("mem_with_mine"))}</div><div class="desc">${esc(t("mem_with_mine_desc"))}</div></div>
+          <button class="switch" role="switch" data-act="mem-with-mine" aria-checked="${S.ui.memWithMine ? "true" : "false"}" aria-label="${esc(t("mem_with_mine"))}"><span></span></button></div>
+        <div class="btn-row">
+          <button class="ghost" data-act="mem-export" ${m.mine ? "" : "disabled"}>${esc(t("mem_export"))}</button>
+          <button class="ghost" data-act="mem-import">${esc(t("mem_import"))}</button>
+          <button class="ghost" data-act="mem-forget" ${m.mine - m.fixed > 0 ? "" : "disabled"}>${esc(t("mem_forget"))}</button>
+          <input type="file" id="mem-file" accept=".json,application/json" hidden>
+        </div>${forget}
+        <div class="gloss"><div class="grow-head"><span>${esc(t("mem_packs"))}</span><span></span><span></span></div>${packs}</div>
       </section>`;
   }
 
@@ -1661,6 +1692,23 @@
       toast(r.ok ? t("lib_exported", r) : t("lib_export_failed", { error: r.error || "" }), 9000, r.ok ? "info" : "warn");
     },
     "lib-import": () => { const f = $("lib-file"); f.value = ""; f.click(); },
+    "mem-range": (el) => { S.ui.memRange = el.dataset.value; renderSettingsPage(); const b = document.querySelector(`[data-act="mem-range"][data-value="${el.dataset.value}"]`); if (b) b.focus(); },
+    "mem-with-mine": () => { S.ui.memWithMine = !S.ui.memWithMine; renderSettingsPage(); const b = document.querySelector('[data-act="mem-with-mine"]'); if (b) b.focus(); },
+    "mem-export": async () => {
+      const r = await post("/api/memory", { action: "export", range: S.ui.memRange || "2h", with_mine: !!S.ui.memWithMine });
+      toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: r.error || "" })), 9000, r.ok ? "info" : "warn");
+    },
+    "mem-import": () => { const f = $("mem-file"); f.value = ""; f.click(); },
+    "mem-pack-remove": (el) => post("/api/memory", { action: "remove_pack", pack: el.dataset.pack }),
+    "mem-forget": () => { S.ui.memAsk = true; renderSettingsPage(); const b = document.querySelector('[data-act="mem-forget-no"]'); if (b) b.focus(); },
+    "mem-forget-no": () => { S.ui.memAsk = false; renderSettingsPage(); const b = document.querySelector('[data-act="mem-forget"]'); if (b) b.focus(); },
+    "mem-forget-yes": async () => {
+      const r = await post("/api/memory", { action: "forget" });
+      S.ui.memAsk = false;
+      if (r && r.ok) toast(t("mem_forgot", r), 4200);
+      renderSettingsPage();
+      const b = document.querySelector('[data-act="mem-import"]'); if (b) b.focus();
+    },
     pack: (el) => {      // 用語包可以多選
       const now = (S.cfg.term_packs || []).slice(), p = el.dataset.pack;
       saveCfg({ term_packs: now.indexOf(p) >= 0 ? now.filter((x) => x !== p) : now.concat(p) }, "#pack-" + p);
@@ -1978,11 +2026,19 @@
         .catch(() => toast(t("set_bad"), 9000, "warn"));
       return;
     }
+    if (e.target.id === "mem-file") {      // 匯入朋友的翻譯分享檔：在這裡讀檔，內容交給程式檢查
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      file.text().then((text) => { let data = null; try { data = JSON.parse(text); } catch (ex) { data = null; } return post("/api/memory", { action: "import", data, name: file.name }); })
+        .then((r) => toast(r.ok ? t("mem_imported", r) : t(r.error === "is_library" ? "mem_is_library" : "mem_bad"), 9000, r.ok ? "info" : "warn"))
+        .catch(() => toast(t("mem_bad"), 9000, "warn"));
+      return;
+    }
     if (e.target.id === "lib-file") {      // 匯入詞彙檔：在這裡讀檔，內容交給程式檢查和合併
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       file.text().then((text) => { let data = null; try { data = JSON.parse(text); } catch (ex) { data = null; } return post("/api/library", { data }); })
-        .then((r) => toast(r.ok ? t("lib_imported", r) : t("lib_bad"), 9000, r.ok ? "info" : "warn"))
+        .then((r) => toast(r.ok ? t("lib_imported", r) : t(r.error === "is_pack" ? "lib_is_pack" : "lib_bad"), 9000, r.ok ? "info" : "warn"))
         .catch(() => toast(t("lib_bad"), 9000, "warn"));
       return;
     }
@@ -2188,6 +2244,7 @@
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
+    memory: (m) => { S.memory = m; if (S.view === "settings" && S.ui.tab === "quality" && !document.activeElement.closest("form")) renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
     speakers: (d) => {      // 分辨說話者：模型的狀態、多了一個人、有人改了名字
       const before = S.speakers || {};
@@ -2266,7 +2323,7 @@
     const st = await get("/api/state");
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
-    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || [];
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.update = st.update || {};

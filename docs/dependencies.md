@@ -194,6 +194,20 @@
 
 自動把關：測試會擋：健康檢查的代碼少了哪一種語言的說明。新的功能如果有「開不起來」「被擋住」這種狀態，要記得在健康檢查加一個燈或併進現有的燈。
 
+### 改翻過的句子（翻譯記憶）或翻譯分享檔
+
+1. `memory.py`：資料表欄位、誰比較優先（lookup 的分數）、分享檔格式（KIND、version）：改格式要能讀舊版的檔
+2. `translate.py`：什麼時候查、什麼時候記：半句（unfinished）、數字對不上、留著原文的都不記
+3. `service.py`：remember 只從 _translate 給（回譯不記）；teach、lesson_remove 要同步；設定 remember_translations、use_shared 改了要清暫存
+4. `config.py`：remember_translations、use_shared
+5. `server.py`：/api/memory 的四個動作
+6. `app.js`、`i18n.js`：翻譯品質頁的「翻過的句子」區塊、匯入時選錯檔案（詞彙檔、分享檔）的提示
+7. `storage.py`：memory.db 算在「設定和紀錄」裡
+8. `guide.py`：說明頁提到分享檔的那一段
+9. `test_basics.py`：test_translation_memory_and_share_files
+
+自動把關：測試會擋：同一句沒有直接用記住的、比較差的模型翻的被拿來用、詞彙表改了還用舊的、匯入的蓋過教過的、匯出含了我自己打的、刪一包沒刪乾淨。真的在 Windows 上用起來快不快，要自己看。
+
 ### 改對話歷史
 
 1. `history.py`：記哪些欄位、檔案格式、保留幾天
@@ -370,6 +384,7 @@
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
 | 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
+| 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs）（改壞不會報錯） |
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字；留下設定時要刪的資料夾名字（models、engine）（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
 | 每一版改了什麼（每種介面語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
 | 問題報告：先給使用者看，不自己送出 | `livelingo/report.py` | `service.py`：把狀態、設定、紀錄排成一份文字；存檔、複製用的是剛才給使用者看過的那一份（改壞會報錯）<br>`app.js`：預覽的欄位（text、lines、bytes）和存好之後的檔名（改壞不會報錯） |
