@@ -24,6 +24,9 @@ from .core.romanize import romanize
 from .core.translate import LANGS, MAX_TEXT, Stop, Stopped, Translator, detect_language, numbers_lost, similarity, why
 from .history import DAYS as HISTORY_DAYS
 from .jobs import Jobs
+from .memory import KIND as MEMORY_KIND
+from .memory import RANGES as MEMORY_RANGES
+from .memory import Memory
 from .history import History
 from .hotkeys import ACTIONS as HOTKEY_ACTIONS
 from .hotkeys import NOTES as HOTKEY_NOTES
@@ -156,6 +159,9 @@ class Service:
         self._move_lock = threading.Lock()
         self.glossary = Glossary(data)
         self.lessons = Lessons(data)      # 使用者教過的整句翻法
+        self.memory = Memory(data)        # 翻過的句子：同一句再出現就直接用；也可以匯出給朋友、匯入朋友的
+        self.memory.mine_on, self.memory.shared_on = bool(self.cfg["remember_translations"]), bool(self.cfg["use_shared"])
+        self._memory_told = 0.0
         self.terms = TermPack(self.cfg["term_packs"])
         self.audio = audio or RealAudio()
         from .core import audio as audio_core
@@ -166,7 +172,8 @@ class Service:
         self.fallback = False          # 高品質開不起來，自動退回標準
         self.engine: Engine | None = None
         self.translator = Translator("http://127.0.0.1:8177", glossary=self.glossary.as_dict,
-                                     tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list)
+                                     tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list,
+                                     memory=self.memory)
         self._terms_changed()
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
@@ -286,6 +293,7 @@ class Service:
             "messages": list(self.messages),
             "glossary": self.glossary.list(),
             "lessons": self.lessons.list(),
+            "memory": self.memory.state(),
             "langs": {k: v["family"] for k, v in LANGS.items()},
             "ui_langs": list(UI_LANGS),
             "can_window": bool(self.window or self.can_window),
@@ -948,8 +956,10 @@ class Service:
         import inspect
 
         fn = self.translator.translate
+        self.translator.model = self.mode.get("model", "")
         if "on_part" not in inspect.signature(fn).parameters:
             return fn(msg["original"], target, msg["lang"], self._context_for(msg))
+        more = {"remember": msg.get("via") or ""} if "remember" in inspect.signature(fn).parameters else {}
         sent, shown = [0.0], msg.get("partial") or ""
 
         def part(text: str) -> None:
@@ -960,7 +970,11 @@ class Service:
             self.hub.publish("partial", {"id": msg["id"], "text": text})
             self.overlay.on_partial(msg, text)
 
-        return fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part)
+        out = fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part, **more)
+        if more and time.monotonic() - self._memory_told > 10:      # 設定畫面上「記住幾句」的數字，最多 10 秒更新一次
+            self._memory_told = time.monotonic()
+            self.hub.publish("memory", self.memory.state())
+        return out
 
     # ---- 即時字幕：對方還在說，就先把目前聽到的顯示出來、先翻
 
@@ -1183,6 +1197,9 @@ class Service:
             return False
         if not self.lessons.add(msg["original"], dst, msg["lang"], msg["target"]):
             return False
+        if msg.get("lang"):
+            self.memory.fix(msg["original"], msg["lang"], msg["target"], self.cfg["tone"], dst, self.mode.get("model", ""))
+            self.hub.publish("memory", self.memory.state())
         self.translator.clear_cache()
         self.hub.publish("lessons", self.lessons.list())
         msg = dict(msg, translated=dst, error="", taught=True, back="",
@@ -1195,8 +1212,10 @@ class Service:
 
     def lesson_remove(self, src: str, target: str) -> None:
         self.lessons.remove(src, target)
+        self.memory.unfix(src, target)
         self.translator.clear_cache()
         self.hub.publish("lessons", self.lessons.list())
+        self.hub.publish("memory", self.memory.state())
 
     def glossary_add(self, src: str, dst: str) -> bool:
         ok = self.glossary.add(src, dst)
@@ -1228,6 +1247,8 @@ class Service:
 
     def import_library(self, data) -> dict:
         """匯入別人（或自己以前）匯出的檔案：只加原本沒有的，原本就有的不動。"""
+        if isinstance(data, dict) and data.get("kind") == MEMORY_KIND:
+            return {"ok": False, "error": "is_pack"}      # 選到翻譯分享檔了：那個要用「翻過的句子」的匯入
         if not isinstance(data, dict) or data.get("kind") != LIBRARY_KIND:
             return {"ok": False, "error": "not_library"}
         from .core.translate import SOURCES
@@ -1240,6 +1261,53 @@ class Service:
             self.hub.publish("glossary", self.glossary.list())
             self.hub.publish("lessons", self.lessons.list())
         return {"ok": True, "words": words, "sentences": sentences, "skipped": max(0, given - words - sentences)}
+
+    # ---- 翻過的句子：分享檔、清除
+
+    def memory_export(self, range_key: str = "all", with_mine: bool = False) -> dict:
+        """把我翻過的句子存成分享檔（放在字幕記錄的資料夾），朋友匯入之後同樣的句子就不用重翻。
+        預設不含我自己打的、說的（可能是私人聊天）。"""
+        if range_key not in MEMORY_RANGES:
+            range_key = "all"
+        data = self.memory.export(range_key, with_mine)
+        if not data["items"]:
+            return {"ok": False, "error": "empty"}
+        folder = self.transcript_dir()
+        path = folder / f"LiveLingo-translations-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError as ex:
+            self.log(f"translations export failed: {ex!r}")
+            return {"ok": False, "error": str(ex)}
+        oswin.open_path(folder)
+        return {"ok": True, "path": str(path), "sentences": len(data["items"])}
+
+    def memory_import(self, data, name: str = "") -> dict:
+        """匯入朋友的分享檔，當成一包；之後可以整包刪掉。"""
+        from .core.translate import SOURCES
+
+        if isinstance(data, dict) and data.get("kind") == LIBRARY_KIND:
+            return {"ok": False, "error": "is_library"}      # 選到詞彙檔了：那個要用上面的「匯入」
+        name = re.sub(r"\.json$", "", str(name or ""), flags=re.I)
+        result = self.memory.import_pack(data, name, sources=tuple(SOURCES), targets=tuple(LANGS))
+        if result.get("added"):
+            self.translator.clear_cache()
+            self.hub.publish("memory", self.memory.state())
+        return result
+
+    def memory_remove_pack(self, pack: str) -> dict:
+        self.memory.remove_pack(pack)
+        self.translator.clear_cache()
+        self.hub.publish("memory", self.memory.state())
+        return {"ok": True}
+
+    def memory_forget(self) -> dict:
+        """清除我翻過的句子（教過的留著，那些在「我教過的句子」裡刪）。"""
+        n = self.memory.forget_mine()
+        self.translator.clear_cache()
+        self.hub.publish("memory", self.memory.state())
+        return {"ok": True, "removed": n}
 
     def copy(self, msg_id: int) -> bool:
         with self._lock:
@@ -2024,6 +2092,9 @@ class Service:
             self.translator.tone = after["tone"]
             self.translator.clear_cache()
         if changed("game_terms"):
+            self.translator.clear_cache()
+        if changed("remember_translations", "use_shared"):
+            self.memory.mine_on, self.memory.shared_on = bool(after["remember_translations"]), bool(after["use_shared"])
             self.translator.clear_cache()
         if changed("term_packs"):
             self._terms_changed()

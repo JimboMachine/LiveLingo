@@ -1398,6 +1398,137 @@ def test_export_and_import_library(tmp_path):
     assert friend.import_library(odd)["sentences"] == 1
 
 
+def test_translation_memory_and_share_files(tmp_path):
+    """翻過的句子：同一句直接用；比較差的模型翻的、詞彙表改過的要重翻；匯入的一包一包、可以整包刪、可以不用；
+    教過的最優先；匯出預設不含我自己打的、說的；亂七八糟的檔案不收。"""
+    from pathlib import Path
+
+    from livelingo.memory import KIND, Memory, terms_print
+    from livelingo.service import LIBRARY_KIND, Service
+
+    mem = Memory(tmp_path / "m")
+    words = {}
+    tr = _FakeModel("오늘 날씨 좋다.", memory=mem, glossary=lambda: dict(words))
+    tr.model = "4b"
+    assert tr.translate("今天天氣很好", "ko", "zh", remember="heard") == "오늘 날씨 좋다." and len(tr.asked) == 1
+    tr.clear_cache()                                                             # 重開程式也一樣（暫存沒了，記憶還在）
+    tr.answers = "다른 번역"
+    assert tr.translate("今天天氣很好", "ko", "zh", remember="heard") == "오늘 날씨 좋다." and len(tr.asked) == 1
+    assert Memory(tmp_path / "m").lookup("今天天氣很好", "zh", "ko", "casual", "4b", "") == "오늘 날씨 좋다."   # 存進檔案了
+    assert mem.lookup("今天天氣很好", "zh", "ko", "polite", "4b", "") is None   # 語氣不同不算
+    tr.clear_cache()
+    tr.model = "12b"                                                             # 換成高品質：標準翻的不用，重翻、記新的
+    assert tr.translate("今天天氣很好", "ko", "zh", remember="heard") == "다른 번역" and len(tr.asked) == 2
+    tr.clear_cache()
+    tr.model = "4b"                                                              # 回到標準：高品質翻的照樣可以用
+    assert tr.translate("今天天氣很好", "ko", "zh", remember="heard") == "다른 번역" and len(tr.asked) == 2
+    tr.clear_cache()
+    words["天氣"] = "날씨님"                                                      # 詞彙表多了跟這句有關的詞：重翻
+    tr.answers = "오늘 날씨님 좋다."
+    assert tr.translate("今天天氣很好", "ko", "zh", remember="heard") == "오늘 날씨님 좋다." and len(tr.asked) == 3
+    tr.clear_cache()
+    words["無關"] = "x"                                                           # 無關的詞不影響
+    assert tr.translate("今天天氣很好", "ko", "zh", remember="heard") == "오늘 날씨님 좋다." and len(tr.asked) == 3
+    del words["天氣"], words["無關"]
+    tr.clear_cache()
+    tr.answers = "x"
+    tr.translate("沒有記的", "ko", "zh")                                          # 沒說要記（例如回譯）：不記
+    assert mem.lookup("沒有記的", "zh", "ko", "casual", "4b", "") is None
+    tr.answers = "3시에 봐."
+    tr.translate("5點見", "ko", "zh", remember="heard")                          # 數字對不上的不記，下次再翻
+    assert mem.lookup("5點見", "zh", "ko", "casual", "4b", "") is None
+    tr.translate("還在說", "ko", "zh", remember="heard", unfinished=True)        # 還沒說完的半句不記
+    assert mem.lookup("還在說", "zh", "ko", "casual", "4b", "") is None
+    assert terms_print([]) == "" and terms_print([("a", "b")]) == terms_print([("a", "b"), ("a", "b")]) != ""
+
+    # ---- 教過的最優先，而且不會被之後翻的蓋掉
+    mem.fix("今天天氣很好", "zh", "ko", "casual", "오늘 날씨 진짜 좋다.")
+    mem.store("今天天氣很好", "zh", "ko", "casual", "덮어쓰기", "12b", "", "heard")
+    assert mem.lookup("今天天氣很好", "zh", "ko", "casual", "12b", "") == "오늘 날씨 진짜 좋다."
+    mem.store("我先去睡了", "zh", "ko", "casual", "나 먼저 잘게.", "12b", "", "typed")      # 我自己打的
+    mem.store("  牠來了  ", "zh", "ko", "casual", "걔 왔다.", "12b", "", "screen")
+    assert mem.lookup("牠來了", "zh", "ko", "casual", "4b", "") == "걔 왔다."      # 前後空白不算
+
+    # ---- 匯出：只有我的；預設不含我自己打的、說的；教過的一定在
+    data = mem.export("all")
+    srcs = {i["src"] for i in data["items"]}
+    assert data["kind"] == KIND and "我先去睡了" not in srcs and {"今天天氣很好", "牠來了"} <= srcs
+    assert next(i for i in data["items"] if i["src"] == "今天天氣很好")["fixed"] is True
+    assert "我先去睡了" in {i["src"] for i in mem.export("all", with_mine=True)["items"]}
+    clock = [10_000_000.0]
+    old = Memory(tmp_path / "old", now=lambda: clock[0])
+    old.store("很久以前", "zh", "ko", "casual", "옛날에", "4b", "", "heard")
+    old.fix("教過的", "zh", "ko", "casual", "가르친 거")
+    clock[0] += 3 * 3600
+    assert {i["src"] for i in old.export("2h")["items"]} == {"教過的"} and len(old.export("all")["items"]) == 2
+
+    # ---- 朋友匯入：一包；同一個檔案匯入兩次不會重複；人工改過的蓋過朋友自己翻的；不想用就關掉；可以整包刪
+    friend = Memory(tmp_path / "f")
+    friend.store("今天天氣很好", "zh", "ko", "casual", "朋友自己翻的", "12b", "", "heard")
+    friend.store("牠來了", "zh", "ko", "casual", "朋友的", "12b", "", "heard")
+    langs = ("zh", "ko", "en", "ja")
+    got = friend.import_pack(data, "第一集", sources=langs, targets=("ko", "zh-TW"))
+    assert got["ok"] and got["added"] == len(data["items"]) and got["pack"]["name"] == "第一集"
+    assert friend.import_pack(data, "第一集", sources=langs, targets=("ko",))["added"] == got["added"]
+    st = friend.state()
+    assert len(st["packs"]) == 1 and st["packs"][0]["count"] == got["added"] and st["mine"] == 2
+    assert friend.lookup("今天天氣很好", "zh", "ko", "casual", "12b", "") == "오늘 날씨 진짜 좋다."   # 人工改過的 > 自己機器翻的
+    assert friend.lookup("牠來了", "zh", "ko", "casual", "12b", "") == "朋友的"                     # 機器翻的：自己的優先
+    friend.forget_mine()
+    assert friend.lookup("牠來了", "zh", "ko", "casual", "12b", "") == "걔 왔다."
+    assert friend.lookup("牠來了", "zh", "ko", "casual", "12b", "abc") is None                     # 我的詞彙表跟這句有關：不用別人機器翻的
+    friend.shared_on = False
+    assert friend.lookup("今天天氣很好", "zh", "ko", "casual", "12b", "") is None                   # 只用自己翻的
+    friend.shared_on = True
+    friend.mine_on = False
+    friend.store("新的一句", "zh", "ko", "casual", "새 문장", "12b", "", "heard")
+    assert friend.state()["mine"] == 0                                                               # 關掉記住：不記新的
+    friend.mine_on = True
+    friend.remove_pack(got["pack"]["id"])
+    assert friend.state()["packs"] == [] and friend.lookup("牠來了", "zh", "ko", "casual", "4b", "") is None
+    for bad in (None, [], "x", {"kind": "other"}, {"kind": KIND, "items": "nope"}):
+        assert friend.import_pack(bad, "x", sources=langs, targets=("ko",))["ok"] is False
+    odd = {"kind": KIND, "items": [1, {"src": "", "dst": "x", "lang": "zh", "target": "ko"},
+                                   {"src": "a", "dst": "b", "lang": "xx", "target": "ko"},
+                                   {"src": "a", "dst": "b", "lang": "zh", "target": "klingon"},
+                                   {"src": "一樣", "dst": "一樣", "lang": "zh", "target": "ko"},
+                                   {"src": "好", "dst": "좋아", "lang": "zh", "target": "ko", "tone": "rude"},
+                                   {"src": "你好", "dst": "안녕", "lang": "zh", "target": "ko", "fixed": "yes"}]}
+    got = friend.import_pack(odd, "", sources=langs, targets=("ko",))
+    assert got["added"] == 1 and got["skipped"] == 6
+    assert friend.lookup("你好", "zh", "ko", "casual", "12b", "") is None             # fixed 不是 true：當機器翻的，模型不明比 12b 差
+    assert friend.lookup("你好", "zh", "ko", "casual", "", "") == "안녕"
+    mem.close()
+    assert mem.lookup("今天天氣很好", "zh", "ko", "casual", "4b", "") is None          # 資料庫關了：當作沒記住，不會出錯
+    mem.store("x", "zh", "ko", "casual", "y", "4b", "", "heard")
+
+    # ---- 整個程式：教句子會同步、刪掉教的也會忘掉、匯出檔、選錯檔案的提示、設定開關
+    me = Service(tmp_path / "me")
+    me.cfg.set(transcript_dir=str(tmp_path / "out"))
+    assert me.translator.memory is me.memory and me.state()["memory"]["mine"] == 0
+    me.messages.append({"id": 1, "who": "them", "via": "heard", "original": "我們走吧", "lang": "zh", "target": "ko",
+                        "translated": "갈까?", "pending": False, "error": ""})
+    me._post = lambda msg: None
+    me._want_back = lambda msg: None
+    assert me.teach(1, "가자.")
+    assert me.memory.lookup("我們走吧", "zh", "ko", me.cfg["tone"], "12b", "") == "가자."
+    out = me.memory_export("all")
+    assert out["ok"] and out["sentences"] == 1 and json.loads(Path(out["path"]).read_text(encoding="utf-8"))["kind"] == KIND
+    assert me.memory_export("bogus")["ok"]                                              # 不認得的範圍：當全部
+    me.lesson_remove("我們走吧", "ko")
+    assert me.memory.lookup("我們走吧", "zh", "ko", me.cfg["tone"], "4b", "") is None
+    assert me.memory_export("all") == {"ok": False, "error": "empty"}
+    assert me.memory_import({"kind": LIBRARY_KIND}) == {"ok": False, "error": "is_library"}
+    assert me.import_library({"kind": KIND, "items": []}) == {"ok": False, "error": "is_pack"}
+    got = me.memory_import(data, "第一集.json")
+    assert got["ok"] and got["pack"]["name"] == "第一集"
+    assert me.memory_remove_pack(got["pack"]["id"])["ok"] and me.memory.state()["packs"] == []
+    me.update_config({"remember_translations": False, "use_shared": False})
+    assert me.memory.mine_on is False and me.memory.shared_on is False
+    me.update_config({"remember_translations": True, "use_shared": True})
+    assert me.memory.mine_on and me.memory.shared_on and me.memory_forget()["ok"]
+
+
 def test_voice_tuning_delay_echo_and_push_to_talk(tmp_path):
     """聲音設定：靈敏度、斷句、快／準收音中直接換；延遲有記；喇叭回音不算我說的；按住才說話只收按著的那一段。"""
     import numpy as np

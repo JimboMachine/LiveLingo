@@ -1,13 +1,40 @@
 """啟動、關閉本機的翻譯引擎（llama.cpp 的 llama-server）。"""
 
+import contextlib
 import os
 import secrets
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
+
+_dll_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def own_dlls_only():
+    """
+    打包好的 LiveLingo 啟動時，PyInstaller 用 SetDllDirectory 把程式資料夾（_internal）加進找 DLL 的地方，
+    而這個設定會傳給開出來的程式。引擎因此會載入 _internal 裡的 msvcp140.dll、vcruntime140.dll 並一直佔著，
+    LiveLingo 關掉後如果引擎還在，更新就換不掉這些檔案（2.4.2 那次把程式裝壞就是這樣）。
+    開引擎的那一刻先把這個設定拿掉，開完再放回去。
+    """
+    base = getattr(sys, "_MEIPASS", None)
+    if sys.platform != "win32" or not base:
+        yield
+        return
+    import ctypes
+
+    k32 = ctypes.windll.kernel32
+    with _dll_lock:
+        k32.SetDllDirectoryW(None)
+        try:
+            yield
+        finally:
+            k32.SetDllDirectoryW(str(base))
 
 
 def free_port() -> int:
@@ -97,9 +124,10 @@ class Engine:
         self._kill_leftover()
         log = open(self.log_path, "w", encoding="utf-8", errors="replace")
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-        self.proc = subprocess.Popen(self.command(), stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                                     cwd=str(Path(self.exe).parent), creationflags=flags,
-                                     env={**os.environ, "LLAMA_API_KEY": self.key})
+        with own_dlls_only():
+            self.proc = subprocess.Popen(self.command(), stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                         cwd=str(Path(self.exe).parent), creationflags=flags,
+                                         env={**os.environ, "LLAMA_API_KEY": self.key})
         try:
             self._pid_file.write_text(f"{self.proc.pid}\nllama-server", encoding="utf-8")
         except OSError:
