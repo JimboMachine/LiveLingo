@@ -135,6 +135,7 @@
 7. `updater.py`、`service.py`、`build.yml`：用過的安裝檔不留著：新版一開就刪（updater.tidy、_installers_cleanup），剛跑完的那一個等安裝程式結束再試；比現在新的（還沒裝的更新）不能刪。Windows 安裝測試會真的看它有沒有被刪掉
 8. `updater.py`、`service.py`、`app.js`、`i18n.js`：回上一版：update.json 記「從哪一版來的」，退回時重新下載那一版、核對雜湊才裝（介面和儲存空間頁的說明要跟著這個說法）；新版加了舊版不認得的東西（像搬過位置的大檔案），退回之前要先處理（STORE_BEFORE）
 9. `installer.iss`：[Files] 要有 ignoreversion，裝舊版才換得掉新版的檔案
+10. `installer.iss`、`__main__.py`、`build.yml`、`engine.py`：換檔前先把舊的 _internal、LiveLingo.exe 改名成 .old 留著（改名成功才表示檔案都放開了；等不到就用 KillFileHolders 關掉載入了程式資料夾或引擎資料夾裡檔案的程式，再等不到就什麼都不動），裝好才刪，沒裝好就換回去、自動更新時再打開舊版；不要再用 [InstallDelete] 先刪。exit_now 不能先放掉「我還開著」的記號（LiveLingoRunning），收尾出錯也要關引擎並結束；開引擎（和以後開任何外部程式）要包在 engine.own_dlls_only() 裡，否則它會載入並佔住 _internal 的 msvcp140.dll。Windows 安裝測試會在檔案被佔住時更新，看程式還打不打得開
 
 自動把關：測試會擋：更新程式下載的檔名和發佈的檔名不一樣。自動打包會真的安裝、更新、卸載一次。
 

@@ -1,4 +1,58 @@
 {
+  "2.5.1": {
+    "zh-TW": [
+      "修正：自動更新時如果 LiveLingo 還沒完全關掉，可能把程式裝壞、之後打不開（找不到 python312.dll）。",
+      "現在更新會先把舊版留著，等檔案真的放開才換；萬一沒裝好，會自動換回舊版並重新打開。"
+    ],
+    "zh-CN": [
+      "修复：自动更新时如果 LiveLingo 还没完全关闭，可能把程序装坏、之后打不开（找不到 python312.dll）。",
+      "现在更新会先把旧版留着，等文件真的释放才替换；万一没装好，会自动换回旧版并重新打开。"
+    ],
+    "en": [
+      "Fixed: an automatic update could break the program if LiveLingo had not fully closed yet, so it no longer started (python312.dll not found).",
+      "Updates now keep the old version until its files are free, and if the install does not finish, the old version is put back and reopened."
+    ],
+    "ko": [
+      "수정: 자동 업데이트 때 LiveLingo가 완전히 닫히기 전이면 프로그램이 망가져 열리지 않을 수 있었습니다(python312.dll을 찾을 수 없음).",
+      "이제 업데이트는 파일이 풀릴 때까지 이전 버전을 남겨 두고, 설치가 끝나지 않으면 이전 버전으로 되돌려 다시 엽니다."
+    ],
+    "ja": [
+      "修正：自動更新のとき LiveLingo がまだ完全に終了していないと、プログラムが壊れて起動しなくなることがありました（python312.dll が見つからない）。",
+      "更新はファイルが解放されるまで旧版を残し、インストールが終わらなかった場合は旧版に戻して起動し直します。"
+    ],
+    "vi": [
+      "Đã sửa: cập nhật tự động có thể làm hỏng chương trình nếu LiveLingo chưa đóng hẳn, khiến nó không mở được (không tìm thấy python312.dll).",
+      "Giờ cập nhật giữ bản cũ cho đến khi các tệp được giải phóng; nếu cài chưa xong, bản cũ được khôi phục và mở lại."
+    ],
+    "th": [
+      "แก้ไข: การอัปเดตอัตโนมัติอาจทำให้โปรแกรมเสียจนเปิดไม่ได้ (หา python312.dll ไม่เจอ) ถ้า LiveLingo ยังปิดไม่สนิท",
+      "ตอนนี้การอัปเดตจะเก็บเวอร์ชันเก่าไว้จนกว่าไฟล์จะว่าง และถ้าติดตั้งไม่เสร็จ จะคืนเวอร์ชันเก่าแล้วเปิดใหม่ให้"
+    ],
+    "id": [
+      "Diperbaiki: pembaruan otomatis bisa merusak program jika LiveLingo belum benar-benar tertutup, sehingga tidak bisa dibuka (python312.dll tidak ditemukan).",
+      "Sekarang pembaruan menyimpan versi lama sampai berkasnya bebas, dan jika pemasangan tidak selesai, versi lama dikembalikan dan dibuka lagi."
+    ],
+    "es": [
+      "Corregido: una actualización automática podía dañar el programa si LiveLingo aún no se había cerrado del todo, y ya no se abría (falta python312.dll).",
+      "Ahora la actualización conserva la versión anterior hasta que sus archivos queden libres; si la instalación no termina, se restaura y se vuelve a abrir."
+    ],
+    "pt": [
+      "Corrigido: uma atualização automática podia estragar o programa se o LiveLingo ainda não tivesse fechado por completo, e ele não abria (falta python312.dll).",
+      "Agora a atualização mantém a versão anterior até os arquivos ficarem livres; se a instalação não terminar, ela é restaurada e aberta de novo."
+    ],
+    "ru": [
+      "Исправлено: автообновление могло повредить программу, если LiveLingo ещё не закрылся полностью, и она не запускалась (не найден python312.dll).",
+      "Теперь обновление сохраняет старую версию, пока её файлы не освободятся, а если установка не завершилась, старая версия возвращается и открывается снова."
+    ],
+    "de": [
+      "Behoben: Ein automatisches Update konnte das Programm beschädigen, wenn LiveLingo noch nicht ganz beendet war, sodass es nicht mehr startete (python312.dll fehlt).",
+      "Updates behalten jetzt die alte Version, bis ihre Dateien frei sind; wird die Installation nicht fertig, wird die alte Version zurückgeholt und neu gestartet."
+    ],
+    "fr": [
+      "Corrigé : une mise à jour automatique pouvait abîmer le programme si LiveLingo n'était pas encore complètement fermé, et il ne démarrait plus (python312.dll introuvable).",
+      "Les mises à jour gardent l'ancienne version tant que ses fichiers ne sont pas libérés ; si l'installation n'aboutit pas, elle est remise en place et rouverte."
+    ]
+  },
   "2.5.0": {
     "zh-TW": [
       "翻譯語言多了 8 種：越南文、泰文、印尼文、西班牙文、葡萄牙文、俄文、德文、法文。對方和自己都可以選，聽對方說話、聽我說話、讀螢幕、打字都能用，自動偵測也認得這些語言。",
