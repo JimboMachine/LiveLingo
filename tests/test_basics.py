@@ -5566,3 +5566,55 @@ def test_subtitles_can_be_seen_in_screen_sharing(tmp_path, monkeypatch):
     w._look(w._slots[0], w.grab)
     w._look(w._slots[0], w.grab)      # 第二次畫面沒變：這時候才算停下來，會去辨識
     assert seen and (seen[0][20:100, 100:] == 0).all() and (seen[0][:20] == 200).all() and (seen[0][:, :100] == 200).all()
+
+
+def test_whats_new_is_told_after_every_update_or_reinstall(tmp_path):
+    """每次更新（自動的、手動重裝的都算）之後第一次開：用程式裡那份說明，把這一版和中間跳過的每一版改了什麼說完，
+    使用者按了「知道了」才算看過。全新安裝、退回舊版不用說。"""
+    from pathlib import Path
+
+    from livelingo import __version__, changes
+    from livelingo.service import WHATS_NEW_FLOOR, Service
+
+    def versions(service):
+        return [e["version"] for e in service.whats_new]
+
+    def new_service(**cfg):
+        first = Service(tmp_path)
+        first.cfg.set(**cfg)
+        return Service(tmp_path)
+
+    # 全新安裝：第一次設定的畫面就是說明，不另外說；也記下來，下次不會當成「更新」
+    fresh = Service(tmp_path)
+    assert fresh.whats_new == [] and fresh.cfg["seen_version"] == __version__ and fresh.state()["whats_new"] == []
+
+    # 這個功能出現以前就裝好的、沒有紀錄：從 WHATS_NEW_FLOOR 以後錯過的一次說完，新的在前，現在這一版一定在
+    old = new_service(setup_done=True, seen_version="")
+    got = versions(old)
+    assert got and got[0] == __version__ and all(changes._key(v) > changes._key(WHATS_NEW_FLOOR) for v in got)
+    assert got == sorted(got, key=changes._key, reverse=True) and old.state()["whats_new"] == old.whats_new
+    assert all(e["items"].get("zh-TW") and e["items"].get("en") for e in old.whats_new)      # 每一版都有說明，不是空的
+
+    # 沒按「知道了」就一直說（關掉再開還在）；按了才算看過
+    assert versions(Service(tmp_path)) == got and Service(tmp_path).cfg["seen_version"] == ""
+    old.whats_new_seen()
+    assert old.whats_new == [] and old.state()["whats_new"] == [] and Service(tmp_path).whats_new == []
+
+    # 有紀錄：只說上次看過那一版以後的（包含中間跳過的）
+    skipped = new_service(setup_done=True, seen_version="2.5.0")
+    assert versions(skipped) and all(changes._key(v) > (2, 5, 0) for v in versions(skipped)) and "2.5.0" not in versions(skipped)
+
+    # 退回舊版（紀錄比現在新）：不用說，也不會一直卡著
+    back = new_service(setup_done=True, seen_version="99.0.0")
+    assert back.whats_new == [] and back.cfg["seen_version"] == __version__
+
+    # 這個紀錄不是設定：匯出、匯入、恢復預設都不碰它
+    from livelingo.service import SETTINGS_SKIP
+
+    assert "seen_version" in SETTINGS_SKIP
+
+    # 介面真的接上了：蓋板、「知道了」、更新提示拿不到說明時的那一行，五種語言以上的文字都有
+    root = Path(changes.__file__).parent
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'S.whatsNew' in js and '"wn-done"' in js and '/api/seen", { whats_new: true }' in js and "up-notes-missing" in js
+    assert 'body.get("whats_new")' in (root / "server.py").read_text(encoding="utf-8")

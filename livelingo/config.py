@@ -17,6 +17,7 @@ DEFAULTS = {
     "transcript_dir": "",        # 字幕記錄存在哪個資料夾（空的：文件\\LiveLingo）
     "transcript_original": True, # 字幕記錄裡同時留原文
     "close_to_tray": True,       # 關掉視窗時收到系統匣，不結束程式
+    "seen_version": "",          # 使用者最後一次看過「這一版改了什麼」的版本；空的 = 還沒有紀錄（不是設定，匯出和恢復預設都不碰）
     "tray_hint_shown": False,    # 第一次收到系統匣時提醒過了沒
     "tone": "casual",            # casual = 朋友語氣（韓文半語）；polite = 有禮貌
     "quality": "auto",           # auto = 照顯示卡自動決定；standard；high

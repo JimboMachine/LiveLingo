@@ -267,8 +267,10 @@ class Server:
                             return self._json(service.report_copy())
                         return self._json(service.report_make(str(body.get("note") or ""), bool(body.get("settings", True)),
                                                               bool(body.get("log", True))))
-                    if route == "/api/seen":      # 介面已經說過「更新好了」：不用再說
+                    if route == "/api/seen":      # 介面已經說過「更新好了」、或使用者按了「知道了」：不用再說
                         service.updated_from = ""
+                        if body.get("whats_new"):
+                            service.whats_new_seen()
                         return self._json({"ok": True})
                     if route == "/api/storage":      # 搬大檔案、取消、刪掉沒在用的、打開資料夾
                         if body.get("choose"):      # 跳出選資料夾的視窗，會等使用者選完
