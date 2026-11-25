@@ -244,7 +244,11 @@ class Server:
                     if route == "/api/memory":      # 翻過的句子：匯出分享檔、匯入朋友的、刪一包、清除我的
                         action = body.get("action")
                         if action == "export":
-                            return self._json(service.memory_export(str(body.get("range") or "all"), bool(body.get("with_mine"))))
+                            return self._json(service.memory_export(str(body.get("range") or "all"), bool(body.get("with_mine")),
+                                                                    str(body.get("work") or "")[:40], str(body.get("title") or "")[:120]))
+                        if action in ("own_only", "forget_work"):      # 作品清單：這部不用別人的、忘掉這部
+                            return self._json(service.memory_work(str(body.get("work") or "")[:40],
+                                                                  "forget" if action == "forget_work" else action, bool(body.get("on"))))
                         if action == "remove_pack":
                             return self._json(service.memory_remove_pack(str(body.get("pack") or "")))
                         if action == "forget":

@@ -387,11 +387,13 @@
     // 語音的句子：後面標從說完到翻好花了幾秒
     const took = m.took > 0 && !m.pending ? ` · <span class="took" title="${esc(t("took_hint"))}">${esc(t("took", { s: Number(m.took).toFixed(1) }))}</span>` : "";
     const place = m.place ? ` · ${esc(m.place)}` : "";      // 同時讀好幾個聊天區時，標是哪一個讀到的
+    // 用的是記住的翻法（不是剛剛翻的）：標「翻過的」或「朋友的」
+    const kept = m.kept && !m.pending && !m.error && !m.taught ? ` · <span class="kept" title="${esc(t("kept_hint"))}">${esc(t("kept_" + m.kept))}</span>` : "";
     // 有分出是誰說的：「對方」換成那個人（顏色的點加名字），點下去可以去改名字
     const sp = S.speakers || {};
     const tagged = m.speaker && S.cfg.tell_speakers && m.speaker_run === sp.run;
     const who = tagged ? `<button class="spk" data-act="spk-open" title="${esc(t("spk_open"))}"><span class="spk-dot spk-c${(m.speaker - 1) % 6}"></span>${esc(speakerLabel(m.speaker))}</button>` : esc(t("who_" + m.who));
-    return `${icon}<span>${who} · ${esc(t("via_" + m.via))}${place}${took}</span>`;
+    return `${icon}<span>${who} · ${esc(t("via_" + m.via))}${place}${took}${kept}</span>`;
   }
 
   // ---- 分辨說話者
@@ -751,7 +753,30 @@
           <input type="file" id="mem-file" accept=".json,application/json" hidden>
         </div>${forget}
         <div class="gloss"><div class="grow-head"><span>${esc(t("mem_packs"))}</span><span></span><span></span></div>${packs}</div>
+        ${worksBlock(m)}
       </section>`;
+  }
+
+  // 記過的作品（哪一部影片、哪一個網頁）：收合起來，打開才看得到；每一部可以單獨匯出、不用別人的、忘掉
+  function worksBlock(m) {
+    const list = m.works || [];
+    const rows = list.length ? list.map((w) => {
+      const naming = S.ui.workExport === w.key
+        ? `<div class="work-export"><input id="work-title" maxlength="120" value="${esc(w.title)}" aria-label="${esc(t("works_name"))}">
+            <button class="primary" data-act="work-export-yes" data-work="${esc(w.key)}">${esc(t("works_export_yes"))}</button>
+            <button class="ghost" data-act="work-export-no">${esc(t("cancel"))}</button>
+            <div class="desc">${esc(t("works_export_desc", { n: w.mine }))}</div></div>` : "";
+      return `<div class="work-row"><div class="work-name"><div>${esc(w.title)}</div>
+          <div class="desc">${esc(t("works_count", { mine: w.mine, shared: w.shared }))}</div></div>
+          <div class="work-acts">
+            <button class="ghost" data-act="work-export" data-work="${esc(w.key)}" ${w.mine ? "" : "disabled"}>${esc(t("works_export"))}</button>
+            <button class="pill" data-act="work-own" data-work="${esc(w.key)}" aria-pressed="${w.own_only}" title="${esc(t("works_own_desc"))}">${esc(t("works_own"))}</button>
+            <button data-act="work-forget" data-work="${esc(w.key)}" aria-label="${esc(t("remove", { word: w.title }))}">${ICON.x}</button>
+          </div>${naming}</div>`;
+    }).join("") : `<div class="none">${esc(t("works_empty"))}</div>`;
+    return `${switchRow("remember_works", t("works_remember"), t("works_remember_desc"))}
+      <div class="works"><button class="works-toggle" data-act="works-open" aria-expanded="${S.ui.worksOpen ? "true" : "false"}"><span aria-hidden="true">${S.ui.worksOpen ? "▾" : "▸"}</span><span>${esc(t("works_title", { n: list.length }))}</span></button>
+        ${S.ui.worksOpen ? `<div class="works-list">${rows}</div>` : ""}</div>`;
   }
 
   // ---------------------------------------------------------------- 螢幕上的聊天區（可以好幾個）
@@ -1376,7 +1401,7 @@
     const scroll = page.scrollTop;
     const active = page.contains(document.activeElement) ? document.activeElement : null;
     const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
-      ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack", "exe"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
+      ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack", "exe", "work"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "history") page.innerHTML = historyPage();
     else if (S.ui.tab === "health") page.innerHTML = healthPage();
@@ -1704,6 +1729,18 @@
       toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: r.error || "" })), 9000, r.ok ? "info" : "warn");
     },
     "mem-import": () => { const f = $("mem-file"); f.value = ""; f.click(); },
+    "works-open": () => { S.ui.worksOpen = !S.ui.worksOpen; renderSettingsPage(); const b = document.querySelector('[data-act="works-open"]'); if (b) b.focus(); },
+    "work-export": (el) => { S.ui.workExport = el.dataset.work; renderSettingsPage(); const i = $("work-title"); if (i) { i.focus(); i.select(); } },
+    "work-export-no": () => { const k = S.ui.workExport; S.ui.workExport = ""; renderSettingsPage(); const b = document.querySelector(`[data-act="work-export"][data-work="${k}"]`); if (b) b.focus(); },
+    "work-export-yes": async (el) => {
+      const title = ($("work-title") || {}).value || "";
+      const r = await post("/api/memory", { action: "export", work: el.dataset.work, title, with_mine: !!S.ui.memWithMine });
+      S.ui.workExport = "";
+      renderSettingsPage();
+      toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: r.error || "" })), 9000, r.ok ? "info" : "warn");
+    },
+    "work-own": (el) => post("/api/memory", { action: "own_only", work: el.dataset.work, on: el.getAttribute("aria-pressed") !== "true" }),
+    "work-forget": (el) => post("/api/memory", { action: "forget_work", work: el.dataset.work }),
     "mem-pack-remove": (el) => post("/api/memory", { action: "remove_pack", pack: el.dataset.pack }),
     "mem-forget": () => { S.ui.memAsk = true; renderSettingsPage(); const b = document.querySelector('[data-act="mem-forget-no"]'); if (b) b.focus(); },
     "mem-forget-no": () => { S.ui.memAsk = false; renderSettingsPage(); const b = document.querySelector('[data-act="mem-forget"]'); if (b) b.focus(); },
@@ -1898,7 +1935,7 @@
   // 這裡的畫面大多是整塊換掉重畫的。換掉的那一塊裡如果正好有焦點，焦點就會掉回最上面，只用鍵盤的人得從頭再 Tab 一次。
   // 所以記住最後停在哪個東西上；它被換掉了，就在新的畫面裡找回同一個；找不到（例如那一列被刪了）就停在最近的地方。
 
-  const FOCUS_DATA = ["key", "value", "code", "q", "tone", "id", "pack", "exe", "side", "to", "src", "target", "view", "name"];
+  const FOCUS_DATA = ["key", "value", "code", "q", "tone", "id", "pack", "exe", "work", "side", "to", "src", "target", "view", "name"];
   const FOCUSABLE = 'button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]';
   let focusLast = null;      // 最後停的地方 { el, home, exact, loose, index }
   let focusLost = null;      // 原來的地方暫時不見了，先停在替代的地方 { mark, stand, at, wait }
@@ -2036,7 +2073,7 @@
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       file.text().then((text) => { let data = null; try { data = JSON.parse(text); } catch (ex) { data = null; } return post("/api/memory", { action: "import", data, name: file.name }); })
-        .then((r) => toast(r.ok ? t("mem_imported", r) : t(r.error === "is_library" ? "mem_is_library" : "mem_bad"), 9000, r.ok ? "info" : "warn"))
+        .then((r) => toast(r.ok ? t("mem_imported", r) + (r.works ? " " + t("mem_imported_works", r) : "") : t(r.error === "is_library" ? "mem_is_library" : "mem_bad"), 9000, r.ok ? "info" : "warn"))
         .catch(() => toast(t("mem_bad"), 9000, "warn"));
       return;
     }

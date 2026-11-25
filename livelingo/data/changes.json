@@ -1,4 +1,110 @@
 {
+  "2.7.0": {
+    "zh-TW": [
+      "LiveLingo 會用視窗標題認出你在看哪一部影片、哪一個網頁。",
+      "同一部再看一次，翻過的句子直接用，對話裡標「翻過的」或「朋友的」；第一次打開翻過的那一部會提示之前翻過幾句。",
+      "同一部裡聽到的句子跟之前差一兩個字（語音辨識常有），也會用之前的翻法；別部的不會拿錯。",
+      "「翻過的句子」多了「記過的作品」清單：可以只把某一部匯出給朋友（匯出前可以改名稱），朋友匯入後看同一部就直接有翻譯。",
+      "也可以設「不用別人的」或忘掉某一部。",
+      "標題只存在你的電腦，只有你自己選「匯出這部」時才會寫進分享檔；不想記可以關掉「記住在看哪一部」。舊的分享檔照樣能匯入。"
+    ],
+    "zh-CN": [
+      "LiveLingo 会用窗口标题认出你在看哪一部视频、哪一个网页。",
+      "同一部再看一次，翻过的句子直接用，对话里标“翻过的”或“朋友的”；第一次打开翻过的那一部会提示之前翻过几句。",
+      "同一部里听到的句子跟之前差一两个字（语音识别常有），也会用之前的翻法；别部的不会拿错。",
+      "“翻过的句子”多了“记过的作品”列表：可以只把某一部导出给朋友（导出前可以改名称），朋友导入后看同一部就直接有翻译。",
+      "也可以设“不用别人的”或忘掉某一部。",
+      "标题只存在你的电脑，只有你自己选“导出这部”时才会写进分享文件；不想记可以关掉“记住在看哪一部”。旧的分享文件照样能导入。"
+    ],
+    "en": [
+      "LiveLingo now tells which video or page you are watching from the window title. Watch the same one again and sentences already translated are used right away, marked “translated before” or “from a friend”.",
+      "The first time you open one that was translated before, it tells you how many sentences are ready.",
+      "Within the same video, a sentence heard with one or two words different (common with speech recognition) also gets the earlier translation. Sentences from other videos are never taken by mistake.",
+      "“Translated sentences” has a new list, “Remembered videos and pages”.",
+      "Export just one for a friend (you can rename it first), and after importing they get translations right away for the same one. You can also set one to use only your own translations, or forget it.",
+      "Titles stay on your computer and go into a share file only when you choose “Export this one”. Turn off “Remember what I am watching” if you do not want them kept. Older share files still import."
+    ],
+    "ko": [
+      "LiveLingo가 창 제목으로 어떤 영상, 어떤 페이지를 보고 있는지 알아봅니다.",
+      "같은 작품을 다시 보면 번역한 문장을 바로 쓰고, 대화에 ‘번역한 적 있음’ 또는 ‘친구 번역’이 표시됩니다. 전에 번역한 작품을 처음 열면 몇 문장이 준비되어 있는지 알려 줍니다.",
+      "같은 작품 안에서 한두 글자가 다르게 들린 문장(음성 인식에서 흔함)도 전의 번역을 씁니다. 다른 작품의 문장을 잘못 가져오지는 않습니다.",
+      "‘번역한 문장’에 ‘기억한 작품’ 목록이 생겼습니다.",
+      "한 작품만 친구에게 내보낼 수 있고(내보내기 전에 이름 변경 가능), 친구가 가져오면 같은 작품을 볼 때 바로 번역이 나옵니다. 작품별로 ‘내 것만’을 켜거나 잊게 할 수도 있습니다.",
+      "제목은 내 컴퓨터에만 저장되고, ‘이 작품 내보내기’를 직접 골랐을 때만 공유 파일에 들어갑니다. 원하지 않으면 ‘보고 있는 작품 기억하기’를 끄세요. 예전 공유 파일도 그대로 가져올 수 있습니다."
+    ],
+    "ja": [
+      "LiveLingo がウィンドウのタイトルから、見ている動画やページを見分けるようになりました。",
+      "同じ作品をもう一度見ると翻訳済みの文をすぐ使い、会話に「翻訳済み」「友達の翻訳」と表示します。前に翻訳した作品を初めて開くと、何文あるかを知らせます。",
+      "同じ作品の中で、一、二文字違って聞き取られた文（音声認識ではよくあります）も前の翻訳を使います。別の作品の文を間違えて使うことはありません。",
+      "「翻訳した文」に「覚えた作品」の一覧が増えました。一つだけ友達に書き出せ（書き出す前に名前を変えられます）、友達が読み込むと同じ作品ですぐ翻訳が出ます。",
+      "作品ごとに「自分のだけ」にしたり、忘れたりもできます。",
+      "タイトルはこのパソコンだけに保存され、自分で「この作品を書き出す」を選んだときだけ共有ファイルに入ります。不要なら「見ている作品を覚える」をオフにしてください。古い共有ファイルもそのまま読み込めます。"
+    ],
+    "vi": [
+      "LiveLingo giờ nhận ra bạn đang xem video hay trang nào qua tiêu đề cửa sổ.",
+      "Xem lại cùng nội dung thì các câu đã dịch được dùng ngay, đánh dấu “đã dịch trước” hoặc “của bạn bè”. Lần đầu mở một nội dung đã dịch, nó cho biết có sẵn bao nhiêu câu.",
+      "Trong cùng một video, câu nghe khác một hai chữ (thường gặp khi nhận dạng giọng nói) cũng dùng bản dịch trước đó. Không bao giờ lấy nhầm câu của video khác.",
+      "“Các câu đã dịch” có thêm danh sách “Video và trang đã nhớ”.",
+      "Có thể chỉ xuất một mục cho bạn bè (đổi tên trước được); bạn bè nhập vào sẽ có bản dịch ngay khi xem cùng nội dung. Cũng có thể đặt “Chỉ của tôi” hoặc quên một mục.",
+      "Tiêu đề chỉ lưu trên máy bạn và chỉ vào tệp chia sẻ khi bạn tự chọn “Xuất mục này”. Không muốn lưu thì tắt “Nhớ mình đang xem gì”. Tệp chia sẻ cũ vẫn nhập được."
+    ],
+    "th": [
+      "LiveLingo รู้แล้วว่าคุณกำลังดูวิดีโอหรือหน้าเว็บไหนจากชื่อหน้าต่าง ดูเรื่องเดิมซ้ำ ประโยคที่เคยแปลจะใช้ทันที",
+      "ประโยคนั้นจะขึ้นว่า “เคยแปลแล้ว” หรือ “ของเพื่อน” เปิดเรื่องที่เคยแปลครั้งแรกจะบอกว่ามีพร้อมกี่ประโยค",
+      "ในเรื่องเดียวกัน ประโยคที่ได้ยินต่างไปหนึ่งสองคำ (เกิดบ่อยกับการรู้จำเสียง) ก็ใช้คำแปลเดิมได้ และจะไม่หยิบประโยคจากเรื่องอื่นผิด",
+      "“ประโยคที่แปลแล้ว” มีรายการใหม่ “เรื่องที่จำไว้” ส่งออกเฉพาะเรื่องเดียวให้เพื่อนได้ (แก้ชื่อก่อนได้)",
+      "เพื่อนนำเข้าแล้วดูเรื่องเดียวกันจะมีคำแปลทันที ตั้งเป็น “ใช้ของฉันเท่านั้น” หรือลืมเรื่องนั้นก็ได้",
+      "ชื่อเก็บไว้ในเครื่องคุณเท่านั้น และจะอยู่ในไฟล์แชร์เฉพาะเมื่อคุณเลือก “ส่งออกเรื่องนี้” เอง ถ้าไม่ต้องการให้ปิด “จำว่ากำลังดูอะไร” ไฟล์แชร์เก่ายังนำเข้าได้"
+    ],
+    "id": [
+      "LiveLingo kini mengenali video atau halaman yang Anda tonton dari judul jendela. Tonton yang sama lagi dan kalimat yang pernah diterjemahkan langsung dipakai, ditandai “pernah diterjemahkan” atau “dari teman”.",
+      "Saat pertama membuka yang pernah diterjemahkan, ia memberi tahu berapa kalimat yang siap.",
+      "Dalam video yang sama, kalimat yang terdengar beda satu dua kata (sering terjadi pada pengenalan suara) juga memakai terjemahan sebelumnya. Kalimat dari video lain tidak akan terambil keliru.",
+      "“Kalimat yang sudah diterjemahkan” punya daftar baru, “Video dan halaman yang diingat”.",
+      "Ekspor satu saja untuk teman (namanya bisa diubah dulu), dan setelah diimpor teman langsung mendapat terjemahan untuk yang sama. Anda juga bisa mengatur “Hanya milik saya” atau melupakannya.",
+      "Judul hanya disimpan di komputer Anda dan masuk ke file berbagi hanya jika Anda memilih “Ekspor yang ini”. Matikan “Ingat yang sedang saya tonton” bila tidak mau disimpan. File berbagi lama tetap bisa diimpor."
+    ],
+    "es": [
+      "LiveLingo ahora reconoce qué vídeo o página estás viendo por el título de la ventana.",
+      "Si vuelves a ver lo mismo, las frases ya traducidas se usan al momento, marcadas como “ya traducida” o “de un amigo”. La primera vez que abres algo ya traducido, te dice cuántas frases hay listas.",
+      "Dentro del mismo vídeo, una frase que se oye con una o dos palabras distintas (algo común en el reconocimiento de voz) también recibe la traducción anterior. Nunca se toman por error frases de otros vídeos.",
+      "“Frases traducidas” tiene una lista nueva, “Vídeos y páginas recordados”.",
+      "Exporta solo uno para un amigo (puedes cambiarle el nombre antes) y, al importarlo, tendrá traducción al momento para lo mismo. También puedes marcar uno como “Solo las mías” u olvidarlo.",
+      "Los títulos se quedan en tu equipo y solo van a un archivo cuando eliges “Exportar este”. Desactiva “Recordar qué estoy viendo” si no quieres guardarlos. Los archivos antiguos se siguen pudiendo importar."
+    ],
+    "pt": [
+      "O LiveLingo agora reconhece qual vídeo ou página você está vendo pelo título da janela.",
+      "Ao assistir o mesmo de novo, as frases já traduzidas são usadas na hora, marcadas como “já traduzida” ou “de um amigo”. Na primeira vez que você abre algo já traduzido, ele avisa quantas frases estão prontas.",
+      "No mesmo vídeo, uma frase ouvida com uma ou duas palavras diferentes (comum no reconhecimento de voz) também recebe a tradução anterior. Frases de outros vídeos nunca são usadas por engano.",
+      "“Frases traduzidas” ganhou a lista “Vídeos e páginas lembrados”.",
+      "Exporte só um para um amigo (dá para mudar o nome antes) e, ao importar, ele terá tradução na hora para o mesmo. Você também pode marcar um como “Só as minhas” ou esquecê-lo.",
+      "Os títulos ficam no seu computador e só vão para um arquivo quando você escolhe “Exportar este”. Desligue “Lembrar o que estou assistindo” se não quiser guardá-los. Arquivos antigos continuam sendo importados."
+    ],
+    "ru": [
+      "LiveLingo теперь узнаёт по заголовку окна, какое видео или страницу вы смотрите. При повторном просмотре уже переведённые фразы берутся сразу, с пометкой «уже переводилось» или «от друга».",
+      "Когда вы впервые открываете то, что уже переводилось, программа сообщает, сколько фраз готово.",
+      "В пределах одного видео фраза, услышанная с отличием в одно-два слова (частое дело при распознавании речи), тоже получает прежний перевод. Фразы из других видео по ошибке не берутся.",
+      "В «Переведённых фразах» появился список «Запомненные видео и страницы».",
+      "Можно экспортировать одно видео для друга (название можно изменить), и после импорта у друга сразу будет перевод того же видео. Можно также включить «Только мои» или забыть видео.",
+      "Заголовки хранятся только на вашем компьютере и попадают в файл, только если вы сами выбрали «Экспортировать». Отключите «Запоминать, что я смотрю», если не хотите их хранить. Старые файлы по-прежнему импортируются."
+    ],
+    "de": [
+      "LiveLingo erkennt jetzt am Fenstertitel, welches Video oder welche Seite du schaust.",
+      "Schaust du dasselbe wieder, werden schon übersetzte Sätze sofort genutzt und mit „schon übersetzt“ oder „von Freunden“ markiert. Beim ersten Öffnen von etwas schon Übersetztem sagt es, wie viele Sätze bereitliegen.",
+      "Im selben Video bekommt ein Satz, der mit ein, zwei Wörtern Unterschied erkannt wurde (bei Spracherkennung häufig), ebenfalls die frühere Übersetzung. Sätze aus anderen Videos werden nie versehentlich genommen.",
+      "„Übersetzte Sätze“ hat eine neue Liste „Gemerkte Videos und Seiten“.",
+      "Exportiere ein einzelnes für Freunde (Name vorher änderbar); nach dem Import haben sie beim selben Inhalt sofort Übersetzungen. Du kannst auch „Nur meine“ einstellen oder es vergessen.",
+      "Titel bleiben auf deinem Computer und kommen nur in eine Datei, wenn du selbst „Dies exportieren“ wählst. Schalte „Merken, was ich schaue“ aus, wenn du das nicht willst. Ältere Dateien lassen sich weiter importieren."
+    ],
+    "fr": [
+      "LiveLingo reconnaît maintenant la vidéo ou la page que vous regardez grâce au titre de la fenêtre. En regardant la même chose à nouveau, les phrases déjà traduites sont utilisées tout de suite, marquées « déjà traduite » ou « d’un ami ».",
+      "La première fois que vous ouvrez quelque chose de déjà traduit, il indique combien de phrases sont prêtes.",
+      "Dans la même vidéo, une phrase entendue avec un ou deux mots différents (fréquent avec la reconnaissance vocale) reçoit aussi la traduction précédente. Les phrases d’autres vidéos ne sont jamais prises par erreur.",
+      "« Phrases traduites » a une nouvelle liste, « Vidéos et pages retenues ».",
+      "Exportez-en une seule pour un ami (le nom peut être modifié avant) ; après import, il a tout de suite la traduction pour la même. Vous pouvez aussi choisir « Seulement les miennes » ou l’oublier.",
+      "Les titres restent sur votre ordinateur et ne vont dans un fichier que si vous choisissez « Exporter celle-ci ». Désactivez « Retenir ce que je regarde » si vous ne le voulez pas. Les anciens fichiers s’importent toujours."
+    ]
+  },
   "2.5.3": {
     "zh-TW": [
       "每次更新或重新安裝後，第一次開啟會用你的語言列出這次改了什麼（包含中間跳過的版本），按「知道了」才關掉，之後可以在「關於」再看。",

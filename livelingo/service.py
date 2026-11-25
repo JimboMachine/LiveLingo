@@ -16,7 +16,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, updater, voicebook
+from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, updater, voicebook, works
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -164,6 +164,8 @@ class Service:
         self.memory = Memory(data)        # 翻過的句子：同一句再出現就直接用；也可以匯出給朋友、匯入朋友的
         self.memory.mine_on, self.memory.shared_on = bool(self.cfg["remember_translations"]), bool(self.cfg["use_shared"])
         self._memory_told = 0.0
+        self._work_seen = (0.0, "", "", "")      # (什麼時候看的, via, place, work key)：視窗標題最多兩秒看一次
+        self._work_told: set[str] = set()        # 這次開程式已經提示過「這部翻過了」的作品
         self.terms = TermPack(self.cfg["term_packs"])
         self.audio = audio or RealAudio()
         from .core import audio as audio_core
@@ -887,10 +889,11 @@ class Service:
             return None
         lang = lang or detect_language(text) or "en"
         who = "them" if via in ("screen", "heard") else "me"
+        work = self._work_now(via, place)
         msg = {"id": next(self._ids), "who": who, "via": via, "original": text, "lang": lang,
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
                "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time(),
-               "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30]}
+               "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30], "work": work}
         if speaker:
             msg.update(speaker=int(speaker), speaker_run=self._speaker_run, voice=self._speaker_names.get(int(speaker), ""))
         if live:      # 同一則、同一個時間，先翻出來的半句留在畫面上，等整句翻好再換掉
@@ -899,6 +902,41 @@ class Service:
             self._post(msg)
         self.jobs.put(msg)
         return msg["id"]
+
+    def _work_now(self, via: str, place: str = "") -> str:
+        """這一句是在哪一部影片、哪一個網頁看到的（works.work_key）；自己打的、說的，或關掉「記住在看哪一部」就是空的。
+        讀畫面：區域跟著的程式的視窗，沒跟就是區域中間那個視窗；聽聲音：只聽的那個程式，否則最前面的視窗。
+        第一次看到之前翻過的那一部，跳一則提示「這部之前翻過 N 句」。"""
+        if via not in ("screen", "heard") or not self.cfg["remember_works"]:
+            return ""
+        now = time.monotonic()
+        at, last_via, last_place, last = self._work_seen
+        if now - at < 2.0 and (via, place) == (last_via, last_place):
+            return last
+        exe, point = "", None
+        if via == "screen":
+            on = [r for r in self.cfg["regions"] if r.get("on")]
+            region = next((r for r in on if place and r.get("name") == place), on[0] if on else None)
+            if region:
+                exe = str(region.get("app") or "")
+                point = (int(region.get("left", 0)) + int(region.get("width", 0)) // 2,
+                         int(region.get("top", 0)) + int(region.get("height", 0)) // 2)
+        elif self.cfg["listen_apps"]:
+            exe = str(self.cfg["listen_apps"][0])
+        try:
+            win = works.pick_window(apps.windows(), exe=exe, point=None if exe else point)
+        except Exception:  # noqa: BLE001  拿不到視窗清單就當作不知道在看哪一部
+            win = None
+        title = works.clean_title(win["title"]) if win else ""
+        key = works.work_key(title)
+        self._work_seen = (now, via, place, key)
+        if key and key != last:
+            info = self.memory.work_info(key)
+            self.memory.saw(key, title)
+            if info and key not in self._work_told and (info["mine"] or (info["shared"] and self.cfg["use_shared"] and not info["own_only"])):
+                self._work_told.add(key)
+                self.notice("work_known", title=title, n=info["mine"] + info["shared"], mine=info["mine"], shared=info["shared"])
+        return key
 
     def _target_for(self, msg: dict) -> str:
         my, their = self.cfg["my_lang"], self.cfg["their_lang"]
@@ -992,6 +1030,8 @@ class Service:
         if "on_part" not in inspect.signature(fn).parameters:
             return fn(msg["original"], target, msg["lang"], self._context_for(msg))
         more = {"remember": msg.get("via") or ""} if "remember" in inspect.signature(fn).parameters else {}
+        if more and msg.get("work") and "work" in inspect.signature(fn).parameters:
+            more["work"] = msg["work"]
         sent, shown = [0.0], msg.get("partial") or ""
 
         def part(text: str) -> None:
@@ -1003,6 +1043,8 @@ class Service:
             self.overlay.on_partial(msg, text)
 
         out = fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part, **more)
+        came = self.translator.came_from() if more and hasattr(self.translator, "came_from") else None
+        msg["kept"] = came["from"] if came else ""      # 用的是記住的翻法：介面在旁邊標「翻過的」「朋友的」
         if more and time.monotonic() - self._memory_told > 10:      # 設定畫面上「記住幾句」的數字，最多 10 秒更新一次
             self._memory_told = time.monotonic()
             self.hub.publish("memory", self.memory.state())
@@ -1230,11 +1272,12 @@ class Service:
         if not self.lessons.add(msg["original"], dst, msg["lang"], msg["target"]):
             return False
         if msg.get("lang"):
-            self.memory.fix(msg["original"], msg["lang"], msg["target"], self.cfg["tone"], dst, self.mode.get("model", ""))
+            self.memory.fix(msg["original"], msg["lang"], msg["target"], self.cfg["tone"], dst, self.mode.get("model", ""),
+                            msg.get("work") or "")
             self.hub.publish("memory", self.memory.state())
         self.translator.clear_cache()
         self.hub.publish("lessons", self.lessons.list())
-        msg = dict(msg, translated=dst, error="", taught=True, back="",
+        msg = dict(msg, translated=dst, error="", taught=True, back="", kept="",
                    pron=self._pronunciation(dst, msg["target"]) if msg["who"] == "me" else "")
         if msg["who"] == "me" and msg["target"] != self.cfg["my_lang"]:
             msg["copied"] = oswin.copy_text(dst)
@@ -1296,16 +1339,17 @@ class Service:
 
     # ---- 翻過的句子：分享檔、清除
 
-    def memory_export(self, range_key: str = "all", with_mine: bool = False) -> dict:
+    def memory_export(self, range_key: str = "all", with_mine: bool = False, work: str = "", title: str = "") -> dict:
         """把我翻過的句子存成分享檔（放在字幕記錄的資料夾），朋友匯入之後同樣的句子就不用重翻。
-        預設不含我自己打的、說的（可能是私人聊天）。"""
+        預設不含我自己打的、說的（可能是私人聊天）。work：只匯出這一部（帶著標題，朋友看同一部就認得）；title：改用這個名字。"""
         if range_key not in MEMORY_RANGES:
             range_key = "all"
-        data = self.memory.export(range_key, with_mine)
+        data = self.memory.export(range_key, with_mine, work=work, title=title)
         if not data["items"]:
             return {"ok": False, "error": "empty"}
         folder = self.transcript_dir()
-        path = folder / f"LiveLingo-translations-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        named = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", data["works"][0]["title"]).strip()[:40] if data["works"] else ""
+        path = folder / f"LiveLingo-translations-{named + '-' if named else ''}{time.strftime('%Y%m%d-%H%M%S')}.json"
         try:
             folder.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -1330,6 +1374,20 @@ class Service:
 
     def memory_remove_pack(self, pack: str) -> dict:
         self.memory.remove_pack(pack)
+        self.translator.clear_cache()
+        self.hub.publish("memory", self.memory.state())
+        return {"ok": True}
+
+    def memory_work(self, key: str, action: str, on: bool = False) -> dict:
+        """作品清單上的動作：own_only（這部不用別人的）、forget（忘掉這部）。"""
+        if action == "own_only":
+            self.memory.set_own_only(key, on)
+        elif action == "forget":
+            self.memory.forget_work(key)
+            self._work_told.discard(key)
+            self._work_seen = (0.0, "", "", "")
+        else:
+            return {"ok": False, "error": "unknown"}
         self.translator.clear_cache()
         self.hub.publish("memory", self.memory.state())
         return {"ok": True}

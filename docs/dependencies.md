@@ -197,17 +197,18 @@
 
 ### 改翻過的句子（翻譯記憶）或翻譯分享檔
 
-1. `memory.py`：資料表欄位、誰比較優先（lookup 的分數）、分享檔格式（KIND、version）：改格式要能讀舊版的檔
-2. `translate.py`：什麼時候查、什麼時候記：半句（unfinished）、數字對不上、留著原文的都不記
-3. `service.py`：remember 只從 _translate 給（回譯不記）；teach、lesson_remove 要同步；設定 remember_translations、use_shared 改了要清暫存
-4. `config.py`：remember_translations、use_shared
-5. `server.py`：/api/memory 的四個動作
-6. `app.js`、`i18n.js`：翻譯品質頁的「翻過的句子」區塊、匯入時選錯檔案（詞彙檔、分享檔）的提示
-7. `storage.py`：memory.db 算在「設定和紀錄」裡
-8. `guide.py`：說明頁提到分享檔的那一段
-9. `test_basics.py`：test_translation_memory_and_share_files
+1. `memory.py`：資料表欄位（memory、packs、works、work_lines）、誰比較優先（find 的分數）、分享檔格式（KIND、VERSION、works）：改格式要能讀舊版的檔
+2. `works.py`：標題怎麼整理（clean_title、GENERIC）：改了之後舊的作品 key 會對不上，等於全部變成新的一部
+3. `translate.py`：什麼時候查、什麼時候記：半句（unfinished）、數字對不上、留著原文的都不記
+4. `service.py`：remember 只從 _translate 給（回譯不記）；teach、lesson_remove 要同步；設定 remember_translations、use_shared 改了要清暫存
+5. `config.py`：remember_translations、use_shared、remember_works
+6. `server.py`：/api/memory 的動作：export（可帶 work、title）、import、remove_pack、forget、own_only、forget_work
+7. `app.js`、`i18n.js`：翻譯品質頁的「翻過的句子」區塊和作品清單（worksBlock）、訊息旁的「翻過的／朋友的」（kept_）、「這部翻過了」提示（n_work_known）、匯入時選錯檔案（詞彙檔、分享檔）的提示
+8. `storage.py`：memory.db 算在「設定和紀錄」裡
+9. `guide.py`：說明頁提到分享檔的那一段
+10. `test_basics.py`：test_translation_memory_and_share_files
 
-自動把關：測試會擋：同一句沒有直接用記住的、比較差的模型翻的被拿來用、詞彙表改了還用舊的、匯入的蓋過教過的、匯出含了我自己打的、刪一包沒刪乾淨。真的在 Windows 上用起來快不快，要自己看。
+自動把關：測試會擋：同一句沒有直接用記住的、比較差的模型翻的被拿來用、詞彙表改了還用舊的、匯入的蓋過教過的、匯出含了我自己打的、刪一包沒刪乾淨、同一部裡幾乎一樣的句子沒用上、別部的拿錯、第 1 版的檔讀不進來。真的在 Windows 上用起來快不快、瀏覽器的視窗標題對不對，要自己看。
 
 ### 改對話歷史
 
@@ -394,7 +395,8 @@
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
 | 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
-| 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs）（改壞不會報錯） |
+| 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs、works）（改壞不會報錯） |
+| 作品：從視窗標題認出在看哪一部影片、哪一個網頁 | `livelingo/works.py` | `service.py`：每一句是在哪一部看到的（_work_now）：挑視窗、整理標題、算 key（改壞會報錯）<br>`memory.py`：匯入第 2 版分享檔時用標題重算作品的 key（改壞會報錯） |
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字；留下設定時要刪的資料夾名字（models、engine）（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
 | 每一版改了什麼（每種介面語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
 | 問題報告：先給使用者看，不自己送出 | `livelingo/report.py` | `service.py`：把狀態、設定、紀錄排成一份文字；存檔、複製用的是剛才給使用者看過的那一份（改壞會報錯）<br>`app.js`：預覽的欄位（text、lines、bytes）和存好之後的檔名（改壞不會報錯） |
@@ -433,6 +435,6 @@
 | --- | --- | --- |
 | 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`changes.py`：changes.json 放在哪（改壞會報錯）<br>`guide.py`：help.json 和品牌標誌放在哪（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯） |
 | Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、接著哪些螢幕和各自的大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯） |
-| 開著哪些程式 | `livelingo/apps.py` | `service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
+| 開著哪些程式 | `livelingo/apps.py` | `works.py`：apps.windows() 的欄位（exe、title、rect、minimized）（改壞不會報錯）<br>`service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
 | 模型下載 | `livelingo/assets.py` | `storage.py`：模型和引擎的檔名、資料夾（改壞會報錯）<br>`service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN、分辨說話者的聲紋模型）（改壞會報錯）<br>`voices.py`：聲紋模型的檔案（打開功能時才下載）（改壞不會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯）<br>`README.md`：第一次下載大約幾 GB（要和實際的檔案大小對得上）（改壞不會報錯） |
 | 顯示卡判斷 | `livelingo/gpu.py` | `service.py`：選模式（改壞會報錯） |
