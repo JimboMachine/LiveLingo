@@ -581,3 +581,11 @@ input::placeholder { color: var(--faint); }
 .work-export { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .work-export input { flex: 1 1 200px; min-width: 0; }
 .work-export .desc { flex: 1 1 100%; }
+
+/* 匯入字幕檔的預覽 */
+.sub-preview { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.sub-sample { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.sub-pair { padding: 6px 8px; border-radius: 8px; background: var(--panel-2, rgba(127,127,127,0.08)); overflow-wrap: anywhere; }
+.sub-pair .dim { color: var(--dim); }
+.sub-preview input { width: 100%; min-width: 0; }
+.sub-preview .pills { flex-wrap: wrap; }

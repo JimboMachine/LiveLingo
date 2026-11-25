@@ -16,7 +16,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, updater, voicebook, works
+from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, subtitles, updater, voicebook, works
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -1044,7 +1044,7 @@ class Service:
 
         out = fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part, **more)
         came = self.translator.came_from() if more and hasattr(self.translator, "came_from") else None
-        msg["kept"] = came["from"] if came else ""      # 用的是記住的翻法：介面在旁邊標「翻過的」「朋友的」
+        msg["kept"] = came["from"] if came else ""      # 用的是記住的翻法：介面在旁邊標「翻過的」「朋友的」「字幕」
         if more and time.monotonic() - self._memory_told > 10:      # 設定畫面上「記住幾句」的數字，最多 10 秒更新一次
             self._memory_told = time.monotonic()
             self.hub.publish("memory", self.memory.state())
@@ -1377,6 +1377,63 @@ class Service:
         self.translator.clear_cache()
         self.hub.publish("memory", self.memory.state())
         return {"ok": True}
+
+    def _subtitle_pairs(self, files, swap: bool = False) -> dict:
+        """字幕檔（一個雙語的，或原文、翻譯各一個）→ {"ok", "pairs", "lang", "target"} 或 {"ok": False, "error"}。
+        target 是 LANGS 的代碼：跟我的語言同一家就用我的語言（繁體或簡體），否則用那一家的第一個。"""
+        from .core.translate import SOURCES
+
+        files = [f for f in (files if isinstance(files, list) else []) if isinstance(f, dict) and isinstance(f.get("text"), str)][:2]
+        cues = [subtitles.parse(f["text"]) for f in files]
+        if not files or not all(cues):
+            return {"ok": False, "error": "sub_unreadable"}
+        if len(cues) == 2:
+            langs = [subtitles.language_of(c, detect_language) for c in cues]
+            if not all(langs) or langs[0] == langs[1]:
+                return {"ok": False, "error": "sub_same_lang"}
+            mine = LANGS[self.cfg["my_lang"]]["family"]
+            order = [0, 1] if langs[1] == mine or (langs[0] != mine and len(cues[0]) >= len(cues[1])) else [1, 0]
+            if swap:
+                order.reverse()
+            pairs = subtitles.pair_two(cues[order[0]], cues[order[1]])
+            lang, family = langs[order[0]], langs[order[1]]
+        else:
+            pairs, lang, family = subtitles.split_one(cues[0], detect_language, swap=swap)
+        if not pairs:
+            return {"ok": False, "error": "sub_no_pairs"}
+        mine = self.cfg["my_lang"]
+        target = mine if LANGS[mine]["family"] == family else next((k for k, v in LANGS.items() if v["family"] == family), "")
+        if lang not in SOURCES or not target:
+            return {"ok": False, "error": "sub_lang", "lang": lang or "", "target": family or ""}
+        return {"ok": True, "pairs": pairs, "lang": lang, "target": target}
+
+    def subtitles_preview(self, files, swap: bool = False) -> dict:
+        """先看看字幕檔配出來的樣子：幾句、前 5 句、哪種語言翻成哪種。也告訴介面現在在看哪一部（可以直接記在那部底下）。"""
+        got = self._subtitle_pairs(files, swap)
+        if not got["ok"]:
+            return got
+        now = self._work_seen[3]
+        info = self.memory.work_info(now) if now else None
+        return {"ok": True, "count": len(got["pairs"]), "sample": [list(p) for p in got["pairs"][:5]], "lang": got["lang"],
+                "target": got["target"], "now": {"key": now, "title": info["title"]} if info else None}
+
+    def subtitles_import(self, files, swap: bool = False, work: str = "", title: str = "", name: str = "") -> dict:
+        """匯入字幕檔當成翻譯，一包（可以整包刪）。work：記在哪一部底下；沒有就用 title 當新的一部（標題整理過）。"""
+        got = self._subtitle_pairs(files, swap)
+        if not got["ok"]:
+            return got
+        if not (work and self.memory.work_info(work)):
+            title = works.clean_title(title)
+            work = works.work_key(title)
+        else:
+            title = self.memory.work_info(work)["title"]
+        name = re.sub(r"\.(srt|vtt)$", "", str(name or ""), flags=re.I) or title
+        result = self.memory.import_subtitles(got["pairs"], got["lang"], got["target"], name, work, title)
+        if result.get("ok"):
+            self.translator.clear_cache()
+            self._work_told.discard(work)
+            self.hub.publish("memory", self.memory.state())
+        return dict(result, work=work)
 
     def memory_work(self, key: str, action: str, on: bool = False) -> dict:
         """作品清單上的動作：own_only（這部不用別人的）、forget（忘掉這部）。"""

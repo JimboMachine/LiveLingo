@@ -573,7 +573,7 @@ class Translator:
         self._came = threading.local()    # 這條執行緒上一次翻譯用了記住的翻法的話，是哪來的
 
     def came_from(self) -> dict | None:
-        """上一次 translate() 用的是記住的翻法：{"from": "mine" | "shared", "near": 是不是同一部裡幾乎一樣的句子}；
+        """上一次 translate() 用的是記住的翻法：{"from": "mine" | "shared" | "subtitle", "near": 是不是同一部裡幾乎一樣的句子}；
         是模型翻的（或沒用記憶）就 None。"""
         return getattr(self._came, "value", None)
 

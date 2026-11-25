@@ -38,6 +38,8 @@ MODEL_RANK = {"4b": 1, "12b": 2}        # 模型好壞的順序；不認得的�
 MINE_VIAS = ("typed", "spoken", "quick")      # 我自己打的、說的（匯出時預設不含）
 RANGES = {"2h": 2 * 3600, "today": None, "all": 0}      # 匯出的範圍；today = 今天 0 點起
 VERSION = 2                             # 分享檔的版本；第 2 版多了 works
+SUBTITLE = 2                            # memory.fixed 的值：從字幕檔匯入的（人翻的，但常常濃縮過）
+TONES = ("casual", "polite")
 NEAR = 0.85                             # 同一部裡「幾乎一樣」的句子要多像才拿來用
 NEAR_MIN = 4                            # 太短的句子不找幾乎一樣的（「好」「對啊」差一個字就是別的意思）
 NEAR_SCAN = 5000                        # 同一部裡最多比對幾句
@@ -55,6 +57,15 @@ def terms_print(pairs) -> str:
 def key_text(text: str) -> str:
     """比對用的原文：前後空白拿掉、中間連續的空白當一個。"""
     return re.sub(r"\s+", " ", str(text or "")).strip()[:MAX_TEXT]
+
+
+def _tier(mine: bool, fixed: int) -> int:
+    """誰比較優先：我教過的 4、朋友教過的 3、字幕檔 2、我翻的 1、朋友機器翻的 0。"""
+    if fixed == SUBTITLE:
+        return 2
+    if fixed:
+        return 4 if mine else 3
+    return 1 if mine else 0
 
 
 def _rank(model: str) -> int:
@@ -124,7 +135,7 @@ class Memory:
         return found[0] if found else None
 
     def find(self, text: str, lang: str, target: str, tone: str, model: str, terms: str, work: str = ""):
-        """記住的翻法和它是哪來的：(譯文, "mine" | "shared", 是不是同一部裡幾乎一樣的句子)；沒有就 None。
+        """記住的翻法和它是哪來的：(譯文, "mine" | "shared" | "subtitle", 是不是同一部裡幾乎一樣的句子)；沒有就 None。
         順序：我教過的 > 匯入的人工改過的 > 我翻過的 > 匯入的；同一級裡同一部的先。
         work：現在在看的那一部（works.work_key）；那一部設了「不用別人的」就只用我的。"""
         if not (self.mine_on or self.shared_on):
@@ -147,21 +158,21 @@ class Memory:
                     continue
                 if (row_terms if mine else "") != terms:
                     continue
-            # 分數：我教過的 3、匯入的人工改過的 2、我翻的 1、匯入的 0；同一級裡同一部的先
-            score = ((3 if mine else 2) if fixed else (1 if mine else 0), origin in here, _rank(row_model), at)
+            score = (_tier(mine, fixed), origin in here, _rank(row_model), at)
             if best_score is None or score > best_score:
-                best, best_score = (origin, dst), score
+                best, best_score = (origin, dst, src, fixed), score
         near = False
         if best is None and work and not terms and len(src) >= NEAR_MIN:
             best, near = self._near(src, lang, target, tone, model, work, shared_on), True
         if best is None:
             return None
+        origin, dst, row_src, fixed = best
         self._run("UPDATE memory SET used=? WHERE src=? AND lang=? AND target=? AND tone=? AND origin=?",
-                  (self._now(), best[2] if near else src, lang, target, tone, best[0]), commit=True)
-        return best[1], ("mine" if best[0] == "" else "shared"), near
+                  (self._now(), row_src, lang, target, tone, origin), commit=True)
+        return dst, ("mine" if origin == "" else "subtitle" if fixed == SUBTITLE else "shared"), near
 
     def _near(self, src: str, lang: str, target: str, tone: str, model: str, work: str, shared_on: bool):
-        """同一部裡「幾乎一樣」的句子（語音辨識差一兩個字）：(origin, 譯文, 那一句的原文)；沒有就 None。
+        """同一部裡「幾乎一樣」的句子（語音辨識差一兩個字）：(origin, 譯文, 那一句的原文, fixed)；沒有就 None。
         只用詞彙表、用語包跟它沒關係的（terms 空的），人工改過的除外。
         像不像用一個字一個字比（difflib）：11 個字差 1 個大約 0.91，差 2 個大約 0.82。"""
         from difflib import SequenceMatcher
@@ -170,7 +181,7 @@ class Memory:
                             JOIN memory m ON m.src = w.src AND m.lang = w.lang AND m.target = w.target AND m.tone = w.tone AND m.origin = w.origin
                             WHERE w.work=? AND w.lang=? AND w.target=? AND w.tone=? ORDER BY m.used DESC LIMIT ?""",
                          (work, lang, target, tone, NEAR_SCAN))
-        best, best_score = None, NEAR
+        best, best_score, best_rank = None, NEAR, (0.0, -1)
         for origin, dst, other, row_model, row_terms, fixed in rows:
             mine = origin == ""
             if (mine and not self.mine_on) or (not mine and not shared_on) or abs(len(other) - len(src)) > max(3, len(src) // 4):
@@ -178,8 +189,8 @@ class Memory:
             if not fixed and (_rank(row_model) < _rank(model) or row_terms):
                 continue
             score = SequenceMatcher(None, src, other, autojunk=False).ratio()
-            if score >= best_score and (best is None or score > best_score or fixed):
-                best, best_score = (origin, dst, other), score
+            if score >= best_score and (best is None or (score, _tier(mine, fixed)) > best_rank):
+                best, best_score, best_rank = (origin, dst, other, fixed), NEAR, (score, _tier(mine, fixed))
         return best
 
     def store(self, text: str, lang: str, target: str, tone: str, dst: str, model: str, terms: str, via: str = "",
@@ -332,6 +343,35 @@ class Memory:
                       [(*link, pack) for link in links], many=True, commit=True)
         return {"ok": True, "added": len(rows), "skipped": skipped, "pack": {"id": pack, "name": name}, "works": len(used)}
 
+    def import_subtitles(self, pairs, lang: str, target: str, name: str, work: str = "", title: str = "") -> dict:
+        """匯入字幕檔配好的句子 [(原文, 翻譯)]，當成一包（可以整包刪），記在 work 那一部底下。
+        字幕是人翻的：比機器翻的優先，比教過的後面（fixed = SUBTITLE）。兩種語氣都記（字幕不分語氣）。"""
+        rows, seen = [], set()
+        for src, dst in list(pairs)[:MAX_IMPORT]:
+            src, dst = key_text(src), str(dst or "").strip()[:MAX_TEXT * 2]
+            if not src or not dst or src == dst or src in seen:
+                continue
+            seen.add(src)
+            rows.append((src, dst))
+        if not rows:
+            return {"ok": False, "error": "no_pairs"}
+        pack = "s" + hashlib.sha1(json.dumps([lang, target, work, rows], ensure_ascii=False).encode("utf-8")).hexdigest()[:11]
+        name = re.sub(r"\s+", " ", str(name or "")).strip()[:60] or pack
+        now = self._now()
+        with self._lock:
+            self._run("DELETE FROM memory WHERE origin=?", (pack,))
+            self._run("DELETE FROM work_lines WHERE origin=?", (pack,))
+            self._run("INSERT OR REPLACE INTO packs (id, name, at) VALUES (?, ?, ?)", (pack, name, now))
+            self._run("""INSERT OR REPLACE INTO memory (src, lang, target, tone, origin, dst, model, terms, fixed, via, at, used)
+                         VALUES (?, ?, ?, ?, ?, ?, '', '', ?, 'subtitle', ?, ?)""",
+                      [(s, lang, target, tone, pack, d, SUBTITLE, now, now) for s, d in rows for tone in TONES], many=True)
+            if work:
+                self._run("INSERT OR IGNORE INTO works (key, title, seen, at) VALUES (?, ?, 0, ?)", (work, str(title or "")[:120], now))
+                self._run("INSERT OR IGNORE INTO work_lines (work, src, lang, target, tone, origin) VALUES (?, ?, ?, ?, ?, ?)",
+                          [(work, s, lang, target, tone, pack) for s, _ in rows for tone in TONES], many=True)
+            self._run("SELECT 1", commit=True)
+        return {"ok": True, "added": len(rows), "pack": {"id": pack, "name": name}}
+
     def remove_pack(self, pack: str) -> None:
         with self._lock:
             self._run("DELETE FROM memory WHERE origin=? AND origin<>''", (str(pack),))
@@ -355,7 +395,7 @@ class Memory:
         named = self._run("SELECT title, own_only FROM works WHERE key=?", (key,))
         if not named:
             return None
-        counts = self._run("""SELECT w.origin, COUNT(*), p.name FROM work_lines w LEFT JOIN packs p ON p.id = w.origin
+        counts = self._run("""SELECT w.origin, COUNT(DISTINCT w.src || char(31) || w.lang || char(31) || w.target), p.name FROM work_lines w LEFT JOIN packs p ON p.id = w.origin
                               WHERE w.work=? GROUP BY w.origin""", (key,))
         mine = sum(c for o, c, _ in counts if o == "")
         shared = sum(c for o, c, _ in counts if o != "")
@@ -383,8 +423,8 @@ class Memory:
     def works(self, limit: int = 50) -> list[dict]:
         """記過的作品，最近看的在前：[{"key", "title", "mine", "shared", "seen", "own_only"}]。"""
         rows = self._run("""SELECT k.key, k.title, k.seen, k.at, k.own_only,
-                              COALESCE(SUM(CASE WHEN w.origin='' THEN 1 ELSE 0 END), 0),
-                              COALESCE(SUM(CASE WHEN w.origin<>'' THEN 1 ELSE 0 END), 0)
+                              COUNT(DISTINCT CASE WHEN w.origin='' THEN w.src || char(31) || w.lang || char(31) || w.target END),
+                              COUNT(DISTINCT CASE WHEN w.origin<>'' THEN w.origin || char(31) || w.src || char(31) || w.lang || char(31) || w.target END)
                             FROM works k LEFT JOIN work_lines w ON w.work = k.key
                             GROUP BY k.key ORDER BY MAX(k.seen, k.at) DESC LIMIT ?""", (int(limit),))
         return [{"key": k, "title": t, "seen": int(seen), "own_only": bool(o), "mine": m, "shared": sh}
@@ -393,7 +433,7 @@ class Memory:
     def state(self) -> dict:
         """給設定畫面：我記住了幾句（其中幾句教過）、匯入了哪幾包。"""
         mine = self._run("SELECT COUNT(*), COALESCE(SUM(fixed), 0) FROM memory WHERE origin=''")
-        packs = self._run("""SELECT p.id, p.name, p.at, COUNT(m.src) FROM packs p LEFT JOIN memory m ON m.origin = p.id
+        packs = self._run("""SELECT p.id, p.name, p.at, COUNT(DISTINCT m.src || char(31) || m.lang || char(31) || m.target) FROM packs p LEFT JOIN memory m ON m.origin = p.id
                              GROUP BY p.id ORDER BY p.at DESC""")
         count, fixed = (mine[0] if mine else (0, 0))
         return {"mine": count or 0, "fixed": fixed or 0, "error": self.error, "ok": self._db is not None,

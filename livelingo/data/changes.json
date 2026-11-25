@@ -6,6 +6,7 @@
       "同一部裡聽到的句子跟之前差一兩個字（語音辨識常有），也會用之前的翻法；別部的不會拿錯。",
       "「翻過的句子」多了「記過的作品」清單：可以只把某一部匯出給朋友（匯出前可以改名稱），朋友匯入後看同一部就直接有翻譯。",
       "也可以設「不用別人的」或忘掉某一部。",
+      "可以匯入影片的字幕檔（.srt / .vtt，一個雙語的或原文、翻譯各一個）當成翻譯，匯入前先看配出來的例子。字幕是人翻的，比機器翻的優先，比你教過的後面。",
       "標題只存在你的電腦，只有你自己選「匯出這部」時才會寫進分享檔；不想記可以關掉「記住在看哪一部」。舊的分享檔照樣能匯入。"
     ],
     "zh-CN": [
@@ -14,6 +15,7 @@
       "同一部里听到的句子跟之前差一两个字（语音识别常有），也会用之前的翻法；别部的不会拿错。",
       "“翻过的句子”多了“记过的作品”列表：可以只把某一部导出给朋友（导出前可以改名称），朋友导入后看同一部就直接有翻译。",
       "也可以设“不用别人的”或忘掉某一部。",
+      "可以导入视频的字幕文件（.srt / .vtt，一个双语的或原文、翻译各一个）当成翻译，导入前先看配出来的例子。字幕是人翻的，比机器翻的优先，比你教过的后面。",
       "标题只存在你的电脑，只有你自己选“导出这部”时才会写进分享文件；不想记可以关掉“记住在看哪一部”。旧的分享文件照样能导入。"
     ],
     "en": [
@@ -22,6 +24,7 @@
       "Within the same video, a sentence heard with one or two words different (common with speech recognition) also gets the earlier translation. Sentences from other videos are never taken by mistake.",
       "“Translated sentences” has a new list, “Remembered videos and pages”.",
       "Export just one for a friend (you can rename it first), and after importing they get translations right away for the same one. You can also set one to use only your own translations, or forget it.",
+      "You can import a video's subtitle files (.srt or .vtt, one bilingual file or one original plus one translation) as translations, with a preview first. Subtitles come before machine translations but after sentences you taught.",
       "Titles stay on your computer and go into a share file only when you choose “Export this one”. Turn off “Remember what I am watching” if you do not want them kept. Older share files still import."
     ],
     "ko": [
@@ -30,6 +33,7 @@
       "같은 작품 안에서 한두 글자가 다르게 들린 문장(음성 인식에서 흔함)도 전의 번역을 씁니다. 다른 작품의 문장을 잘못 가져오지는 않습니다.",
       "‘번역한 문장’에 ‘기억한 작품’ 목록이 생겼습니다.",
       "한 작품만 친구에게 내보낼 수 있고(내보내기 전에 이름 변경 가능), 친구가 가져오면 같은 작품을 볼 때 바로 번역이 나옵니다. 작품별로 ‘내 것만’을 켜거나 잊게 할 수도 있습니다.",
+      "영상의 자막 파일(.srt / .vtt, 이중 언어 하나 또는 원문과 번역 각각 하나)을 번역으로 가져올 수 있고, 가져오기 전에 짝지은 예를 봅니다. 자막은 기계 번역보다 먼저, 직접 가르친 문장보다는 나중에 씁니다.",
       "제목은 내 컴퓨터에만 저장되고, ‘이 작품 내보내기’를 직접 골랐을 때만 공유 파일에 들어갑니다. 원하지 않으면 ‘보고 있는 작품 기억하기’를 끄세요. 예전 공유 파일도 그대로 가져올 수 있습니다."
     ],
     "ja": [
@@ -38,6 +42,7 @@
       "同じ作品の中で、一、二文字違って聞き取られた文（音声認識ではよくあります）も前の翻訳を使います。別の作品の文を間違えて使うことはありません。",
       "「翻訳した文」に「覚えた作品」の一覧が増えました。一つだけ友達に書き出せ（書き出す前に名前を変えられます）、友達が読み込むと同じ作品ですぐ翻訳が出ます。",
       "作品ごとに「自分のだけ」にしたり、忘れたりもできます。",
+      "動画の字幕ファイル（.srt / .vtt、二言語の一つ、または原文と翻訳を一つずつ）を翻訳として読み込めます。読み込む前に対応付けの例を確認できます。字幕は機械翻訳より優先し、自分で教えた文よりは後です。",
       "タイトルはこのパソコンだけに保存され、自分で「この作品を書き出す」を選んだときだけ共有ファイルに入ります。不要なら「見ている作品を覚える」をオフにしてください。古い共有ファイルもそのまま読み込めます。"
     ],
     "vi": [
@@ -46,6 +51,7 @@
       "Trong cùng một video, câu nghe khác một hai chữ (thường gặp khi nhận dạng giọng nói) cũng dùng bản dịch trước đó. Không bao giờ lấy nhầm câu của video khác.",
       "“Các câu đã dịch” có thêm danh sách “Video và trang đã nhớ”.",
       "Có thể chỉ xuất một mục cho bạn bè (đổi tên trước được); bạn bè nhập vào sẽ có bản dịch ngay khi xem cùng nội dung. Cũng có thể đặt “Chỉ của tôi” hoặc quên một mục.",
+      "Có thể nhập tệp phụ đề của video (.srt / .vtt, một tệp song ngữ hoặc một bản gốc và một bản dịch) làm bản dịch, có xem trước. Phụ đề được ưu tiên hơn máy dịch nhưng sau các câu bạn đã dạy.",
       "Tiêu đề chỉ lưu trên máy bạn và chỉ vào tệp chia sẻ khi bạn tự chọn “Xuất mục này”. Không muốn lưu thì tắt “Nhớ mình đang xem gì”. Tệp chia sẻ cũ vẫn nhập được."
     ],
     "th": [
@@ -54,6 +60,7 @@
       "ในเรื่องเดียวกัน ประโยคที่ได้ยินต่างไปหนึ่งสองคำ (เกิดบ่อยกับการรู้จำเสียง) ก็ใช้คำแปลเดิมได้ และจะไม่หยิบประโยคจากเรื่องอื่นผิด",
       "“ประโยคที่แปลแล้ว” มีรายการใหม่ “เรื่องที่จำไว้” ส่งออกเฉพาะเรื่องเดียวให้เพื่อนได้ (แก้ชื่อก่อนได้)",
       "เพื่อนนำเข้าแล้วดูเรื่องเดียวกันจะมีคำแปลทันที ตั้งเป็น “ใช้ของฉันเท่านั้น” หรือลืมเรื่องนั้นก็ได้",
+      "นำเข้าไฟล์ซับของวิดีโอ (.srt / .vtt ไฟล์สองภาษาหนึ่งไฟล์ หรือต้นฉบับกับคำแปลอย่างละไฟล์) เป็นคำแปลได้ โดยดูตัวอย่างก่อน ซับจะใช้ก่อนคำแปลของเครื่อง แต่หลังประโยคที่คุณสอนเอง",
       "ชื่อเก็บไว้ในเครื่องคุณเท่านั้น และจะอยู่ในไฟล์แชร์เฉพาะเมื่อคุณเลือก “ส่งออกเรื่องนี้” เอง ถ้าไม่ต้องการให้ปิด “จำว่ากำลังดูอะไร” ไฟล์แชร์เก่ายังนำเข้าได้"
     ],
     "id": [
@@ -62,6 +69,7 @@
       "Dalam video yang sama, kalimat yang terdengar beda satu dua kata (sering terjadi pada pengenalan suara) juga memakai terjemahan sebelumnya. Kalimat dari video lain tidak akan terambil keliru.",
       "“Kalimat yang sudah diterjemahkan” punya daftar baru, “Video dan halaman yang diingat”.",
       "Ekspor satu saja untuk teman (namanya bisa diubah dulu), dan setelah diimpor teman langsung mendapat terjemahan untuk yang sama. Anda juga bisa mengatur “Hanya milik saya” atau melupakannya.",
+      "Anda bisa mengimpor file subtitle video (.srt atau .vtt, satu dwibahasa atau satu asli dan satu terjemahan) sebagai terjemahan, dengan pratinjau dulu. Subtitle didahulukan dari terjemahan mesin, tapi setelah kalimat yang Anda ajarkan.",
       "Judul hanya disimpan di komputer Anda dan masuk ke file berbagi hanya jika Anda memilih “Ekspor yang ini”. Matikan “Ingat yang sedang saya tonton” bila tidak mau disimpan. File berbagi lama tetap bisa diimpor."
     ],
     "es": [
@@ -70,6 +78,7 @@
       "Dentro del mismo vídeo, una frase que se oye con una o dos palabras distintas (algo común en el reconocimiento de voz) también recibe la traducción anterior. Nunca se toman por error frases de otros vídeos.",
       "“Frases traducidas” tiene una lista nueva, “Vídeos y páginas recordados”.",
       "Exporta solo uno para un amigo (puedes cambiarle el nombre antes) y, al importarlo, tendrá traducción al momento para lo mismo. También puedes marcar uno como “Solo las mías” u olvidarlo.",
+      "Puedes importar los subtítulos de un vídeo (.srt o .vtt, uno bilingüe o un original y una traducción) como traducciones, con vista previa. Los subtítulos van antes que la traducción automática, pero después de lo que enseñaste tú.",
       "Los títulos se quedan en tu equipo y solo van a un archivo cuando eliges “Exportar este”. Desactiva “Recordar qué estoy viendo” si no quieres guardarlos. Los archivos antiguos se siguen pudiendo importar."
     ],
     "pt": [
@@ -78,6 +87,7 @@
       "No mesmo vídeo, uma frase ouvida com uma ou duas palavras diferentes (comum no reconhecimento de voz) também recebe a tradução anterior. Frases de outros vídeos nunca são usadas por engano.",
       "“Frases traduzidas” ganhou a lista “Vídeos e páginas lembrados”.",
       "Exporte só um para um amigo (dá para mudar o nome antes) e, ao importar, ele terá tradução na hora para o mesmo. Você também pode marcar um como “Só as minhas” ou esquecê-lo.",
+      "Você pode importar as legendas de um vídeo (.srt ou .vtt, uma bilíngue ou uma original e uma tradução) como traduções, com prévia antes. Legendas vêm antes da tradução automática, mas depois do que você ensinou.",
       "Os títulos ficam no seu computador e só vão para um arquivo quando você escolhe “Exportar este”. Desligue “Lembrar o que estou assistindo” se não quiser guardá-los. Arquivos antigos continuam sendo importados."
     ],
     "ru": [
@@ -86,6 +96,7 @@
       "В пределах одного видео фраза, услышанная с отличием в одно-два слова (частое дело при распознавании речи), тоже получает прежний перевод. Фразы из других видео по ошибке не берутся.",
       "В «Переведённых фразах» появился список «Запомненные видео и страницы».",
       "Можно экспортировать одно видео для друга (название можно изменить), и после импорта у друга сразу будет перевод того же видео. Можно также включить «Только мои» или забыть видео.",
+      "Можно импортировать субтитры видео (.srt или .vtt, один двуязычный файл или оригинал и перевод) как переводы, сначала посмотрев пример. Субтитры важнее машинного перевода, но уступают фразам, которые вы исправили сами.",
       "Заголовки хранятся только на вашем компьютере и попадают в файл, только если вы сами выбрали «Экспортировать». Отключите «Запоминать, что я смотрю», если не хотите их хранить. Старые файлы по-прежнему импортируются."
     ],
     "de": [
@@ -94,6 +105,7 @@
       "Im selben Video bekommt ein Satz, der mit ein, zwei Wörtern Unterschied erkannt wurde (bei Spracherkennung häufig), ebenfalls die frühere Übersetzung. Sätze aus anderen Videos werden nie versehentlich genommen.",
       "„Übersetzte Sätze“ hat eine neue Liste „Gemerkte Videos und Seiten“.",
       "Exportiere ein einzelnes für Freunde (Name vorher änderbar); nach dem Import haben sie beim selben Inhalt sofort Übersetzungen. Du kannst auch „Nur meine“ einstellen oder es vergessen.",
+      "Du kannst Untertitel eines Videos (.srt oder .vtt, eine zweisprachige Datei oder Original plus Übersetzung) als Übersetzungen importieren, mit Vorschau. Untertitel gehen vor Maschinenübersetzung, aber nach selbst beigebrachten Sätzen.",
       "Titel bleiben auf deinem Computer und kommen nur in eine Datei, wenn du selbst „Dies exportieren“ wählst. Schalte „Merken, was ich schaue“ aus, wenn du das nicht willst. Ältere Dateien lassen sich weiter importieren."
     ],
     "fr": [
@@ -102,6 +114,7 @@
       "Dans la même vidéo, une phrase entendue avec un ou deux mots différents (fréquent avec la reconnaissance vocale) reçoit aussi la traduction précédente. Les phrases d’autres vidéos ne sont jamais prises par erreur.",
       "« Phrases traduites » a une nouvelle liste, « Vidéos et pages retenues ».",
       "Exportez-en une seule pour un ami (le nom peut être modifié avant) ; après import, il a tout de suite la traduction pour la même. Vous pouvez aussi choisir « Seulement les miennes » ou l’oublier.",
+      "Vous pouvez importer les sous-titres d’une vidéo (.srt ou .vtt, un fichier bilingue ou un original et une traduction) comme traductions, avec un aperçu. Ils passent avant la traduction automatique, mais après vos phrases corrigées.",
       "Les titres restent sur votre ordinateur et ne vont dans un fichier que si vous choisissez « Exporter celle-ci ». Désactivez « Retenir ce que je regarde » si vous ne le voulez pas. Les anciens fichiers s’importent toujours."
     ]
   },

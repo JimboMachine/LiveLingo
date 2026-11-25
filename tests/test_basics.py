@@ -1627,6 +1627,70 @@ def test_works_recognise_what_is_watched_and_share_one(tmp_path, monkeypatch):
     assert me._work_now("screen") == ""
 
 
+def test_subtitle_files_become_translations(tmp_path):
+    """匯入字幕檔：.srt、.vtt 都讀得懂；兩個檔照時間配對、雙語檔照語言分；字幕比機器翻的優先、比教過的後面；
+    記在選的那一部底下；可以整包刪；壞檔不會出錯。"""
+    from livelingo import subtitles, works
+    from livelingo.core.translate import detect_language
+    from livelingo.memory import Memory
+    from livelingo.service import Service
+
+    ja = "\ufeff1\n00:00:01,000 --> 00:00:03,000\n<i>もう行こう。</i>\n\n2\n00:00:04,000 --> 00:00:06,500\n- 魔法は\n想像の世界だ。\n\n3\n00:00:10,000 --> 00:00:11,000\n誰？\n\nbroken\nno time here\n"
+    zh = "WEBVTT\n\nNOTE 這是註解\n\n00:01.100 --> 00:03.100\n走吧。\n\n00:04.200 --> 00:06.400 align:start\n魔法是想像的世界。\n\n00:20.000 --> 00:21.000\n對不上的一句\n"
+    a, b = subtitles.parse(ja), subtitles.parse(zh)
+    assert [c["lines"] for c in a] == [["もう行こう。"], ["魔法は", "想像の世界だ。"], ["誰？"]] and a[1]["end"] == 6.5
+    assert len(b) == 3 and b[0]["start"] == 1.1
+    assert subtitles.language_of(a, detect_language) == "ja" and subtitles.language_of(b, detect_language) == "zh"
+    assert subtitles.pair_two(a, b) == [("もう行こう。", "走吧。"), ("魔法は 想像の世界だ。", "魔法是想像的世界。")]
+    both = "1\n00:00:01,000 --> 00:00:02,000\n안녕하세요\nHello\n\n2\n00:00:03,000 --> 00:00:04,000\n고마워요\nThank you\n\n3\n00:00:05,000 --> 00:00:06,000\n네\n"
+    pairs, lang, fam = subtitles.split_one(subtitles.parse(both), detect_language)
+    assert pairs == [("안녕하세요", "Hello"), ("고마워요", "Thank you")] and (lang, fam) == ("ko", "en")
+    assert subtitles.split_one(subtitles.parse(both), detect_language, swap=True)[0][0] == ("Hello", "안녕하세요")
+    latin = "1\n00:00:01,000 --> 00:00:02,000\nGood morning\nBuenos días\n"
+    assert subtitles.split_one(subtitles.parse(latin), detect_language)[0] == [("Good morning", "Buenos días")]
+    assert subtitles.parse("") == [] and subtitles.parse("x" * 10) == [] and subtitles.parse(None) == []
+
+    # ---- 優先順序：我教過的 > 字幕 > 我機器翻的；記在那一部底下；整包刪
+    mem = Memory(tmp_path / "m")
+    key = works.work_key("葬送的芙莉蓮 第 1 集")
+    mem.store("もう行こう。", "ja", "zh-TW", "casual", "機器翻的", "12b", "", "heard", key)
+    got = mem.import_subtitles([("もう行こう。", "走吧。"), ("魔法は想像の世界だ。", "魔法是想像的世界。"), ("", "x"), ("同じ", "同じ")],
+                               "ja", "zh-TW", "第1集", key, "葬送的芙莉蓮 第 1 集")
+    assert got["ok"] and got["added"] == 2
+    assert mem.find("もう行こう。", "ja", "zh-TW", "casual", "12b", "", key) == ("走吧。", "subtitle", False)
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "polite", "12b", "") == "走吧。"            # 字幕不分語氣
+    assert mem.find("魔法は想像の世界た。", "ja", "zh-TW", "casual", "12b", "", key)[0] == "魔法是想像的世界。"   # 聽錯一個字
+    mem.fix("もう行こう。", "ja", "zh-TW", "casual", "我們走吧。")
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == "我們走吧。"
+    info = mem.work_info(key)
+    assert info["shared"] == 2 and info["mine"] == 1
+    st = mem.state()
+    assert next(p for p in st["packs"] if p["id"] == got["pack"]["id"])["count"] == 2
+    assert mem.import_subtitles([], "ja", "zh-TW", "x")["ok"] is False
+    mem.remove_pack(got["pack"]["id"])
+    assert mem.lookup("魔法は想像の世界だ。", "ja", "zh-TW", "casual", "12b", "") is None
+
+    # ---- 整個程式：預覽、對調、選哪一部、錯的檔
+    me = Service(tmp_path / "me")
+    me.cfg.set(my_lang="zh-TW", their_lang="ja")
+    files = [{"name": "ep1.zh.vtt", "text": zh}, {"name": "ep1.ja.srt", "text": ja}]     # 順序反過來也認得哪個是原文
+    pre = me.subtitles_preview(files)
+    assert pre["ok"] and pre["count"] == 2 and (pre["lang"], pre["target"]) == ("ja", "zh-TW") and pre["sample"][0] == ["もう行こう。", "走吧。"]
+    assert pre["now"] is None
+    flip = me.subtitles_preview(files, swap=True)                                              # 對調：中文翻成日文（我說中文時用得到）
+    assert (flip["lang"], flip["target"], flip["sample"][0]) == ("zh", "ja", ["走吧。", "もう行こう。"])
+    done = me.subtitles_import(files, title="葬送的芙莉蓮 第 1 集 - YouTube", name="ep1.ja.srt")
+    assert done["ok"] and done["added"] == 2 and done["work"] == key and done["pack"]["name"] == "ep1.ja"
+    assert me.memory.work_info(key)["title"] == "葬送的芙莉蓮 第 1 集"
+    me._work_seen = (0.0, "screen", "", key)
+    assert me.subtitles_preview(files)["now"] == {"key": key, "title": "葬送的芙莉蓮 第 1 集"}
+    assert me.subtitles_preview([{"name": "a.srt", "text": "nothing"}])["error"] == "sub_unreadable"
+    assert me.subtitles_preview([{"name": "a", "text": zh}, {"name": "b", "text": zh}])["error"] == "sub_same_lang"
+    far = zh.replace("00:01.100 --> 00:03.100", "05:01.100 --> 05:03.100").replace("00:04.200 --> 00:06.400", "06:04.200 --> 06:06.400")
+    assert me.subtitles_preview([{"name": "a", "text": ja}, {"name": "b", "text": far}])["error"] == "sub_no_pairs"
+    assert me.subtitles_preview("nope")["error"] == "sub_unreadable"
+
+
 def test_voice_tuning_delay_echo_and_push_to_talk(tmp_path):
     """聲音設定：靈敏度、斷句、快／準收音中直接換；延遲有記；喇叭回音不算我說的；按住才說話只收按著的那一段。"""
     import numpy as np

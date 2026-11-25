@@ -749,12 +749,47 @@
         <div class="btn-row">
           <button class="ghost" data-act="mem-export" ${m.mine ? "" : "disabled"}>${esc(t("mem_export"))}</button>
           <button class="ghost" data-act="mem-import">${esc(t("mem_import"))}</button>
+          <button class="ghost" data-act="sub-import">${esc(t("sub_import"))}</button>
           <button class="ghost" data-act="mem-forget" ${m.mine - m.fixed > 0 ? "" : "disabled"}>${esc(t("mem_forget"))}</button>
           <input type="file" id="mem-file" accept=".json,application/json" hidden>
-        </div>${forget}
+          <input type="file" id="sub-file" accept=".srt,.vtt,text/vtt" multiple hidden>
+        </div>${forget}${subtitlePreview()}
         <div class="gloss"><div class="grow-head"><span>${esc(t("mem_packs"))}</span><span></span><span></span></div>${packs}</div>
         ${worksBlock(m)}
       </section>`;
+  }
+
+  // 匯入字幕檔：先看配出來的樣子（哪種語言翻成哪種、前 5 句），選記在哪一部，再匯入
+  function subtitlePreview() {
+    const p = S.ui.subPreview;
+    if (!p) return "";
+    const now = p.now;
+    const pick = S.ui.subWork != null ? S.ui.subWork : (now ? now.key : "");
+    const sample = p.sample.map(([a, b]) => `<div class="sub-pair"><div>${esc(a)}</div><div class="dim">${esc(b)}</div></div>`).join("");
+    return `<div class="sub-preview" id="sub-preview">
+        <div><b>${esc(t("sub_found", { count: p.count, from: langName(p.lang), to: langName(p.target) }))}</b></div>
+        <div class="sub-sample">${sample}</div>
+        <div class="btn-row"><button class="ghost" data-act="sub-swap">${esc(t("sub_swap"))}</button></div>
+        <div class="setting-row choice"><div>${esc(t("sub_where"))}</div><div class="pills">
+          ${now ? `<button class="pill" data-act="sub-work" data-work="${esc(now.key)}" aria-pressed="${pick === now.key}">${esc(t("sub_now", { title: now.title }))}</button>` : ""}
+          <button class="pill" data-act="sub-work" data-work="" aria-pressed="${pick === ""}">${esc(t("sub_new"))}</button></div></div>
+        ${pick === "" ? `<input id="sub-title" maxlength="120" value="${esc(S.ui.subName || "")}" aria-label="${esc(t("sub_title"))}" placeholder="${esc(t("sub_title"))}">` : ""}
+        <div class="note">${ICON.info}<span>${esc(t("sub_rights"))}</span></div>
+        <div class="btn-row"><button class="primary" data-act="sub-yes">${esc(t("sub_yes"))}</button><button class="ghost" data-act="sub-no">${esc(t("cancel"))}</button></div>
+      </div>`;
+  }
+
+  async function subtitleLoad(swap) {
+    const r = await post("/api/memory", { action: "subtitles_preview", files: S.ui.subFiles, swap });
+    if (!r || !r.ok) {
+      S.ui.subPreview = null;
+      toast(t("n_" + ((r && r.error) || "sub_unreadable")), 9000, "warn");
+    } else {
+      S.ui.subPreview = r;
+      S.ui.subSwap = swap;
+    }
+    renderSettingsPage();
+    const b = document.querySelector(S.ui.subPreview ? '[data-act="sub-swap"]' : '[data-act="sub-import"]'); if (b) b.focus();
   }
 
   // 記過的作品（哪一部影片、哪一個網頁）：收合起來，打開才看得到；每一部可以單獨匯出、不用別人的、忘掉
@@ -1729,6 +1764,20 @@
       toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: r.error || "" })), 9000, r.ok ? "info" : "warn");
     },
     "mem-import": () => { const f = $("mem-file"); f.value = ""; f.click(); },
+    "sub-import": () => { const f = $("sub-file"); f.value = ""; f.click(); },
+    "sub-swap": () => subtitleLoad(!S.ui.subSwap),
+    "sub-work": (el) => { S.ui.subWork = el.dataset.work; renderSettingsPage(); const b = document.querySelector(`[data-act="sub-work"][data-work="${el.dataset.work}"]`); if (b) b.focus(); },
+    "sub-no": () => { S.ui.subPreview = null; S.ui.subFiles = null; renderSettingsPage(); const b = document.querySelector('[data-act="sub-import"]'); if (b) b.focus(); },
+    "sub-yes": async () => {
+      const p = S.ui.subPreview, now = p && p.now;
+      const work = S.ui.subWork != null ? S.ui.subWork : (now ? now.key : "");
+      const title = work ? "" : (($("sub-title") || {}).value || "");
+      const r = await post("/api/memory", { action: "subtitles_import", files: S.ui.subFiles, swap: !!S.ui.subSwap, work, title, name: S.ui.subName || "" });
+      if (r && r.ok) { S.ui.subPreview = null; S.ui.subFiles = null; }
+      toast(r && r.ok ? t("sub_done", r) : t("n_" + ((r && r.error) || "sub_unreadable")), 9000, r && r.ok ? "info" : "warn");
+      renderSettingsPage();
+      const b = document.querySelector('[data-act="sub-import"]'); if (b) b.focus();
+    },
     "works-open": () => { S.ui.worksOpen = !S.ui.worksOpen; renderSettingsPage(); const b = document.querySelector('[data-act="works-open"]'); if (b) b.focus(); },
     "work-export": (el) => { S.ui.workExport = el.dataset.work; renderSettingsPage(); const i = $("work-title"); if (i) { i.focus(); i.select(); } },
     "work-export-no": () => { const k = S.ui.workExport; S.ui.workExport = ""; renderSettingsPage(); const b = document.querySelector(`[data-act="work-export"][data-work="${k}"]`); if (b) b.focus(); },
@@ -2075,6 +2124,15 @@
       file.text().then((text) => { let data = null; try { data = JSON.parse(text); } catch (ex) { data = null; } return post("/api/memory", { action: "import", data, name: file.name }); })
         .then((r) => toast(r.ok ? t("mem_imported", r) + (r.works ? " " + t("mem_imported_works", r) : "") : t(r.error === "is_library" ? "mem_is_library" : "mem_bad"), 9000, r.ok ? "info" : "warn"))
         .catch(() => toast(t("mem_bad"), 9000, "warn"));
+      return;
+    }
+    if (e.target.id === "sub-file") {      // 字幕檔：一個雙語的，或原文、翻譯各一個；在這裡讀檔，配對交給程式
+      const all = [...(e.target.files || [])];
+      if (!all.length) return;
+      if (all.length > 2) toast(t("n_sub_two_max"), 7000, "warn");
+      Promise.all(all.slice(0, 2).map((f) => f.text().then((text) => ({ name: f.name, text }))))
+        .then((files) => { S.ui.subFiles = files; S.ui.subName = files[0].name.replace(/\.(srt|vtt)$/i, "").replace(/[._-](zh|ja|ko|en|vi|th|id|es|pt|ru|de|fr)([-_][a-z]{2,4})?$/i, ""); S.ui.subWork = null; return subtitleLoad(false); })
+        .catch(() => toast(t("n_sub_unreadable"), 9000, "warn"));
       return;
     }
     if (e.target.id === "lib-file") {      // 匯入詞彙檔：在這裡讀檔，內容交給程式檢查和合併
