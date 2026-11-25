@@ -198,16 +198,17 @@
 ### 改翻過的句子（翻譯記憶）或翻譯分享檔
 
 1. `memory.py`：資料表欄位（memory、packs、works、work_lines）、誰比較優先（find 的分數）、分享檔格式（KIND、VERSION、works）：改格式要能讀舊版的檔
-2. `subtitles.py`：字幕檔怎麼讀、怎麼配對（MIN_OVERLAP、雙語檔的分法）；字幕的句子 fixed = SUBTITLE，排在教過的後面、機器翻的前面
-3. `works.py`：標題怎麼整理（clean_title、GENERIC）：改了之後舊的作品 key 會對不上，等於全部變成新的一部
-4. `translate.py`：什麼時候查、什麼時候記：半句（unfinished）、數字對不上、留著原文的都不記
-5. `service.py`：remember 只從 _translate 給（回譯不記）；teach、lesson_remove 要同步；設定 remember_translations、use_shared 改了要清暫存
-6. `config.py`：remember_translations、use_shared、remember_works
-7. `server.py`：/api/memory 的動作：export（可帶 work、title）、import、remove_pack、forget、own_only、forget_work、subtitles_preview、subtitles_import；請求最大 8 MB（兩個字幕檔）
-8. `app.js`、`i18n.js`：翻譯品質頁的「翻過的句子」區塊和作品清單（worksBlock）、訊息旁的「翻過的／朋友的」（kept_）、「這部翻過了」提示（n_work_known）、匯入字幕檔的預覽（subtitlePreview、sub_*、n_sub_*）、匯入時選錯檔案（詞彙檔、分享檔）的提示
-9. `storage.py`：memory.db 算在「設定和紀錄」裡
-10. `guide.py`：說明頁提到分享檔的那一段
-11. `test_basics.py`：test_translation_memory_and_share_files、test_works_recognise_what_is_watched_and_share_one、test_subtitle_files_become_translations
+2. `watcher.py`：雙語字幕（pair_lang、_pairs）：配到的那一行不能再當成要翻的一則；on_message 有配到時多一個 shown
+3. `subtitles.py`：字幕檔怎麼讀、怎麼配對（MIN_OVERLAP、雙語檔的分法）；字幕的句子 fixed = SUBTITLE，排在教過的後面、機器翻的前面
+4. `works.py`：標題怎麼整理（clean_title、GENERIC）：改了之後舊的作品 key 會對不上，等於全部變成新的一部
+5. `translate.py`：什麼時候查、什麼時候記：半句（unfinished）、數字對不上、留著原文的都不記
+6. `service.py`：remember 只從 _translate 給（回譯不記）；teach、lesson_remove 要同步；設定 remember_translations、use_shared 改了要清暫存
+7. `config.py`：remember_translations、use_shared、remember_works、use_shown_translation
+8. `server.py`：/api/memory 的動作：export（可帶 work、title）、import、remove_pack、forget、own_only、forget_work、subtitles_preview、subtitles_import；請求最大 8 MB（兩個字幕檔）
+9. `app.js`、`i18n.js`：翻譯品質頁的「翻過的句子」區塊和作品清單（worksBlock）、訊息旁的「翻過的／朋友的」（kept_）、「這部翻過了」提示（n_work_known）、匯入字幕檔的預覽（subtitlePreview、sub_*、n_sub_*）、匯入時選錯檔案（詞彙檔、分享檔）的提示
+10. `storage.py`：memory.db 算在「設定和紀錄」裡
+11. `guide.py`：說明頁提到分享檔的那一段
+12. `test_basics.py`：test_translation_memory_and_share_files、test_works_recognise_what_is_watched_and_share_one、test_subtitle_files_become_translations
 
 自動把關：測試會擋：同一句沒有直接用記住的、比較差的模型翻的被拿來用、詞彙表改了還用舊的、匯入的蓋過教過的、匯出含了我自己打的、刪一包沒刪乾淨、同一部裡幾乎一樣的句子沒用上、別部的拿錯、第 1 版的檔讀不進來。真的在 Windows 上用起來快不快、瀏覽器的視窗標題對不對，要自己看。
 

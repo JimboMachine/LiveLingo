@@ -39,6 +39,8 @@ MINE_VIAS = ("typed", "spoken", "quick")      # 我自己打的、說的（匯�
 RANGES = {"2h": 2 * 3600, "today": None, "all": 0}      # 匯出的範圍；today = 今天 0 點起
 VERSION = 2                             # 分享檔的版本；第 2 版多了 works
 SUBTITLE = 2                            # memory.fixed 的值：從字幕檔匯入的（人翻的，但常常濃縮過）
+SHOWN = 3                               # memory.fixed 的值：畫面上雙語字幕現成的翻譯（origin = SCREEN）
+SCREEN = "screen"                       # 畫面上現成的翻譯用的 origin（不是一包，不會匯出；清除我翻過的時一起清掉）
 TONES = ("casual", "polite")
 NEAR = 0.85                             # 同一部裡「幾乎一樣」的句子要多像才拿來用
 NEAR_MIN = 4                            # 太短的句子不找幾乎一樣的（「好」「對啊」差一個字就是別的意思）
@@ -60,11 +62,13 @@ def key_text(text: str) -> str:
 
 
 def _tier(mine: bool, fixed: int) -> int:
-    """誰比較優先：我教過的 4、朋友教過的 3、字幕檔 2、我翻的 1、朋友機器翻的 0。"""
+    """誰比較優先：我教過的 5、朋友教過的 4、字幕檔 3、畫面上現成的 2、我翻的 1、朋友機器翻的 0。"""
     if fixed == SUBTITLE:
+        return 3
+    if fixed == SHOWN:
         return 2
     if fixed:
-        return 4 if mine else 3
+        return 5 if mine else 4
     return 1 if mine else 0
 
 
@@ -150,7 +154,7 @@ class Memory:
                                             (work, src, lang, target, tone))}
         best, best_score = None, None
         for origin, dst, row_model, row_terms, fixed, at in rows:
-            mine = origin == ""
+            mine = origin in ("", SCREEN)
             if (mine and not self.mine_on) or (not mine and not shared_on):
                 continue
             if not fixed:
@@ -169,7 +173,8 @@ class Memory:
         origin, dst, row_src, fixed = best
         self._run("UPDATE memory SET used=? WHERE src=? AND lang=? AND target=? AND tone=? AND origin=?",
                   (self._now(), row_src, lang, target, tone, origin), commit=True)
-        return dst, ("mine" if origin == "" else "subtitle" if fixed == SUBTITLE else "shared"), near
+        kind = "screen" if origin == SCREEN else "mine" if origin == "" else "subtitle" if fixed == SUBTITLE else "shared"
+        return dst, kind, near
 
     def _near(self, src: str, lang: str, target: str, tone: str, model: str, work: str, shared_on: bool):
         """同一部裡「幾乎一樣」的句子（語音辨識差一兩個字）：(origin, 譯文, 那一句的原文, fixed)；沒有就 None。
@@ -183,7 +188,7 @@ class Memory:
                          (work, lang, target, tone, NEAR_SCAN))
         best, best_score, best_rank = None, NEAR, (0.0, -1)
         for origin, dst, other, row_model, row_terms, fixed in rows:
-            mine = origin == ""
+            mine = origin in ("", SCREEN)
             if (mine and not self.mine_on) or (not mine and not shared_on) or abs(len(other) - len(src)) > max(3, len(src) // 4):
                 continue
             if not fixed and (_rank(row_model) < _rank(model) or row_terms):
@@ -255,6 +260,7 @@ class Memory:
         """清除我翻過的句子。keep_fixed：教過的留著（那些也在「我教過的句子」裡）。"""
         rows = self._run("SELECT COUNT(*) FROM memory WHERE origin=''" + (" AND fixed=0" if keep_fixed else ""))
         self._run("DELETE FROM memory WHERE origin=''" + (" AND fixed=0" if keep_fixed else ""), commit=True)
+        self._run("DELETE FROM memory WHERE origin=?", (SCREEN,), commit=True)
         self._tidy_lines()
         return rows[0][0] if rows else 0
 
@@ -343,6 +349,19 @@ class Memory:
                       [(*link, pack) for link in links], many=True, commit=True)
         return {"ok": True, "added": len(rows), "skipped": skipped, "pack": {"id": pack, "name": name}, "works": len(used)}
 
+    def seen_on_screen(self, text: str, lang: str, target: str, dst: str, work: str = "") -> None:
+        """畫面上雙語字幕現成的翻譯：記下來（兩種語氣都記），排在字幕檔後面、機器翻的前面。不會匯出。"""
+        src, dst = key_text(text), str(dst or "").strip()[:MAX_TEXT * 2]
+        if not self.mine_on or not src or not dst or src == dst:
+            return
+        now = self._now()
+        self._run("""INSERT OR REPLACE INTO memory (src, lang, target, tone, origin, dst, model, terms, fixed, via, at, used)
+                     VALUES (?, ?, ?, ?, ?, ?, '', '', ?, 'shown', ?, ?)""",
+                  [(src, lang, target, tone, SCREEN, dst, SHOWN, now, now) for tone in TONES], many=True, commit=True)
+        if work:
+            self._run("INSERT OR IGNORE INTO work_lines (work, src, lang, target, tone, origin) VALUES (?, ?, ?, ?, ?, ?)",
+                      [(work, src, lang, target, tone, SCREEN) for tone in TONES], many=True, commit=True)
+
     def import_subtitles(self, pairs, lang: str, target: str, name: str, work: str = "", title: str = "") -> dict:
         """匯入字幕檔配好的句子 [(原文, 翻譯)]，當成一包（可以整包刪），記在 work 那一部底下。
         字幕是人翻的：比機器翻的優先，比教過的後面（fixed = SUBTITLE）。兩種語氣都記（字幕不分語氣）。"""
@@ -397,10 +416,10 @@ class Memory:
             return None
         counts = self._run("""SELECT w.origin, COUNT(DISTINCT w.src || char(31) || w.lang || char(31) || w.target), p.name FROM work_lines w LEFT JOIN packs p ON p.id = w.origin
                               WHERE w.work=? GROUP BY w.origin""", (key,))
-        mine = sum(c for o, c, _ in counts if o == "")
-        shared = sum(c for o, c, _ in counts if o != "")
+        mine = sum(c for o, c, _ in counts if o in ("", SCREEN))
+        shared = sum(c for o, c, _ in counts if o not in ("", SCREEN))
         return {"key": key, "title": named[0][0], "mine": mine, "shared": shared, "own_only": bool(named[0][1]),
-                "packs": [n for o, c, n in counts if o != "" and n]}
+                "packs": [n for o, c, n in counts if o not in ("", SCREEN) and n]}
 
     def own_only(self, key: str) -> bool:
         rows = self._run("SELECT own_only FROM works WHERE key=?", (key,))
@@ -423,8 +442,8 @@ class Memory:
     def works(self, limit: int = 50) -> list[dict]:
         """記過的作品，最近看的在前：[{"key", "title", "mine", "shared", "seen", "own_only"}]。"""
         rows = self._run("""SELECT k.key, k.title, k.seen, k.at, k.own_only,
-                              COUNT(DISTINCT CASE WHEN w.origin='' THEN w.src || char(31) || w.lang || char(31) || w.target END),
-                              COUNT(DISTINCT CASE WHEN w.origin<>'' THEN w.origin || char(31) || w.src || char(31) || w.lang || char(31) || w.target END)
+                              COUNT(DISTINCT CASE WHEN w.origin IN ('', 'screen') THEN w.src || char(31) || w.lang || char(31) || w.target END),
+                              COUNT(DISTINCT CASE WHEN w.origin NOT IN ('', 'screen') THEN w.origin || char(31) || w.src || char(31) || w.lang || char(31) || w.target END)
                             FROM works k LEFT JOIN work_lines w ON w.work = k.key
                             GROUP BY k.key ORDER BY MAX(k.seen, k.at) DESC LIMIT ?""", (int(limit),))
         return [{"key": k, "title": t, "seen": int(seen), "own_only": bool(o), "mine": m, "shared": sh}

@@ -61,7 +61,8 @@
      "在「翻譯品質」可以選語氣（朋友之間或有禮貌）和翻譯品質。",
      "同一句話翻過一次就會記住，下次直接用，不用再等。在「翻譯品質」的「翻過的句子」可以匯出分享檔給朋友，朋友匯入後同樣的句子就不用重翻；不想用別人的翻法，關掉「使用匯入的翻譯」就好。",
      "看影片、看網頁時，LiveLingo 會用視窗標題記住是哪一部。同一部再看一次，或朋友傳來這一部的分享檔，翻過的句子直接用，對話裡會標「翻過的」或「朋友的」。在「翻過的句子」打開「記過的作品」，可以只匯出某一部給朋友、設成不用別人的、或忘掉它。",
-     "可以匯入影片的字幕檔（.srt / .vtt，一個雙語的或原文、翻譯各一個）當成翻譯，匯入前先看配出來的例子。字幕是人翻的，比機器翻的優先，比你教過的後面。"
+     "可以匯入影片的字幕檔（.srt / .vtt，一個雙語的或原文、翻譯各一個）當成翻譯，匯入前先看配出來的例子。字幕是人翻的，比機器翻的優先，比你教過的後面。",
+     "新開關「用畫面上現成的翻譯」（預設關）：讀畫面遇到雙語字幕，直接用你的語言那一行，不再翻一次，也會記下來。聊天室裡兩種語言混著時可能配錯，所以要自己打開。"
     ]
    },
    {
@@ -167,7 +168,8 @@
      "在“翻译质量”可以选语气（朋友之间或有礼貌）和翻译质量。",
      "同一句话翻过一次就会记住，下次直接用，不用再等。在「翻译质量」的「翻过的句子」可以导出分享文件给朋友，朋友导入后同样的句子就不用重翻；不想用别人的翻法，关掉「使用导入的翻译」就好。",
      "看视频、看网页时，LiveLingo 会用窗口标题记住是哪一部。同一部再看一次，或朋友传来这一部的分享文件，翻过的句子直接用，对话里会标“翻过的”或“朋友的”。在“翻过的句子”打开“记过的作品”，可以只导出某一部给朋友、设成不用别人的、或忘掉它。",
-     "可以导入视频的字幕文件（.srt / .vtt，一个双语的或原文、翻译各一个）当成翻译，导入前先看配出来的例子。字幕是人翻的，比机器翻的优先，比你教过的后面。"
+     "可以导入视频的字幕文件（.srt / .vtt，一个双语的或原文、翻译各一个）当成翻译，导入前先看配出来的例子。字幕是人翻的，比机器翻的优先，比你教过的后面。",
+     "新开关“用屏幕上现成的翻译”（默认关）：读屏幕遇到双语字幕，直接用你的语言那一行，不再翻一次，也会记下来。聊天室里两种语言混着时可能配错，所以要自己打开。"
     ]
    },
    {
@@ -273,7 +275,8 @@
      "In “Translation quality” you can choose the tone (casual or polite) and the quality.",
      "A sentence translated once is remembered and used right away next time. Under \"Translated sentences\" in \"Translation quality\" you can export a share file for a friend, and after importing it the same sentences are not translated again. To ignore other people's versions, turn off \"Use imported translations\".",
      "When you watch a video or read a page, LiveLingo remembers which one it is from the window title. Watch it again, or import a friend's share file for it, and sentences already translated are used right away, marked “translated before” or “from a friend”. Open “Remembered videos and pages” under “Translated sentences” to export just one for a friend, use only your own translations for it, or forget it.",
-     "You can import a video's subtitle files (.srt or .vtt, one bilingual file or one original plus one translation) as translations, with a preview first. Subtitles come before machine translations but after sentences you taught."
+     "You can import a video's subtitle files (.srt or .vtt, one bilingual file or one original plus one translation) as translations, with a preview first. Subtitles come before machine translations but after sentences you taught.",
+     "New switch “Use translations already on screen” (off by default): with bilingual subtitles on screen, the line in your language is used and remembered instead of translating again. It can mismatch in chats that mix both languages."
     ]
    },
    {
@@ -379,7 +382,8 @@
      "‘번역 품질’에서 말투(친구 사이 또는 공손하게)와 번역 품질을 고를 수 있습니다.",
      "한 번 번역한 문장은 기억해 두었다가 다음에 바로 씁니다. 「번역 품질」의 「번역한 문장」에서 공유 파일을 친구에게 내보낼 수 있고, 친구가 가져오면 같은 문장을 다시 번역하지 않습니다. 다른 사람의 번역을 쓰고 싶지 않으면 「가져온 번역 사용」을 끄면 됩니다.",
      "영상이나 웹페이지를 볼 때 LiveLingo는 창 제목으로 어떤 작품인지 기억합니다. 같은 작품을 다시 보거나 친구가 보낸 그 작품의 공유 파일을 가져오면 번역한 문장을 바로 쓰고, 대화에 ‘번역한 적 있음’ 또는 ‘친구 번역’이 표시됩니다. ‘번역한 문장’에서 ‘기억한 작품’을 열면 한 작품만 친구에게 내보내거나, 내 번역만 쓰게 하거나, 잊게 할 수 있습니다.",
-     "영상의 자막 파일(.srt / .vtt, 이중 언어 하나 또는 원문과 번역 각각 하나)을 번역으로 가져올 수 있고, 가져오기 전에 짝지은 예를 봅니다. 자막은 기계 번역보다 먼저, 직접 가르친 문장보다는 나중에 씁니다."
+     "영상의 자막 파일(.srt / .vtt, 이중 언어 하나 또는 원문과 번역 각각 하나)을 번역으로 가져올 수 있고, 가져오기 전에 짝지은 예를 봅니다. 자막은 기계 번역보다 먼저, 직접 가르친 문장보다는 나중에 씁니다.",
+     "새 스위치 ‘화면에 있는 번역 쓰기’(기본 꺼짐): 화면에 이중 언어 자막이 있으면 내 언어 줄을 그대로 쓰고 기억합니다. 두 언어가 섞인 채팅에서는 잘못 짝지을 수 있어 직접 켜야 합니다."
     ]
    },
    {
@@ -485,7 +489,8 @@
      "「翻訳の品質」で口調（友だち同士か丁寧か）と翻訳の品質を選べます。",
      "一度翻訳した文は覚えておき、次からはすぐに使います。「翻訳の品質」の「翻訳した文」で共有ファイルを友達に書き出せ、友達が読み込むと同じ文は翻訳し直しません。ほかの人の訳を使いたくないときは「読み込んだ翻訳を使う」をオフにします。",
      "動画やウェブページを見ると、LiveLingo はウィンドウのタイトルでどの作品かを覚えます。同じ作品をもう一度見たり、友達からその作品の共有ファイルを読み込んだりすると、翻訳済みの文をすぐ使い、会話に「翻訳済み」「友達の翻訳」と表示します。「翻訳した文」の「覚えた作品」から、一つだけ友達に書き出す、自分の翻訳だけ使う、忘れる、ができます。",
-     "動画の字幕ファイル（.srt / .vtt、二言語の一つ、または原文と翻訳を一つずつ）を翻訳として読み込めます。読み込む前に対応付けの例を確認できます。字幕は機械翻訳より優先し、自分で教えた文よりは後です。"
+     "動画の字幕ファイル（.srt / .vtt、二言語の一つ、または原文と翻訳を一つずつ）を翻訳として読み込めます。読み込む前に対応付けの例を確認できます。字幕は機械翻訳より優先し、自分で教えた文よりは後です。",
+     "新しいスイッチ「画面にある翻訳を使う」（初期設定オフ）：画面に二言語字幕があれば、自分の言語の行をそのまま使って覚えます。二言語が混ざったチャットでは間違えることがあるため、自分でオンにします。"
     ]
    },
    {
@@ -591,7 +596,8 @@
      "Trong “Chất lượng dịch” bạn có thể chọn giọng điệu (thân mật hay lịch sự) và chất lượng.",
      "Một câu đã dịch một lần sẽ được nhớ và lần sau dùng ngay. Trong “Các câu đã dịch” ở “Chất lượng dịch”, bạn có thể xuất tệp chia sẻ cho bạn bè; sau khi họ nhập, những câu giống nhau sẽ không phải dịch lại. Không muốn dùng bản dịch của người khác thì tắt “Dùng bản dịch đã nhập”.",
      "Khi bạn xem video hoặc trang web, LiveLingo nhớ đó là nội dung nào qua tiêu đề cửa sổ. Xem lại, hoặc nhập tệp chia sẻ của bạn bè cho nội dung đó, các câu đã dịch được dùng ngay và được đánh dấu “đã dịch trước” hoặc “của bạn bè”. Mở “Video và trang đã nhớ” trong “Các câu đã dịch” để chỉ xuất một mục cho bạn bè, chỉ dùng bản dịch của mình, hoặc quên mục đó.",
-     "Có thể nhập tệp phụ đề của video (.srt / .vtt, một tệp song ngữ hoặc một bản gốc và một bản dịch) làm bản dịch, có xem trước. Phụ đề được ưu tiên hơn máy dịch nhưng sau các câu bạn đã dạy."
+     "Có thể nhập tệp phụ đề của video (.srt / .vtt, một tệp song ngữ hoặc một bản gốc và một bản dịch) làm bản dịch, có xem trước. Phụ đề được ưu tiên hơn máy dịch nhưng sau các câu bạn đã dạy.",
+     "Công tắc mới “Dùng bản dịch có sẵn trên màn hình” (mặc định tắt): gặp phụ đề song ngữ, dòng ngôn ngữ của bạn được dùng và ghi nhớ, không dịch lại. Có thể ghép sai trong phòng chat lẫn hai thứ tiếng."
     ]
    },
    {
@@ -697,7 +703,8 @@
      "ใน “คุณภาพการแปล” คุณเลือกน้ำเสียง (กันเองหรือสุภาพ) และคุณภาพได้",
      "ประโยคที่แปลแล้วครั้งหนึ่งจะถูกจำไว้และใช้ทันทีในครั้งต่อไป ที่ “ประโยคที่แปลแล้ว” ใน “คุณภาพการแปล” คุณส่งออกไฟล์แชร์ให้เพื่อนได้ เมื่อเพื่อนนำเข้าแล้ว ประโยคเดียวกันจะไม่ต้องแปลใหม่ ถ้าไม่อยากใช้คำแปลของคนอื่น ให้ปิด “ใช้คำแปลที่นำเข้า”",
      "เวลาดูวิดีโอหรือหน้าเว็บ LiveLingo จะจำจากชื่อหน้าต่างว่าเป็นเรื่องไหน ดูซ้ำ หรือนำเข้าไฟล์แชร์ของเพื่อนสำหรับเรื่องนั้น ประโยคที่เคยแปลจะใช้ทันที และขึ้นว่า “เคยแปลแล้ว” หรือ “ของเพื่อน” เปิด “เรื่องที่จำไว้” ใน “ประโยคที่แปลแล้ว” เพื่อส่งออกเฉพาะเรื่องเดียวให้เพื่อน ใช้เฉพาะคำแปลของคุณ หรือลืมเรื่องนั้น",
-     "นำเข้าไฟล์ซับของวิดีโอ (.srt / .vtt ไฟล์สองภาษาหนึ่งไฟล์ หรือต้นฉบับกับคำแปลอย่างละไฟล์) เป็นคำแปลได้ โดยดูตัวอย่างก่อน ซับจะใช้ก่อนคำแปลของเครื่อง แต่หลังประโยคที่คุณสอนเอง"
+     "นำเข้าไฟล์ซับของวิดีโอ (.srt / .vtt ไฟล์สองภาษาหนึ่งไฟล์ หรือต้นฉบับกับคำแปลอย่างละไฟล์) เป็นคำแปลได้ โดยดูตัวอย่างก่อน ซับจะใช้ก่อนคำแปลของเครื่อง แต่หลังประโยคที่คุณสอนเอง",
+     "สวิตช์ใหม่ “ใช้คำแปลที่มีอยู่บนจอ” (ปิดไว้ก่อน): ถ้าบนจอมีซับสองภาษา จะใช้และจำบรรทัดภาษาของคุณ ไม่แปลซ้ำ ในแชตที่ปนสองภาษาอาจจับคู่ผิด"
     ]
    },
    {
@@ -803,7 +810,8 @@
      "Di “Kualitas terjemahan” kamu bisa memilih nada (santai atau sopan) dan kualitasnya.",
      "Kalimat yang sudah diterjemahkan sekali akan diingat dan langsung dipakai lain kali. Di “Kalimat yang sudah diterjemahkan” pada “Kualitas terjemahan”, kamu bisa mengekspor file berbagi untuk teman; setelah diimpor, kalimat yang sama tidak diterjemahkan ulang. Tidak mau memakai versi orang lain? Matikan “Pakai terjemahan yang diimpor”.",
      "Saat menonton video atau membaca halaman, LiveLingo mengingat yang mana dari judul jendelanya. Tonton lagi, atau impor file berbagi teman untuk itu, dan kalimat yang pernah diterjemahkan langsung dipakai, ditandai “pernah diterjemahkan” atau “dari teman”. Buka “Video dan halaman yang diingat” di “Kalimat yang sudah diterjemahkan” untuk mengekspor satu saja bagi teman, hanya memakai terjemahan sendiri, atau melupakannya.",
-     "Anda bisa mengimpor file subtitle video (.srt atau .vtt, satu dwibahasa atau satu asli dan satu terjemahan) sebagai terjemahan, dengan pratinjau dulu. Subtitle didahulukan dari terjemahan mesin, tapi setelah kalimat yang Anda ajarkan."
+     "Anda bisa mengimpor file subtitle video (.srt atau .vtt, satu dwibahasa atau satu asli dan satu terjemahan) sebagai terjemahan, dengan pratinjau dulu. Subtitle didahulukan dari terjemahan mesin, tapi setelah kalimat yang Anda ajarkan.",
+     "Sakelar baru “Pakai terjemahan yang sudah ada di layar” (mati secara bawaan): jika ada subtitle dwibahasa, baris bahasa Anda dipakai dan diingat tanpa diterjemahkan lagi. Bisa salah pasang di obrolan campur dua bahasa."
     ]
    },
    {
@@ -909,7 +917,8 @@
      "En “Calidad de traducción” puedes elegir el tono (informal o formal) y la calidad.",
      "Una frase traducida una vez se recuerda y se usa al instante la próxima vez. En “Frases traducidas”, dentro de “Calidad de traducción”, puedes exportar un archivo para un amigo; al importarlo, las mismas frases no se vuelven a traducir. Para no usar versiones de otros, desactiva “Usar traducciones importadas”.",
      "Cuando ves un vídeo o una página, LiveLingo recuerda cuál es por el título de la ventana. Si lo vuelves a ver, o importas el archivo de un amigo para él, las frases ya traducidas se usan al momento, marcadas como “ya traducida” o “de un amigo”. Abre “Vídeos y páginas recordados” en “Frases traducidas” para exportar solo uno a un amigo, usar solo tus traducciones o olvidarlo.",
-     "Puedes importar los subtítulos de un vídeo (.srt o .vtt, uno bilingüe o un original y una traducción) como traducciones, con vista previa. Los subtítulos van antes que la traducción automática, pero después de lo que enseñaste tú."
+     "Puedes importar los subtítulos de un vídeo (.srt o .vtt, uno bilingüe o un original y una traducción) como traducciones, con vista previa. Los subtítulos van antes que la traducción automática, pero después de lo que enseñaste tú.",
+     "Nuevo interruptor “Usar traducciones que ya están en pantalla” (desactivado): con subtítulos bilingües, se usa y guarda la línea en tu idioma sin volver a traducir. Puede emparejar mal en chats que mezclan ambos idiomas."
     ]
    },
    {
@@ -1015,7 +1024,8 @@
      "Em “Qualidade da tradução” você escolhe o tom (informal ou educado) e a qualidade.",
      "Uma frase traduzida uma vez é lembrada e usada na hora da próxima vez. Em “Frases traduzidas”, dentro de “Qualidade da tradução”, você pode exportar um arquivo para um amigo; depois de importar, as mesmas frases não são traduzidas de novo. Para não usar versões de outras pessoas, desligue “Usar traduções importadas”.",
      "Quando você assiste a um vídeo ou lê uma página, o LiveLingo lembra qual é pelo título da janela. Ao assistir de novo, ou importar o arquivo de um amigo para ele, as frases já traduzidas são usadas na hora, marcadas como “já traduzida” ou “de um amigo”. Abra “Vídeos e páginas lembrados” em “Frases traduzidas” para exportar só um para um amigo, usar só as suas traduções ou esquecê-lo.",
-     "Você pode importar as legendas de um vídeo (.srt ou .vtt, uma bilíngue ou uma original e uma tradução) como traduções, com prévia antes. Legendas vêm antes da tradução automática, mas depois do que você ensinou."
+     "Você pode importar as legendas de um vídeo (.srt ou .vtt, uma bilíngue ou uma original e uma tradução) como traduções, com prévia antes. Legendas vêm antes da tradução automática, mas depois do que você ensinou.",
+     "Nova chave “Usar traduções que já estão na tela” (desligada): com legendas bilíngues, a linha no seu idioma é usada e guardada sem traduzir de novo. Pode parear errado em chats que misturam os dois idiomas."
     ]
    },
    {
@@ -1121,7 +1131,8 @@
      "В «Качестве перевода» можно выбрать тон (дружеский или вежливый) и качество.",
      "Фраза, переведённая один раз, запоминается и в следующий раз используется сразу. В разделе «Переведённые фразы» на странице «Качество перевода» можно экспортировать файл для друга; после импорта те же фразы не переводятся заново. Чтобы не использовать чужие переводы, выключите «Использовать импортированные переводы».",
      "Когда вы смотрите видео или читаете страницу, LiveLingo запоминает, что это, по заголовку окна. При повторном просмотре или после импорта файла друга для этого видео уже переведённые фразы берутся сразу, с пометкой «уже переводилось» или «от друга». В разделе «Переведённые фразы» откройте «Запомненные видео и страницы», чтобы экспортировать одно видео для друга, использовать только свои переводы или забыть его.",
-     "Можно импортировать субтитры видео (.srt или .vtt, один двуязычный файл или оригинал и перевод) как переводы, сначала посмотрев пример. Субтитры важнее машинного перевода, но уступают фразам, которые вы исправили сами."
+     "Можно импортировать субтитры видео (.srt или .vtt, один двуязычный файл или оригинал и перевод) как переводы, сначала посмотрев пример. Субтитры важнее машинного перевода, но уступают фразам, которые вы исправили сами.",
+     "Новый переключатель «Брать перевод, который уже на экране» (выключен): при двуязычных субтитрах строка на вашем языке берётся и запоминается без нового перевода. В чатах со смешанными языками возможны ошибки."
     ]
    },
    {
@@ -1227,7 +1238,8 @@
      "Unter „Übersetzungsqualität“ kannst du den Ton (locker oder höflich) und die Qualität wählen.",
      "Ein einmal übersetzter Satz wird gemerkt und beim nächsten Mal sofort verwendet. Unter „Übersetzte Sätze“ in „Übersetzungsqualität“ kannst du eine Freigabedatei für Freunde exportieren; nach dem Import werden dieselben Sätze nicht erneut übersetzt. Wenn du keine fremden Übersetzungen willst, schalte „Importierte Übersetzungen verwenden“ aus.",
      "Beim Anschauen eines Videos oder Lesen einer Seite merkt sich LiveLingo am Fenstertitel, was es ist. Schaust du es wieder, oder importierst die Datei eines Freundes dafür, werden schon übersetzte Sätze sofort genutzt und mit „schon übersetzt“ oder „von Freunden“ markiert. Unter „Übersetzte Sätze“ → „Gemerkte Videos und Seiten“ kannst du ein einzelnes für Freunde exportieren, dafür nur eigene Übersetzungen nutzen oder es vergessen.",
-     "Du kannst Untertitel eines Videos (.srt oder .vtt, eine zweisprachige Datei oder Original plus Übersetzung) als Übersetzungen importieren, mit Vorschau. Untertitel gehen vor Maschinenübersetzung, aber nach selbst beigebrachten Sätzen."
+     "Du kannst Untertitel eines Videos (.srt oder .vtt, eine zweisprachige Datei oder Original plus Übersetzung) als Übersetzungen importieren, mit Vorschau. Untertitel gehen vor Maschinenübersetzung, aber nach selbst beigebrachten Sätzen.",
+     "Neuer Schalter „Übersetzungen vom Bildschirm nutzen“ (standardmäßig aus): Bei zweisprachigen Untertiteln wird deine Zeile genutzt und gemerkt, ohne neu zu übersetzen. In Chats mit beiden Sprachen kann es falsch zuordnen."
     ]
    },
    {
@@ -1333,7 +1345,8 @@
      "Dans « Qualité de traduction », vous choisissez le ton (familier ou poli) et la qualité.",
      "Une phrase traduite une fois est mémorisée et utilisée tout de suite la fois suivante. Dans « Phrases traduites » de « Qualité de traduction », vous pouvez exporter un fichier de partage pour un ami ; une fois importé, les mêmes phrases ne sont pas retraduites. Pour ne pas utiliser les versions des autres, désactivez « Utiliser les traductions importées ».",
      "Quand vous regardez une vidéo ou lisez une page, LiveLingo retient de laquelle il s’agit grâce au titre de la fenêtre. En la regardant à nouveau, ou après avoir importé le fichier d’un ami pour elle, les phrases déjà traduites sont utilisées tout de suite, marquées « déjà traduite » ou « d’un ami ». Ouvrez « Vidéos et pages retenues » dans « Phrases traduites » pour exporter une seule vidéo pour un ami, n’utiliser que vos traductions, ou l’oublier.",
-     "Vous pouvez importer les sous-titres d’une vidéo (.srt ou .vtt, un fichier bilingue ou un original et une traduction) comme traductions, avec un aperçu. Ils passent avant la traduction automatique, mais après vos phrases corrigées."
+     "Vous pouvez importer les sous-titres d’une vidéo (.srt ou .vtt, un fichier bilingue ou un original et une traduction) comme traductions, avec un aperçu. Ils passent avant la traduction automatique, mais après vos phrases corrigées.",
+     "Nouvel interrupteur « Utiliser les traductions déjà à l’écran » (désactivé) : avec des sous-titres bilingues, la ligne dans votre langue est utilisée et retenue sans retraduire. Peut se tromper dans un chat mêlant les deux langues."
     ]
    },
    {

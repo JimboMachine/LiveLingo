@@ -25,7 +25,8 @@ DEFAULTS = {
     "term_packs": ["lol", "chat"],   # 用哪幾包內建用語（terms.PACKS）；game_terms 關掉時都不用
     "back_translate": True,      # 我說的、打的翻成對方的語言之後，再翻回來給我看（回譯）
     "use_context": True,         # 翻譯時參考前面兩句對話（代名詞、省略的主詞比較不會翻錯）
-    "remember_works": True,          # 記住在看哪一部影片、哪一個網頁（讀取來源那個視窗的標題，只存在這台電腦）
+    "remember_works": True,
+    "use_shown_translation": False,  # 畫面上是雙語字幕時，直接用畫面上我的語言那一行當翻譯（預設關：聊天室裡兩種語言混著時會配錯）          # 記住在看哪一部影片、哪一個網頁（讀取來源那個視窗的標題，只存在這台電腦）
     "remember_translations": True,   # 翻過的句子記在這台電腦上（memory.db），同一句再出現就直接用，不用重翻
     "use_shared": True,          # 使用匯入的翻譯檔（朋友翻過的）；關掉 = 每一句都自己翻
     "speaker_device": None,      # 對方的聲音從哪個播放裝置出來（裝置 id），None = Windows 預設
@@ -98,7 +99,7 @@ DEFAULTS = {
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
-            "remember_translations", "use_shared", "remember_works",
+            "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",

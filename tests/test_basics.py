@@ -1691,6 +1691,60 @@ def test_subtitle_files_become_translations(tmp_path):
     assert me.subtitles_preview("nope")["error"] == "sub_unreadable"
 
 
+def test_bilingual_subtitles_on_screen(tmp_path):
+    """畫面上的雙語字幕：開著「用畫面上現成的翻譯」才配對；緊鄰的那一行是我的語言才算；
+    配到的直接用（不叫模型翻），也記下來，排在字幕檔後面、機器翻的前面；關掉就照常翻。"""
+    from types import SimpleNamespace
+
+    from livelingo.core.watcher import ScreenWatcher
+    from livelingo.memory import Memory
+    from livelingo.service import Service
+
+    w = ScreenWatcher(ocr=None, on_message=lambda *a: None, source_langs={"ja"})
+    rows = [(SimpleNamespace(text=t), []) for t in ("もう行こう。", "我們走吧。", "魔法は想像の世界だ。", "次の話へ", "OK")]
+    assert w._pairs(rows) == {}                                     # 沒開：不配
+    w.pair_lang = "zh"
+    assert w._pairs(rows) == {0: 1}                                 # 下面一行是中文；一行翻譯只配一次，其他行照常翻
+    rows2 = [(SimpleNamespace(text=t), []) for t in ("走吧。", "もう行こう。", "魔法は想像の世界だ。", "魔法是想像的世界。")]
+    assert w._pairs(rows2) == {1: 0, 2: 3}                          # 上面一行也算
+
+    mem = Memory(tmp_path / "m")
+    mem.store("もう行こう。", "ja", "zh-TW", "casual", "機器翻的", "12b", "", "screen")
+    mem.seen_on_screen("もう行こう。", "ja", "zh-TW", "我們走吧。")
+    assert mem.find("もう行こう。", "ja", "zh-TW", "polite", "12b", "") == ("我們走吧。", "screen", False)
+    assert mem.find("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == ("我們走吧。", "screen", False)
+    mem.import_subtitles([("もう行こう。", "走吧。")], "ja", "zh-TW", "字幕")
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == "走吧。"      # 字幕檔 > 畫面上的
+    assert all(i["src"] != "もう行こう。" or i["dst"] == "機器翻的" for i in mem.export("all")["items"])   # 畫面上的不匯出
+    mem.forget_mine()
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == "走吧。"
+
+    asked = []
+
+    class Echo:
+        tone = "casual"
+
+        def translate(self, text, target, source=None, context=None):
+            asked.append(text)
+            return "模型翻的"
+
+        def clear_cache(self):
+            pass
+
+    me = Service(tmp_path / "me")
+    me.translator = Echo()
+    me.cfg.set(my_lang="zh-TW", their_lang="ja", use_shown_translation=True)
+    msg = {"id": 1, "who": "them", "via": "screen", "original": "魔法は想像の世界だ。", "lang": "ja", "shown": "这是魔法的世界。"}
+    assert me._translate(msg, "zh-TW") == "這是魔法的世界。" and msg["kept"] == "screen" and asked == []   # 簡體轉成繁體
+    assert me.memory.lookup("魔法は想像の世界だ。", "ja", "zh-TW", "casual", "12b", "") == "這是魔法的世界。"
+    me.cfg.set(use_shown_translation=False)
+    msg = {"id": 2, "who": "them", "via": "screen", "original": "次へ", "lang": "ja", "shown": "下一個"}
+    assert me._translate(msg, "zh-TW") == "模型翻的" and asked == ["次へ"]
+    assert me._shown_pair_lang() is None
+    me.cfg.set(use_shown_translation=True)
+    assert me._shown_pair_lang() == "zh"
+
+
 def test_voice_tuning_delay_echo_and_push_to_talk(tmp_path):
     """聲音設定：靈敏度、斷句、快／準收音中直接換；延遲有記；喇叭回音不算我說的；按住才說話只收按著的那一段。"""
     import numpy as np

@@ -876,12 +876,13 @@ class Service:
                 "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
 
     def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
-               place: str = "", live: dict | None = None, speaker: int | None = None) -> int | None:
+               place: str = "", live: dict | None = None, speaker: int | None = None, shown: str = "") -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
         hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。
         live：這一句還在說的時候已經先顯示出來的那一則（即時字幕）；整句接手同一則，不另外多一則。
-        speaker：第幾個說話者（有開「分辨說話者」而且分得出來才有）。回傳這則訊息的編號。"""
+        speaker：第幾個說話者（有開「分辨說話者」而且分得出來才有）。
+        shown：畫面上現成的翻譯（雙語字幕裡我的語言那一行）；有的話直接用，不叫模型翻。回傳這則訊息的編號。"""
         text = text.strip()[:MAX_TEXT]
         if not text:
             if live:
@@ -894,6 +895,8 @@ class Service:
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
                "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time(),
                "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30], "work": work}
+        if shown and via == "screen":
+            msg["shown"] = str(shown).strip()[:MAX_TEXT * 2]
         if speaker:
             msg.update(speaker=int(speaker), speaker_run=self._speaker_run, voice=self._speaker_names.get(int(speaker), ""))
         if live:      # 同一則、同一個時間，先翻出來的半句留在畫面上，等整句翻好再換掉
@@ -1025,6 +1028,15 @@ class Service:
         """翻一則。翻的時候譯文一邊出來一邊送給畫面（即時），最後回傳的才是整理過的整句。"""
         import inspect
 
+        if msg.get("shown") and self.cfg["use_shown_translation"] and target == self.cfg["my_lang"] and not msg.get("edited"):
+            # 雙語字幕：畫面上已經有我的語言那一行，直接用（繁簡照我的設定轉），也記下來，之後同一句不用重翻
+            from .core.translate import to_script
+
+            out = to_script(msg["shown"], target)
+            if msg.get("lang"):
+                self.memory.seen_on_screen(msg["original"], msg["lang"], target, out, msg.get("work") or "")
+            msg["kept"] = "screen"
+            return out
         fn = self.translator.translate
         self.translator.model = self.mode.get("model", "")
         if "on_part" not in inspect.signature(fn).parameters:
@@ -2240,6 +2252,8 @@ class Service:
             self.translator.clear_cache()
         if changed("game_terms"):
             self.translator.clear_cache()
+        if changed("use_shown_translation", "my_lang") and self.watcher is not None:
+            self.watcher.pair_lang = self._shown_pair_lang()
         if changed("remember_translations", "use_shared"):
             self.memory.mine_on, self.memory.shared_on = bool(after["remember_translations"]), bool(after["use_shared"])
             self.translator.clear_cache()
@@ -2335,9 +2349,14 @@ class Service:
         """開著的聊天區。"""
         return [dict(r) for r in self.cfg["regions"] if r.get("on")]
 
-    def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None) -> None:
+    def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None, shown: str = "") -> None:
+        """shown：雙語字幕裡緊鄰這一行、我的語言的那一行（開著「用畫面上現成的翻譯」才有）。"""
         many = len(self._regions_on()) > 1      # 只有一個區域時不用標是哪裡讀到的
-        self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "")
+        self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "",
+                    **({"shown": shown} if shown else {}))
+
+    def _shown_pair_lang(self) -> str | None:
+        return LANGS[self.cfg["my_lang"]]["family"] if self.cfg["use_shown_translation"] else None
 
     def capture_mask(self) -> list[list[int]]:
         """
@@ -2418,6 +2437,7 @@ class Service:
                     grab=getattr(self, "grab", None), locate=self._locate,
                     on_stats=lambda stats: self.hub.publish("screen_stats", stats), on_black=self._screen_black,
                     mask=self.capture_mask)
+                self.watcher.pair_lang = self._shown_pair_lang()
                 self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
             self.watcher.paused = False

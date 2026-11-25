@@ -810,6 +810,7 @@
           </div>${naming}</div>`;
     }).join("") : `<div class="none">${esc(t("works_empty"))}</div>`;
     return `${switchRow("remember_works", t("works_remember"), t("works_remember_desc"))}
+      ${switchRow("use_shown_translation", t("shown_title"), t("shown_desc"))}
       <div class="works"><button class="works-toggle" data-act="works-open" aria-expanded="${S.ui.worksOpen ? "true" : "false"}"><span aria-hidden="true">${S.ui.worksOpen ? "▾" : "▸"}</span><span>${esc(t("works_title", { n: list.length }))}</span></button>
         ${S.ui.worksOpen ? `<div class="works-list">${rows}</div>` : ""}</div>`;
   }
