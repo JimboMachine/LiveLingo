@@ -18,7 +18,7 @@
     "title": "三種來源",
     "items": [
      "「讀螢幕」：框出遊戲或聊天軟體的聊天區，新的訊息會自動翻譯。最多可以框 6 個區域，也可以讓區域跟著某個程式的視窗移動。",
-     "「聽對方說話」：翻譯電腦播放出來的聲音。在「聲音裝置」可以選只聽某幾個程式（例如只聽 Discord），遊戲音效就不會混進來。對方還在說的時候字幕就會先出來，說完再換成整句；不想要可以在同一頁關掉。同一頁還可以打開「分辨不同的說話者」：好幾個人在同一個語音頻道時，照聲音分成說話者 1、2、3，各用一個顏色，也可以幫他們取名字。",
+     "「聽對方說話」：翻譯電腦播放出來的聲音。在「聲音裝置」可以選只聽某幾個程式（例如只聽 Discord），遊戲音效就不會混進來。對方還在說的時候字幕就會先出來，說完再換成整句；不想要可以在同一頁關掉。同一頁還可以打開「分辨不同的說話者」：好幾個人在同一個語音頻道時，照聲音分成說話者 1、2、3，各用一個顏色，也可以幫他們取名字。分出來的每個人還可以選主語言和副語言（例如主語言中文、副語言英文），他說的話就只照他的語言來聽。",
      "「聽我說話」：翻譯你對麥克風說的話。怕收到雜音可以打開「按住才說話」，按著 [[{ptt}]] 的時候才收音。"
     ]
    },
@@ -125,7 +125,7 @@
     "title": "三种来源",
     "items": [
      "“读屏幕”：框出游戏或聊天软件的聊天区，新的消息会自动翻译。最多可以框 6 个区域，也可以让区域跟着某个程序的窗口移动。",
-     "“听对方说话”：翻译电脑播放出来的声音。在“声音设备”可以选只听某几个程序（例如只听 Discord），游戏音效就不会混进来。对方还在说的时候字幕就会先出来，说完再换成整句；不想要可以在同一页关掉。同一页还可以打开“分辨不同的说话者”：好几个人在同一个语音频道时，按声音分成说话者 1、2、3，各用一个颜色，也可以给他们取名字。",
+     "“听对方说话”：翻译电脑播放出来的声音。在“声音设备”可以选只听某几个程序（例如只听 Discord），游戏音效就不会混进来。对方还在说的时候字幕就会先出来，说完再换成整句；不想要可以在同一页关掉。同一页还可以打开“分辨不同的说话者”：好几个人在同一个语音频道时，按声音分成说话者 1、2、3，各用一个颜色，也可以给他们取名字。分出来的每个人还可以选主语言和副语言（例如主语言中文、副语言英语），他说的话就只按他的语言来听。",
      "“听我说话”：翻译你对麦克风说的话。怕收到杂音可以打开“按住才说话”，按着 [[{ptt}]] 的时候才收音。"
     ]
    },
@@ -232,7 +232,7 @@
     "title": "The three sources",
     "items": [
      "“Read screen”: frame the chat area of your game or chat app and new messages are translated automatically. You can frame up to 6 areas, and an area can follow a program’s window.",
-     "“Hear them”: translates the sound your computer plays. In “Audio devices” you can listen to chosen programs only (for example only Discord), so game sound stays out. Captions appear while they are still talking and are replaced by the finished sentence afterwards; you can turn this off on the same page. On the same page you can also turn on “Tell different speakers apart”: when several people share a voice channel they are grouped by voice as Speaker 1, 2, 3, each with its own colour, and you can name them.",
+     "“Hear them”: translates the sound your computer plays. In “Audio devices” you can listen to chosen programs only (for example only Discord), so game sound stays out. Captions appear while they are still talking and are replaced by the finished sentence afterwards; you can turn this off on the same page. On the same page you can also turn on “Tell different speakers apart”: when several people share a voice channel they are grouped by voice as Speaker 1, 2, 3, each with its own colour, and you can name them. Each person found can also be given a main and a second language (for example main Chinese, second English), so their speech is heard only in their own languages.",
      "“Hear me”: translates what you say into the microphone. To keep noise out, turn on “Push to talk”; the microphone then listens only while you hold [[{ptt}]]."
     ]
    },
@@ -339,7 +339,7 @@
     "title": "세 가지 입력",
     "items": [
      "‘화면 읽기’: 게임이나 채팅 프로그램의 채팅 영역을 지정하면 새 메시지를 자동으로 번역합니다. 영역은 6개까지 지정할 수 있고, 특정 프로그램 창을 따라다니게 할 수도 있습니다.",
-     "‘상대방 음성 듣기’: 컴퓨터에서 나오는 소리를 번역합니다. ‘오디오 장치’에서 고른 프로그램의 소리만 듣게 할 수 있어서(예: Discord만) 게임 효과음이 섞이지 않습니다. 상대가 말하는 중에도 자막이 먼저 나오고, 말이 끝나면 완성된 문장으로 바뀝니다. 원하지 않으면 같은 페이지에서 끌 수 있습니다. 같은 페이지에서 ‘서로 다른 화자 구분하기’를 켜면 여러 사람이 같은 음성 채널에 있을 때 목소리에 따라 화자 1, 2, 3으로 나누어 각각 다른 색으로 표시하고, 이름도 붙일 수 있습니다.",
+     "‘상대방 음성 듣기’: 컴퓨터에서 나오는 소리를 번역합니다. ‘오디오 장치’에서 고른 프로그램의 소리만 듣게 할 수 있어서(예: Discord만) 게임 효과음이 섞이지 않습니다. 상대가 말하는 중에도 자막이 먼저 나오고, 말이 끝나면 완성된 문장으로 바뀝니다. 원하지 않으면 같은 페이지에서 끌 수 있습니다. 같은 페이지에서 ‘서로 다른 화자 구분하기’를 켜면 여러 사람이 같은 음성 채널에 있을 때 목소리에 따라 화자 1, 2, 3으로 나누어 각각 다른 색으로 표시하고, 이름도 붙일 수 있습니다. 구분된 사람마다 주 언어와 보조 언어를 고를 수도 있습니다(예: 주 언어 중국어, 보조 언어 영어). 그러면 그 사람의 말은 그 언어로만 듣습니다.",
      "‘내 음성 듣기’: 마이크에 대고 한 말을 번역합니다. 잡음이 걱정되면 ‘눌러서 말하기’를 켜세요. [[{ptt}]] 키를 누르고 있는 동안에만 마이크가 듣습니다."
     ]
    },
@@ -446,7 +446,7 @@
     "title": "3 つの入力",
     "items": [
      "「画面を読む」：ゲームやチャットアプリのチャット欄を範囲指定すると、新しいメッセージを自動で翻訳します。範囲は 6 つまで指定でき、特定のアプリのウィンドウに追従させることもできます。",
-     "「相手の声を聞く」：パソコンから出る音を翻訳します。「オーディオ機器」で選んだアプリの音だけ（例：Discord だけ）を聞くようにでき、ゲームの効果音が混ざりません。相手が話している途中でも字幕が先に出て、話し終わると完成した文に置き換わります。不要なら同じページでオフにできます。同じページで「話している人を区別する」をオンにすると、複数の人が同じボイスチャンネルにいるとき、声によって話者 1、2、3 に分けてそれぞれ別の色で表示し、名前を付けることもできます。",
+     "「相手の声を聞く」：パソコンから出る音を翻訳します。「オーディオ機器」で選んだアプリの音だけ（例：Discord だけ）を聞くようにでき、ゲームの効果音が混ざりません。相手が話している途中でも字幕が先に出て、話し終わると完成した文に置き換わります。不要なら同じページでオフにできます。同じページで「話している人を区別する」をオンにすると、複数の人が同じボイスチャンネルにいるとき、声によって話者 1、2、3 に分けてそれぞれ別の色で表示し、名前を付けることもできます。区別された人ごとに主な言語と副言語を選ぶこともできます（例：主な言語が中国語、副言語が英語）。その人の発言はその言語だけで聞き取ります。",
      "「自分の声を聞く」：マイクに向かって話した内容を翻訳します。雑音が気になるときは「プッシュトゥトーク」をオンにすると、[[{ptt}]] を押している間だけマイクが音を拾います。"
     ]
    },
@@ -553,7 +553,7 @@
     "title": "Ba nguồn",
     "items": [
      "“Đọc màn hình”: khoanh vùng chat của game hoặc ứng dụng chat, tin nhắn mới sẽ được dịch tự động. Bạn có thể khoanh tối đa 6 vùng, và một vùng có thể đi theo cửa sổ của một chương trình.",
-     "“Nghe họ”: dịch âm thanh máy tính phát ra. Trong “Thiết bị âm thanh” bạn có thể chỉ nghe các chương trình đã chọn (ví dụ chỉ Discord), để tiếng game không lẫn vào. Phụ đề hiện ngay khi họ còn đang nói và sau đó được thay bằng câu hoàn chỉnh; có thể tắt ở cùng trang. Cũng ở trang đó bạn có thể bật “Phân biệt những người nói khác nhau”: khi nhiều người cùng ở một kênh thoại, họ được nhóm theo giọng thành Người nói 1, 2, 3, mỗi người một màu, và bạn có thể đặt tên cho họ.",
+     "“Nghe họ”: dịch âm thanh máy tính phát ra. Trong “Thiết bị âm thanh” bạn có thể chỉ nghe các chương trình đã chọn (ví dụ chỉ Discord), để tiếng game không lẫn vào. Phụ đề hiện ngay khi họ còn đang nói và sau đó được thay bằng câu hoàn chỉnh; có thể tắt ở cùng trang. Cũng ở trang đó bạn có thể bật “Phân biệt những người nói khác nhau”: khi nhiều người cùng ở một kênh thoại, họ được nhóm theo giọng thành Người nói 1, 2, 3, mỗi người một màu, và bạn có thể đặt tên cho họ. Mỗi người được phân biệt còn có thể được chọn ngôn ngữ chính và ngôn ngữ phụ (ví dụ chính là tiếng Trung, phụ là tiếng Anh), khi đó lời họ nói chỉ được nghe bằng ngôn ngữ của họ.",
      "“Nghe tôi”: dịch những gì bạn nói vào micro. Để tránh tạp âm, hãy bật “Nhấn để nói”; micro chỉ nghe khi bạn giữ [[{ptt}]]."
     ]
    },
@@ -660,7 +660,7 @@
     "title": "แหล่งทั้งสาม",
     "items": [
      "“อ่านหน้าจอ”: กรอบพื้นที่แชทของเกมหรือแอปแชท แล้วข้อความใหม่จะถูกแปลอัตโนมัติ กรอบได้สูงสุด 6 แห่ง และพื้นที่หนึ่งติดตามหน้าต่างของโปรแกรมได้",
-     "“ฟังอีกฝ่าย”: แปลเสียงที่คอมพิวเตอร์เล่น ใน “อุปกรณ์เสียง” คุณเลือกฟังเฉพาะบางโปรแกรมได้ (เช่น เฉพาะ Discord) เสียงเกมจะได้ไม่ปน ซับไตเติลแสดงขณะที่อีกฝ่ายยังพูดอยู่ แล้วแทนที่ด้วยประโยคที่สมบูรณ์ภายหลัง ปิดได้ในหน้าเดียวกัน ในหน้าเดียวกันยังเปิด “แยกผู้พูดแต่ละคน” ได้: เมื่อหลายคนอยู่ในห้องเสียงเดียวกัน ระบบจะจัดกลุ่มตามเสียงเป็นผู้พูด 1, 2, 3 แต่ละคนมีสีของตัวเอง และคุณตั้งชื่อให้ได้",
+     "“ฟังอีกฝ่าย”: แปลเสียงที่คอมพิวเตอร์เล่น ใน “อุปกรณ์เสียง” คุณเลือกฟังเฉพาะบางโปรแกรมได้ (เช่น เฉพาะ Discord) เสียงเกมจะได้ไม่ปน ซับไตเติลแสดงขณะที่อีกฝ่ายยังพูดอยู่ แล้วแทนที่ด้วยประโยคที่สมบูรณ์ภายหลัง ปิดได้ในหน้าเดียวกัน ในหน้าเดียวกันยังเปิด “แยกผู้พูดแต่ละคน” ได้: เมื่อหลายคนอยู่ในห้องเสียงเดียวกัน ระบบจะจัดกลุ่มตามเสียงเป็นผู้พูด 1, 2, 3 แต่ละคนมีสีของตัวเอง และคุณตั้งชื่อให้ได้ ผู้พูดแต่ละคนยังเลือกภาษาหลักและภาษารองได้ (เช่น ภาษาหลักจีน ภาษารองอังกฤษ) แล้วระบบจะฟังคำพูดของเขาด้วยภาษาของเขาเท่านั้น",
      "“ฟังฉัน”: แปลสิ่งที่คุณพูดใส่ไมโครโฟน ถ้าไม่อยากให้เสียงรบกวนเข้า ให้เปิด “กดเพื่อพูด” แล้วไมโครโฟนจะฟังเฉพาะตอนที่คุณกด [[{ptt}]] ค้างไว้"
     ]
    },
@@ -767,7 +767,7 @@
     "title": "Tiga sumber",
     "items": [
      "“Baca layar”: tandai area chat game atau aplikasi chat, dan pesan baru diterjemahkan otomatis. Kamu bisa menandai hingga 6 area, dan satu area bisa mengikuti jendela sebuah program.",
-     "“Dengar mereka”: menerjemahkan suara yang diputar komputermu. Di “Perangkat audio” kamu bisa mendengar program tertentu saja (misalnya hanya Discord), supaya suara game tidak ikut. Subtitle muncul saat mereka masih bicara lalu diganti dengan kalimat lengkap; ini bisa dimatikan di halaman yang sama. Di halaman yang sama kamu juga bisa menyalakan “Bedakan pembicara yang berbeda”: saat beberapa orang ada di satu voice channel, mereka dikelompokkan berdasarkan suara sebagai Pembicara 1, 2, 3, masing-masing dengan warnanya sendiri, dan kamu bisa memberi mereka nama.",
+     "“Dengar mereka”: menerjemahkan suara yang diputar komputermu. Di “Perangkat audio” kamu bisa mendengar program tertentu saja (misalnya hanya Discord), supaya suara game tidak ikut. Subtitle muncul saat mereka masih bicara lalu diganti dengan kalimat lengkap; ini bisa dimatikan di halaman yang sama. Di halaman yang sama kamu juga bisa menyalakan “Bedakan pembicara yang berbeda”: saat beberapa orang ada di satu voice channel, mereka dikelompokkan berdasarkan suara sebagai Pembicara 1, 2, 3, masing-masing dengan warnanya sendiri, dan kamu bisa memberi mereka nama. Setiap orang yang ditemukan juga bisa diberi bahasa utama dan bahasa kedua (misalnya utama Mandarin, kedua Inggris), sehingga ucapannya hanya didengar dalam bahasanya sendiri.",
      "“Dengar aku”: menerjemahkan yang kamu ucapkan ke mikrofon. Supaya suara bising tidak masuk, nyalakan “Tekan untuk bicara”; mikrofon hanya mendengar selama kamu menahan [[{ptt}]]."
     ]
    },
@@ -874,7 +874,7 @@
     "title": "Las tres fuentes",
     "items": [
      "“Leer pantalla”: enmarca la zona de chat de tu juego o app de chat y los mensajes nuevos se traducen solos. Puedes enmarcar hasta 6 zonas, y una zona puede seguir la ventana de un programa.",
-     "“Oírlos”: traduce el sonido que reproduce tu ordenador. En “Dispositivos de audio” puedes escuchar solo los programas que elijas (por ejemplo solo Discord), para que el sonido del juego no se cuele. Los subtítulos aparecen mientras todavía hablan y luego se sustituyen por la frase terminada; puedes desactivarlo en la misma página. En esa misma página también puedes activar “Distinguir a distintos hablantes”: cuando varias personas comparten un canal de voz se agrupan por voz como Hablante 1, 2, 3, cada uno con su color, y puedes ponerles nombre.",
+     "“Oírlos”: traduce el sonido que reproduce tu ordenador. En “Dispositivos de audio” puedes escuchar solo los programas que elijas (por ejemplo solo Discord), para que el sonido del juego no se cuele. Los subtítulos aparecen mientras todavía hablan y luego se sustituyen por la frase terminada; puedes desactivarlo en la misma página. En esa misma página también puedes activar “Distinguir a distintos hablantes”: cuando varias personas comparten un canal de voz se agrupan por voz como Hablante 1, 2, 3, cada uno con su color, y puedes ponerles nombre. A cada persona encontrada también se le puede poner un idioma principal y un segundo idioma (por ejemplo, principal chino y segundo inglés), y lo que dice se escucha solo en sus idiomas.",
      "“Oírme”: traduce lo que dices al micrófono. Para que no entre ruido, activa “Pulsar para hablar”; así el micrófono solo escucha mientras mantienes [[{ptt}]]."
     ]
    },
@@ -981,7 +981,7 @@
     "title": "As três fontes",
     "items": [
      "“Ler tela”: marque a área de chat do jogo ou do app de chat e as mensagens novas são traduzidas sozinhas. Você pode marcar até 6 áreas, e uma área pode acompanhar a janela de um programa.",
-     "“Ouvir eles”: traduz o som que o computador toca. Em “Dispositivos de áudio” você pode ouvir só os programas escolhidos (por exemplo só o Discord), para o som do jogo não entrar. As legendas aparecem enquanto eles ainda falam e depois são trocadas pela frase completa; dá para desligar isso na mesma página. Na mesma página você também pode ligar “Separar falantes diferentes”: quando várias pessoas estão no mesmo canal de voz, elas são agrupadas pela voz como Falante 1, 2, 3, cada uma com sua cor, e você pode dar nomes a elas.",
+     "“Ouvir eles”: traduz o som que o computador toca. Em “Dispositivos de áudio” você pode ouvir só os programas escolhidos (por exemplo só o Discord), para o som do jogo não entrar. As legendas aparecem enquanto eles ainda falam e depois são trocadas pela frase completa; dá para desligar isso na mesma página. Na mesma página você também pode ligar “Separar falantes diferentes”: quando várias pessoas estão no mesmo canal de voz, elas são agrupadas pela voz como Falante 1, 2, 3, cada uma com sua cor, e você pode dar nomes a elas. Cada pessoa encontrada também pode ter um idioma principal e um segundo idioma (por exemplo, principal chinês e segundo inglês), e o que ela diz é ouvido só nos idiomas dela.",
      "“Me ouvir”: traduz o que você fala no microfone. Para não entrar barulho, ligue “Apertar para falar”; o microfone só ouve enquanto você segura [[{ptt}]]."
     ]
    },
@@ -1088,7 +1088,7 @@
     "title": "Три источника",
     "items": [
      "«Читать экран»: обведите область чата в игре или мессенджере, и новые сообщения будут переводиться автоматически. Можно отметить до 6 областей, и область может следовать за окном программы.",
-     "«Слушать их»: переводит звук, который играет на компьютере. В «Аудиоустройствах» можно слушать только выбранные программы (например, только Discord), чтобы звук игры не мешал. Субтитры появляются, пока собеседник ещё говорит, а потом заменяются готовой фразой; это можно выключить на той же странице. Там же можно включить «Различать разных говорящих»: когда в одном голосовом канале несколько человек, они группируются по голосу как Говорящий 1, 2, 3, у каждого свой цвет, и им можно дать имена.",
+     "«Слушать их»: переводит звук, который играет на компьютере. В «Аудиоустройствах» можно слушать только выбранные программы (например, только Discord), чтобы звук игры не мешал. Субтитры появляются, пока собеседник ещё говорит, а потом заменяются готовой фразой; это можно выключить на той же странице. Там же можно включить «Различать разных говорящих»: когда в одном голосовом канале несколько человек, они группируются по голосу как Говорящий 1, 2, 3, у каждого свой цвет, и им можно дать имена. Каждому найденному человеку можно также выбрать основной и второй язык (например, основной китайский, второй английский), и тогда его речь распознаётся только на его языках.",
      "«Слушать меня»: переводит то, что вы говорите в микрофон. Чтобы не ловить шум, включите «Говорить по кнопке»; тогда микрофон слушает, только пока вы держите [[{ptt}]]."
     ]
    },
@@ -1195,7 +1195,7 @@
     "title": "Die drei Quellen",
     "items": [
      "„Bildschirm lesen“: Rahme den Chat-Bereich deines Spiels oder deiner Chat-App ein, und neue Nachrichten werden automatisch übersetzt. Du kannst bis zu 6 Bereiche einrahmen, und ein Bereich kann dem Fenster eines Programms folgen.",
-     "„Andere hören“: übersetzt den Ton, den dein Computer abspielt. Unter „Audiogeräte“ kannst du nur ausgewählte Programme hören (zum Beispiel nur Discord), damit der Spielsound draußen bleibt. Untertitel erscheinen schon, während noch gesprochen wird, und werden danach durch den fertigen Satz ersetzt; das lässt sich auf derselben Seite ausschalten. Auf derselben Seite kannst du auch „Verschiedene Sprecher unterscheiden“ einschalten: Wenn mehrere Leute in einem Sprachkanal sind, werden sie nach Stimme als Sprecher 1, 2, 3 gruppiert, jeder mit eigener Farbe, und du kannst ihnen Namen geben.",
+     "„Andere hören“: übersetzt den Ton, den dein Computer abspielt. Unter „Audiogeräte“ kannst du nur ausgewählte Programme hören (zum Beispiel nur Discord), damit der Spielsound draußen bleibt. Untertitel erscheinen schon, während noch gesprochen wird, und werden danach durch den fertigen Satz ersetzt; das lässt sich auf derselben Seite ausschalten. Auf derselben Seite kannst du auch „Verschiedene Sprecher unterscheiden“ einschalten: Wenn mehrere Leute in einem Sprachkanal sind, werden sie nach Stimme als Sprecher 1, 2, 3 gruppiert, jeder mit eigener Farbe, und du kannst ihnen Namen geben. Jeder erkannten Person kannst du außerdem eine Hauptsprache und eine Zweitsprache geben (zum Beispiel Hauptsprache Chinesisch, Zweitsprache Englisch); sie wird dann nur in ihren Sprachen gehört.",
      "„Mich hören“: übersetzt, was du ins Mikrofon sprichst. Damit keine Geräusche hineinkommen, schalte „Push-to-Talk“ ein; dann hört das Mikrofon nur zu, solange du [[{ptt}]] gedrückt hältst."
     ]
    },
@@ -1302,7 +1302,7 @@
     "title": "Les trois sources",
     "items": [
      "« Lire l'écran » : encadrez la zone de chat de votre jeu ou de votre appli de discussion, et les nouveaux messages sont traduits automatiquement. Vous pouvez encadrer jusqu'à 6 zones, et une zone peut suivre la fenêtre d'un programme.",
-     "« Les entendre » : traduit le son joué par l'ordinateur. Dans « Appareils audio », vous pouvez n'écouter que certains programmes (par exemple seulement Discord), pour laisser de côté le son du jeu. Les sous-titres apparaissent pendant qu'ils parlent encore, puis sont remplacés par la phrase terminée ; cela se désactive sur la même page. Sur cette même page, vous pouvez aussi activer « Distinguer les différents intervenants » : quand plusieurs personnes partagent un salon vocal, elles sont regroupées par voix en Intervenant 1, 2, 3, chacune avec sa couleur, et vous pouvez leur donner un nom.",
+     "« Les entendre » : traduit le son joué par l'ordinateur. Dans « Appareils audio », vous pouvez n'écouter que certains programmes (par exemple seulement Discord), pour laisser de côté le son du jeu. Les sous-titres apparaissent pendant qu'ils parlent encore, puis sont remplacés par la phrase terminée ; cela se désactive sur la même page. Sur cette même page, vous pouvez aussi activer « Distinguer les différents intervenants » : quand plusieurs personnes partagent un salon vocal, elles sont regroupées par voix en Intervenant 1, 2, 3, chacune avec sa couleur, et vous pouvez leur donner un nom. Chaque personne trouvée peut aussi recevoir une langue principale et une seconde langue (par exemple chinois en principale, anglais en seconde) ; ses paroles sont alors écoutées uniquement dans ses langues.",
      "« M'entendre » : traduit ce que vous dites au micro. Pour éviter le bruit, activez « Appuyer pour parler » ; le micro n'écoute alors que pendant que vous maintenez [[{ptt}]]."
     ]
    },

@@ -553,6 +553,7 @@ class Stop:
 
 
 class Translator:
+    turn = None            # 見 __init__
     def __init__(self, url: str, glossary=None, tone: str = "casual", max_chars: int = 500, hints=None, lessons=None,
                  memory=None):
         """glossary：呼叫後回傳 {原文: 譯文}；hints：hints(原文, 來源語言, 目標語言) 回傳 [(詞, 建議譯法)]；
@@ -571,11 +572,35 @@ class Translator:
         self._lock = threading.Lock()  # 一次只翻一則，其他排隊
         self._cache: dict[tuple, str] = {}
         self._came = threading.local()    # 這條執行緒上一次翻譯用了記住的翻法的話，是哪來的
+        # turn()：回傳「輪到我用處理器」的鎖（翻譯引擎和語音辨識都用處理器的電腦上，兩個輪流跑，見 Service._cpu_turn）。
+        # None = 不用輪流
+        self.turn = None
 
     def came_from(self) -> dict | None:
         """上一次 translate() 用的是記住的翻法：{"from": "mine" | "shared" | "subtitle", "near": 是不是同一部裡幾乎一樣的句子}；
         是模型翻的（或沒用記憶）就 None。"""
         return getattr(self._came, "value", None)
+
+    def _my_turn(self):
+        import contextlib
+
+        return self.turn() if self.turn else contextlib.nullcontext()
+
+    def warm(self, pairs) -> int:
+        """引擎剛開好時先「暖機」：把每個翻譯方向固定不變的那段提示先算好放進引擎的快取。
+        實測（處理器、4B）：沒暖機時每個方向的第一句要 3.4 到 4 秒，暖機後 1 到 1.7 秒（之後的句子本來就是這麼快）。
+        pairs：[(來源語言 family, 目標語言代碼)]。只叫引擎讀提示、吐 1 個字，不會記進任何快取或翻過的句子。回傳暖了幾個方向。"""
+        done = 0
+        for source, target in pairs:
+            if source not in SOURCES or target not in LANGS or source == LANGS[target]["family"]:
+                continue
+            with self._lock, self._my_turn():
+                try:
+                    self._ask("ok", source, target, [], max_tokens=1)
+                    done += 1
+                except Exception:  # noqa: BLE001  暖不起來沒關係，第一句慢一點而已
+                    return done
+        return done
 
     def clear_cache(self) -> None:
         self._cache.clear()
@@ -589,13 +614,13 @@ class Translator:
 
     def _ask(self, text: str, source: str, target: str, hints: list, examples: list | None = None,
              style: str = "full", context: list[str] | None = None, on_part=None, unfinished: bool = False,
-             stop: Stop | None = None) -> str:
+             stop: Stop | None = None, max_tokens: int | None = None) -> str:
         """on_part(目前翻出來的字)：有給的話，模型每吐出幾個字就叫一次（畫面上譯文一個字一個字出來，不用等整句）。
         on_part 回傳 False 表示「不用翻完了」：馬上停，丟出 Stopped。stop：見 Stop。"""
         payload = {
             "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context,
                                    self.hint_intro, unfinished),
-            "max_tokens": min(1024, 64 + 4 * len(text)),
+            "max_tokens": max_tokens or min(1024, 64 + 4 * len(text)),
             "temperature": 0,
             "repeat_penalty": 1.0,
             "stop": ["<end_of_turn>"],
@@ -790,7 +815,7 @@ class Translator:
         kind = sentence_kind(text, source)
         sent = text if unfinished else with_end_mark(text, source, kind)
         show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
-        with self._lock:
+        with self._lock, self._my_turn():
             if stop is not None and stop.asked:      # 排隊等引擎的時候就被叫停了
                 raise Stopped()
             out = self._ask(sent, source, target, hints, examples, context=context, **({"on_part": show} if show else {}),

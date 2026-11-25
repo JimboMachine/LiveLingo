@@ -228,9 +228,12 @@ class Server:
                     if route == "/api/glossary/remove":
                         service.glossary_remove(str(body.get("src") or ""))
                         return self._json({"ok": True})
-                    if route == "/api/speakers":      # 分辨說話者：取名字、全部重來、模型沒準備好時再試一次
+                    if route == "/api/speakers":      # 分辨說話者：取名字、設語言、全部重來、模型沒準備好時再試一次
                         if body.get("action") == "rename":
                             return self._json(service.speaker_rename(int(body.get("id") or 0), str(body.get("name") or "")))
+                        if body.get("action") == "language":      # 這個人說的語言：主語言、副語言
+                            return self._json(service.speaker_language(int(body.get("id") or 0), str(body.get("lang") or ""),
+                                                                       str(body.get("lang2") or "")))
                         if body.get("action") == "forget":
                             return self._json(service.speakers_forget())
                         service.speakers_load(retry=True)

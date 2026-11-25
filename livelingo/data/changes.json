@@ -131,6 +131,61 @@
       "Les titres restent sur votre ordinateur et ne vont dans un fichier que si vous choisissez « Exporter celle-ci ». Désactivez « Retenir ce que je regarde » si vous ne le voulez pas. Les anciens fichiers s’importent toujours."
     ]
   },
+  "2.6.1": {"zh-TW": ["翻譯變快了：翻譯引擎一開好就先暖機，每個方向的第一句不用再多等 2 秒左右。", "只用處理器的電腦：語音辨識和翻譯改成輪流跑，不再互搶，對方連著說好幾句時，上一句的譯文會快很多出來。", "即時字幕：對方還在說時先出的半句更新得更快；整句的辨識準確度不變。"], "zh-CN": ["翻译变快了：翻译引擎一启动好就先预热，每个方向的第一句不用再多等 2 秒左右。", "只用处理器的电脑：语音识别和翻译改成轮流运行，不再互相抢占，对方连着说好几句时，上一句的译文会快很多出来。", "实时字幕：对方还在说时先出的半句更新得更快；整句的识别准确度不变。"], "en": ["Faster translation: the translation engine warms up as soon as it starts, so the first sentence in each direction no longer waits about 2 extra seconds.", "On computers without a graphics card, speech recognition and translation now take turns instead of slowing each other down, so when someone speaks several sentences in a row, the earlier ones are translated much sooner.", "Live captions: the half sentence shown while the other person is still talking updates faster. Full-sentence recognition is as accurate as before."], "ko": ["번역이 빨라졌습니다. 번역 엔진이 켜지자마자 미리 준비해 두어, 방향마다 첫 문장을 약 2초 더 기다리지 않아도 됩니다.", "그래픽 카드 없이 CPU만 쓰는 컴퓨터에서는 음성 인식과 번역이 서로 느려지게 하지 않고 번갈아 실행되어, 상대가 여러 문장을 이어 말할 때 앞 문장의 번역이 훨씬 빨리 나옵니다.", "실시간 자막: 상대가 아직 말하는 중에 먼저 보이는 반쪽 문장이 더 빨리 갱신됩니다. 전체 문장 인식 정확도는 그대로입니다."], "ja": ["翻訳が速くなりました。翻訳エンジンが起動するとすぐに準備運転をするので、各方向の最初の一文で約2秒余分に待つことがなくなりました。", "グラフィックカードを使わないパソコンでは、音声認識と翻訳が取り合わずに順番に動くようになり、相手が続けて話したとき前の文の訳がずっと早く出ます。", "リアルタイム字幕：相手がまだ話している間に先に出る途中の文の更新が速くなりました。文全体の認識の正確さは変わりません。"], "vi": ["Dịch nhanh hơn: công cụ dịch được khởi động sẵn ngay khi mở, nên câu đầu tiên của mỗi chiều dịch không còn phải chờ thêm khoảng 2 giây.", "Trên máy không dùng card đồ họa, nhận dạng giọng nói và dịch giờ chạy lần lượt thay vì làm chậm nhau, nên khi ai đó nói liền nhiều câu, các câu trước được dịch sớm hơn nhiều.", "Phụ đề trực tiếp: nửa câu hiện ra khi người kia vẫn đang nói được cập nhật nhanh hơn. Độ chính xác khi nhận dạng cả câu vẫn như cũ."], "th": ["แปลเร็วขึ้น: เครื่องมือแปลจะวอร์มเครื่องทันทีที่เปิดเสร็จ ประโยคแรกของแต่ละทิศทางจึงไม่ต้องรอเพิ่มอีกราว 2 วินาที", "บนคอมพิวเตอร์ที่ไม่ใช้การ์ดจอ การรู้จำเสียงและการแปลจะผลัดกันทำงานแทนการแย่งกัน เมื่ออีกฝ่ายพูดหลายประโยคติดกัน คำแปลของประโยคก่อนหน้าจะออกมาเร็วขึ้นมาก", "คำบรรยายสด: ครึ่งประโยคที่แสดงระหว่างอีกฝ่ายยังพูดอยู่จะอัปเดตเร็วขึ้น ความแม่นยำในการรู้จำทั้งประโยคยังเท่าเดิม"], "id": ["Terjemahan lebih cepat: mesin terjemahan langsung dipanaskan begitu siap, jadi kalimat pertama di tiap arah tidak lagi menunggu sekitar 2 detik ekstra.", "Di komputer tanpa kartu grafis, pengenalan suara dan terjemahan kini bergantian, tidak saling memperlambat, sehingga saat seseorang bicara beberapa kalimat beruntun, kalimat sebelumnya diterjemahkan jauh lebih cepat.", "Teks langsung: potongan kalimat yang tampil saat lawan bicara masih berbicara diperbarui lebih cepat. Akurasi pengenalan kalimat utuh tetap sama."], "es": ["Traducción más rápida: el motor de traducción se prepara en cuanto arranca, así que la primera frase de cada dirección ya no espera unos 2 segundos de más.", "En equipos sin tarjeta gráfica, el reconocimiento de voz y la traducción ahora se turnan en lugar de frenarse entre sí, así que cuando alguien dice varias frases seguidas, las anteriores se traducen mucho antes.", "Subtítulos en vivo: la media frase que aparece mientras la otra persona sigue hablando se actualiza más rápido. El reconocimiento de la frase completa es igual de preciso."], "pt": ["Tradução mais rápida: o motor de tradução é aquecido assim que inicia, então a primeira frase de cada direção não espera mais cerca de 2 segundos extras.", "Em computadores sem placa de vídeo, o reconhecimento de voz e a tradução agora se revezam em vez de se atrasarem, então quando alguém fala várias frases seguidas, as anteriores são traduzidas bem mais cedo.", "Legendas ao vivo: a meia frase mostrada enquanto a outra pessoa ainda fala é atualizada mais rápido. O reconhecimento da frase inteira continua tão preciso quanto antes."], "ru": ["Перевод стал быстрее: движок перевода прогревается сразу после запуска, поэтому первая фраза в каждом направлении больше не ждёт лишние 2 секунды.", "На компьютерах без видеокарты распознавание речи и перевод теперь работают по очереди и не тормозят друг друга, поэтому, когда собеседник говорит несколько фраз подряд, предыдущие переводятся намного раньше.", "Живые субтитры: половина фразы, которую видно, пока собеседник ещё говорит, обновляется быстрее. Точность распознавания целой фразы не изменилась."], "de": ["Schnellere Übersetzung: Die Übersetzungs-Engine wärmt sich direkt nach dem Start auf, sodass der erste Satz jeder Richtung nicht mehr etwa 2 Sekunden länger wartet.", "Auf Computern ohne Grafikkarte wechseln sich Spracherkennung und Übersetzung jetzt ab, statt sich gegenseitig zu bremsen. Spricht jemand mehrere Sätze am Stück, werden die früheren deutlich schneller übersetzt.", "Live-Untertitel: Der halbe Satz, der erscheint, während die andere Person noch spricht, wird schneller aktualisiert. Die Erkennung ganzer Sätze ist so genau wie vorher."], "fr": ["Traduction plus rapide : le moteur de traduction se prépare dès son démarrage, la première phrase de chaque sens n'attend donc plus environ 2 secondes de plus.", "Sur les ordinateurs sans carte graphique, la reconnaissance vocale et la traduction se relaient au lieu de se ralentir, donc quand quelqu'un enchaîne plusieurs phrases, les précédentes sont traduites bien plus tôt.", "Sous-titres en direct : la demi-phrase affichée pendant que l'autre personne parle encore se met à jour plus vite. La reconnaissance des phrases entières reste aussi précise."]},
+  "2.6.0": {
+    "zh-TW": [
+      "分辨說話者：可以幫每個人選「主語言」和「副語言」（例如主語言中文、副語言英文）。選了之後，他說的話只照這兩種語言來聽，主語言優先，不會被別人的語言或自動偵測帶走。在說話者名單裡每個人的名字下面設定。",
+      "取了名字、而且有開「記住取過名字的人」時，他的語言會跟名字一起記到下次；跟聲音特徵一樣只存在這台電腦，不會傳出去。沒取名字的人只記到程式關掉為止。"
+    ],
+    "zh-CN": [
+      "分辨说话者：可以给每个人选“主语言”和“副语言”（例如主语言中文、副语言英语）。选了之后，他说的话只按这两种语言来听，主语言优先，不会被别人的语言或自动检测带走。在说话者名单里每个人的名字下面设置。",
+      "取了名字、并且打开了“记住取过名字的人”时，他的语言会跟名字一起记到下次；跟声音特征一样只存在这台电脑，不会传出去。没取名字的人只记到程序关掉为止。"
+    ],
+    "en": [
+      "Telling speakers apart: each person can now have a main and a second language (e.g. Chinese and English). Their speech is heard only in those two, main first, whatever the others speak. Set it under each name in the speaker list.",
+      "For a named person, with “Remember people I have named” on, the languages are remembered with the name. Like the voice features, they stay on this PC only. For people without a name they last until the app closes."
+    ],
+    "ko": [
+      "화자 구분: 이제 사람마다 ‘주 언어’와 ‘보조 언어’를 고를 수 있습니다(예: 주 언어 중국어, 보조 언어 영어). 고르면 그 사람의 말은 이 두 언어로만 듣고 주 언어를 우선하며, 다른 사람의 언어나 자동 감지에 끌려가지 않습니다. 화자 목록의 각 이름 아래에서 설정합니다.",
+      "이름을 붙였고 ‘이름 붙인 사람 기억하기’가 켜져 있으면 언어도 이름과 함께 다음에도 기억합니다. 목소리 특징과 마찬가지로 이 컴퓨터에만 저장됩니다. 이름이 없는 사람은 프로그램을 닫을 때까지만 기억합니다."
+    ],
+    "ja": [
+      "話者の区別：人ごとに「主な言語」と「副言語」を選べるようになりました（例：主な言語が中国語、副言語が英語）。選ぶと、その人の発言はこの二つの言語だけで聞き取り、主な言語を優先し、ほかの人の言語や自動検出に引っ張られません。話者リストの名前の下で設定します。",
+      "名前を付けた人は、「名前を付けた人を覚える」がオンなら言語も名前と一緒に次回まで覚えます。声の特徴と同じく、このパソコンにだけ保存されます。名前のない人はアプリを閉じるまでです。"
+    ],
+    "vi": [
+      "Phân biệt người nói: mỗi người giờ có thể có ngôn ngữ chính và ngôn ngữ phụ (ví dụ tiếng Trung và tiếng Anh). Lời họ nói chỉ được nghe bằng hai ngôn ngữ đó, ưu tiên ngôn ngữ chính, dù người khác nói tiếng gì. Đặt dưới tên trong danh sách.",
+      "Với người đã đặt tên và khi bật “Nhớ những người tôi đã đặt tên”, ngôn ngữ được nhớ cùng với tên. Giống đặc trưng giọng nói, chúng chỉ nằm trên máy này. Với người chưa đặt tên, chỉ giữ đến khi đóng ứng dụng."
+    ],
+    "th": [
+      "การแยกผู้พูด: เลือก “ภาษาหลัก” และ “ภาษารอง” ให้แต่ละคนได้แล้ว (เช่น จีนและอังกฤษ) ระบบจะฟังคำพูดของเขาด้วยสองภาษานี้เท่านั้น โดยให้ภาษาหลักมาก่อน ไม่ว่าคนอื่นจะพูดภาษาอะไร ตั้งค่าได้ใต้ชื่อในรายชื่อผู้พูด",
+      "คนที่ตั้งชื่อแล้วและเปิด “จำคนที่ฉันตั้งชื่อไว้” อยู่ ภาษาจะถูกจำไปพร้อมกับชื่อ และเก็บไว้ในเครื่องนี้เท่านั้นเหมือนลักษณะเสียง คนที่ยังไม่มีชื่อจะจำไว้จนกว่าจะปิดแอป"
+    ],
+    "id": [
+      "Membedakan pembicara: tiap orang kini bisa punya bahasa utama dan bahasa kedua (misalnya Mandarin dan Inggris). Ucapannya hanya didengar dalam dua bahasa itu, bahasa utama dulu, apa pun bahasa orang lain. Atur di bawah nama dalam daftar.",
+      "Untuk orang yang sudah diberi nama, saat “Ingat orang yang sudah kuberi nama” aktif, bahasanya diingat bersama namanya. Seperti ciri suara, semuanya hanya disimpan di PC ini. Untuk orang tanpa nama, hanya sampai aplikasi ditutup."
+    ],
+    "es": [
+      "Distinguir hablantes: cada persona puede tener ahora un idioma principal y un segundo idioma (p. ej., chino e inglés). Lo que dice se escucha solo en esos dos, primero el principal, hablen lo que hablen los demás. Se ajusta bajo su nombre.",
+      "Si la persona tiene nombre y “Recordar a las personas que he nombrado” está activado, sus idiomas se recuerdan junto con el nombre. Como los rasgos de voz, solo se guardan en este PC. Sin nombre, duran hasta cerrar la aplicación."
+    ],
+    "pt": [
+      "Distinguir falantes: cada pessoa agora pode ter um idioma principal e um segundo idioma (por exemplo, chinês e inglês). O que ela diz é ouvido só nesses dois, primeiro o principal, seja qual for o idioma dos outros. Ajuste abaixo do nome.",
+      "Se a pessoa tem nome e “Lembrar das pessoas que eu nomeei” está ativado, os idiomas são lembrados junto com o nome. Como as características da voz, ficam só neste PC. Sem nome, duram até fechar o aplicativo."
+    ],
+    "ru": [
+      "Различение говорящих: каждому человеку теперь можно выбрать основной и второй язык (например, китайский и английский). Его речь распознаётся только на этих двух, основной в приоритете, что бы ни звучало у других. Настройка под именем.",
+      "Если человеку дано имя и включено «Запоминать людей, которым я дал имя», языки запоминаются вместе с именем. Как и признаки голоса, они хранятся только на этом ПК. Для людей без имени — до закрытия приложения."
+    ],
+    "de": [
+      "Sprecher unterscheiden: Jede Person kann jetzt eine Haupt- und eine Zweitsprache haben (z. B. Chinesisch und Englisch). Sie wird nur in diesen beiden gehört, die Hauptsprache zuerst, egal was andere sprechen. Einstellbar unter dem Namen.",
+      "Hat die Person einen Namen und ist „Personen merken, denen ich einen Namen gegeben habe“ an, werden die Sprachen mit dem Namen gemerkt und bleiben nur auf diesem PC. Ohne Namen gelten sie, bis die App geschlossen wird."
+    ],
+    "fr": [
+      "Distinguer les intervenants : chaque personne peut avoir une langue principale et une seconde langue (p. ex. chinois et anglais). Ses paroles sont écoutées dans ces deux langues seulement, la principale d'abord. À régler sous son nom.",
+      "Si la personne a un nom et que « Se souvenir des personnes que j'ai nommées » est activé, ses langues sont retenues avec le nom et restent sur ce PC. Sans nom, elles durent jusqu'à la fermeture de l'application."
+    ]
+  },
   "2.5.3": {
     "zh-TW": [
       "每次更新或重新安裝後，第一次開啟會用你的語言列出這次改了什麼（包含中間跳過的版本），按「知道了」才關掉，之後可以在「關於」再看。",

@@ -401,6 +401,12 @@
     const p = ((S.speakers || {}).people || []).find((x) => x.id === n);
     return (p && p.name) || t("spk_n", { n });
   }
+  function speakerLangsHTML(p) {      // 這個人說的語言：主語言（沒選 = 照「對方的語言」）、副語言（要先有主語言）
+    const pick = (which, current, none, off) => `<label class="spk-lang"><span>${esc(t(which === "lang" ? "spk_lang" : "spk_lang2"))}</span>
+      <select id="spk-${which}-${p.id}" data-spk-lang="${p.id}" data-which="${which}" ${off ? "disabled" : ""}><option value="">${esc(t(none))}</option>${PAIR_LANGS.map((c) =>
+        `<option value="${c}" ${c === current ? "selected" : ""}>${esc(langName(c))}</option>`).join("")}</select></label>`;
+    return `<div class="spk-langs">${pick("lang", p.lang || "", "spk_lang_auto", false)}${pick("lang2", p.lang2 || "", "spk_lang2_none", !p.lang)}</div>`;
+  }
   function speakersHTML() {
     const sp = S.speakers || {};
     let more = "";
@@ -412,8 +418,8 @@
       else if (sp.state === "ready" && !(sp.people || []).length) more = `<div class="note">${ICON.info}<span>${esc(t("spk_none"))}</span></div>`;
       else if (sp.state === "ready") more = `<div class="sub">${esc(t(sp.remember ? "spk_list_kept" : "spk_list"))}</div>` + sp.people.map((p) => `
         <div class="setting-row spk-row"><label for="spk-name-${p.id}"><span class="spk-dot spk-c${(p.id - 1) % 6}"></span><span>${esc(t("spk_n", { n: p.id }))}</span><span class="desc">${esc(p.known && !p.count ? t("spk_known") : t("spk_count", { n: p.count }) + (p.known ? " · " + t("spk_kept") : ""))}</span></label>
-          <input type="text" id="spk-name-${p.id}" data-speaker="${p.id}" value="${esc(p.name || "")}" maxlength="24" placeholder="${esc(t("spk_name"))}"></div>`).join("") +
-        `<div class="btn-row"><button class="ghost small" data-act="spk-forget">${esc(t("spk_forget"))}</button></div>`;
+          <input type="text" id="spk-name-${p.id}" data-speaker="${p.id}" value="${esc(p.name || "")}" maxlength="24" placeholder="${esc(t("spk_name"))}">${speakerLangsHTML(p)}</div>`).join("") +
+        `<div class="sub">${esc(t("spk_lang_hint"))}</div><div class="btn-row"><button class="ghost small" data-act="spk-forget">${esc(t("spk_forget"))}</button></div>`;
       more = switchRow("remember_speakers", t("remember_speakers"), t("remember_speakers_desc")) + more;      // 要不要把取過名字的人記到下次
     }
     return `<section><div><h2>${esc(t("spk_title"))}</h2><div class="sub">${esc(t("spk_hint"))}</div></div>
@@ -2111,6 +2117,16 @@
       });
       return;
     }
+    if (e.target.dataset && e.target.dataset.spkLang) {      // 這個人說的語言：主語言、副語言一起送，程式整理過再照回來的顯示
+      const id = Number(e.target.dataset.spkLang), main = $("spk-lang-" + id), second = $("spk-lang2-" + id), changed = e.target;
+      post("/api/speakers", { action: "language", id, lang: main ? main.value : "", lang2: second ? second.value : "" }).then((r) => {
+        if (!r || !r.ok) { toast(t("n_save_failed", { error: "" }), 6000, "error"); return; }
+        if (main) main.value = r.lang;
+        if (second) { second.value = r.lang2; second.disabled = !r.lang; }
+        flashSaved("#" + changed.id);
+      });
+      return;
+    }
     if (e.target.id === "set-file") {      // 匯入設定檔：在這裡讀檔，內容交給程式檢查
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -2353,7 +2369,8 @@
       S.speakers = d;
       const percent = $("spk-percent");
       if (percent && d.state === "downloading" && before.state === "downloading") { percent.textContent = t("spk_downloading", { mb: d.mb, percent: d.percent || 0 }); return; }
-      const typing = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.speaker;      // 正在打名字：不要重畫把字洗掉
+      const at = (document.activeElement && document.activeElement.dataset) || {};
+      const typing = at.speaker || at.spkLang;      // 正在打名字、正在選語言：不要重畫把字洗掉、把選單關掉
       if (S.view === "settings" && S.ui.tab === "audio" && !S.ui.live && !typing) renderSettingsPage();
       const sign = (x) => JSON.stringify([x.on, x.run, (x.people || []).map((p) => [p.id, p.name])]);
       if (sign(before) !== sign(d)) renderMessages();
