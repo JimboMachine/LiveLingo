@@ -12,6 +12,7 @@
     record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
     hotkeys: { available: false, states: {}, defaults: {} },
     history: { count: 0, bytes: 0 },
+    words: {}, wordbook: { count: 0, due: 0 }, recaps: { count: 0, state: "off" },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -120,6 +121,7 @@
     help: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8M12 16.6h.01"/></svg>',
     back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    book: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M9 8h7M9 12h5"/></svg>',
     clock: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
     frame: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>',
     chat: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h3M10 7h10M4 12h3M10 12h7M4 17h3M10 17h9"/></svg>',
@@ -379,9 +381,21 @@
       body += `<div class="actions"><button data-act="fix" data-id="${m.id}">${esc(t("wrong"))}</button>` +
         `<button data-act="copy" data-id="${m.id}">${esc(t("copy"))}</button>` +
         (m.who === "them" ? `<button data-act="replies" data-id="${m.id}">${esc(t("reply_ideas"))}</button>` : "") + `</div>`;
-      body += repliesHTML(m.id);
+      body += repliesHTML(m.id) + wordsHTML(m);
     }
     return body;
+  }
+
+  // 語言學習：對方的句子下面標一兩個生字和意思，按「收進單字本」或「我會了」（以後不再標）
+  const wordKey = (w) => w.lang + "|" + w.w.toLowerCase();
+  function wordsHTML(m) {
+    const items = S.words[m.id];
+    if (!S.cfg.learn_mode || m.who === "me" || !items || !items.length) return "";
+    const saved = S.ui.wordSaved || {};
+    return `<div class="words"><div class="words-head">${esc(t("learn_new"))}</div>${items.map((w, i) => `<div class="word">
+      <span class="word-w">${esc(w.w)}</span><span class="word-m">${esc(w.meaning)}</span>
+      <button class="ghost" data-act="word-add" data-id="${m.id}" data-n="${i}" ${saved[wordKey(w)] ? "disabled" : ""}>${esc(t(saved[wordKey(w)] ? "learn_saved" : "learn_save"))}</button>
+      <button class="ghost" data-act="word-know" data-id="${m.id}" data-n="${i}" title="${esc(t("learn_know_desc"))}">${esc(t("learn_know"))}</button></div>`).join("")}</div>`;
   }
 
   // 回話建議：對方那句下面列 3 句（對方的語言 + 我的語言的意思），按一下複製
@@ -653,7 +667,8 @@
     if (S.ui.tab === "audio") openDevices();
     if (S.ui.tab === "screen" || S.ui.tab === "quality") loadApps();
     if (S.ui.tab === "overlay") loadScreens();
-    if (S.ui.tab === "history") { S.ui.hist = null; loadHistory(); }
+    if (S.ui.tab === "history") { S.ui.hist = null; S.ui.recapList = null; loadHistory(); loadRecaps(); }
+    if (S.ui.tab === "learn") { S.ui.review = null; loadWords(); }
     if (S.ui.tab === "health") { S.ui.useAsk = false; loadHealth(); loadUsage(); }
     if (S.ui.tab === "storage") { S.ui.storeAsk = ""; loadStorage(); }
     if (S.ui.tab === "help") { S.ui.friendSaved = null; loadHelp(); }
@@ -671,7 +686,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["history", "nav_history", "clock"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["help", "nav_help", "help"], ["about", "nav_about", "info"]];
+  const TABS = [["history", "nav_history", "clock"], ["learn", "nav_learn", "book"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["help", "nav_help", "help"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
@@ -683,8 +698,9 @@
       <div class="rail-brand">${MARK}<div class="wordmark">${WORDMARK}</div></div>
       ${item("main", "nav_chat", "bubble")}
       ${item("history", "nav_history", "clock")}
+      ${item("learn", "nav_learn", "book")}
       <div class="rail-title">${esc(t("settings"))}</div>
-      ${TABS.filter(([id]) => id !== "about" && id !== "help" && id !== "history").map(([id, key, icon]) => item(id, key, icon)).join("")}
+      ${TABS.filter(([id]) => id !== "about" && id !== "help" && id !== "history" && id !== "learn").map(([id, key, icon]) => item(id, key, icon)).join("")}
       <div class="grow"></div>
       ${item("help", "nav_help", "help")}
       ${item("about", "nav_about", "info")}`;
@@ -1372,6 +1388,10 @@
         ${switchRow("history_keep", t("hist_keep"), t("hist_keep_desc"))}
         ${S.cfg.history_keep ? choiceRow("history_days", t("hist_days"), [["7", t("hist_d7")], ["30", t("hist_d30")], ["90", t("hist_d90")], ["0", t("hist_d0")]]) : ""}
       </section>
+      <section id="recap-section"><div><h2>${esc(t("recap_title"))}</h2><div class="sub">${esc(t("recap_hint"))}</div></div>
+        ${switchRow("recap_auto", t("recap_auto"), t("recap_auto_desc"))}
+        <div id="recap-list">${recapListHTML()}</div>
+      </section>
       <section>
         <input type="text" id="hist-q" class="hist-q" maxlength="80" placeholder="${esc(t("hist_search"))}" aria-label="${esc(t("hist_search"))}" value="${esc((S.ui.hist && S.ui.hist.q) || "")}">
         <div id="hist-tools">${histToolsHTML()}</div>
@@ -1379,10 +1399,92 @@
       </section>`;
   }
   function paintHistory() {      // 只換工具列和清單
-    const tools = $("hist-tools"), list = $("hist-list");
+    const tools = $("hist-tools"), list = $("hist-list"), recaps = $("recap-list");
     if (tools) tools.innerHTML = histToolsHTML();
     if (list) list.innerHTML = histListHTML();
+    if (recaps) recaps.innerHTML = recapListHTML();
   }
+
+  // 對話摘要：一段對話一張卡（什麼時候、幾句、幾個重點）；跟著上面的搜尋一起找
+  function recapListHTML() {
+    const thinking = S.recaps.state === "thinking";
+    const tools = `<div class="btn-row"><button class="ghost" data-act="recap-now" ${thinking ? "disabled" : ""}>${esc(t(thinking ? "recap_thinking" : "recap_now"))}</button></div>`;
+    const list = S.ui.recapList;
+    if (!list) return tools;
+    const q = S.ui.hist && S.ui.hist.q;
+    if (!list.length) return tools + `<div class="hist-none">${esc(t(q ? "recap_none_found" : "recap_empty"))}</div>`;
+    const when = (r) => {
+      const a = new Date(r.start * 1000), b = new Date(r.end * 1000);
+      const time = (d) => d.toLocaleTimeString(S.cfg.ui_lang, { hour: "2-digit", minute: "2-digit" });
+      return a.toLocaleDateString(S.cfg.ui_lang, { month: "long", day: "numeric", weekday: "short" }) + " " + time(a) + "–" + time(b);
+    };
+    return tools + list.map((r) => `<div class="recap"><div class="recap-head"><span>${esc(when(r))} · ${esc(t("recap_lines", { n: r.lines }))}</span>
+      <button class="icon-btn" data-act="recap-remove" data-id="${esc(r.id)}" aria-label="${esc(t("recap_remove"))}" title="${esc(t("recap_remove"))}">${ICON.x}</button></div>
+      <ul>${r.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>`).join("");
+  }
+  let recapSeq = 0;
+  async function loadRecaps() {
+    const seq = ++recapSeq, q = S.ui.hist ? S.ui.hist.q : "";
+    const r = await get(`/api/recaps?q=${encodeURIComponent(q || "")}`);
+    if (!r || r.error || seq !== recapSeq) return;
+    S.ui.recapList = r.items;
+    const box = $("recap-list");
+    if (box && S.view === "settings" && S.ui.tab === "history") box.innerHTML = recapListHTML();
+  }
+
+  // 學習頁：學習模式的開關、今天要複習的、單字本（可以搜尋、刪掉）。搜尋只換清單那一塊
+  function learnPage() {
+    const wb = S.wordbook || { count: 0, due: 0 };
+    return `
+      <section><div><h2>${esc(t("learn_title"))}</h2><div class="sub">${esc(t("learn_hint"))}</div></div>
+        ${switchRow("learn_mode", t("learn_mode"), t("learn_mode_desc"))}
+      </section>
+      <section id="review-section"><div><h2>${esc(t("learn_review"))}</h2></div>${reviewHTML(wb)}</section>
+      <section><div><h2>${esc(t("learn_book"))}</h2><div class="sub">${esc(t("learn_book_hint"))}</div></div>
+        <input type="text" id="word-q" class="hist-q" maxlength="40" placeholder="${esc(t("learn_search"))}" aria-label="${esc(t("learn_search"))}" value="${esc((S.ui.words && S.ui.words.q) || "")}">
+        <div class="hist-list" id="word-list" aria-live="polite">${wordListHTML()}</div>
+      </section>`;
+  }
+  function reviewHTML(wb) {
+    const rv = S.ui.review;
+    if (!rv) {
+      return `<div class="setting-row"><div>${esc(wb.due ? t("learn_due", { n: wb.due }) : t(wb.count ? "learn_due_none" : "learn_empty"))}</div>
+        <button class="primary" data-act="review-start" ${wb.due ? "" : "disabled"}>${esc(t("learn_review_start"))}</button></div>`;
+    }
+    const w = rv.items[rv.i];
+    if (!w) return `<div class="note">${ICON.check}<span>${esc(t("learn_review_done", { n: rv.items.length }))}</span></div>`;
+    return `<div class="card-word"><div class="card-count">${esc(t("learn_left", { n: rv.items.length - rv.i }))} · ${esc(langName(w.lang === "zh" ? "zh-TW" : w.lang))}</div>
+      <div class="card-w">${esc(w.w)}</div>
+      ${rv.show ? `<div class="card-m">${esc(w.meaning || t("learn_no_meaning"))}</div>${w.example ? `<div class="card-ex">${esc(w.example)}${w.example_tr ? `<br><span>${esc(w.example_tr)}</span>` : ""}</div>` : ""}
+        <div class="btn-row"><button class="primary" data-act="review-answer" data-value="1">${esc(t("learn_remember"))}</button><button class="ghost" data-act="review-answer" data-value="">${esc(t("learn_forgot"))}</button></div>`
+        : `<div class="btn-row"><button class="primary" data-act="review-show">${esc(t("learn_show"))}</button></div>`}</div>`;
+  }
+  function wordListHTML() {
+    const ws = S.ui.words;
+    if (!ws) return "";
+    if (!ws.items.length) return `<div class="hist-none">${esc(t(ws.q ? "learn_none_found" : "learn_empty"))}</div>`;
+    return ws.items.map((w) => `<div class="hist-row word-row"><div><span class="word-w">${esc(w.w)}</span> <span class="word-m">${esc(w.meaning || t("learn_looking"))}</span>
+      ${w.example ? `<div class="hist-meta">${esc(w.example)}</div>` : ""}</div>
+      <button class="icon-btn" data-act="word-remove" data-w="${esc(w.w)}" data-lang="${esc(w.lang)}" aria-label="${esc(t("learn_remove", { w: w.w }))}" title="${esc(t("learn_remove", { w: w.w }))}">${ICON.x}</button></div>`).join("");
+  }
+  let wordSeq = 0;
+  async function loadWords() {
+    const seq = ++wordSeq, q = S.ui.words ? S.ui.words.q : "";
+    const r = await get(`/api/words?q=${encodeURIComponent(q)}`);
+    if (!r || r.error || seq !== wordSeq) return;
+    S.wordbook = { count: r.count, due: r.due };
+    S.ui.words = { q, items: r.items.slice(0, 300) };
+    if (S.view !== "settings" || S.ui.tab !== "learn") return;
+    const list = $("word-list"), rv = $("review-section");
+    if (list) list.innerHTML = wordListHTML();
+    if (rv && !S.ui.review) rv.innerHTML = `<div><h2>${esc(t("learn_review"))}</h2></div>${reviewHTML(S.wordbook)}`;
+  }
+  function paintReview() {
+    const rv = $("review-section");
+    if (rv) rv.innerHTML = `<div><h2>${esc(t("learn_review"))}</h2></div>${reviewHTML(S.wordbook)}`;
+  }
+  let wordTimer = null;
+
   let histSeq = 0;
   async function loadHistory(more) {
     const q = S.ui.hist ? S.ui.hist.q : "", seq = ++histSeq;
@@ -1523,6 +1625,7 @@
       ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack", "exe", "work"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
     if (S.ui.tab === "history") page.innerHTML = historyPage();
+    else if (S.ui.tab === "learn") page.innerHTML = learnPage();
     else if (S.ui.tab === "health") page.innerHTML = healthPage();
     else if (S.ui.tab === "storage") page.innerHTML = storagePage();
     else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + speakHTML() + voiceTuningHTML();
@@ -1837,6 +1940,44 @@
       const r = await post("/api/replies", { action: "copy", text: it.text });
       if (r && r.ok) { S.ui.replyCopied = Number(el.dataset.n); renderMessages(); setTimeout(() => { S.ui.replyCopied = null; renderMessages(); }, 2500); }
     },
+    "word-add": async (el) => {
+      const w = (S.words[Number(el.dataset.id)] || [])[Number(el.dataset.n)];
+      if (!w) return;
+      const r = await post("/api/words", { action: "add", w: w.w, lang: w.lang, meaning: w.meaning, id: Number(el.dataset.id) });
+      if (r && r.ok) { S.ui.wordSaved = Object.assign(S.ui.wordSaved || {}, { [wordKey(w)]: true }); upsertMessage(S.messages.find((m) => m.id === Number(el.dataset.id)) || { id: 0 }); }
+    },
+    "word-know": async (el) => {
+      const w = (S.words[Number(el.dataset.id)] || [])[Number(el.dataset.n)];
+      if (w) await post("/api/words", { action: "know", w: w.w, lang: w.lang });
+    },
+    "word-pick": async () => {      // 在字幕上選取一段字，按浮出來的「收進單字本」
+      const pick = S.ui.pick;
+      hidePick();
+      if (!pick) return;
+      const r = await post("/api/words", { action: "add", w: pick.w, lang: pick.lang, id: pick.id });
+      toast(r && r.ok ? t("learn_added", { w: pick.w }) : t(r && r.error === "not_ready" ? "n_not_ready" : "learn_add_failed"), 4200, r && r.ok ? "info" : "warn");
+    },
+    "word-remove": async (el) => { const r = await post("/api/words", { action: "remove", w: el.dataset.w, lang: el.dataset.lang }); if (r && r.ok) loadWords(); },
+    "review-start": async () => {
+      const r = await get("/api/words?review=1");
+      if (!r || !r.items || !r.items.length) return;
+      S.ui.review = { items: r.items.slice(0, 30), i: 0, show: false };
+      paintReview();
+    },
+    "review-show": () => { if (S.ui.review) { S.ui.review.show = true; paintReview(); } },
+    "review-answer": async (el) => {
+      const rv = S.ui.review, w = rv && rv.items[rv.i];
+      if (!w) return;
+      rv.i += 1; rv.show = false;
+      paintReview();
+      await post("/api/words", { action: "review", w: w.w, lang: w.lang, remembered: !!el.dataset.value });
+      if (rv.i >= rv.items.length) setTimeout(() => { if (S.ui.review === rv) { S.ui.review = null; loadWords(); } }, 2500);
+    },
+    "recap-now": async () => {
+      const r = await post("/api/recaps", { action: "now" });
+      if (r && !r.ok) toast(t(r.error === "not_ready" ? "n_not_ready" : (r.error === "busy" ? "recap_thinking" : "recap_nothing")), 6000, "info");
+    },
+    "recap-remove": async (el) => { const r = await post("/api/recaps", { action: "remove", id: el.dataset.id }); if (r && r.ok) loadRecaps(); },
     "stream-copy": async () => {
       const r = await post("/api/stream", { action: "copy" });
       if (r && r.ok) { S.ui.streamCopied = true; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); setTimeout(() => { S.ui.streamCopied = false; }, 3000); }
@@ -2074,6 +2215,35 @@
     retry: () => post("/api/retry")
   };
 
+  // 在字幕上選取一段對方語言的字：旁邊浮出「收進單字本」（中文、泰文這些不會自動標生字的語言也能收）
+  function hidePick() { S.ui.pick = null; const b = $("word-pick"); if (b) b.hidden = true; }
+  document.addEventListener("mouseup", (e) => {
+    if (e.target.closest("#word-pick")) return;
+    setTimeout(() => {
+      const sel = window.getSelection(), text = sel ? sel.toString().replace(/\s+/g, " ").trim() : "";
+      const node = sel && sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+      const part = node && node.closest("#messages .orig, #messages .text");
+      const box = part && part.closest(".msg");
+      const m = box && S.messages.find((x) => "m-" + x.id === box.id);
+      const lang = m && (part.classList.contains("orig") ? m.lang : (S.langs || {})[m.target] || m.target);
+      const mine = (S.langs || {})[S.cfg.my_lang] || S.cfg.my_lang;
+      if (!m || !text || text.length > 40 || !lang || lang === mine) { hidePick(); return; }
+      S.ui.pick = { w: text, lang, id: m.id };
+      let b = $("word-pick");
+      if (!b) {
+        b = document.createElement("button");
+        b.id = "word-pick"; b.className = "word-pick"; b.dataset.act = "word-pick";
+        document.body.appendChild(b);
+      }
+      b.textContent = t("learn_pick");
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      b.style.left = Math.max(8, Math.min(window.innerWidth - 180, r.left)) + "px";
+      b.style.top = Math.max(8, r.top - 38) + "px";
+      b.hidden = false;
+    }, 0);
+  });
+  document.addEventListener("scroll", hidePick, true);
+
   document.addEventListener("click", (e) => {
     const el = e.target.closest("[data-act]");
     if (!el || el.disabled) return;
@@ -2187,10 +2357,16 @@
     return { [el.dataset.change]: el.dataset.sub ? { [el.dataset.sub]: value } : value };
   }
   document.addEventListener("input", (e) => {
-    if (e.target.id === "hist-q") {      // 歷史的搜尋：邊打邊找，停一下才查
+    if (e.target.id === "hist-q") {      // 歷史的搜尋：邊打邊找，停一下才查（摘要也一起找）
       const q = e.target.value.trim();
       clearTimeout(histTimer);
-      histTimer = setTimeout(() => { S.ui.hist = Object.assign(S.ui.hist || { items: [], total: 0, all: 0, more: false }, { q }); S.ui.histConfirm = false; loadHistory(); }, 220);
+      histTimer = setTimeout(() => { S.ui.hist = Object.assign(S.ui.hist || { items: [], total: 0, all: 0, more: false }, { q }); S.ui.histConfirm = false; loadHistory(); loadRecaps(); }, 220);
+      return;
+    }
+    if (e.target.id === "word-q") {
+      const q = e.target.value.trim();
+      clearTimeout(wordTimer);
+      wordTimer = setTimeout(() => { S.ui.words = Object.assign(S.ui.words || { items: [] }, { q }); loadWords(); }, 220);
       return;
     }
     const key = e.target.dataset && e.target.dataset.range;
@@ -2464,6 +2640,9 @@
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
     replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
+    words: (d) => { S.words[d.id] = d.items; const m = S.messages.find((x) => x.id === d.id); if (m) upsertMessage(m); },
+    wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") loadWords(); },
+    recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
     game: (g) => { S.game = g; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
@@ -2547,7 +2726,7 @@
     const st = await get("/api/state");
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
-    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];

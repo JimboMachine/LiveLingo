@@ -29,6 +29,9 @@ from .memory import KIND as MEMORY_KIND
 from .memory import RANGES as MEMORY_RANGES
 from .memory import Memory
 from .history import History
+from .learn import Wordbook, family_of
+from .recap import GAP as RECAP_GAP
+from .recap import Recaps, sessions, worth
 from .hotkeys import ACTIONS as HOTKEY_ACTIONS
 from .hotkeys import NOTES as HOTKEY_NOTES
 from .hotkeys import Hotkeys
@@ -67,6 +70,9 @@ LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLin
 REVIVE_TIMES = 3            # 翻譯引擎自己停掉時，最多自動重開幾次……
 REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
 WHATS_NEW_FLOOR = "2.5.0"      # 沒有「上次看到哪一版」的紀錄（這個功能出現以前就裝好的）：把這一版以後錯過的改動一次說完
+MAX_MARKED = 60            # 最近幾則訊息的生字標記留著（介面重開也看得到）
+RECAP_RECENT = 6 * 3600     # 自動摘要只補最近這麼久之內結束的對話
+RECAP_EVERY = 30.0          # 每隔幾秒看一次有沒有剛結束、還沒摘要的對話
 GAME_EVERY = 5.0            # 每隔幾秒看一次現在在玩哪個遊戲（遊戲用語自動切換）
 ENGINE_REST = (0, 10, 30, 60)    # 設定「幾分鐘沒翻譯就讓翻譯引擎休息」可以選的值，0 = 一直開著
 SPEECH_REST = 120.0         # 兩邊收音都關掉這麼多秒：把語音辨識模型（約 1 GB）放掉，下次開收音再載入
@@ -229,6 +235,12 @@ class Service:
         self._ids = itertools.count(1)
         self.transcript = Transcript()
         self.history = History(self.data, bool(self.cfg["history_keep"]), int(self.cfg["history_days"]))
+        self.wordbook = Wordbook(self.data)      # 語言學習的單字本（learn.py）
+        self.recaps = Recaps(self.data)          # 對話摘要（recap.py）
+        self._recap = {"state": "off", "id": ""}      # 正在整理的摘要（給介面）
+        self._recap_checked = 0.0
+        self._all_terms = None      # 查生字意思用的全部用語包（第一次用到才讀）
+        self._words: dict[int, list[dict]] = {}      # 訊息 id → 標出來的生字 [{w, lang, meaning}]（只留最近的）
         self.usage = Usage(self.data, bool(self.cfg["usage_keep"]))      # 每天幾句、失敗幾次、平均等多久（只有數字）
         self._counted: set[int] = set()      # 已經算進使用數字的訊息（重翻不再算）
         self.tray = Tray(self)
@@ -325,6 +337,9 @@ class Service:
             "stream": self.stream.state(),
             "speak": self.speak_state(),
             "replies": dict(self._replies),
+            "words": {str(k): v for k, v in self._words.items()},
+            "wordbook": self.wordbook.state(),
+            "recaps": dict(self.recaps.state(), **self._recap),
             "record": self.record_state(),
             "hotkeys": self.hotkeys_state(),
             "history": self.history.state(),
@@ -841,6 +856,9 @@ class Service:
         while not self.closing.wait(GAME_EVERY):
             try:
                 self.check_game()
+                if time.time() - self._recap_checked >= RECAP_EVERY:
+                    self._recap_checked = time.time()
+                    self.recap_check()
             except Exception:  # noqa: BLE001
                 self.log(traceback.format_exc())
 
@@ -1105,6 +1123,7 @@ class Service:
                     msg["copied"] = oswin.copy_text(out)
             self._post(msg)
             self._speak_mine(msg, target, out)
+            self._learn(msg)
             self._want_back(msg)
         except Exception as ex:  # noqa: BLE001
             if not self._engine_gone():
@@ -3261,6 +3280,174 @@ class Service:
         """收到的是 LiveLingo 自己念出來的譯文（念到喇叭、被「聽對方」或麥克風收到）：不要再翻一次。"""
         said = self.speaker.recent()
         return bool(said) and any(similarity(t, text) >= 0.6 for t in said)
+
+    # ------------------------------------------------------------------ 語言學習：生字和單字本（2.10.0）
+
+    def _learn(self, msg: dict) -> None:
+        """學習模式：對方的一句話翻好之後，在背景挑一兩個生字、查意思，送 words 事件給介面標在字幕旁邊。
+        翻譯還有在排隊的時候就不查（不能讓生字拖慢翻譯）。"""
+        if not self.cfg["learn_mode"] or msg.get("who") == "me" or msg.get("via") == "typed":
+            return
+        lang = family_of(msg.get("lang") or "")
+        if not lang or lang == family_of(self.cfg["my_lang"]):
+            return
+        words = self.wordbook.fresh(msg.get("original", ""), lang)
+        if not words:
+            return
+
+        def work():
+            items = []
+            for w in words:
+                if self.jobs.waiting() or self.closing.is_set():
+                    break
+                meaning = self._gloss(w, lang, msg.get("original", ""))
+                if meaning:
+                    items.append({"w": w, "lang": lang, "meaning": meaning})
+            if items:
+                with self._lock:
+                    self._words[msg["id"]] = items
+                    for old in sorted(self._words)[:-MAX_MARKED]:
+                        self._words.pop(old, None)
+                self.hub.publish("words", {"id": msg["id"], "items": items})
+
+        threading.Thread(target=work, daemon=True, name="learn").start()
+
+    def _gloss(self, word: str, lang: str, sentence: str = "") -> str:
+        """一個字的意思（我的語言）。詞彙表或用語包裡有的直接用（遊戲用語模型常翻錯）；沒有的才帶著整句問模型。翻不出來回傳空字串。"""
+        from .core import assist
+
+        mine = self.cfg["my_lang"]
+        key = word.lower()
+        for src, dst in self.glossary.as_dict(self._game_words()).items():
+            if src.lower() == key:
+                return dst
+        if lang == "ko" and mine in ("zh-TW", "zh-CN"):
+            if self._all_terms is None:
+                self._all_terms = TermPack()      # 所有的用語包：查字的意思不用管現在在玩哪個遊戲
+            for term, dst in self._all_terms.find(word, "ko", mine):
+                if term == word:
+                    return dst
+        try:
+            self._wake_engine()
+            return assist.parse_gloss(self.translator.ask_free(assist.gloss_prompt(word, sentence, mine), 40), word, mine)
+        except Exception:  # noqa: BLE001
+            self.log(traceback.format_exc())
+            return ""
+
+    def word_action(self, action: str, word: str, lang: str, meaning: str = "", msg_id=None, remembered: bool = False) -> dict:
+        """單字本：add（收進來；沒給意思就查）/ remove / know（我會了，以後不標）/ review（複習完，remembered 記得嗎）/ meaning（改意思）。"""
+        word, lang = str(word or "").strip(), family_of(str(lang or ""))
+        if not word or not lang:
+            return {"ok": False, "error": "nothing"}
+        if action == "add":
+            example, example_tr = "", ""
+            with self._lock:
+                msg = next((m for m in self.messages if m["id"] == msg_id), None) if msg_id is not None else None
+            if msg:
+                example, example_tr = msg.get("original", ""), msg.get("translated", "")
+            if not meaning:
+                if self.phase != "ready":
+                    return {"ok": False, "error": "not_ready"}
+                row = self.wordbook.add(word, lang, "", example, example_tr)
+
+                def work():
+                    found = self._gloss(word, lang, example)
+                    if found:
+                        self.wordbook.add(word, lang, found)
+                    self.hub.publish("wordbook", self.wordbook.state())
+
+                threading.Thread(target=work, daemon=True, name="gloss").start()
+            else:
+                row = self.wordbook.add(word, lang, meaning, example, example_tr)
+            if row is None:
+                return {"ok": False, "error": "nothing"}
+        elif action == "remove":
+            self.wordbook.remove(word, lang)
+        elif action == "know":
+            self.wordbook.know(word, lang)
+            with self._lock:      # 已經標在字幕旁邊的也拿掉
+                for mid, items in list(self._words.items()):
+                    keep = [x for x in items if not (x["lang"] == lang and x["w"].lower() == word.lower())]
+                    if len(keep) != len(items):
+                        self._words[mid] = keep
+                        self.hub.publish("words", {"id": mid, "items": keep})
+        elif action == "review":
+            if self.wordbook.review(word, lang, bool(remembered)) is None:
+                return {"ok": False, "error": "nothing"}
+        elif action == "meaning":
+            if self.wordbook.add(word, lang, str(meaning or "")[:200]) is None:
+                return {"ok": False, "error": "nothing"}
+        else:
+            return {"ok": False, "error": "unknown"}
+        state = self.wordbook.state()
+        self.hub.publish("wordbook", state)
+        return {"ok": True, **state}
+
+    def words_list(self, q: str = "", review: bool = False) -> dict:
+        return {"items": self.wordbook.due() if review else self.wordbook.listing(q), **self.wordbook.state()}
+
+    # ------------------------------------------------------------------ 對話摘要（2.10.0）
+
+    def _recap_rows(self) -> list[dict]:
+        """還沒摘要過的句子，照時間排。有存歷史就用歷史（重開程式也接得上），沒存就用畫面上的。"""
+        since = self.recaps.until
+        if self.history.keep:
+            rows = self.history.search(limit=200)["items"][::-1]      # 最新的 200 句就夠了（摘要也只看最後 80 句）
+        else:
+            with self._lock:
+                rows = [m for m in self.messages if not m.get("pending") and not m.get("error") and m.get("translated")]
+        return [r for r in rows if float(r.get("at") or 0) > since]
+
+    def recap_check(self) -> None:
+        """自動摘要：最後一段對話安靜超過 10 分鐘、夠長、還沒摘要過，就整理一份。"""
+        if not self.cfg["recap_auto"] or self.phase != "ready" or self._recap.get("state") == "thinking":
+            return
+        now = time.time()
+        for part in sessions(self._recap_rows()):      # 舊的先做，一次做一段；太久以前的（例如剛更新完，歷史裡一個月的對話）不補做
+            end = float(part[-1].get("at") or 0)
+            if now - RECAP_RECENT < end <= now - RECAP_GAP and worth(part):
+                self._summarize(part)
+                return
+
+    def recap_now(self) -> dict:
+        """「現在摘要」：最近這一段（還沒摘要過的）馬上整理。"""
+        if self.phase != "ready":
+            return {"ok": False, "error": "not_ready"}
+        if self._recap.get("state") == "thinking":
+            return {"ok": False, "error": "busy"}
+        parts = sessions(self._recap_rows())
+        if not parts or not worth(parts[-1], 2):
+            return {"ok": False, "error": "nothing"}
+        self._summarize(parts[-1])
+        return {"ok": True}
+
+    def _summarize(self, lines: list[dict]) -> None:
+        from .core import assist
+
+        self._recap = {"state": "thinking", "id": ""}
+        self.hub.publish("recaps", dict(self.recaps.state(), **self._recap))
+
+        def work():
+            row = None
+            try:
+                self._wake_engine()
+                names = chatpaint.NAMES.get(self.cfg["my_lang"]) or chatpaint.NAMES["en"]
+                out = self.translator.ask_free(assist.summary_prompt(lines, self.cfg["my_lang"], {"me": names["me"], "them": names["heard"]}), 400)
+                row = self.recaps.add(lines, assist.parse_summary(out, self.cfg["my_lang"]), self.cfg["my_lang"])
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+            self._recap = {"state": "ready" if row else "failed", "id": row["id"] if row else ""}
+            self.hub.publish("recaps", dict(self.recaps.state(), **self._recap))
+            if row:
+                self.notice("recap_ready", n=len(row["points"]))
+
+        threading.Thread(target=work, daemon=True, name="recap").start()
+
+    def recap_remove(self, rid: str) -> dict:
+        self.recaps.remove(rid)
+        self._recap = {"state": "off", "id": ""}
+        self.hub.publish("recaps", dict(self.recaps.state(), **self._recap))
+        return {"ok": True}
 
     # ------------------------------------------------------------------ 念出我的譯文（2.9.0）
 

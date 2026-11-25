@@ -611,3 +611,26 @@ input::placeholder { color: var(--faint); }
 .sub-pair .dim { color: var(--dim); }
 .sub-preview input { width: 100%; min-width: 0; }
 .sub-preview .pills { flex-wrap: wrap; }
+
+/* 語言學習（2.10.0）：字幕下面的生字、選取字之後浮出來的按鈕、複習卡、單字本 */
+.words { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.words-head { font-size: 12px; font-weight: 700; color: var(--accent); }
+.word { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; }
+.word .ghost { height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; min-height: 0; }
+.word-w { font-weight: 700; color: var(--text); }
+.word-m { color: var(--dim); }
+.word-pick { position: fixed; z-index: 50; padding: 6px 12px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, .3); }
+.word-pick[hidden] { display: none; }
+.word-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.card-word { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-align: center; }
+.card-count { font-size: 12px; color: var(--dim); }
+.card-w { font-size: 28px; font-weight: 700; color: var(--text); }
+.card-m { font-size: 17px; color: var(--accent); }
+.card-ex { font-size: 13px; color: var(--dim); max-width: 520px; }
+.card-ex span { opacity: .85; }
+
+/* 對話摘要（2.10.0） */
+.recap { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.recap-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--dim); }
+.recap ul { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.recap li { font-size: 14px; line-height: 1.45; }

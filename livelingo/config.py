@@ -55,9 +55,11 @@ DEFAULTS = {
     "on_top": True,
     "show_pronunciation": True,  # 韓文下面顯示唸法
     "copy_spoken": True,
+    "learn_mode": False,         # 語言學習：字幕旁邊標出一兩個生字，可以收進單字本（learn.py）
+    "recap_auto": True,          # 一段對話結束（安靜 10 分鐘）自動整理重點（recap.py）
     "speak_out": False,          # 我說的、打的翻成對方的語言之後，用 Windows 內建語音念出來（core/speak.py）
     "speak_device": None,        # 念到哪個播放裝置（裝置 id，例如 VB-CABLE 的 CABLE Input），None = Windows 預設
-    "speak_name": "",         # 我用說的翻出來的句子也自動複製
+    "speak_name": "",            # 用哪個 Windows 語音念（語音的名字），空的 = 照語言自動選
     "update_check": True,        # 開啟時檢查有沒有新版本（關掉的話，模型都下載好之後 LiveLingo 完全不連網路）
     "setup_done": False,
     "history_keep": True,        # 對話歷史存在這台電腦上（history.jsonl）；關掉就不再記新的
@@ -111,7 +113,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

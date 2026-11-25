@@ -1,4 +1,58 @@
 {
+  "2.10.0": {
+    "zh-TW": [
+      "對話摘要：一場遊戲或通話結束（安靜 10 分鐘）後，自動把剛才的對話整理成幾個重點，用你的語言寫，在「歷史」頁看得到、搜得到；也可以按「現在摘要這段對話」。可能有漏或不準，原句都還在。",
+      "語言學習：新的「學習」頁打開學習模式，對方的句子下面會標一兩個生字和意思，按一下收進單字本；中文、泰文可以在字幕上選取字自己收。單字本有複習卡，記得的隔越久才再出現。全部只存在這台電腦。"
+    ],
+    "zh-CN": [
+      "对话摘要：一局游戏或通话结束（安静 10 分钟）后，自动把刚才的对话整理成几个重点，用你的语言写，在「历史」页看得到、搜得到；也可以按「现在摘要这段对话」。可能有漏或不准，原句都还在。",
+      "语言学习：新的「学习」页打开学习模式，对方的句子下面会标一两个生词和意思，点一下收进单词本；中文、泰文可以在字幕上选中文字自己收。单词本有复习卡，记得的隔越久才再出现。全部只存在这台电脑。"
+    ],
+    "en": [
+      "Conversation summaries: when a game or call ends (10 quiet minutes), it is summarized in a few points in your language on the History page, and searchable. You can also summarize now. It can miss things; the full sentences stay.",
+      "Language learning: turn on learning mode on the new Learn page to see one or two new words with meanings under their sentences and save them to a word book. Review cards space out words you remember. All on this computer."
+    ],
+    "ko": [
+      "대화 요약: 게임이나 통화가 끝나면(10분 동안 조용하면) 대화를 몇 가지 요점으로 내 언어로 정리해요. ‘기록’ 페이지에서 보고 검색할 수 있고 ‘지금 이 대화 요약’도 있어요. 빠지거나 틀릴 수 있지만 원문은 그대로 남아요.",
+      "언어 학습: 새 ‘학습’ 페이지에서 학습 모드를 켜면 상대 문장 아래에 새 단어 한두 개와 뜻이 나오고, 단어장에 저장할 수 있어요. 복습 카드는 기억한 단어일수록 늦게 다시 보여 줘요. 모두 이 컴퓨터에만 저장돼요."
+    ],
+    "ja": [
+      "会話の要約：ゲームや通話が終わる（10分間静か）と、会話を自分の言語で数個の要点にまとめます。「履歴」ページで見られて検索もでき、「今の会話を要約」ボタンもあります。抜けや誤りがあることもありますが、元の文は残ります。",
+      "語学学習：新しい「学習」ページで学習モードをオンにすると、相手の文の下に新しい単語が1〜2個、意味つきで出て、単語帳に保存できます。復習カードは覚えた単語ほど間隔をあけて出します。すべてこのパソコンの中だけです。"
+    ],
+    "vi": [
+      "Tóm tắt hội thoại: khi ván game hay cuộc gọi kết thúc (im lặng 10 phút), cuộc trò chuyện được tóm thành vài ý bằng ngôn ngữ của bạn, xem và tìm được ở trang Lịch sử; cũng có nút tóm tắt ngay. Có thể sót ý; câu gốc vẫn còn.",
+      "Học ngôn ngữ: bật chế độ học ở trang Học mới để thấy một hai từ mới kèm nghĩa dưới câu của họ và lưu vào sổ từ. Thẻ ôn tập đưa từ đã nhớ quay lại thưa dần. Tất cả chỉ nằm trên máy này."
+    ],
+    "th": [
+      "สรุปบทสนทนา: เมื่อเกมหรือการโทรจบ (เงียบ 10 นาที) จะสรุปบทสนทนาเป็นไม่กี่ประเด็นด้วยภาษาของคุณ ดูและค้นหาได้ในหน้าประวัติ และกดสรุปตอนนี้ได้ อาจตกหล่นบ้าง แต่ประโยคเต็มยังอยู่",
+      "เรียนภาษา: เปิดโหมดเรียนในหน้าเรียนใหม่ จะเห็นคำใหม่หนึ่งสองคำพร้อมความหมายใต้ประโยคของอีกฝ่าย และเก็บลงสมุดคำศัพท์ได้ บัตรทบทวนจะให้คำที่จำได้กลับมาห่างขึ้น ทั้งหมดอยู่ในเครื่องนี้เท่านั้น"
+    ],
+    "id": [
+      "Ringkasan percakapan: saat game atau panggilan selesai (10 menit sepi), percakapan diringkas jadi beberapa poin dalam bahasamu di halaman Riwayat, bisa dicari; bisa juga diringkas sekarang. Kalimat lengkap tetap ada.",
+      "Belajar bahasa: nyalakan mode belajar di halaman Belajar untuk melihat satu dua kata baru beserta artinya di bawah kalimat mereka dan simpan ke buku kata. Kartu ulangan menjarangkan kata yang diingat. Semua di komputer ini."
+    ],
+    "es": [
+      "Resúmenes: al terminar una partida o llamada (10 minutos de silencio), la conversación se resume en unos puntos en tu idioma en la página Historial, con búsqueda. También puedes resumir ahora. Las frases completas quedan.",
+      "Aprender idiomas: activa el modo aprendizaje en la nueva página Aprender para ver una o dos palabras nuevas con su significado bajo sus frases y guardarlas. Las tarjetas de repaso espacian las que recuerdas. Todo en este equipo."
+    ],
+    "pt": [
+      "Resumos: quando uma partida ou chamada termina (10 minutos de silêncio), a conversa vira alguns pontos no seu idioma na página Histórico, com busca. Também dá para resumir agora. Pode faltar algo; as frases ficam.",
+      "Aprender idiomas: ligue o modo de aprendizado na nova página Aprender para ver uma ou duas palavras novas com significado abaixo das frases deles e salvá-las. Os cartões de revisão espaçam as que você lembra. Tudo neste PC."
+    ],
+    "ru": [
+      "Итоги разговоров: когда игра или звонок заканчивается (10 минут тишины), разговор сводится к нескольким пунктам на вашем языке на странице «История», с поиском. Можно и сразу. Полные фразы остаются.",
+      "Изучение языка: включите режим обучения на новой странице «Учёба» — под их фразами появятся одно-два новых слова со значением, их можно сохранить. Карточки повторения показывают выученное всё реже. Всё на этом ПК."
+    ],
+    "de": [
+      "Zusammenfassungen: Endet ein Spiel oder Anruf (10 ruhige Minuten), wird das Gespräch in wenigen Punkten in deiner Sprache auf der Seite Verlauf zusammengefasst, durchsuchbar. Auch sofort per Knopf. Die Sätze bleiben.",
+      "Sprache lernen: Mit dem Lernmodus auf der neuen Seite Lernen stehen unter ihren Sätzen ein bis zwei neue Wörter mit Bedeutung, die du speichern kannst. Wiederholkarten zeigen gewusste Wörter seltener. Alles nur auf diesem PC."
+    ],
+    "fr": [
+      "Résumés : à la fin d’une partie ou d’un appel (10 minutes de silence), la conversation est résumée en quelques points dans votre langue, page Historique, avec recherche. Aussi possible tout de suite. Les phrases restent.",
+      "Apprendre une langue : le mode apprentissage (nouvelle page Apprendre) montre un ou deux mots nouveaux avec leur sens sous leurs phrases, à ajouter au carnet. Les cartes de révision espacent les mots retenus. Tout reste ici."
+    ]
+  },
   "2.9.0": {
     "zh-TW": [
       "回話助手：對方講完按 Ctrl+Alt+R，跳出 3 句用對方語言的回覆和中文意思，按 1／2／3 複製；對話頁每句對方的話下面也有「怎麼回？」。",

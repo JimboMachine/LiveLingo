@@ -263,6 +263,29 @@
 
 自動把關：測試用假的模型回答檢查解析和流程；建議好不好要用真的模型看。
 
+### 改語言學習（生字、單字本、複習）
+
+1. `learn.py`：candidates、Wordbook（wordbook.json 的格式、STEPS）
+2. `service.py`、`server.py`：_learn（翻譯在排隊就不查）、_gloss（用 translate）、word_action、words_list；/api/words；words、wordbook 事件
+3. `translate.py`：_gloss 用的是一般翻譯，會套詞彙表和術語包
+4. `config.py`：learn_mode
+5. `app.js`、`i18n.js`、`style.css`：字幕下的生字、選取字浮出的按鈕、學習頁（複習卡、單字本）、導覽的「學習」
+6. `test_basics.py`：test_seven_features_part_three
+
+自動把關：測試會擋：挑字（韓文去助詞、日文漢字和片假名、英文常見字不標）、收過或說會了的不再標、複習的間隔、檔案壞了照樣開。意思準不準要用真的模型看。
+
+### 改對話摘要
+
+1. `core/assist.py`：summary_prompt 和 parse_summary（一行一點，- 開頭）要一起改
+2. `recap.py`：sessions、worth、GAP、MIN_LINES、recaps.json
+3. `service.py`、`server.py`：recap_check（遊戲偵測那條執行緒每 30 秒看一次）、recap_now、_summarize、recap_remove；/api/recaps；recaps 事件、recap_ready 通知
+4. `history.py`：有存歷史就從歷史拿句子，沒存就用畫面上的
+5. `config.py`：recap_auto
+6. `app.js`、`i18n.js`、`style.css`：歷史頁的摘要區塊，跟著歷史的搜尋一起找
+7. `test_basics.py`：test_seven_features_part_three
+
+自動把關：測試用假的模型回答檢查切段、解析和流程；摘要好不好要用真的模型看。
+
 ### 改念出我的譯文
 
 1. `core/speak.py`：PowerShell 腳本（SCRIPT）、語音的語言對照（VOICE_LANG）、試聽句（SAMPLES，每種語言）、WAV 讀取和播放
@@ -439,6 +462,8 @@
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
 | 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
+| 語言學習：挑生字、單字本、複習 | `livelingo/learn.py` | `service.py`：學習模式挑生字（Wordbook.fresh）、單字本的收、刪、複習（改壞會報錯） |
+| 對話摘要：切出一段段對話、存摘要、搜尋 | `livelingo/recap.py` | `service.py`：切出對話（sessions、worth、GAP）、存摘要、搜尋（改壞會報錯） |
 | 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs、works）（改壞不會報錯） |
 | 讀 .srt / .vtt 字幕檔，配成原文和翻譯 | `livelingo/subtitles.py` | `service.py`：字幕檔的預覽和匯入（_subtitle_pairs）；語言用 detect_language 判斷（改壞會報錯） |
 | 作品：從視窗標題認出在看哪一部影片、哪一個網頁 | `livelingo/works.py` | `service.py`：每一句是在哪一部看到的（_work_now）：挑視窗、整理標題、算 key（改壞會報錯）<br>`memory.py`：匯入第 2 版分享檔時用標題重算作品的 key（改壞會報錯） |
