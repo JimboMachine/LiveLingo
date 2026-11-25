@@ -24,6 +24,7 @@ from pathlib import Path
 
 FILE = "memory.db"
 KIND = "livelingo-translations"         # 分享檔的 kind
+TONES = ("casual", "polite", "casual+keep", "polite+keep")      # 記住的翻法分開存的語氣（+keep = 保留語氣，Translator.memory_tone）
 MAX_MINE = 100000                       # 我的（沒教過的）最多留這麼多句，再多就丟掉最久沒用到的
 MAX_IMPORT = 50000                      # 一個分享檔最多收幾句
 MAX_TEXT = 500
@@ -206,7 +207,7 @@ class Memory:
             src, dst = key_text(item.get("src")), str(item.get("dst") or "").strip()[:MAX_TEXT * 2]
             lang, target, tone = str(item.get("lang") or ""), str(item.get("target") or ""), str(item.get("tone") or "casual")
             if (not src or not dst or src == dst or lang not in sources or target not in targets
-                    or tone not in ("casual", "polite") or (src, lang, target, tone) in seen):
+                    or tone not in TONES or (src, lang, target, tone) in seen):
                 continue
             seen.add((src, lang, target, tone))
             model = str(item.get("model") or "")

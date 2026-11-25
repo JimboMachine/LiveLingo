@@ -23,6 +23,8 @@ DEFAULTS = {
     "quality": "auto",           # auto = 照顯示卡自動決定；standard；high
     "game_terms": True,          # 內建的遊戲用語表（英雄聯盟，韓文和中文之間）
     "term_packs": ["lol", "chat"],   # 用哪幾包內建用語（terms.PACKS）；game_terms 關掉時都不用
+    "game_auto": True,           # 照正在玩的遊戲自動切換：遊戲專用的用語包（terms.GAME_PACKS）和遊戲專用詞只在那個遊戲開著時用
+    "tone_keep": False,          # 保留語氣：髒話、玩笑、網路用語翻成對方語言裡一樣強烈的口語（關掉 = 直翻，比較收斂）
     "back_translate": True,      # 我說的、打的翻成對方的語言之後，再翻回來給我看（回譯）
     "use_context": True,         # 翻譯時參考前面兩句對話（代名詞、省略的主詞比較不會翻錯）
     "remember_translations": True,   # 翻過的句子記在這台電腦上（memory.db），同一句再出現就直接用，不用重翻
@@ -54,6 +56,11 @@ DEFAULTS = {
     "update_check": True,        # 開啟時檢查有沒有新版本（關掉的話，模型都下載好之後 LiveLingo 完全不連網路）
     "setup_done": False,
     "history_keep": True,        # 對話歷史存在這台電腦上（history.jsonl）；關掉就不再記新的
+    "stream": False,             # 直播模式：給 OBS 的「瀏覽器來源」一個固定網址，乾淨的雙語字幕（stream.py）
+    "stream_original": True,     # 直播字幕：譯文上面也顯示原文
+    "stream_mine": True,         # 直播字幕：我說的、打的也顯示
+    "stream_port": 47860,        # 直播字幕的網址用哪個連接埠（被佔用時往後找）；進階，介面上沒有
+    "stream_key": "",            # 直播字幕網址裡的通行碼：第一次打開直播模式時產生，之後固定（網址才不會每次變）
     "share_visible": True,       # 浮動字幕和主視窗要不要讓「分享螢幕、直播、錄影」看得到；關掉就只有自己看得到
     "engine_rest": 30,           # 幾分鐘沒翻譯就讓翻譯引擎休息（放掉記憶體和顯示卡記憶體），0 = 一直開著（service.ENGINE_REST）
     "history_days": 30,          # 歷史保留幾天（history.DAYS：7、30、90，0 = 不限）
@@ -96,10 +103,10 @@ DEFAULTS = {
 # 介面可以改的設定（其他的只能直接改檔案）
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
-EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "quality", "game_terms", "term_packs", "back_translate", "use_context",
+EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
@@ -216,7 +223,8 @@ GLOSSARY_SEED = [
 
 
 class Glossary:
-    """我的詞彙表：[{"src": 看到這個詞, "dst": 要翻成}]。"""
+    """我的詞彙表：[{"src": 看到這個詞, "dst": 要翻成, "game": 只在這個遊戲用（程式檔名小寫，可以沒有）}]。
+    有 game 的是那個遊戲的專用詞：只有在玩那個遊戲（terms.find_game 認出來）的時候才用。"""
 
     def __init__(self, folder: Path):
         self.path = folder / "glossary.json"
@@ -224,48 +232,68 @@ class Glossary:
         self.items: list[dict] = [dict(i) for i in GLOSSARY_SEED]   # 第一次使用時先放幾個例子
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
-            self.items = [{"src": str(i["src"]).strip(), "dst": str(i["dst"]).strip()} for i in raw
-                          if str(i.get("src", "")).strip() and str(i.get("dst", "")).strip()]
+            self.items = [self._clean(i) for i in raw if isinstance(i, dict)
+                          and str(i.get("src", "")).strip() and str(i.get("dst", "")).strip()]
         except FileNotFoundError:
             pass
         except Exception:  # noqa: BLE001
             self.items = []
 
-    def as_dict(self) -> dict[str, str]:
+    @staticmethod
+    def _clean(item: dict) -> dict:
+        out = {"src": str(item["src"]).strip()[:80], "dst": str(item["dst"]).strip()[:80]}
+        game = str(item.get("game") or "").strip().lower()[:80]
+        if game:
+            out["game"] = game
+        return out
+
+    def as_dict(self, game: str = "") -> dict[str, str]:
+        """現在要用的詞：通用的，加上現在這個遊戲的專用詞（同一個詞兩邊都有時，遊戲專用的優先）。"""
+        game = (game or "").lower()
         with self._lock:
-            return {i["src"]: i["dst"] for i in self.items}
+            out = {i["src"]: i["dst"] for i in self.items if not i.get("game")}
+            if game:
+                out.update({i["src"]: i["dst"] for i in self.items if i.get("game") == game})
+            return out
+
+    def games(self) -> set[str]:
+        """有專用詞的遊戲（程式檔名小寫）。"""
+        with self._lock:
+            return {i["game"] for i in self.items if i.get("game")}
 
     def list(self) -> list[dict]:
         with self._lock:
             return [dict(i) for i in self.items]
 
-    def add(self, src: str, dst: str) -> bool:
-        src, dst = src.strip()[:80], dst.strip()[:80]
+    def add(self, src: str, dst: str, game: str = "") -> bool:
+        src, dst, game = src.strip()[:80], dst.strip()[:80], (game or "").strip().lower()[:80]
         if not src or not dst:
             return False
         with self._lock:
-            self.items = [i for i in self.items if i["src"].lower() != src.lower()]
-            self.items.insert(0, {"src": src, "dst": dst})
+            self.items = [i for i in self.items if i["src"].lower() != src.lower() or i.get("game", "") != game]
+            self.items.insert(0, {"src": src, "dst": dst, **({"game": game} if game else {})})
             self._save()
         return True
 
-    def remove(self, src: str) -> None:
+    def remove(self, src: str, game: str = "") -> None:
+        game = (game or "").lower()
         with self._lock:
-            self.items = [i for i in self.items if i["src"] != src]
+            self.items = [i for i in self.items if i["src"] != src or i.get("game", "") != game]
             self._save()
 
     def merge(self, items) -> int:
-        """匯入：只加進原本沒有的詞（原本就有的不動），回傳加了幾個。"""
+        """匯入：只加進原本沒有的詞（原本就有的不動），回傳加了幾個。遊戲專用詞照樣是那個遊戲的。"""
         added = 0
         with self._lock:
-            have = {i["src"].lower() for i in self.items}
+            have = {(i["src"].lower(), i.get("game", "")) for i in self.items}
             for item in items if isinstance(items, list) else []:
-                if not isinstance(item, dict):
+                if not isinstance(item, dict) or not str(item.get("src", "")).strip() or not str(item.get("dst", "")).strip():
                     continue
-                src, dst = str(item.get("src", "")).strip()[:80], str(item.get("dst", "")).strip()[:80]
-                if src and dst and src.lower() not in have:
-                    self.items.append({"src": src, "dst": dst})
-                    have.add(src.lower())
+                clean = self._clean(item)
+                key = (clean["src"].lower(), clean.get("game", ""))
+                if key not in have:
+                    self.items.append(clean)
+                    have.add(key)
                     added += 1
             if added:
                 self._save()

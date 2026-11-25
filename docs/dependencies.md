@@ -56,8 +56,9 @@
 2. `translate.py`：why() 多一種失敗原因時，介面要有對應的 err_代碼（每種介面語言）
 3. `app.js`、`i18n.js`：接事件的地方、對話畫面；失敗的那一則的說明和「重試」（/api/again）
 4. `overlay.py`：浮動留言
-5. `transcript.py`：字幕檔
-6. `tray.py`：選單要不要跟著更新
+5. `stream.py`：直播字幕（line_of 決定哪些出現）
+6. `transcript.py`：字幕檔
+7. `tray.py`：選單要不要跟著更新
 
 自動把關：測試會擋：背景送出介面沒接的事件、提醒少了文字。欄位改名不會被擋，四個收留言的地方要自己對。
 
@@ -246,16 +247,28 @@
 
 自動把關：測試會擋：舊設定檔沒搬過來、介面改得到位置大小、統計數字對不起來。區域多一個欄位時下面每一處都要認得它。
 
+### 改直播字幕（OBS）
+
+1. `stream.py`：網頁本身（PAGE）、哪些留言出現（line_of）、連接埠被佔用時往後找、通行碼和 Host 檢查
+2. `config.py`：stream_…；stream_key 不匯出（SETTINGS_SKIP），網址才不會跟著設定檔流出去
+3. `service.py`：每個送留言的地方都要叫到 stream（_post、_drop、翻到一半、清空）；開關改了要 stream.apply()
+4. `app.js`、`i18n.js`、`style.css`：「顯示在畫面上」頁的直播段落、網址、複製按鈕、OBS 連著幾個
+5. `server.py`：/api/stream（複製網址）
+6. `test_basics.py`：test_seven_features_part_one
+
+自動把關：測試會連上直播字幕頁看字幕有沒有出來、通行碼不對會不會被擋。OBS 裡真正的樣子要自己開 OBS 看。
+
 ### 改翻譯的做法
 
 1. `translate.py`：提示、整理輸出、補救；數字核對（numbers_lost）認得的寫法：新增語言時要補那個語言的數字寫法和數字用語
-2. `terms.py`：遊戲用語
-3. `config.py`：詞彙表、學過的句子
-4. `service.py`：翻成哪種語言、重試；留言的 lost 欄位（譯文裡找不到的數字）
-5. `app.js`、`style.css`、`i18n.js`：留言下面的提醒（numbers_lost）
-6. `index.html`、`app.js`：輸入框和「改原文」的字數上限要跟 translate.MAX_TEXT 一樣（測試會擋）；超過 500 個字的會切段分開翻
-7. `romanize.py`：韓文唸法
-8. `test_basics.py`：固定句子的檢查
+2. `terms.py`：遊戲用語；照正在玩的遊戲切換（GAME_PACKS、GAMES）
+3. `config.py`：詞彙表（有 game 的是遊戲專用詞）、學過的句子
+4. `memory.py`：記住的翻法照語氣分開存（memory.TONES、Translator.memory_tone：保留語氣是 +keep）
+5. `service.py`：翻成哪種語言、重試；留言的 lost 欄位（譯文裡找不到的數字）
+6. `app.js`、`style.css`、`i18n.js`：留言下面的提醒（numbers_lost）
+7. `index.html`、`app.js`：輸入框和「改原文」的字數上限要跟 translate.MAX_TEXT 一樣（測試會擋）；超過 500 個字的會切段分開翻
+8. `romanize.py`：韓文唸法
+9. `test_basics.py`：固定句子的檢查
 
 自動把關：測試有固定的句子在把關，例如陳述句不能變成問句、原文的數字翻完要還在。
 
@@ -387,6 +400,7 @@
 | 視窗 | `livelingo/window.py` | `__main__.py`：開視窗（改壞會報錯） |
 | 系統匣 | `livelingo/tray.py` | `window.py`：系統匣有沒有開起來（改壞不會報錯）<br>`service.py`：系統匣（改壞會報錯） |
 | 浮動留言 | `livelingo/overlay.py` | `hotkeys.py`：短提示顯示在浮動留言上（note）（改壞不會報錯）<br>`service.py`：浮動留言（改壞會報錯） |
+| 直播字幕（給 OBS 的網頁） | `livelingo/stream.py` | `service.py`：直播字幕：每則留言、翻到一半的譯文、刪掉、清空（on_message、on_partial、on_removed、clear）（改壞會報錯） |
 | 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯） |
 | 框選聊天區 | `livelingo/region.py` | `quickbox.py`：顏色和字型（改壞會報錯）<br>`__main__.py`：框選模式（改壞會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
 | 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼；程式自己的短提示（略過幾則、引擎重開）也用 NOTES，介面那邊要有同名的 n_ 文字（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯）<br>`guide.py`：四個全域快速鍵的名稱（overlay、mic、copy、quick）（改壞不會報錯） |
@@ -408,8 +422,8 @@
 | --- | --- | --- |
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
-| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯） |
-| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：介面語言清單（UI_LANGS，十三種）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：每種介面語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：每種介面語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：每種介面語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、每種介面語言的短提示（改壞不會報錯）<br>`quickbox.py`：每種介面語言的提示（改壞不會報錯）<br>`transcript.py`：每種介面語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、每種介面語言的標題（改壞不會報錯）<br>`changes.py`：每種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明每種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`guide.py`：每種介面語言都要寫；給朋友的那一頁用預設快速鍵（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
+| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯）<br>`stream.py`：留言的欄位（who、via、original、translated、pending、error）、說話者名字（speaker_tag）（改壞不會報錯） |
+| 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：介面語言清單（UI_LANGS，十三種）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：每種介面語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：每種介面語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：每種介面語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、每種介面語言的短提示（改壞不會報錯）<br>`quickbox.py`：每種介面語言的提示（改壞不會報錯）<br>`transcript.py`：每種介面語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、每種介面語言的標題（改壞不會報錯）<br>`changes.py`：每種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明每種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`guide.py`：每種介面語言都要寫；給朋友的那一頁用預設快速鍵（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`stream.py`：stream、stream_original、stream_mine、stream_port、stream_key；字的大小和停留秒數跟 overlay_font、overlay_seconds（改壞不會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
 
@@ -424,7 +438,7 @@
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
 | 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言；拉丁字母的語言（LATIN）分不清時歸給唯一在讀的那一種（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
 | 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）；每次啟動把新的網址和金鑰交給翻譯（改壞會報錯）<br>`translate.py`：引擎每次啟動的金鑰（環境變數 LLAMA_API_KEY；請求要帶 Authorization: Bearer）（改壞不會報錯） |
-| 用語包（可多選） | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json`<br>`livelingo/data/terms_chat.json` | `service.py`：遊戲用語（改壞會報錯） |
+| 用語包（可多選） | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json`<br>`livelingo/data/terms_chat.json` | `service.py`：現在在玩哪個遊戲（find_game）、照遊戲挑用語包（packs_for）、遊戲名字（game_name）（改壞會報錯）<br>`service.py`：遊戲用語（改壞會報錯） |
 | 韓文唸法 | `livelingo/core/romanize.py` | `service.py`：韓文唸法（改壞會報錯） |
 
 ### 底層（路徑、Windows 功能、模型下載、顯示卡）

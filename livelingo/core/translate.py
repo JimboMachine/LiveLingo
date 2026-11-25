@@ -260,6 +260,24 @@ def apply_glossary(text: str, glossary: dict[str, str], target: str | None = Non
 
 
 # 還沒說完的半句：實測沒有這一段的話，模型會把「이제 과학적」翻成一整句「現在要用科學的方式。」；有了就只翻聽到的
+# 「保留語氣」：髒話、玩笑、網路用語照原本的強度翻成對方語言的口語（預設的直翻會被模型收斂成比較客氣的說法）。
+# 實測沒有給例子時，翻成台灣中文會出現大陸用語（卧槽），所以每個語言給幾個當地常用的說法。
+# 不給整句示範：試過，4B 會把示範的譯文原封不動抄出來當成答案
+KEEP_TONE = ("Keep the speaker's attitude and strength: translate swear words, insults, teasing, jokes and internet slang "
+             "into equally strong, natural {lang} slang{examples}. Do not soften, censor or explain them, "
+             "and do not add any that are not in the original.\n")
+KEEP_EXAMPLES = {"zh-TW": " as used in Taiwan (for example 幹, 靠北, 笑死, 很瞎, 雷)", "zh-CN": " (for example 卧槽, 笑死, 太菜了, 坑)",
+                 "ko": " (for example 씨발, 존나, ㅋㅋ, 개-)", "ja": " (for example クソ, マジ, 草, ヤバい)",
+                 "en": " (for example damn, wtf, lmao, trash)", "vi": " (for example vãi, đm, gà)",
+                 "th": " (for example เชี่ย, 555, กาก)", "id": " (for example anjir, wkwk, noob)",
+                 "es": " (for example joder, jaja, manco)", "pt": " (for example porra, kkkk, ruim demais)",
+                 "ru": " (for example блин, лол, рак)", "de": " (for example scheiße, lol, Noob)",
+                 "fr": " (for example putain, mdr, nul)"}
+
+def keep_tone_text(target: str) -> str:
+    return KEEP_TONE.format(lang=LANGS[target]["en"], examples=KEEP_EXAMPLES.get(target, ""))
+
+
 UNFINISHED = ("The speaker is still talking, so the text may stop in the middle of a sentence. "
               "Translate only the words that are there. Do not finish or guess the rest of the sentence.\n")
 
@@ -267,11 +285,12 @@ UNFINISHED = ("The speaker is still talking, so the text may stop in the middle 
 def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], tone: str = "casual",
                  hints: list[tuple[str, str]] | None = None, examples: list[tuple[str, str]] | None = None,
                  style: str = "full", context: list[str] | None = None, hint_intro: str | None = None,
-                 unfinished: bool = False) -> str:
+                 unfinished: bool = False, keep: bool = False) -> str:
     """TranslateGemma 官方的提示格式，加上聊天語氣提示、專有名詞表和遊戲用語提示（實測過效果最好的組合）。
     unfinished：這是還沒說完的半句（即時字幕）。跟模型說清楚，不然它會自己把句子編完。
     style：full = 平常用的；short = 語氣提示換成比較短的寫法（直述句被翻成問句時重翻用）；
-    plain = 只有官方的提示（模型把原文原封不動吐回來時重翻用，意思最穩但語氣會比較正式）。"""
+    plain = 只有官方的提示（模型把原文原封不動吐回來時重翻用，意思最穩但語氣會比較正式）。
+    keep：保留語氣（髒話、玩笑、網路用語照原本的強度翻），plain 以外的寫法都加。"""
     s_name, s_code = SOURCES[source]
     t_name = LANGS[target]["en"]
     text, kept = apply_glossary(text, glossary, target)
@@ -292,6 +311,8 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
                  + ", and keep names, game terms and Latin-alphabet words unchanged.\n")
     if style == "full":
         extra += FAITHFUL
+    if keep and style != "plain":
+        extra += keep_tone_text(target)
     if kept:
         extra += "Keep these terms exactly as written, do not translate or change them: " + "; ".join(kept) + "\n"
     hints = [(a, b) for a, b in (hints or []) if a in text]
@@ -566,10 +587,15 @@ class Translator:
         self.memory = memory
         self.model = ""                   # 現在用哪個模型（"4b"／"12b"）：記住的翻法比現在的模型差就重翻
         self.tone = tone
+        self.keep_tone = False            # 保留語氣（髒話、玩笑、網路用語照原本的強度翻）；記住的翻法跟直翻的分開
         self.hint_intro = HINT_INTRO      # 用語提示前面那句話（照選了哪些用語包換）
         self.max_chars = max_chars
         self._lock = threading.Lock()  # 一次只翻一則，其他排隊
         self._cache: dict[tuple, str] = {}
+
+    def memory_tone(self) -> str:
+        """記住的翻法用哪個語氣分開存：保留語氣翻出來的跟直翻的不混用。"""
+        return self.tone + ("+keep" if self.keep_tone else "")
 
     def clear_cache(self) -> None:
         self._cache.clear()
@@ -588,7 +614,7 @@ class Translator:
         on_part 回傳 False 表示「不用翻完了」：馬上停，丟出 Stopped。stop：見 Stop。"""
         payload = {
             "prompt": build_prompt(text, source, target, self.glossary(), self.tone, hints, examples, style, context,
-                                   self.hint_intro, unfinished),
+                                   self.hint_intro, unfinished, self.keep_tone),
             "max_tokens": min(1024, 64 + 4 * len(text)),
             "temperature": 0,
             "repeat_penalty": 1.0,
@@ -773,7 +799,7 @@ class Translator:
 
             words = self.glossary()
             terms = terms_print([(k, v) for k, v in words.items() if k and k in text] + [tuple(h) for h in hints])
-            known = self.memory.lookup(text, source, target, self.tone, self.model, terms)
+            known = self.memory.lookup(text, source, target, self.memory_tone(), self.model, terms)
             if known:
                 self._cache[key] = known
                 return known
@@ -814,5 +840,5 @@ class Translator:
         if (remember is not None and self.memory is not None and out and out.strip() != text
                 and not numbers_lost(sent, out, target, source) and not _leftover(out, source, target)):
             # 只記沒問題的：數字對得上、沒有留著原文的字。有問題的下次再翻一次
-            self.memory.store(text, source, target, self.tone, out, self.model, terms, remember)
+            self.memory.store(text, source, target, self.memory_tone(), out, self.model, terms, remember)
         return out
