@@ -330,7 +330,7 @@
 
 自動把關：測試會擋：還沒翻完的字沒有送到畫面、整句不是最後才到、自己打的字先出半句、半句進了歷史或被算次數、說完之後半句沒被整句接手或沒收回、停不下來。真的快了多少、整句有沒有因此變慢，要用真的模型和錄音量。
 
-### 改「分辨說話者」：門檻、模型、標籤、名字
+### 改「分辨說話者」：門檻、模型、標籤、名字、每個人的語言
 
 1. `voices.py`：SAME／MAYBE／NEW_SECONDS 改了要重量：幾個人、標錯幾句、有沒有同一個人被分成兩個
 2. `assets.py`、`storage.py`：聲紋模型鎖版本、核對 sha256；打開功能才下載；儲存空間頁列得出來、沒開的時候可以刪
@@ -341,7 +341,9 @@
 7. `overlay.py`、`chatpaint.py`、`transcript.py`：名字和顏色：浮動字幕、字幕檔都要用同一套（speaker_name、speaker_color）；改名字、全部重來的時候字幕檔裡已經記下的句子也要跟著（name_speaker、forget_speakers）
 8. `app.js`、`style.css`、`i18n.js`：顏色的點要和 chatpaint.SPEAKER_COLORS 同一組、同樣的順序；「說話者 n」每種介面語言在三個地方（i18n、chatpaint.SPEAKER）要一致
 9. `guide.py`：說明裡提到的頁面和開關名字
-10. `test_basics.py`：test_speakers_are_told_apart、test_named_voices_are_remembered
+10. `speech.py`、`voices.py`、`service.py`：每個人自己的語言（主語言、副語言）：辨識之前先看大概是誰（guess 只看不記），設過語言的人用他的語言聽（speaker_langs、OWN_STAY），聲紋只算一次交給 who；沒人設語言時不能多算。設過語言的人說的話不拿來換「對方的語言」（自動偵測）
+11. `voicebook.py`、`service.py`、`server.py`、`app.js`、`style.css`、`i18n.js`：語言跟名字存在同一筆（lang、lang2），跟聲紋一樣不進設定檔、匯出的設定、問題報告；POST /api/speakers 的 action language；名單上每個人兩個選單（清單跟翻譯語言同一份 PAIR_LANGS），正在選的時候不能重畫；多一種翻譯語言時這裡自動跟著多
+12. `test_basics.py`：test_speakers_are_told_apart、test_named_voices_are_remembered、test_each_speaker_has_their_own_languages
 
 自動把關：測試會擋：分人的規則變了（太短的不認新的人、像的歸同一個人）、聲紋被存檔或放進問題報告、重新分辨之後舊的標籤還在、介面沒有接 speakers、模型沒有鎖版本。門檻準不準，要用真的聲音量（乾淨的朗讀和 Discord 語音差很多）。
 

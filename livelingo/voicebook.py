@@ -1,5 +1,6 @@
 """
 記住的聲音：使用者取過名字的說話者，把名字和聲紋存在這台電腦上（voices.json），下次開程式一開口就認得。
+使用者幫他設的語言（主語言 lang、副語言 lang2，語言代碼）也跟著記在同一筆；沒設就是空的。
 
 只有使用者自己打開「記住取過名字的人」才會寫這個檔。關掉那個開關、把某個人的名字清空、或卸載程式，就會刪掉。
 這個檔不會傳到任何地方，也不會出現在設定檔、匯出的設定、對話歷史、問題報告裡。
@@ -20,11 +21,18 @@ MODEL = "wespeaker-voxceleb-resnet34-LM"      # 換了聲紋模型，舊的聲�
 DIM = 256
 MAX_PEOPLE = 20         # 最多記幾個人
 MAX_NAME = 24
+MAX_LANG = 8            # 語言代碼最長幾個字（"zh-TW"）；是不是真的有這個語言由用的人（service）檢查
 MAX_WEIGHT = 30.0       # 記下來的聲紋最多算「說過 30 秒」那麼重：下次換了麥克風或 Discord 的音質，還跟得上新的聲音
 
 
+def _lang(value) -> str:
+    """語言代碼只收短短的英文字母和連字號，其他的當作沒設。"""
+    value = value if isinstance(value, str) else ""
+    return value if 0 < len(value) <= MAX_LANG and value.replace("-", "").isascii() and value.replace("-", "").isalpha() else ""
+
+
 def load(data: Path) -> list[dict]:
-    """讀出記住的人：[{"name", "voice"（長度是 1 的向量）, "weight"}]。沒有檔案、檔案壞了、是別的模型存的，都回傳空的。"""
+    """讀出記住的人：[{"name", "voice"（長度是 1 的向量）, "weight", "lang", "lang2"}]。沒有檔案、檔案壞了、是別的模型存的，都回傳空的。"""
     try:
         raw = json.loads((Path(data) / FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -41,7 +49,8 @@ def load(data: Path) -> list[dict]:
             continue
         norm = float(np.linalg.norm(voice)) if voice.shape == (DIM,) and np.all(np.isfinite(voice)) else 0.0
         if name and norm > 0 and np.isfinite(weight):
-            people.append({"name": name, "voice": voice / norm, "weight": min(max(weight, 1.0), MAX_WEIGHT)})
+            people.append({"name": name, "voice": voice / norm, "weight": min(max(weight, 1.0), MAX_WEIGHT),
+                           "lang": _lang(row.get("lang")), "lang2": _lang(row.get("lang2"))})
     return people
 
 
@@ -55,7 +64,8 @@ def save(data: Path, people: list[dict]) -> bool:
         norm = float(np.linalg.norm(voice)) if voice.shape == (DIM,) and np.all(np.isfinite(voice)) else 0.0
         if name and norm > 0:
             rows.append({"name": name, "voice": base64.b64encode((voice / norm).astype("<f4").tobytes()).decode("ascii"),
-                         "weight": round(min(max(float(person.get("weight") or 1.0), 1.0), MAX_WEIGHT), 2)})
+                         "weight": round(min(max(float(person.get("weight") or 1.0), 1.0), MAX_WEIGHT), 2),
+                         **{k: _lang(person.get(k)) for k in ("lang", "lang2") if _lang(person.get(k))}})
     if not rows:
         clear(data)
         return True

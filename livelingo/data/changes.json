@@ -1,4 +1,58 @@
 {
+  "2.6.0": {
+    "zh-TW": [
+      "分辨說話者：可以幫每個人選「主語言」和「副語言」（例如主語言中文、副語言英文）。選了之後，他說的話只照這兩種語言來聽，主語言優先，不會被別人的語言或自動偵測帶走。在說話者名單裡每個人的名字下面設定。",
+      "取了名字、而且有開「記住取過名字的人」時，他的語言會跟名字一起記到下次；跟聲音特徵一樣只存在這台電腦，不會傳出去。沒取名字的人只記到程式關掉為止。"
+    ],
+    "zh-CN": [
+      "分辨说话者：可以给每个人选“主语言”和“副语言”（例如主语言中文、副语言英语）。选了之后，他说的话只按这两种语言来听，主语言优先，不会被别人的语言或自动检测带走。在说话者名单里每个人的名字下面设置。",
+      "取了名字、并且打开了“记住取过名字的人”时，他的语言会跟名字一起记到下次；跟声音特征一样只存在这台电脑，不会传出去。没取名字的人只记到程序关掉为止。"
+    ],
+    "en": [
+      "Telling speakers apart: each person can now have a main and a second language (e.g. Chinese and English). Their speech is heard only in those two, main first, whatever the others speak. Set it under each name in the speaker list.",
+      "For a named person, with “Remember people I have named” on, the languages are remembered with the name. Like the voice features, they stay on this PC only. For people without a name they last until the app closes."
+    ],
+    "ko": [
+      "화자 구분: 이제 사람마다 ‘주 언어’와 ‘보조 언어’를 고를 수 있습니다(예: 주 언어 중국어, 보조 언어 영어). 고르면 그 사람의 말은 이 두 언어로만 듣고 주 언어를 우선하며, 다른 사람의 언어나 자동 감지에 끌려가지 않습니다. 화자 목록의 각 이름 아래에서 설정합니다.",
+      "이름을 붙였고 ‘이름 붙인 사람 기억하기’가 켜져 있으면 언어도 이름과 함께 다음에도 기억합니다. 목소리 특징과 마찬가지로 이 컴퓨터에만 저장됩니다. 이름이 없는 사람은 프로그램을 닫을 때까지만 기억합니다."
+    ],
+    "ja": [
+      "話者の区別：人ごとに「主な言語」と「副言語」を選べるようになりました（例：主な言語が中国語、副言語が英語）。選ぶと、その人の発言はこの二つの言語だけで聞き取り、主な言語を優先し、ほかの人の言語や自動検出に引っ張られません。話者リストの名前の下で設定します。",
+      "名前を付けた人は、「名前を付けた人を覚える」がオンなら言語も名前と一緒に次回まで覚えます。声の特徴と同じく、このパソコンにだけ保存されます。名前のない人はアプリを閉じるまでです。"
+    ],
+    "vi": [
+      "Phân biệt người nói: mỗi người giờ có thể có ngôn ngữ chính và ngôn ngữ phụ (ví dụ tiếng Trung và tiếng Anh). Lời họ nói chỉ được nghe bằng hai ngôn ngữ đó, ưu tiên ngôn ngữ chính, dù người khác nói tiếng gì. Đặt dưới tên trong danh sách.",
+      "Với người đã đặt tên và khi bật “Nhớ những người tôi đã đặt tên”, ngôn ngữ được nhớ cùng với tên. Giống đặc trưng giọng nói, chúng chỉ nằm trên máy này. Với người chưa đặt tên, chỉ giữ đến khi đóng ứng dụng."
+    ],
+    "th": [
+      "การแยกผู้พูด: เลือก “ภาษาหลัก” และ “ภาษารอง” ให้แต่ละคนได้แล้ว (เช่น จีนและอังกฤษ) ระบบจะฟังคำพูดของเขาด้วยสองภาษานี้เท่านั้น โดยให้ภาษาหลักมาก่อน ไม่ว่าคนอื่นจะพูดภาษาอะไร ตั้งค่าได้ใต้ชื่อในรายชื่อผู้พูด",
+      "คนที่ตั้งชื่อแล้วและเปิด “จำคนที่ฉันตั้งชื่อไว้” อยู่ ภาษาจะถูกจำไปพร้อมกับชื่อ และเก็บไว้ในเครื่องนี้เท่านั้นเหมือนลักษณะเสียง คนที่ยังไม่มีชื่อจะจำไว้จนกว่าจะปิดแอป"
+    ],
+    "id": [
+      "Membedakan pembicara: tiap orang kini bisa punya bahasa utama dan bahasa kedua (misalnya Mandarin dan Inggris). Ucapannya hanya didengar dalam dua bahasa itu, bahasa utama dulu, apa pun bahasa orang lain. Atur di bawah nama dalam daftar.",
+      "Untuk orang yang sudah diberi nama, saat “Ingat orang yang sudah kuberi nama” aktif, bahasanya diingat bersama namanya. Seperti ciri suara, semuanya hanya disimpan di PC ini. Untuk orang tanpa nama, hanya sampai aplikasi ditutup."
+    ],
+    "es": [
+      "Distinguir hablantes: cada persona puede tener ahora un idioma principal y un segundo idioma (p. ej., chino e inglés). Lo que dice se escucha solo en esos dos, primero el principal, hablen lo que hablen los demás. Se ajusta bajo su nombre.",
+      "Si la persona tiene nombre y “Recordar a las personas que he nombrado” está activado, sus idiomas se recuerdan junto con el nombre. Como los rasgos de voz, solo se guardan en este PC. Sin nombre, duran hasta cerrar la aplicación."
+    ],
+    "pt": [
+      "Distinguir falantes: cada pessoa agora pode ter um idioma principal e um segundo idioma (por exemplo, chinês e inglês). O que ela diz é ouvido só nesses dois, primeiro o principal, seja qual for o idioma dos outros. Ajuste abaixo do nome.",
+      "Se a pessoa tem nome e “Lembrar das pessoas que eu nomeei” está ativado, os idiomas são lembrados junto com o nome. Como as características da voz, ficam só neste PC. Sem nome, duram até fechar o aplicativo."
+    ],
+    "ru": [
+      "Различение говорящих: каждому человеку теперь можно выбрать основной и второй язык (например, китайский и английский). Его речь распознаётся только на этих двух, основной в приоритете, что бы ни звучало у других. Настройка под именем.",
+      "Если человеку дано имя и включено «Запоминать людей, которым я дал имя», языки запоминаются вместе с именем. Как и признаки голоса, они хранятся только на этом ПК. Для людей без имени — до закрытия приложения."
+    ],
+    "de": [
+      "Sprecher unterscheiden: Jede Person kann jetzt eine Haupt- und eine Zweitsprache haben (z. B. Chinesisch und Englisch). Sie wird nur in diesen beiden gehört, die Hauptsprache zuerst, egal was andere sprechen. Einstellbar unter dem Namen.",
+      "Hat die Person einen Namen und ist „Personen merken, denen ich einen Namen gegeben habe“ an, werden die Sprachen mit dem Namen gemerkt und bleiben nur auf diesem PC. Ohne Namen gelten sie, bis die App geschlossen wird."
+    ],
+    "fr": [
+      "Distinguer les intervenants : chaque personne peut avoir une langue principale et une seconde langue (p. ex. chinois et anglais). Ses paroles sont écoutées dans ces deux langues seulement, la principale d'abord. À régler sous son nom.",
+      "Si la personne a un nom et que « Se souvenir des personnes que j'ai nommées » est activé, ses langues sont retenues avec le nom et restent sur ce PC. Sans nom, elles durent jusqu'à la fermeture de l'application."
+    ]
+  },
   "2.5.3": {
     "zh-TW": [
       "每次更新或重新安裝後，第一次開啟會用你的語言列出這次改了什麼（包含中間跳過的版本），按「知道了」才關掉，之後可以在「關於」再看。",

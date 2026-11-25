@@ -115,6 +115,19 @@ class Speakers:
                 return best + 1
             return None
 
+    def guess(self, voice: np.ndarray | None, seconds: float) -> int | None:
+        """只看不記：這份聲紋像已經分出來的哪一個人（編號），誰都不夠像回傳 None。
+        不會多一個人、不改任何人的聲紋、不算一句。辨識之前先問「大概是誰」用的（才知道要用誰的語言去聽）。"""
+        if voice is None or seconds < MIN_SECONDS:
+            return None
+        with self._lock:
+            best, score = -1, -1.0
+            for i, total in enumerate(self._sums):
+                s = float(voice @ (total / (np.linalg.norm(total) + 1e-9)))
+                if s > score:
+                    best, score = i, s
+            return best + 1 if best >= 0 and score >= self.maybe else None
+
     def people(self) -> list[dict]:
         with self._lock:
             return [{"id": i + 1, "count": n} for i, n in enumerate(self.counts)]
@@ -150,5 +163,11 @@ class Voices:
         self.model = Voiceprint(model_path, threads)
         self.speakers = Speakers()
 
-    def who(self, audio: np.ndarray) -> int | None:
-        return self.speakers.who(self.model.embed(audio), len(audio) / SR)
+    def who(self, audio: np.ndarray, voice: np.ndarray | None = None) -> int | None:
+        """voice：這段聲音已經算好的聲紋（guess 給的），有給就不用再算一次。"""
+        return self.speakers.who(self.model.embed(audio) if voice is None else voice, len(audio) / SR)
+
+    def guess(self, audio: np.ndarray) -> tuple[np.ndarray | None, int | None]:
+        """辨識之前先看一下大概是誰：回傳（聲紋, 編號或 None）。不會記下任何東西；聲紋交回給 who 就不用算兩次。"""
+        voice = self.model.embed(audio)
+        return voice, self.speakers.guess(voice, len(audio) / SR)
