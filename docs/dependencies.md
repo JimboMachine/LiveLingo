@@ -326,7 +326,10 @@
 9. `overlay.py`：on_partial 只給對方說的話；螢幕讀到的要翻完才知道要不要顯示
 10. `app.js`、`style.css`：還在翻的那一則用 #part-編號 直接換字，不整塊重畫；游標閃動在「減少動態」時要停；還在說的原文後面有「…」
 11. `history.py`、`transcript.py`、`usage.py`：半句不進歷史、不進字幕檔、不算次數
-12. `test_basics.py`：test_translation_streams_out_while_it_is_made、test_live_captions_while_the_other_person_is_still_talking
+12. `speech.py`：半句只補到 QUICK_WINDOW 秒（快），整句一定照 Recognizer.window（15 秒）：整句補短實測會不準（重複、漏字）
+13. `service.py`、`translate.py`、`speech.py`：兩邊都用處理器時，翻譯（Translator.translate）和辨識（Recognizer.transcribe）拿同一把鎖輪流跑（Service._cpu_turn）；任何一邊用顯示卡就不擋。新增會用到處理器的重活也要拿這把鎖
+14. `service.py`、`translate.py`：引擎開好、換語言或語氣時在背景暖機（_warm_engine → Translator.warm，只吐 1 個字）；提示開頭的寫法（build_prompt）改了，暖機就跟著對
+15. `test_basics.py`：test_translation_streams_out_while_it_is_made、test_live_captions_while_the_other_person_is_still_talking、test_faster_translation_warm_up_turns_and_quick_window
 
 自動把關：測試會擋：還沒翻完的字沒有送到畫面、整句不是最後才到、自己打的字先出半句、半句進了歷史或被算次數、說完之後半句沒被整句接手或沒收回、停不下來。真的快了多少、整句有沒有因此變慢，要用真的模型和錄音量。
 
