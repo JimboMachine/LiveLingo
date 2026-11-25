@@ -243,6 +243,9 @@ class Service:
         self.voices = None
         self.speakers = {"state": "off", "percent": 0, "error": "", "mb": assets.VOICE_MB}
         self._speaker_names: dict[int, str] = {}
+        # 每個說話者自己的語言：{編號: (主語言, 副語言)}，語言代碼跟 their_lang 一樣（"" = 沒設）。
+        # 設了的人，他說的話只在這兩個語言裡聽（主語言優先），不跟著「對方的語言」和自動偵測走
+        self._speaker_langs: dict[int, tuple[str, str]] = {}
         self._speaker_run = 1      # 按一次「全部重新分辨」加一：之前標的編號就不算數了
         self._black_regions: set[str] = set()      # 抓到的畫面是全黑的聊天區（遊戲用全螢幕時會這樣）
         self._lock = threading.RLock()
@@ -2563,7 +2566,9 @@ class Service:
                                   on_partial=self._on_live if key == "listen" else None,
                                   live=lambda: bool(self.cfg["live_captions"]), busy=self._live_wait,
                                   # 分辨說話者也只給「對方說的話」
-                                  voices=self._voices_now if key == "listen" else None)
+                                  voices=self._voices_now if key == "listen" else None,
+                                  # 每個人自己的語言（主語言、副語言）：設過的人照他的語言聽
+                                  speaker_langs=self._speaker_lang_table if key == "listen" else None)
             if key == "listen" and self.cfg["their_auto"]:
                 pipe.stay = 1.5
             old = self.pipelines.pop(key, None)
@@ -2702,7 +2707,9 @@ class Service:
         remember = bool(self.cfg["remember_speakers"])
         return {**self.speakers, "on": bool(self.cfg["tell_speakers"]), "run": self._speaker_run, "remember": remember,
                 # known：這個人會被記住（有開「記住」而且取了名字）
-                "people": [dict(p, name=self._speaker_names.get(p["id"], ""), known=remember and bool(self._speaker_names.get(p["id"])))
+                # lang、lang2：使用者幫這個人設的主語言、副語言（沒設是空的）
+                "people": [dict(p, name=self._speaker_names.get(p["id"], ""), known=remember and bool(self._speaker_names.get(p["id"])),
+                                lang=self._speaker_langs.get(p["id"], ("", ""))[0], lang2=self._speaker_langs.get(p["id"], ("", ""))[1])
                            for p in people]}
 
     def _speakers(self, **changes) -> None:
@@ -2762,12 +2769,47 @@ class Service:
         self.hub.publish("speakers", self.speakers_state())
         return {"ok": True, "name": name}
 
+    def speaker_language(self, speaker: int, lang: str, lang2: str = "") -> dict:
+        """
+        幫第幾個說話者設他說的語言。lang：主語言（平常說的）；lang2：副語言（偶爾夾著說的，可以沒有）。
+        都是語言代碼（跟「對方的語言」同一份清單）；lang 給空的 = 不指定，照「對方的語言」聽。
+        設了之後，他說的話只在這兩個語言裡判斷，主語言優先；翻譯一樣翻成「我的語言」。
+        沒取名字的人只記到程式關掉；取了名字而且有開「記住取過名字的人」，語言跟名字一起記到下次。
+        """
+        lang, lang2 = self._clean_speaker_langs(lang, lang2)
+        if not self.voices or not any(p["id"] == speaker for p in self.voices.speakers.people()):
+            return {"ok": False}
+        if lang:
+            self._speaker_langs[speaker] = (lang, lang2)
+        else:
+            self._speaker_langs.pop(speaker, None)
+        self._voices_save()
+        self.hub.publish("speakers", self.speakers_state())
+        return {"ok": True, "lang": lang, "lang2": lang2}
+
+    @staticmethod
+    def _clean_speaker_langs(lang, lang2) -> tuple[str, str]:
+        """只收語音辨識聽得懂的語言；沒有主語言就沒有副語言；副語言跟主語言是同一種話（例如繁體和簡體）就不算。"""
+        def ok(code) -> str:
+            code = str(code or "")
+            return code if code in LANGS and LANGS[code]["family"] in VOICE_FAMILIES else ""
+
+        lang, lang2 = ok(lang), ok(lang2)
+        if not lang or (lang2 and LANGS[lang2]["family"] == LANGS[lang]["family"]):
+            lang2 = ""
+        return lang, lang2
+
+    def _speaker_lang_table(self) -> dict[int, list[str]]:
+        """給收音管線：{說話者編號: [主語言, 副語言]}（語音辨識用的語言名，中文不分繁簡）。只有設過語言的人。"""
+        return {n: [LANGS[code]["family"] for code in pair if code] for n, pair in list(self._speaker_langs.items())}
+
     def speakers_forget(self) -> dict:
         """全部重新分辨：忘掉目前分出來的人和名字（換了一群人，或分錯了）。之前的句子不再標是誰。
         以前記住的人（存在 voices.json 的）不會被忘掉：照存檔的樣子放回來，要忘掉某個人是把他的名字清空。"""
         if self.voices:
             self.voices.speakers.forget()
         self._speaker_names.clear()
+        self._speaker_langs.clear()
         self._speaker_run += 1
         self.transcript.forget_speakers()
         self._voices_seed()
@@ -2779,7 +2821,11 @@ class Service:
         if not (self.voices and self.cfg["remember_speakers"]):
             return
         for person in voicebook.load(self.data):
-            self._speaker_names[self.voices.speakers.seed(person["voice"], person["weight"])] = person["name"]
+            n = self.voices.speakers.seed(person["voice"], person["weight"])
+            self._speaker_names[n] = person["name"]
+            lang, lang2 = self._clean_speaker_langs(person.get("lang"), person.get("lang2"))
+            if lang:
+                self._speaker_langs[n] = (lang, lang2)
 
     def _voices_save(self) -> None:
         """把現在取過名字的人存起來（整份換掉）。沒開「記住」、或聲紋模型還沒準備好（還不知道以前記了誰）就不動那個檔。"""
@@ -2789,7 +2835,8 @@ class Service:
         for n, name in sorted(self._speaker_names.items()):
             got = self.voices.speakers.voice_of(n)
             if got and name:
-                people.append({"name": name, "voice": got[0], "weight": got[1]})
+                lang, lang2 = self._speaker_langs.get(n, ("", ""))
+                people.append({"name": name, "voice": got[0], "weight": got[1], "lang": lang, "lang2": lang2})
         self._voices_saved = time.time()
         if not voicebook.save(self.data, people):
             self.log("remembered voices could not be saved")
@@ -2868,9 +2915,11 @@ class Service:
         if self.cfg["drop_echo"] and self._is_echo(kind, text, lang):
             self._end_live(kind)
             return
-        if kind == "loopback" and self.cfg["their_auto"]:
+        own = self._speaker_langs.get(int(speaker)) if speaker and kind == "loopback" else None
+        if kind == "loopback" and self.cfg["their_auto"] and not own:
+            # 設過語言的人說的話不拿來猜「對方的語言」：他的語言是使用者指定的，不代表其他人也換了語言
             self._their_language_heard(lang, text)
-        text = self._voice_script(kind, text, lang)
+        text = self._voice_script(kind, text, lang, own)
         heard = text
         msg_id = self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure, hear=seconds,
                              live=self._take_live(kind), speaker=speaker if kind == "loopback" else None)
@@ -2880,12 +2929,16 @@ class Service:
                 self._voices_save()      # 記住的人：聲紋跟著今天的聲音調整過了，隔一陣子存一次
         self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
 
-    def _voice_script(self, kind: str, text: str, lang: str | None) -> str:
-        """語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一。"""
+    def _voice_script(self, kind: str, text: str, lang: str | None, own: tuple[str, str] | None = None) -> str:
+        """語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一。
+        own：這個說話者自己設的（主語言, 副語言）；裡面有中文就照他設的那一種。"""
         if lang != "zh":
             return text
         from .core.translate import to_script
 
+        mine = next((code for code in own or () if code and LANGS[code]["family"] == "zh"), "")
+        if mine:
+            return to_script(text, mine)
         speaker, other = ((self.cfg["their_lang"], self.cfg["my_lang"]) if kind == "loopback"
                           else (self.cfg["my_lang"], self.cfg["their_lang"]))
         return to_script(text, speaker if LANGS[speaker]["family"] == "zh" else other)

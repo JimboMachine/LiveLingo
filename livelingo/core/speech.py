@@ -27,6 +27,7 @@ QUICK_WINDOW = 10
 
 QUIET = 0.0008      # 整段聲音的最大值比這個還小，就當成完全沒聲音（關掉的麥克風送來的是一串 0）
 MAX_GAIN = 30.0     # 太小聲的聲音最多放大這麼多倍
+OWN_STAY = 1.5      # 設過語言的人：主語言比副語言優先這麼多（短短一兩個字不會被聽成副語言；整句說副語言還是換得過去）
 
 
 def not_sure(avg_logprob: float, no_speech_prob: float) -> bool:
@@ -267,17 +268,23 @@ class SpeechPipeline(threading.Thread):
     整句照樣走 on_text；那一句最後沒有結果（雜音、太短）就叫 on_partial(來源, None, None) 收回。
     busy()：回傳 True 的時候先不要做（電腦正在忙別的重活）。
     分辨說話者：有給 voices 的話，每一句說完順便算是誰說的，多交一個 speaker=編號 給 on_text。
+    每個人自己的語言：有給 speaker_langs 的話（回傳 {編號: [主語言, 副語言]}），辨識之前先看這句大概是誰說的，
+    是設過語言的人就只在他的語言裡聽（主語言優先），不用整條收音共用的 langs。
     """
 
     gate = None      # gate()：現在要不要收音（「按住才說話」沒按著的時候是 False）。None = 一直收
     on_partial = None      # 沒給就不做即時字幕
     voices = None          # voices()：回傳分辨說話者用的東西（有 who(聲音)），沒開那個功能就回傳 None
+    speaker_langs = None   # speaker_langs()：{說話者編號: [主語言, 副語言（可以沒有）]}，只有使用者設過語言的人
     _live_text = None
+    _live_langs = None     # 還在說的這一句：先看過是誰了，用他的語言（None = 還沒看過，() = 看過了，不是設過語言的人）
 
     def __init__(self, capture, recognizer: Recognizer, langs: list[str], on_text, on_state=None,
-                 end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None, on_partial=None, live=None, busy=None, voices=None):
+                 end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None, on_partial=None, live=None, busy=None, voices=None,
+                 speaker_langs=None):
         super().__init__(daemon=True)
         self.voices = voices
+        self.speaker_langs = speaker_langs
         self.on_partial = on_partial
         self.live = live or (lambda: True)
         self.busy = busy or (lambda: False)
@@ -337,12 +344,29 @@ class SpeechPipeline(threading.Thread):
                 was_speaking = self.segmenter.speaking
                 self.on_state(self.capture.kind, was_speaking)
 
-    def _who(self, utter: np.ndarray) -> int | None:
+    def _who(self, utter: np.ndarray, voice=None) -> int | None:
         try:
             voices = self.voices() if self.voices else None
-            return voices.who(utter) if voices else None
+            if not voices:
+                return None
+            return voices.who(utter) if voice is None else voices.who(utter, voice)
         except Exception:  # noqa: BLE001  分不出來不能讓字幕也沒有
             return None
+
+    def _langs_of(self, sound: np.ndarray):
+        """
+        這段聲音大概是誰說的；他有設自己的語言就回傳（他的語言, 聲紋），不然回傳（None, 聲紋）。
+        沒有人設過語言的時候什麼都不算（聲紋是 None），跟以前一樣快。
+        """
+        try:
+            table = self.speaker_langs() if self.speaker_langs else None
+            voices = self.voices() if (table and self.voices) else None
+            if not voices or not hasattr(voices, "guess"):
+                return None, None
+            voice, likely = voices.guess(sound)
+            return ([l for l in table.get(likely) or [] if l] or None) if likely else None, voice
+        except Exception:  # noqa: BLE001  看不出來就照平常的語言聽
+            return None, None
 
     def _hear(self, audio: np.ndarray) -> None:
         """把新進來的聲音交給切句的；說完的句子送去辨識，還在說的那一句看情況先辨識一次。"""
@@ -351,14 +375,16 @@ class SpeechPipeline(threading.Thread):
             if self._live_text is not None:
                 self.on_partial(kind, "", None)      # 說完了：半句不用再翻，把電腦讓給整句
             t = time.time()
+            own, voice = self._langs_of(utter)      # 設過語言的人：只在他的主語言、副語言裡聽
+            self._live_langs = None
             try:
-                res = self.recognizer.transcribe(utter, self.langs, self.stay)
+                res = self.recognizer.transcribe(utter, own or self.langs, OWN_STAY if own else self.stay)
             except Exception as ex:  # noqa: BLE001
                 self.on_text(kind, str(ex), "error", 0.0, False)
                 continue
             if res:
                 given = True
-                who = self._who(utter)      # 這一句是誰說的（有開「分辨說話者」才會有）
+                who = self._who(utter, voice)      # 這一句是誰說的（有開「分辨說話者」才會有）
                 self.on_text(kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False,
                              **({"speaker": who} if who else {}))
                 self._live_text = None      # 先顯示的那一則已經被整句接手
@@ -369,14 +395,18 @@ class SpeechPipeline(threading.Thread):
             if self._live_text is not None and not given:
                 self.on_partial(kind, None, None)      # 先顯示過了，但最後沒有結果：收回
             self._live_text = None
+            self._live_langs = None
             self.pacer.reset()
             return
         so_far = self.segmenter.so_far() if self.live() else None
         if so_far is None or not self.pacer.due(len(so_far) / SR, time.time(), self.recognizer.busy() or self.busy()):
             return
         t = time.time()
+        if self._live_langs is None:      # 這一句第一次先辨識：看一次是誰就好，後面幾次沿用
+            self._live_langs = tuple(self._langs_of(so_far)[0] or ())
+        own = list(self._live_langs)
         try:
-            res = self.recognizer.transcribe(so_far, self.langs, self.stay, quick=True)
+            res = self.recognizer.transcribe(so_far, own or self.langs, OWN_STAY if own else self.stay, quick=True)
         except Exception:  # noqa: BLE001  先看一下而已，失敗就等整句
             res = None
         self.pacer.done(len(so_far) / SR, time.time(), time.time() - t)
