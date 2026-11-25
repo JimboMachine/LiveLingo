@@ -198,17 +198,20 @@
 
 ### 改翻過的句子（翻譯記憶）或翻譯分享檔
 
-1. `memory.py`：資料表欄位、誰比較優先（lookup 的分數）、分享檔格式（KIND、version）：改格式要能讀舊版的檔
-2. `translate.py`：什麼時候查、什麼時候記：半句（unfinished）、數字對不上、留著原文的都不記
-3. `service.py`：remember 只從 _translate 給（回譯不記）；teach、lesson_remove 要同步；設定 remember_translations、use_shared 改了要清暫存
-4. `config.py`：remember_translations、use_shared
-5. `server.py`：/api/memory 的四個動作
-6. `app.js`、`i18n.js`：翻譯品質頁的「翻過的句子」區塊、匯入時選錯檔案（詞彙檔、分享檔）的提示
-7. `storage.py`：memory.db 算在「設定和紀錄」裡
-8. `guide.py`：說明頁提到分享檔的那一段
-9. `test_basics.py`：test_translation_memory_and_share_files
+1. `memory.py`：資料表欄位（memory、packs、works、work_lines）、誰比較優先（find 的分數）、分享檔格式（KIND、VERSION、works）：改格式要能讀舊版的檔
+2. `watcher.py`：雙語字幕（pair_lang、_pairs）：配到的那一行不能再當成要翻的一則；on_message 有配到時多一個 shown
+3. `subtitles.py`：字幕檔怎麼讀、怎麼配對（MIN_OVERLAP、雙語檔的分法）；字幕的句子 fixed = SUBTITLE，排在教過的後面、機器翻的前面
+4. `works.py`：標題怎麼整理（clean_title、GENERIC）：改了之後舊的作品 key 會對不上，等於全部變成新的一部
+5. `translate.py`：什麼時候查、什麼時候記：半句（unfinished）、數字對不上、留著原文的都不記
+6. `service.py`：remember 只從 _translate 給（回譯不記）；teach、lesson_remove 要同步；設定 remember_translations、use_shared 改了要清暫存
+7. `config.py`：remember_translations、use_shared、remember_works、use_shown_translation
+8. `server.py`：/api/memory 的動作：export（可帶 work、title）、import、remove_pack、forget、own_only、forget_work、subtitles_preview、subtitles_import；請求最大 8 MB（兩個字幕檔）
+9. `app.js`、`i18n.js`：翻譯品質頁的「翻過的句子」區塊和作品清單（worksBlock）、訊息旁的「翻過的／朋友的」（kept_）、「這部翻過了」提示（n_work_known）、匯入字幕檔的預覽（subtitlePreview、sub_*、n_sub_*）、匯入時選錯檔案（詞彙檔、分享檔）的提示
+10. `storage.py`：memory.db 算在「設定和紀錄」裡
+11. `guide.py`：說明頁提到分享檔的那一段
+12. `test_basics.py`：test_translation_memory_and_share_files、test_works_recognise_what_is_watched_and_share_one、test_subtitle_files_become_translations
 
-自動把關：測試會擋：同一句沒有直接用記住的、比較差的模型翻的被拿來用、詞彙表改了還用舊的、匯入的蓋過教過的、匯出含了我自己打的、刪一包沒刪乾淨。真的在 Windows 上用起來快不快，要自己看。
+自動把關：測試會擋：同一句沒有直接用記住的、比較差的模型翻的被拿來用、詞彙表改了還用舊的、匯入的蓋過教過的、匯出含了我自己打的、刪一包沒刪乾淨、同一部裡幾乎一樣的句子沒用上、別部的拿錯、第 1 版的檔讀不進來。真的在 Windows 上用起來快不快、瀏覽器的視窗標題對不對，要自己看。
 
 ### 改對話歷史
 
@@ -339,11 +342,14 @@
 9. `overlay.py`：on_partial 只給對方說的話；螢幕讀到的要翻完才知道要不要顯示
 10. `app.js`、`style.css`：還在翻的那一則用 #part-編號 直接換字，不整塊重畫；游標閃動在「減少動態」時要停；還在說的原文後面有「…」
 11. `history.py`、`transcript.py`、`usage.py`：半句不進歷史、不進字幕檔、不算次數
-12. `test_basics.py`：test_translation_streams_out_while_it_is_made、test_live_captions_while_the_other_person_is_still_talking
+12. `speech.py`：半句只補到 QUICK_WINDOW 秒（快），整句一定照 Recognizer.window（15 秒）：整句補短實測會不準（重複、漏字）
+13. `service.py`、`translate.py`、`speech.py`：兩邊都用處理器時，翻譯（Translator.translate）和辨識（Recognizer.transcribe）拿同一把鎖輪流跑（Service._cpu_turn）；任何一邊用顯示卡就不擋。新增會用到處理器的重活也要拿這把鎖
+14. `service.py`、`translate.py`：引擎開好、換語言或語氣時在背景暖機（_warm_engine → Translator.warm，只吐 1 個字）；提示開頭的寫法（build_prompt）改了，暖機就跟著對
+15. `test_basics.py`：test_translation_streams_out_while_it_is_made、test_live_captions_while_the_other_person_is_still_talking、test_faster_translation_warm_up_turns_and_quick_window
 
 自動把關：測試會擋：還沒翻完的字沒有送到畫面、整句不是最後才到、自己打的字先出半句、半句進了歷史或被算次數、說完之後半句沒被整句接手或沒收回、停不下來。真的快了多少、整句有沒有因此變慢，要用真的模型和錄音量。
 
-### 改「分辨說話者」：門檻、模型、標籤、名字
+### 改「分辨說話者」：門檻、模型、標籤、名字、每個人的語言
 
 1. `voices.py`：SAME／MAYBE／NEW_SECONDS 改了要重量：幾個人、標錯幾句、有沒有同一個人被分成兩個
 2. `assets.py`、`storage.py`：聲紋模型鎖版本、核對 sha256；打開功能才下載；儲存空間頁列得出來、沒開的時候可以刪
@@ -354,7 +360,9 @@
 7. `overlay.py`、`chatpaint.py`、`transcript.py`：名字和顏色：浮動字幕、字幕檔都要用同一套（speaker_name、speaker_color）；改名字、全部重來的時候字幕檔裡已經記下的句子也要跟著（name_speaker、forget_speakers）
 8. `app.js`、`style.css`、`i18n.js`：顏色的點要和 chatpaint.SPEAKER_COLORS 同一組、同樣的順序；「說話者 n」每種介面語言在三個地方（i18n、chatpaint.SPEAKER）要一致
 9. `guide.py`：說明裡提到的頁面和開關名字
-10. `test_basics.py`：test_speakers_are_told_apart、test_named_voices_are_remembered
+10. `speech.py`、`voices.py`、`service.py`：每個人自己的語言（主語言、副語言）：辨識之前先看大概是誰（guess 只看不記），設過語言的人用他的語言聽（speaker_langs、OWN_STAY），聲紋只算一次交給 who；沒人設語言時不能多算。設過語言的人說的話不拿來換「對方的語言」（自動偵測）
+11. `voicebook.py`、`service.py`、`server.py`、`app.js`、`style.css`、`i18n.js`：語言跟名字存在同一筆（lang、lang2），跟聲紋一樣不進設定檔、匯出的設定、問題報告；POST /api/speakers 的 action language；名單上每個人兩個選單（清單跟翻譯語言同一份 PAIR_LANGS），正在選的時候不能重畫；多一種翻譯語言時這裡自動跟著多
+12. `test_basics.py`：test_speakers_are_told_apart、test_named_voices_are_remembered、test_each_speaker_has_their_own_languages
 
 自動把關：測試會擋：分人的規則變了（太短的不認新的人、像的歸同一個人）、聲紋被存檔或放進問題報告、重新分辨之後舊的標籤還在、介面沒有接 speakers、模型沒有鎖版本。門檻準不準，要用真的聲音量（乾淨的朗讀和 Discord 語音差很多）。
 
@@ -408,7 +416,9 @@
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
 | 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
-| 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs）（改壞不會報錯） |
+| 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs、works）（改壞不會報錯） |
+| 讀 .srt / .vtt 字幕檔，配成原文和翻譯 | `livelingo/subtitles.py` | `service.py`：字幕檔的預覽和匯入（_subtitle_pairs）；語言用 detect_language 判斷（改壞會報錯） |
+| 作品：從視窗標題認出在看哪一部影片、哪一個網頁 | `livelingo/works.py` | `service.py`：每一句是在哪一部看到的（_work_now）：挑視窗、整理標題、算 key（改壞會報錯）<br>`memory.py`：匯入第 2 版分享檔時用標題重算作品的 key（改壞會報錯） |
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字；留下設定時要刪的資料夾名字（models、engine）（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
 | 每一版改了什麼（每種介面語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
 | 問題報告：先給使用者看，不自己送出 | `livelingo/report.py` | `service.py`：把狀態、設定、紀錄排成一份文字；存檔、複製用的是剛才給使用者看過的那一份（改壞會報錯）<br>`app.js`：預覽的欄位（text、lines、bytes）和存好之後的檔名（改壞不會報錯） |
@@ -447,6 +457,6 @@
 | --- | --- | --- |
 | 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`changes.py`：changes.json 放在哪（改壞會報錯）<br>`guide.py`：help.json 和品牌標誌放在哪（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯） |
 | Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、接著哪些螢幕和各自的大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯） |
-| 開著哪些程式 | `livelingo/apps.py` | `service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
+| 開著哪些程式 | `livelingo/apps.py` | `works.py`：apps.windows() 的欄位（exe、title、rect、minimized）（改壞不會報錯）<br>`service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
 | 模型下載 | `livelingo/assets.py` | `storage.py`：模型和引擎的檔名、資料夾（改壞會報錯）<br>`service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN、分辨說話者的聲紋模型）（改壞會報錯）<br>`voices.py`：聲紋模型的檔案（打開功能時才下載）（改壞不會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯）<br>`README.md`：第一次下載大約幾 GB（要和實際的檔案大小對得上）（改壞不會報錯） |
 | 顯示卡判斷 | `livelingo/gpu.py` | `service.py`：選模式（改壞會報錯） |

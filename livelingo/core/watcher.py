@@ -229,6 +229,8 @@ class ScreenWatcher(threading.Thread):
         self.black_after = 5.0                                # 連續黑幾秒才算（切換畫面時黑一下不算）
         self.interval = interval
         self.source_langs = source_langs or {"ko"}
+        # 雙語字幕：有設的話（我的語言那一家，例如 "zh"），要翻的那一行緊鄰著一行這種語言的字，就當成畫面上現成的翻譯一起交出去
+        self.pair_lang: str | None = None
         self.first_scan_keep = first_scan_keep
         self.grab = grab                      # 測試時可以換成別的擷取函式
         self.locate = locate or (lambda region: region)
@@ -370,7 +372,12 @@ class ScreenWatcher(threading.Thread):
         slot.stats["scans"] += 1
         slot.stats["lines"] += len(lines)
         fresh = []
+        pairs = self._pairs(lines)                       # 雙語字幕：要翻的第 i 行 → 旁邊那一行（我的語言）
+        shown_rows = set(pairs.values())
         for i, (ln, parts) in enumerate(lines):
+            if i in shown_rows:
+                slot.stats["other"] += 1      # 雙語字幕裡我的語言那一行：是翻譯，不是要翻的
+                continue
             lang = wanted(ln.text, self.source_langs)
             if not lang:
                 slot.stats["other"] += 1      # 不是要翻的語言（自己的語言、數字、符號）
@@ -382,12 +389,35 @@ class ScreenWatcher(threading.Thread):
                 slot.stats["repeat"] += 1     # 之前讀過的同一則
             else:
                 slot.seen.add(ln.text, parts)
-                fresh.append((ln.text, lang, ln.score))
+                fresh.append((ln.text, lang, ln.score, lines[pairs[i]][0].text if i in pairs else ""))
         if slot.first:
             # 第一次只翻畫面最下面幾則，免得一口氣翻一整頁
             slot.first = False
             slot.stats["old"] += max(0, len(fresh) - self.first_scan_keep)
             fresh = fresh[-self.first_scan_keep:]
         slot.stats["sent"] += len(fresh)
-        for text, lang, score in fresh:
-            self.on_message(text, lang, score, slot.region)
+        for text, lang, score, shown in fresh:
+            if shown:
+                self.on_message(text, lang, score, slot.region, shown)
+            else:
+                self.on_message(text, lang, score, slot.region)
+
+    def _pairs(self, lines) -> dict[int, int]:
+        """雙語字幕：{要翻的那一行: 緊鄰的我的語言那一行}。沒開（pair_lang 是 None）就是空的。
+        先看下面一行（大部分雙語字幕原文在上），再看上面一行；一行翻譯只配一次。
+        日文和中文都有漢字，所以「我的語言那一行」要用 detect_language 認（沒有假名的才是中文），不能用 wanted。"""
+        if not self.pair_lang:
+            return {}
+        from .translate import detect_language
+
+        langs = [detect_language(ln.text) for ln, _ in lines]
+        out, used = {}, set()
+        for i, lang in enumerate(langs):
+            if lang == self.pair_lang or not wanted(lines[i][0].text, self.source_langs):
+                continue
+            for j in (i + 1, i - 1):
+                if 0 <= j < len(lines) and j not in used and j not in out and langs[j] == self.pair_lang:
+                    out[i] = j
+                    used.add(j)
+                    break
+        return out
