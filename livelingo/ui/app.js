@@ -377,9 +377,22 @@
       if (m.pron && S.cfg.show_pronunciation) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
       if (m.copied) body += `<div class="copied">${ICON.check}<span>${esc(t("copied_hint"))}</span></div>`;
       body += `<div class="actions"><button data-act="fix" data-id="${m.id}">${esc(t("wrong"))}</button>` +
-        `<button data-act="copy" data-id="${m.id}">${esc(t("copy"))}</button></div>`;
+        `<button data-act="copy" data-id="${m.id}">${esc(t("copy"))}</button>` +
+        (m.who === "them" ? `<button data-act="replies" data-id="${m.id}">${esc(t("reply_ideas"))}</button>` : "") + `</div>`;
+      body += repliesHTML(m.id);
     }
     return body;
+  }
+
+  // 回話建議：對方那句下面列 3 句（對方的語言 + 我的語言的意思），按一下複製
+  function repliesHTML(id) {
+    const r = S.replies || {};
+    if (r.id !== id || r.state === "off" || r.closed) return "";
+    if (r.state === "thinking") return `<div class="replies" id="replies-${id}"><div class="pending">${esc(t("reply_thinking"))}</div></div>`;
+    if (!r.items || !r.items.length) return `<div class="replies" id="replies-${id}"><div class="pending">${esc(t("reply_none"))}</div></div>`;
+    return `<div class="replies" id="replies-${id}"><div class="replies-head">${esc(t("reply_head"))}<button class="icon-btn" data-act="replies-close" aria-label="${esc(t("close"))}">${ICON.x}</button></div>
+      ${r.items.map((it, i) => `<button class="reply" data-act="reply-copy" data-n="${i}"><span class="reply-text">${esc(it.text)}</span><span class="reply-meaning">${esc(it.meaning)}</span>
+        <span class="reply-copy">${esc(S.ui.replyCopied === i ? t("copied") : t("copy"))}</span></button>`).join("")}</div>`;
   }
 
   function metaHTML(m) {
@@ -511,6 +524,28 @@
         ${micNoticeHTML() || `<div class="btn-row"><button class="ghost" data-act="find-mic">${esc(t("find_btn"))}</button>
           <span class="dim small">${esc(t("find_hint"))}</span></div>`}</section>
       <div class="note">${ICON.info}<span>${esc(t("dev_note"))}</span></div>`;
+  }
+
+  // 念出我的譯文：我說的、打的翻成對方的語言後，用 Windows 內建語音念到選的播放裝置（例如 VB-CABLE，Discord 就聽得到）
+  function speakHTML() {
+    const sp = S.speak || {};
+    const dv = S.ui.devices || {};
+    const chosen = S.cfg.speak_device || "";
+    const opts = [["", t("speak_default")]].concat(((dv.ok && dv.speakers) || []).map((d) => [d.id, d.name]));
+    if (chosen && !opts.some((o) => o[0] === chosen)) opts.push([chosen, S.cfg.speak_name || chosen]);
+    const cable = ((dv.ok && dv.speakers) || []).some((d) => /cable input/i.test(d.name));
+    let status = "";
+    if (sp.available === false) status = `<div class="note warn">${ICON.info}<span>${esc(t("speak_unavailable"))}</span></div>`;
+    else if (sp.error === "no_voice") status = `<div class="note warn">${ICON.info}<span>${esc(t("speak_no_voice", { lang: langName(sp.lang || S.cfg.their_lang) }))}</span></div>`;
+    else if (sp.error) status = `<div class="note warn">${ICON.info}<span>${esc(t("n_speak_failed", { error: sp.error }))}</span></div>`;
+    else if (sp.voice) status = `<div class="note">${ICON.check}<span>${esc(t("speak_voice", { voice: sp.voice }))}</span></div>`;
+    return `<section id="speak-section"><div><h2>${esc(t("speak_title"))}</h2><div class="sub">${esc(t("speak_hint"))}</div></div>
+        ${switchRow("speak_out", t("speak_on"), t("speak_on_desc"))}
+        ${S.cfg.speak_out ? `<div class="setting-row choice"><div>${esc(t("speak_device"))}</div>
+          <select id="speak-device" data-change="speak-device" aria-label="${esc(t("speak_device"))}">${opts.map(([v, n]) => `<option value="${esc(v)}" ${v === chosen ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
+        <div class="dnote">${esc(t(cable ? "speak_cable_found" : "speak_cable_how"))}</div>
+        <div class="btn-row"><button class="ghost" data-act="speak-test">${esc(t("speak_test"))}</button></div>${status}` : ""}
+      </section>`;
   }
 
   function keyName(key) { return ["Mouse4", "Mouse5", "RightCtrl", "RightAlt"].indexOf(key) >= 0 ? t("key_" + key.toLowerCase()) : key; }
@@ -1294,7 +1329,7 @@
   let histTimer = null;
 
   // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
-  const HOTKEYS = ["overlay", "mic", "copy", "quick"];
+  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply"];
   const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
   function hotkeysHTML() {
     const hk = S.hotkeys || { available: false, states: {} };
@@ -1423,7 +1458,7 @@
     if (S.ui.tab === "history") page.innerHTML = historyPage();
     else if (S.ui.tab === "health") page.innerHTML = healthPage();
     else if (S.ui.tab === "storage") page.innerHTML = storagePage();
-    else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + voiceTuningHTML();
+    else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + speakHTML() + voiceTuningHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
@@ -1723,6 +1758,18 @@
     quality: (el) => saveCfg({ quality: el.dataset.q }),
     tone: (el) => saveCfg({ tone: el.dataset.tone }),
     "tone-keep": (el) => saveCfg({ tone_keep: !!el.dataset.value }),
+    "speak-test": () => post("/api/speak", { action: "test" }),
+    replies: async (el) => {
+      const r = await post("/api/replies", { id: Number(el.dataset.id) });
+      if (!r || !r.ok) toast(t(r && r.error === "not_ready" ? "n_not_ready" : (r && r.error === "busy" ? "reply_busy" : "reply_none")), 6000, "info");
+    },
+    "replies-close": () => { S.replies = Object.assign({}, S.replies, { closed: true }); renderMessages(); },
+    "reply-copy": async (el) => {
+      const it = ((S.replies || {}).items || [])[Number(el.dataset.n)];
+      if (!it) return;
+      const r = await post("/api/replies", { action: "copy", text: it.text });
+      if (r && r.ok) { S.ui.replyCopied = Number(el.dataset.n); renderMessages(); setTimeout(() => { S.ui.replyCopied = null; renderMessages(); }, 2500); }
+    },
     "stream-copy": async () => {
       const r = await post("/api/stream", { action: "copy" });
       if (r && r.ok) { S.ui.streamCopied = true; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); setTimeout(() => { S.ui.streamCopied = false; }, 3000); }
@@ -2088,6 +2135,11 @@
       return;
     }
     if (e.target.id === "gloss-game") { S.ui.glossGame = e.target.value; return; }      // 只記下來，加詞的時候才用
+    if (e.target.id === "speak-device") {
+      const sel = e.target, name = sel.value ? sel.options[sel.selectedIndex].text : "";
+      saveCfg({ speak_device: sel.value || null, speak_name: name }, "#speak-device");
+      return;
+    }
     if (e.target.id === "lib-file") {      // 匯入詞彙檔：在這裡讀檔，內容交給程式檢查和合併
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -2298,6 +2350,8 @@
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
+    speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
+    replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
     game: (g) => { S.game = g; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
@@ -2380,7 +2434,7 @@
     const st = await get("/api/state");
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
-    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];

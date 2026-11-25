@@ -2311,7 +2311,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     try:
         service.start_hotkeys()
         state = service.state()["hotkeys"]
-        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok"}
+        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok"}
         assert state["defaults"] == DEFAULTS["hotkeys"]
 
         # 開關字幕
@@ -2607,7 +2607,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "麥克風 (HyperX)")
         assert (light("listen")["code"], light("listen")["name"]) == ("listen_found", "耳機 (HyperX)")
         assert (light("screen")["state"], light("screen")["code"]) == ("off", "screen_none")
-        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 4)
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 5)
         assert (light("saving")["state"], light("saving")["folder"]) == ("ok", str(tmp_path))
         assert first["worst"] == "warn"
 
@@ -3668,7 +3668,7 @@ def test_help_page_and_the_page_for_a_friend(tmp_path, monkeypatch):
         assert used <= set(guide.VALUES), (lang, used - set(guide.VALUES))
     assert {"start", "typing", "keys", "privacy", "trouble"} <= {s["id"] for s in base["sections"]} and set(guide.FRIEND_SECTIONS) <= {s["id"] for s in base["sections"]}
     keys = next(s for s in base["sections"] if s["id"] == "keys")
-    assert {"overlay", "mic", "copy", "quick"} <= set(re.findall(r"\{(\w+)\}", keys["items"][0])) == set(DEFAULTS["hotkeys"])      # 四個全域快速鍵都有寫
+    assert {"overlay", "mic", "copy", "quick", "reply"} <= set(re.findall(r"\{(\w+)\}", keys["items"][0])) == set(DEFAULTS["hotkeys"])      # 四個全域快速鍵都有寫
     js = (Path(guide.__file__).parent / "ui" / "app.js").read_text(encoding="utf-8")
     for key in ("Ctrl+1", "Ctrl+9", "Esc", "F1"):      # 說明裡寫的視窗內按鍵，程式裡真的有
         assert f"[[{key}]]" in keys["items"][1], key
@@ -5709,3 +5709,105 @@ def test_seven_features_part_one(tmp_path, monkeypatch):
     stream.close()
     service.update_config({"stream": False})
     assert service.stream.url() == "" and service.cfg["stream_key"] == key       # 關掉再開，網址還是同一個
+
+
+def test_seven_features_part_two(tmp_path, monkeypatch):
+    """2.9.0：回話建議（模型的回答怎麼解析、快速鍵、介面的流程）和念出我的譯文（排隊、念出來的又被收到時不要再翻）。"""
+    import time as _time
+
+    from livelingo import hotkeys
+    from livelingo.config import DEFAULTS
+    from livelingo.core import assist, speak
+    from livelingo.service import Service
+
+    # ---- 回話建議：提示裡有前面的對話和要的格式；解析拿掉編號、「me:」、引號，格式不對的行不要，意思轉成我的寫法
+    lines = [{"who": "them", "original": "내일 몇 시에 할래?", "translated": "明天幾點玩？"}, {"who": "me", "original": "八點", "translated": "8시"}]
+    prompt = assist.reply_prompt(lines, "zh-TW", "ko", "casual")
+    assert "them: 내일 몇 시에 할래? [明天幾點玩？]" in prompt and "반말" in prompt and assist.SEP in prompt and "Traditional Chinese" in prompt
+    assert "해요" in assist.reply_prompt(lines, "zh-TW", "ko", "polite")
+    out = "1. 좋아, 8시에 봐! ||| 好，8点见！\nme: \"그래 그때 보자\" ||| 好啊到时候见\n這行沒有分隔\n좋아, 8시에 봐! ||| 重複的\n- ||| 空的"
+    got = assist.parse_replies(out, "zh-TW")
+    assert got == [{"text": "좋아, 8시에 봐!", "meaning": "好，8點見！"}, {"text": "그래 그때 보자", "meaning": "好啊到時候見"}]
+    assert assist.parse_replies("a ||| b\nc ||| d\ne ||| f\ng ||| h", "en") == [{"text": "a", "meaning": "b"}, {"text": "c", "meaning": "d"}, {"text": "e", "meaning": "f"}]
+    assert [r["text"] for r in assist.parse_replies("왜 죽었어? někaký 몬스터 ||| 為什麼死了\n괜찮아 ||| 沒關係", "zh-TW", their_lang="ko")] == ["괜찮아"]
+    assert assist.parse_replies("¿Qué tal? ||| 怎麼樣", "zh-TW", their_lang="es")[0]["text"] == "¿Qué tal?"      # 拉丁字母的語言照收
+    assert "reply" in hotkeys.ACTIONS and DEFAULTS["hotkeys"]["reply"] == "Ctrl+Alt+R"
+    assert all({"reply_nothing", "reply_copied"} <= set(table) for table in hotkeys.NOTES.values())
+
+    service = Service(tmp_path)
+    events = []
+    service.hub.publish = lambda event, data: events.append((event, data))
+    assert service.replies()["error"] == "not_ready"
+    service.phase = "ready"
+    assert service.replies() == {"ok": False, "error": "nothing"}
+    asked = []
+
+    def fake_ask(body, max_tokens=300, stop=None):
+        asked.append(body)
+        return "좋아! ||| 好！\n잠깐만 ||| 等一下"
+
+    service.translator.ask_free = fake_ask
+    service._wake_engine = lambda: None
+    base = {"via": "heard", "pending": False, "error": "", "lang": "ko", "time": "", "at": _time.time()}
+    service._post(dict(base, id=1, who="them", original="갈래?", translated="要去嗎？"))
+    service._post(dict(base, id=2, who="me", via="typed", original="好", translated="좋아", lang="zh"))
+    started = service.replies()
+    assert started == {"ok": True, "id": 1}
+    deadline = _time.time() + 5
+    while service._replies["state"] == "thinking" and _time.time() < deadline:
+        _time.sleep(0.05)
+    assert service._replies["state"] == "ready" and service._replies["items"][1] == {"text": "잠깐만", "meaning": "等一下"}
+    assert "them: 갈래? [要去嗎？]" in asked[0] and "me: 好" not in asked[0]      # 只看到要回的那一句為止
+    assert [e for e, _ in events].count("replies") == 2 and service.state()["replies"]["id"] == 1
+    monkeypatch.setattr("livelingo.oswin.copy_text", lambda text: text == "잠깐만")
+    assert service.reply_copy("잠깐만") and not service.reply_copy("")
+    service.cfg.set(their_lang="ko")
+    assert service._reply_lang({"lang": "ko"}) == "ko" and service._reply_lang({"lang": "en"}) == "en" and service._reply_lang({"lang": "zh"}) == "zh-TW"
+
+    # ---- 念出我的譯文：假的語音和播放，確認排隊、念完回報、念出來的被收到時丟掉
+    played, reported = [], []
+
+    class FakeVoice:
+        def synth(self, text, lang, path):
+            import wave
+
+            with wave.open(str(path), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(16000)
+                w.writeframes(b"\x00\x10" * 1600)
+            return {"ok": lang != "th", "voice": f"Voice {lang}", "error": "no_voice" if lang == "th" else ""}
+
+        def voices(self):
+            return [{"name": "Voice ko", "lang": "ko-KR"}]
+
+    sp = speak.Speaker(tmp_path, device=lambda: "dev-1", on_done=reported.append, voice=FakeVoice(),
+                       player=lambda data, rate, device: played.append((len(data), rate, device)))
+    assert sp.say("좋아, 가자", "ko") and not sp.say("   ", "ko")
+    sp.say("ไปกัน", "th")
+    deadline = _time.time() + 5
+    while len(reported) < 2 and _time.time() < deadline:
+        _time.sleep(0.05)
+    assert played == [(1600, 16000, "dev-1")] and reported[0]["ok"] and reported[0]["voice"] == "Voice ko"
+    assert reported[1] == {"ok": False, "text": "ไปกัน", "lang": "th", "voice": "", "error": "no_voice"}
+    assert sp.recent() == ["좋아, 가자"] and sp.voices()[0]["lang"] == "ko-KR"
+    assert not list(tmp_path.glob("livelingo-say-*.wav"))                     # 暫存的聲音檔念完就刪
+    from livelingo.config import UI_LANGS
+
+    assert all(code in speak.VOICE_LANG and code in speak.SAMPLES for code in UI_LANGS)      # 每種語言都有語音對照和試聽句
+
+    service.speaker = sp
+    service.cfg.set(speak_out=True)
+    service._speak_mine({"who": "me"}, "ko", "가자")
+    service._speak_mine({"who": "them"}, "zh-TW", "走吧")                     # 對方的話不念
+    service._speak_mine({"who": "me"}, service.cfg["my_lang"], "走吧")        # 翻回我的語言的不念
+    deadline = _time.time() + 5
+    while len(reported) < 3 and _time.time() < deadline:
+        _time.sleep(0.05)
+    assert [r["text"] for r in reported] == ["좋아, 가자", "ไปกัน", "가자"]
+    assert service._is_own_voice("좋아 가자") and not service._is_own_voice("완전 다른 말이야")
+    service._spoke({"ok": False, "error": "no_voice", "lang": "th"})
+    service._spoke({"ok": False, "error": "no_voice", "lang": "th"})          # 同一個語言沒有語音：只提醒一次
+    assert [d["code"] for e, d in events if e == "notice"].count("speak_no_voice") == 1
+    assert service.speak_state()["error"] == "no_voice" and service.speak_state()["available"]
+    assert service.update_config({"speak_device": 5})["changed"] == [] and service.update_config({"speak_device": "cable"})["changed"] == ["speak_device"]

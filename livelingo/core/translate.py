@@ -651,6 +651,22 @@ class Translator:
             raise Stopped()
         return out.strip()
 
+    def ask_free(self, body: str, max_tokens: int = 300, stop: Stop | None = None) -> str:
+        """不是翻譯的請求（回話建議、對話摘要、生字解釋，core/assist.py）：用同一個模型、同一條排隊，
+        一次只做一件事，不會跟翻譯搶。body 是使用者那一段的內容（格式由這裡包好）。"""
+        payload = {"prompt": f"<start_of_turn>user\n{body}<end_of_turn>\n<start_of_turn>model\n",
+                   "max_tokens": int(max_tokens), "temperature": 0, "repeat_penalty": 1.0, "stop": ["<end_of_turn>"]}
+        headers = {"Content-Type": "application/json"}
+        if self.key:
+            headers["Authorization"] = f"Bearer {self.key}"
+        with self._lock:
+            if stop is not None and stop.asked:
+                raise Stopped()
+            req = urllib.request.Request(f"{self.url.rstrip('/')}/v1/completions", data=json.dumps(payload).encode("utf-8"),
+                                         headers=headers)
+            with urllib.request.urlopen(req, timeout=300) as r:
+                return json.loads(r.read().decode("utf-8"))["choices"][0]["text"].strip()
+
     def _stream(self, body: bytes, headers: dict, stop: Stop | None = None):
         """跟引擎要「一邊翻一邊回」，一行一行交出來。
         自己開連線、自己讀：等引擎的時候每 0.1 秒看一次有沒有人按了停（用 urlopen 的話會一直卡到引擎回第一個字，
