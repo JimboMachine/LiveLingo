@@ -236,6 +236,12 @@ input::placeholder { color: var(--faint); }
 .msg .meta .spk:hover { text-decoration: underline; }
 .spk-row label { display: flex; align-items: center; gap: 8px; }
 .spk-row input { flex: 0 1 220px; min-width: 120px; }
+/* 每個人的主語言、副語言：放在同一張卡片的第二行，靠右，窄的時候各佔一行，不擠到名字 */
+.spk-row { flex-wrap: wrap; }
+.spk-langs { flex: 1 0 100%; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; }
+.spk-lang { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); min-width: 0; }
+.spk-lang select { height: 36px; max-width: 190px; font-size: 13px; color: var(--text); }
+.spk-lang select:disabled { opacity: .5; }
 .msg .meta svg { width: 13px; height: 13px; }
 .msg .bubble { background: var(--surface-2); border-radius: 4px 14px 14px 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
 .msg .orig { font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
@@ -579,3 +585,29 @@ input::placeholder { color: var(--faint); }
 .reply-text { font-size: 14px; font-weight: 600; }
 .reply-meaning { grid-column: 1; font-size: 12px; color: var(--dim); }
 .reply-copy { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 12px; color: var(--accent); }
+
+/* 翻過的句子：用的是記住的翻法時，訊息下方的小字 */
+.msg .meta .kept { color: var(--faint); }
+
+/* 記過的作品（哪一部影片、哪一個網頁）：收合的清單 */
+.works { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; }
+.works-toggle { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.works-list { padding-bottom: 6px; }
+.work-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.work-name { flex: 1 1 220px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.work-name .desc, .work-export .desc { font-size: 12px; color: var(--dim); }
+.work-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.work-acts > button:last-child { width: 44px; height: 44px; border: 0; background: transparent; color: var(--dim); display: flex; align-items: center; justify-content: center; }
+.work-acts > button:last-child:hover { color: var(--danger); }
+.work-acts > button:last-child svg { width: 16px; height: 16px; }
+.work-export { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.work-export input { flex: 1 1 200px; min-width: 0; }
+.work-export .desc { flex: 1 1 100%; }
+
+/* 匯入字幕檔的預覽 */
+.sub-preview { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.sub-sample { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.sub-pair { padding: 6px 8px; border-radius: 8px; background: var(--panel-2, rgba(127,127,127,0.08)); overflow-wrap: anywhere; }
+.sub-pair .dim { color: var(--dim); }
+.sub-preview input { width: 100%; min-width: 0; }
+.sub-preview .pills { flex-wrap: wrap; }

@@ -16,7 +16,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, updater, voicebook
+from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, subtitles, updater, voicebook, works
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -169,6 +169,8 @@ class Service:
         self.memory.mine_on, self.memory.shared_on = bool(self.cfg["remember_translations"]), bool(self.cfg["use_shared"])
         self._memory_told = 0.0
         self.game = ""                 # 現在在玩的遊戲（程式檔名小寫，terms.find_game），空的 = 沒認出來
+        self._work_seen = (0.0, "", "", "")      # (什麼時候看的, via, place, work key)：視窗標題最多兩秒看一次
+        self._work_told: set[str] = set()        # 這次開程式已經提示過「這部翻過了」的作品
         self.terms = TermPack(packs_for(self.cfg["term_packs"], self.game, bool(self.cfg["game_auto"])))
         self.audio = audio or RealAudio()
         from .core import audio as audio_core
@@ -182,6 +184,9 @@ class Service:
                                      tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list,
                                      memory=self.memory)
         self.translator.keep_tone = bool(self.cfg["tone_keep"])
+        # 翻譯引擎和語音辨識都用處理器的電腦上，兩個輪流跑（見 _cpu_turn）
+        self._cpu_lock = threading.Lock()
+        self.translator.turn = self._cpu_turn
         self._terms_changed()
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
@@ -248,6 +253,9 @@ class Service:
         self.voices = None
         self.speakers = {"state": "off", "percent": 0, "error": "", "mb": assets.VOICE_MB}
         self._speaker_names: dict[int, str] = {}
+        # 每個說話者自己的語言：{編號: (主語言, 副語言)}，語言代碼跟 their_lang 一樣（"" = 沒設）。
+        # 設了的人，他說的話只在這兩個語言裡聽（主語言優先），不跟著「對方的語言」和自動偵測走
+        self._speaker_langs: dict[int, tuple[str, str]] = {}
         self._speaker_run = 1      # 按一次「全部重新分辨」加一：之前標的編號就不算數了
         self._black_regions: set[str] = set()      # 抓到的畫面是全黑的聊天區（遊戲用全螢幕時會這樣）
         self._lock = threading.RLock()
@@ -607,6 +615,37 @@ class Service:
         self.translator.clear_cache()
         self.set_phase("ready")
         self._resume_sources()
+        self._warm_engine()
+
+    def _cpu_turn(self):
+        """「輪到誰用處理器」的鎖。翻譯引擎和語音辨識都用處理器的時候，兩個同時跑會互搶，
+        實測（4 核心）：一句正在翻、下一句同時在辨識，翻譯 2.3 → 8.5 秒、辨識 3.7 → 6.6 秒；輪流跑的話
+        翻譯照樣 2.3 秒就好，辨識排在後面也只多等那一點時間。任何一邊用顯示卡就不用輪流（回傳一個什麼都不擋的鎖）。"""
+        import contextlib
+
+        recognizer = self.recognizer
+        if self.mode.get("engine") == "cpu" and getattr(recognizer, "device", "cpu") == "cpu":
+            return self._cpu_lock
+        return contextlib.nullcontext()
+
+    def _warm_directions(self) -> list[tuple[str, str]]:
+        """會用到的翻譯方向：對方的語言 → 我的語言，我的語言 → 對方的語言。"""
+        my, their = self.cfg["my_lang"], self.cfg["their_lang"]
+        return [(LANGS[their]["family"], my), (LANGS[my]["family"], their)]
+
+    def _warm_engine(self) -> None:
+        """引擎剛開好（或換了語言、語氣）：在背景先暖機，第一句不用多等那 2 秒左右（見 Translator.warm）。"""
+        warm = getattr(self.translator, "warm", None)
+        if not warm or self.phase != "ready":
+            return
+
+        def work():
+            started = time.time()
+            done = warm(self._warm_directions())
+            if done:
+                self.log(f"translation engine warmed up for {done} direction(s) in {time.time() - started:.1f} s")
+
+        threading.Thread(target=work, daemon=True, name="warm").start()
 
     def _new_engine(self) -> Engine:
         return Engine(
@@ -931,12 +970,13 @@ class Service:
                 "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
 
     def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
-               place: str = "", live: dict | None = None, speaker: int | None = None) -> int | None:
+               place: str = "", live: dict | None = None, speaker: int | None = None, shown: str = "") -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
         hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。
         live：這一句還在說的時候已經先顯示出來的那一則（即時字幕）；整句接手同一則，不另外多一則。
-        speaker：第幾個說話者（有開「分辨說話者」而且分得出來才有）。回傳這則訊息的編號。"""
+        speaker：第幾個說話者（有開「分辨說話者」而且分得出來才有）。
+        shown：畫面上現成的翻譯（雙語字幕裡我的語言那一行）；有的話直接用，不叫模型翻。回傳這則訊息的編號。"""
         text = text.strip()[:MAX_TEXT]
         if not text:
             if live:
@@ -944,10 +984,13 @@ class Service:
             return None
         lang = lang or detect_language(text) or "en"
         who = "them" if via in ("screen", "heard") else "me"
+        work = self._work_now(via, place)
         msg = {"id": next(self._ids), "who": who, "via": via, "original": text, "lang": lang,
                "translated": "", "pron": "", "back": "", "copied": False, "pending": True, "error": "",
                "unsure": bool(unsure) and via != "typed", "time": time.strftime("%H:%M"), "at": time.time(),
-               "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30]}
+               "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30], "work": work}
+        if shown and via == "screen":
+            msg["shown"] = str(shown).strip()[:MAX_TEXT * 2]
         if speaker:
             msg.update(speaker=int(speaker), speaker_run=self._speaker_run, voice=self._speaker_names.get(int(speaker), ""))
         if live:      # 同一則、同一個時間，先翻出來的半句留在畫面上，等整句翻好再換掉
@@ -956,6 +999,41 @@ class Service:
             self._post(msg)
         self.jobs.put(msg)
         return msg["id"]
+
+    def _work_now(self, via: str, place: str = "") -> str:
+        """這一句是在哪一部影片、哪一個網頁看到的（works.work_key）；自己打的、說的，或關掉「記住在看哪一部」就是空的。
+        讀畫面：區域跟著的程式的視窗，沒跟就是區域中間那個視窗；聽聲音：只聽的那個程式，否則最前面的視窗。
+        第一次看到之前翻過的那一部，跳一則提示「這部之前翻過 N 句」。"""
+        if via not in ("screen", "heard") or not self.cfg["remember_works"]:
+            return ""
+        now = time.monotonic()
+        at, last_via, last_place, last = self._work_seen
+        if now - at < 2.0 and (via, place) == (last_via, last_place):
+            return last
+        exe, point = "", None
+        if via == "screen":
+            on = [r for r in self.cfg["regions"] if r.get("on")]
+            region = next((r for r in on if place and r.get("name") == place), on[0] if on else None)
+            if region:
+                exe = str(region.get("app") or "")
+                point = (int(region.get("left", 0)) + int(region.get("width", 0)) // 2,
+                         int(region.get("top", 0)) + int(region.get("height", 0)) // 2)
+        elif self.cfg["listen_apps"]:
+            exe = str(self.cfg["listen_apps"][0])
+        try:
+            win = works.pick_window(apps.windows(), exe=exe, point=None if exe else point)
+        except Exception:  # noqa: BLE001  拿不到視窗清單就當作不知道在看哪一部
+            win = None
+        title = works.clean_title(win["title"]) if win else ""
+        key = works.work_key(title)
+        self._work_seen = (now, via, place, key)
+        if key and key != last:
+            info = self.memory.work_info(key)
+            self.memory.saw(key, title)
+            if info and key not in self._work_told and (info["mine"] or (info["shared"] and self.cfg["use_shared"] and not info["own_only"])):
+                self._work_told.add(key)
+                self.notice("work_known", title=title, n=info["mine"] + info["shared"], mine=info["mine"], shared=info["shared"])
+        return key
 
     def _target_for(self, msg: dict) -> str:
         my, their = self.cfg["my_lang"], self.cfg["their_lang"]
@@ -1045,11 +1123,22 @@ class Service:
         """翻一則。翻的時候譯文一邊出來一邊送給畫面（即時），最後回傳的才是整理過的整句。"""
         import inspect
 
+        if msg.get("shown") and self.cfg["use_shown_translation"] and target == self.cfg["my_lang"] and not msg.get("edited"):
+            # 雙語字幕：畫面上已經有我的語言那一行，直接用（繁簡照我的設定轉），也記下來，之後同一句不用重翻
+            from .core.translate import to_script
+
+            out = to_script(msg["shown"], target)
+            if msg.get("lang"):
+                self.memory.seen_on_screen(msg["original"], msg["lang"], target, out, msg.get("work") or "")
+            msg["kept"] = "screen"
+            return out
         fn = self.translator.translate
         self.translator.model = self.mode.get("model", "")
         if "on_part" not in inspect.signature(fn).parameters:
             return fn(msg["original"], target, msg["lang"], self._context_for(msg))
         more = {"remember": msg.get("via") or ""} if "remember" in inspect.signature(fn).parameters else {}
+        if more and msg.get("work") and "work" in inspect.signature(fn).parameters:
+            more["work"] = msg["work"]
         sent, shown = [0.0], msg.get("partial") or ""
 
         def part(text: str) -> None:
@@ -1062,6 +1151,8 @@ class Service:
             self.stream.on_partial(msg, text)
 
         out = fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part, **more)
+        came = self.translator.came_from() if more and hasattr(self.translator, "came_from") else None
+        msg["kept"] = came["from"] if came else ""      # 用的是記住的翻法：介面在旁邊標「翻過的」「朋友的」「字幕」
         if more and time.monotonic() - self._memory_told > 10:      # 設定畫面上「記住幾句」的數字，最多 10 秒更新一次
             self._memory_told = time.monotonic()
             self.hub.publish("memory", self.memory.state())
@@ -1290,11 +1381,12 @@ class Service:
         if not self.lessons.add(msg["original"], dst, msg["lang"], msg["target"]):
             return False
         if msg.get("lang"):
-            self.memory.fix(msg["original"], msg["lang"], msg["target"], getattr(self.translator, "memory_tone", lambda: self.cfg["tone"])(), dst, self.mode.get("model", ""))
+            self.memory.fix(msg["original"], msg["lang"], msg["target"], getattr(self.translator, "memory_tone", lambda: self.cfg["tone"])(), dst, self.mode.get("model", ""),
+                            msg.get("work") or "")
             self.hub.publish("memory", self.memory.state())
         self.translator.clear_cache()
         self.hub.publish("lessons", self.lessons.list())
-        msg = dict(msg, translated=dst, error="", taught=True, back="",
+        msg = dict(msg, translated=dst, error="", taught=True, back="", kept="",
                    pron=self._pronunciation(dst, msg["target"]) if msg["who"] == "me" else "")
         if msg["who"] == "me" and msg["target"] != self.cfg["my_lang"]:
             msg["copied"] = oswin.copy_text(dst)
@@ -1362,16 +1454,17 @@ class Service:
 
     # ---- 翻過的句子：分享檔、清除
 
-    def memory_export(self, range_key: str = "all", with_mine: bool = False) -> dict:
+    def memory_export(self, range_key: str = "all", with_mine: bool = False, work: str = "", title: str = "") -> dict:
         """把我翻過的句子存成分享檔（放在字幕記錄的資料夾），朋友匯入之後同樣的句子就不用重翻。
-        預設不含我自己打的、說的（可能是私人聊天）。"""
+        預設不含我自己打的、說的（可能是私人聊天）。work：只匯出這一部（帶著標題，朋友看同一部就認得）；title：改用這個名字。"""
         if range_key not in MEMORY_RANGES:
             range_key = "all"
-        data = self.memory.export(range_key, with_mine)
+        data = self.memory.export(range_key, with_mine, work=work, title=title)
         if not data["items"]:
             return {"ok": False, "error": "empty"}
         folder = self.transcript_dir()
-        path = folder / f"LiveLingo-translations-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        named = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", data["works"][0]["title"]).strip()[:40] if data["works"] else ""
+        path = folder / f"LiveLingo-translations-{named + '-' if named else ''}{time.strftime('%Y%m%d-%H%M%S')}.json"
         try:
             folder.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -1396,6 +1489,77 @@ class Service:
 
     def memory_remove_pack(self, pack: str) -> dict:
         self.memory.remove_pack(pack)
+        self.translator.clear_cache()
+        self.hub.publish("memory", self.memory.state())
+        return {"ok": True}
+
+    def _subtitle_pairs(self, files, swap: bool = False) -> dict:
+        """字幕檔（一個雙語的，或原文、翻譯各一個）→ {"ok", "pairs", "lang", "target"} 或 {"ok": False, "error"}。
+        target 是 LANGS 的代碼：跟我的語言同一家就用我的語言（繁體或簡體），否則用那一家的第一個。"""
+        from .core.translate import SOURCES
+
+        files = [f for f in (files if isinstance(files, list) else []) if isinstance(f, dict) and isinstance(f.get("text"), str)][:2]
+        cues = [subtitles.parse(f["text"]) for f in files]
+        if not files or not all(cues):
+            return {"ok": False, "error": "sub_unreadable"}
+        if len(cues) == 2:
+            langs = [subtitles.language_of(c, detect_language) for c in cues]
+            if not all(langs) or langs[0] == langs[1]:
+                return {"ok": False, "error": "sub_same_lang"}
+            mine = LANGS[self.cfg["my_lang"]]["family"]
+            order = [0, 1] if langs[1] == mine or (langs[0] != mine and len(cues[0]) >= len(cues[1])) else [1, 0]
+            if swap:
+                order.reverse()
+            pairs = subtitles.pair_two(cues[order[0]], cues[order[1]])
+            lang, family = langs[order[0]], langs[order[1]]
+        else:
+            pairs, lang, family = subtitles.split_one(cues[0], detect_language, swap=swap)
+        if not pairs:
+            return {"ok": False, "error": "sub_no_pairs"}
+        mine = self.cfg["my_lang"]
+        target = mine if LANGS[mine]["family"] == family else next((k for k, v in LANGS.items() if v["family"] == family), "")
+        if lang not in SOURCES or not target:
+            return {"ok": False, "error": "sub_lang", "lang": lang or "", "target": family or ""}
+        return {"ok": True, "pairs": pairs, "lang": lang, "target": target}
+
+    def subtitles_preview(self, files, swap: bool = False) -> dict:
+        """先看看字幕檔配出來的樣子：幾句、前 5 句、哪種語言翻成哪種。也告訴介面現在在看哪一部（可以直接記在那部底下）。"""
+        got = self._subtitle_pairs(files, swap)
+        if not got["ok"]:
+            return got
+        now = self._work_seen[3]
+        info = self.memory.work_info(now) if now else None
+        return {"ok": True, "count": len(got["pairs"]), "sample": [list(p) for p in got["pairs"][:5]], "lang": got["lang"],
+                "target": got["target"], "now": {"key": now, "title": info["title"]} if info else None}
+
+    def subtitles_import(self, files, swap: bool = False, work: str = "", title: str = "", name: str = "") -> dict:
+        """匯入字幕檔當成翻譯，一包（可以整包刪）。work：記在哪一部底下；沒有就用 title 當新的一部（標題整理過）。"""
+        got = self._subtitle_pairs(files, swap)
+        if not got["ok"]:
+            return got
+        if not (work and self.memory.work_info(work)):
+            title = works.clean_title(title)
+            work = works.work_key(title)
+        else:
+            title = self.memory.work_info(work)["title"]
+        name = re.sub(r"\.(srt|vtt)$", "", str(name or ""), flags=re.I) or title
+        result = self.memory.import_subtitles(got["pairs"], got["lang"], got["target"], name, work, title)
+        if result.get("ok"):
+            self.translator.clear_cache()
+            self._work_told.discard(work)
+            self.hub.publish("memory", self.memory.state())
+        return dict(result, work=work)
+
+    def memory_work(self, key: str, action: str, on: bool = False) -> dict:
+        """作品清單上的動作：own_only（這部不用別人的）、forget（忘掉這部）。"""
+        if action == "own_only":
+            self.memory.set_own_only(key, on)
+        elif action == "forget":
+            self.memory.forget_work(key)
+            self._work_told.discard(key)
+            self._work_seen = (0.0, "", "", "")
+        else:
+            return {"ok": False, "error": "unknown"}
         self.translator.clear_cache()
         self.hub.publish("memory", self.memory.state())
         return {"ok": True}
@@ -2304,12 +2468,16 @@ class Service:
         if changed("tone"):
             self.translator.tone = after["tone"]
             self.translator.clear_cache()
+            self._warm_engine()      # 語氣不一樣，提示的開頭也不一樣
         if changed("tone_keep"):
             self.translator.keep_tone = bool(after["tone_keep"])
             self.translator.clear_cache()
+            self._warm_engine()      # 保留語氣的提示不一樣
         if changed("game_terms", "game_auto"):
             threading.Thread(target=self.check_game, daemon=True).start()
             self._terms_changed()
+        if changed("use_shown_translation", "my_lang") and self.watcher is not None:
+            self.watcher.pair_lang = self._shown_pair_lang()
         if changed("remember_translations", "use_shared"):
             self.memory.mine_on, self.memory.shared_on = bool(after["remember_translations"]), bool(after["use_shared"])
             self.translator.clear_cache()
@@ -2358,6 +2526,8 @@ class Service:
                     self.recognizer.beam = BEAMS[after["speech_mode"]]
         if changed("my_lang", "their_lang", "their_auto", "also_english"):
             threading.Thread(target=self._languages_changed, daemon=True).start()
+        if changed("my_lang", "their_lang"):
+            self._warm_engine()
         if changed("speaker_device") and self.sources["listen"]["on"]:
             self._restart_voice("listen")
         if changed("mic_device") and self.sources["mic"]["on"]:
@@ -2408,9 +2578,14 @@ class Service:
         """開著的聊天區。"""
         return [dict(r) for r in self.cfg["regions"] if r.get("on")]
 
-    def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None) -> None:
+    def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None, shown: str = "") -> None:
+        """shown：雙語字幕裡緊鄰這一行、我的語言的那一行（開著「用畫面上現成的翻譯」才有）。"""
         many = len(self._regions_on()) > 1      # 只有一個區域時不用標是哪裡讀到的
-        self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "")
+        self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "",
+                    **({"shown": shown} if shown else {}))
+
+    def _shown_pair_lang(self) -> str | None:
+        return LANGS[self.cfg["my_lang"]]["family"] if self.cfg["use_shown_translation"] else None
 
     def capture_mask(self) -> list[list[int]]:
         """
@@ -2491,6 +2666,7 @@ class Service:
                     grab=getattr(self, "grab", None), locate=self._locate,
                     on_stats=lambda stats: self.hub.publish("screen_stats", stats), on_black=self._screen_black,
                     mask=self.capture_mask)
+                self.watcher.pair_lang = self._shown_pair_lang()
                 self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
             self.watcher.paused = False
@@ -2692,6 +2868,7 @@ class Service:
                 device, compute = self._speech_engine()
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]), device=device,
                                              compute_type=compute, on_fallback=self._speech_gpu_failed)
+                self.recognizer.turn = self._cpu_turn
             recognizer = self.recognizer
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
             capture = None
@@ -2713,7 +2890,9 @@ class Service:
                                   on_partial=self._on_live if key == "listen" else None,
                                   live=lambda: bool(self.cfg["live_captions"]), busy=self._live_wait,
                                   # 分辨說話者也只給「對方說的話」
-                                  voices=self._voices_now if key == "listen" else None)
+                                  voices=self._voices_now if key == "listen" else None,
+                                  # 每個人自己的語言（主語言、副語言）：設過的人照他的語言聽
+                                  speaker_langs=self._speaker_lang_table if key == "listen" else None)
             if key == "listen" and self.cfg["their_auto"]:
                 pipe.stay = 1.5
             old = self.pipelines.pop(key, None)
@@ -2852,7 +3031,9 @@ class Service:
         remember = bool(self.cfg["remember_speakers"])
         return {**self.speakers, "on": bool(self.cfg["tell_speakers"]), "run": self._speaker_run, "remember": remember,
                 # known：這個人會被記住（有開「記住」而且取了名字）
-                "people": [dict(p, name=self._speaker_names.get(p["id"], ""), known=remember and bool(self._speaker_names.get(p["id"])))
+                # lang、lang2：使用者幫這個人設的主語言、副語言（沒設是空的）
+                "people": [dict(p, name=self._speaker_names.get(p["id"], ""), known=remember and bool(self._speaker_names.get(p["id"])),
+                                lang=self._speaker_langs.get(p["id"], ("", ""))[0], lang2=self._speaker_langs.get(p["id"], ("", ""))[1])
                            for p in people]}
 
     def _speakers(self, **changes) -> None:
@@ -2912,12 +3093,47 @@ class Service:
         self.hub.publish("speakers", self.speakers_state())
         return {"ok": True, "name": name}
 
+    def speaker_language(self, speaker: int, lang: str, lang2: str = "") -> dict:
+        """
+        幫第幾個說話者設他說的語言。lang：主語言（平常說的）；lang2：副語言（偶爾夾著說的，可以沒有）。
+        都是語言代碼（跟「對方的語言」同一份清單）；lang 給空的 = 不指定，照「對方的語言」聽。
+        設了之後，他說的話只在這兩個語言裡判斷，主語言優先；翻譯一樣翻成「我的語言」。
+        沒取名字的人只記到程式關掉；取了名字而且有開「記住取過名字的人」，語言跟名字一起記到下次。
+        """
+        lang, lang2 = self._clean_speaker_langs(lang, lang2)
+        if not self.voices or not any(p["id"] == speaker for p in self.voices.speakers.people()):
+            return {"ok": False}
+        if lang:
+            self._speaker_langs[speaker] = (lang, lang2)
+        else:
+            self._speaker_langs.pop(speaker, None)
+        self._voices_save()
+        self.hub.publish("speakers", self.speakers_state())
+        return {"ok": True, "lang": lang, "lang2": lang2}
+
+    @staticmethod
+    def _clean_speaker_langs(lang, lang2) -> tuple[str, str]:
+        """只收語音辨識聽得懂的語言；沒有主語言就沒有副語言；副語言跟主語言是同一種話（例如繁體和簡體）就不算。"""
+        def ok(code) -> str:
+            code = str(code or "")
+            return code if code in LANGS and LANGS[code]["family"] in VOICE_FAMILIES else ""
+
+        lang, lang2 = ok(lang), ok(lang2)
+        if not lang or (lang2 and LANGS[lang2]["family"] == LANGS[lang]["family"]):
+            lang2 = ""
+        return lang, lang2
+
+    def _speaker_lang_table(self) -> dict[int, list[str]]:
+        """給收音管線：{說話者編號: [主語言, 副語言]}（語音辨識用的語言名，中文不分繁簡）。只有設過語言的人。"""
+        return {n: [LANGS[code]["family"] for code in pair if code] for n, pair in list(self._speaker_langs.items())}
+
     def speakers_forget(self) -> dict:
         """全部重新分辨：忘掉目前分出來的人和名字（換了一群人，或分錯了）。之前的句子不再標是誰。
         以前記住的人（存在 voices.json 的）不會被忘掉：照存檔的樣子放回來，要忘掉某個人是把他的名字清空。"""
         if self.voices:
             self.voices.speakers.forget()
         self._speaker_names.clear()
+        self._speaker_langs.clear()
         self._speaker_run += 1
         self.transcript.forget_speakers()
         self._voices_seed()
@@ -2929,7 +3145,11 @@ class Service:
         if not (self.voices and self.cfg["remember_speakers"]):
             return
         for person in voicebook.load(self.data):
-            self._speaker_names[self.voices.speakers.seed(person["voice"], person["weight"])] = person["name"]
+            n = self.voices.speakers.seed(person["voice"], person["weight"])
+            self._speaker_names[n] = person["name"]
+            lang, lang2 = self._clean_speaker_langs(person.get("lang"), person.get("lang2"))
+            if lang:
+                self._speaker_langs[n] = (lang, lang2)
 
     def _voices_save(self) -> None:
         """把現在取過名字的人存起來（整份換掉）。沒開「記住」、或聲紋模型還沒準備好（還不知道以前記了誰）就不動那個檔。"""
@@ -2939,7 +3159,8 @@ class Service:
         for n, name in sorted(self._speaker_names.items()):
             got = self.voices.speakers.voice_of(n)
             if got and name:
-                people.append({"name": name, "voice": got[0], "weight": got[1]})
+                lang, lang2 = self._speaker_langs.get(n, ("", ""))
+                people.append({"name": name, "voice": got[0], "weight": got[1], "lang": lang, "lang2": lang2})
         self._voices_saved = time.time()
         if not voicebook.save(self.data, people):
             self.log("remembered voices could not be saved")
@@ -3022,9 +3243,11 @@ class Service:
             self.log(f"{kind} sentence dropped: it is LiveLingo reading my translation aloud")
             self._end_live(kind)
             return
-        if kind == "loopback" and self.cfg["their_auto"]:
+        own = self._speaker_langs.get(int(speaker)) if speaker and kind == "loopback" else None
+        if kind == "loopback" and self.cfg["their_auto"] and not own:
+            # 設過語言的人說的話不拿來猜「對方的語言」：他的語言是使用者指定的，不代表其他人也換了語言
             self._their_language_heard(lang, text)
-        text = self._voice_script(kind, text, lang)
+        text = self._voice_script(kind, text, lang, own)
         heard = text
         msg_id = self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure, hear=seconds,
                              live=self._take_live(kind), speaker=speaker if kind == "loopback" else None)
@@ -3077,12 +3300,16 @@ class Service:
         voices = self.speaker.voices()
         return {"ok": True, "voices": voices}
 
-    def _voice_script(self, kind: str, text: str, lang: str | None) -> str:
-        """語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一。"""
+    def _voice_script(self, kind: str, text: str, lang: str | None, own: tuple[str, str] | None = None) -> str:
+        """語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一。
+        own：這個說話者自己設的（主語言, 副語言）；裡面有中文就照他設的那一種。"""
         if lang != "zh":
             return text
         from .core.translate import to_script
 
+        mine = next((code for code in own or () if code and LANGS[code]["family"] == "zh"), "")
+        if mine:
+            return to_script(text, mine)
         speaker, other = ((self.cfg["their_lang"], self.cfg["my_lang"]) if kind == "loopback"
                           else (self.cfg["my_lang"], self.cfg["their_lang"]))
         return to_script(text, speaker if LANGS[speaker]["family"] == "zh" else other)
