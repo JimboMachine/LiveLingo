@@ -327,6 +327,8 @@ class Server:
                             return self._json(service.storage_remove(str(body["remove"])))
                         if body.get("open"):
                             return self._json(service.storage_open())
+                        if body.get("open_logs"):      # 出錯畫面：打開放紀錄檔的資料夾
+                            return self._json(service.logs_open())
                         return self._json({"ok": False})
                     if route == "/api/help":      # 把給朋友的快速上手存成一個檔案
                         return self._json(service.help_friend(str(body.get("friend") or "")))

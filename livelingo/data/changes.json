@@ -1,4 +1,110 @@
 {
+  "2.11.1": {
+    "zh-TW": [
+      "麥克風提醒：有些麥克風沒人說話時送來的是一串 0，以前說完話安靜幾秒就會跳出「麥克風完全沒有聲音」。現在只有開起來之後一直沒聲音才會提醒。",
+      "新版本提醒：程式一直開著（縮在系統匣）時，每隔幾個小時會自己看一次有沒有新版本，有的話主畫面上方出現一條小提醒，按「看改了什麼」先看再決定要不要更新。不會自己更新；關掉「檢查有沒有新版本」就不連網路。",
+      "出錯的畫面：除了「重試」，多了「回報問題」（直接到問題報告）和「打開資料夾」（紀錄檔放的地方）。",
+      "第一次設定：裝置清單很長時，底下的按鈕不再蓋住清單，可以捲到最後。",
+      "小視窗：視窗縮窄時，主畫面的來源卡片（螢幕、電腦播放的聲音、麥克風）保留名稱和狀態；越南文、西班牙文、葡萄牙文、俄文、法文在最窄的視窗不再出現橫向捲軸。",
+      "更新說明的框更寬、更高，一版改很多時比較好讀；表示「正常」的綠色不再跟著主題色變（玫瑰色不再像錯誤）。"
+    ],
+    "zh-CN": [
+      "麦克风提醒：有些麦克风没人说话时送来的是一串 0，以前说完话安静几秒就会跳出“麦克风完全没有声音”。现在只有打开之后一直没声音才会提醒。",
+      "新版本提醒：程序一直开着（缩在系统托盘）时，每隔几个小时会自己看一次有没有新版本，有的话主画面上方出现一条小提醒，按“看改了什么”先看再决定要不要更新。不会自己更新；关掉“检查有没有新版本”就不联网。",
+      "出错的画面：除了“重试”，多了“反馈问题”（直接到问题报告）和“打开文件夹”（日志文件放的地方）。",
+      "第一次设置：设备列表很长时，底下的按钮不再盖住列表，可以滚动到最后。",
+      "小窗口：窗口缩窄时，主画面的来源卡片（屏幕、电脑播放的声音、麦克风）保留名称和状态；越南语、西班牙语、葡萄牙语、俄语、法语在最窄的窗口不再出现横向滚动条。",
+      "更新说明的框更宽、更高，一版改很多时更好读；表示“正常”的绿色不再跟着主题色变（玫瑰色不再像错误）。"
+    ],
+    "en": [
+      "Microphone warning: some microphones send pure zeros when nobody speaks, so \"the microphone is completely silent\" used to pop up seconds after you stopped talking. It now appears only if the mic has been silent since it was turned on.",
+      "New-version reminder: while LiveLingo stays open (in the tray) it checks every few hours and shows a small bar above the main screen. You can read the changes first; nothing updates by itself. \"Check for a new version\" off = no internet.",
+      "Error screen: besides \"Try again\" there are now \"Report a problem\" (opens the problem report) and \"Open folder\" (where the log files are).",
+      "First-time setup: with a long device list, the buttons at the bottom no longer cover the list; you can scroll to the end.",
+      "Narrow windows: the source cards on the main screen keep their names and status, and Vietnamese, Spanish, Portuguese, Russian and French no longer get a horizontal scrollbar in the narrowest window.",
+      "The update notes box is wider and taller so long lists read better, and the green that means \"fine\" no longer changes with the accent colour (rose no longer looks like an error)."
+    ],
+    "ko": [
+      "마이크 알림: 일부 마이크는 아무도 말하지 않을 때 0만 보내서, 말을 멈춘 몇 초 뒤에 「마이크에서 소리가 전혀 들어오지 않습니다」가 뜨곤 했습니다. 이제는 켠 뒤로 계속 소리가 없을 때만 알립니다.",
+      "새 버전 알림: LiveLingo를 계속 켜 두면(트레이에 상주) 몇 시간마다 새 버전을 확인하고 메인 화면 위에 작은 알림을 보여 줍니다. 「변경 내용」을 먼저 보고 업데이트할지 정할 수 있고, 스스로 업데이트하지 않습니다. 「새 버전 확인」을 끄면 인터넷에 연결하지 않습니다.",
+      "오류 화면: 「다시 시도」 외에 「문제 알리기」(문제 보고로 이동)와 「폴더 열기」(로그 파일이 있는 폴더)가 생겼습니다.",
+      "처음 설정: 장치 목록이 길 때 아래 버튼이 목록을 가리지 않고, 끝까지 스크롤해서 볼 수 있습니다.",
+      "좁은 창: 창을 좁혀도 메인 화면의 소스 카드(화면, 컴퓨터 재생 소리, 마이크)에 이름과 상태가 남습니다. 베트남어·스페인어·포르투갈어·러시아어·프랑스어는 가장 좁은 창에서도 가로 스크롤바가 생기지 않습니다.",
+      "업데이트 설명 상자가 더 넓고 높아져 긴 목록도 읽기 쉽습니다. 「정상」을 나타내는 초록색이 더 이상 테마 색을 따라 바뀌지 않습니다(장미색이 오류처럼 보이지 않음)."
+    ],
+    "ja": [
+      "マイクの警告：誰も話していないときに 0 だけを送ってくるマイクがあり、話し終えて数秒後に「マイクに音がまったく入っていません」と出ていました。今は、オンにしてからずっと無音のときだけ知らせます。",
+      "新バージョンの通知：LiveLingo を開いたまま（タスクトレイに常駐）にしていると、数時間ごとに新バージョンを確認し、メイン画面の上に小さな通知を出します。「変更内容」を見てから更新するか決められ、勝手には更新しません。「新しいバージョンを確認する」をオフにすれば通信しません。",
+      "エラー画面：「再試行」のほかに、「問題を報告」（問題報告へ移動）と「フォルダーを開く」（ログファイルの場所）を追加しました。",
+      "初回設定：デバイスの一覧が長いとき、下のボタンが一覧に重ならなくなり、最後までスクロールして見られます。",
+      "狭いウィンドウ：幅を狭めても、メイン画面のソースカード（画面、PC の再生音、マイク）に名前と状態が残ります。ベトナム語・スペイン語・ポルトガル語・ロシア語・フランス語は、最も狭いウィンドウでも横スクロールバーが出なくなりました。",
+      "更新内容の枠を広く高くして、長い一覧も読みやすくしました。「正常」を表す緑がテーマカラーに合わせて変わらなくなりました（ローズ色がエラーに見えません）。"
+    ],
+    "vi": [
+      "Cảnh báo micro: một số micro gửi toàn số 0 khi không ai nói, nên vài giây sau khi bạn ngừng nói lại hiện \"micro hoàn toàn im lặng\". Giờ chỉ báo khi micro im lặng liên tục từ lúc bật.",
+      "Nhắc phiên bản mới: khi LiveLingo để mở (ở khay hệ thống), cứ vài giờ nó kiểm tra và hiện lời nhắc nhỏ phía trên màn hình chính. Bấm \"Có gì mới\" để xem trước; không tự cập nhật. Tắt \"Kiểm tra phiên bản mới\" thì không lên mạng.",
+      "Màn hình lỗi: ngoài \"Thử lại\", có thêm \"Báo cáo sự cố\" (mở phần báo cáo) và \"Mở thư mục\" (nơi chứa tệp nhật ký).",
+      "Thiết lập lần đầu: khi danh sách thiết bị dài, các nút ở dưới không còn che danh sách; có thể cuộn xem hết.",
+      "Cửa sổ hẹp: khi thu hẹp cửa sổ, các thẻ nguồn ở màn hình chính vẫn giữ tên và trạng thái; tiếng Việt, Tây Ban Nha, Bồ Đào Nha, Nga và Pháp không còn thanh cuộn ngang ở cửa sổ hẹp nhất.",
+      "Khung ghi chú cập nhật rộng và cao hơn nên đọc danh sách dài dễ hơn; màu xanh biểu thị \"ổn\" không còn đổi theo màu chủ đề (màu hồng không còn trông như lỗi)."
+    ],
+    "th": [
+      "คำเตือนไมโครโฟน: ไมโครโฟนบางตัวส่งแต่ศูนย์เมื่อไม่มีใครพูด ทำให้หลังหยุดพูดไม่กี่วินาทีมีข้อความ \"ไมโครโฟนเงียบสนิท\" ขึ้นมา ตอนนี้จะเตือนเฉพาะเมื่อไมโครโฟนเงียบมาตั้งแต่เปิดเท่านั้น",
+      "แจ้งเตือนเวอร์ชันใหม่: เมื่อเปิด LiveLingo ค้างไว้ (อยู่ในถาดระบบ) จะตรวจทุกไม่กี่ชั่วโมงและแสดงแถบแจ้งเตือนเล็กๆ เหนือหน้าหลัก กด \"มีอะไรใหม่\" เพื่ออ่านก่อนได้ ไม่อัปเดตเอง ปิด \"ตรวจหาเวอร์ชันใหม่\" ก็จะไม่ออนไลน์",
+      "หน้าจอข้อผิดพลาด: นอกจาก \"ลองอีกครั้ง\" ยังมี \"รายงานปัญหา\" (ไปยังหน้ารายงาน) และ \"เปิดโฟลเดอร์\" (ที่เก็บไฟล์บันทึก)",
+      "ตั้งค่าครั้งแรก: เมื่อรายการอุปกรณ์ยาว ปุ่มด้านล่างไม่บังรายการอีกต่อไป และเลื่อนดูได้จนสุด",
+      "หน้าต่างแคบ: เมื่อย่อหน้าต่าง การ์ดแหล่งสัญญาณบนหน้าหลักยังแสดงชื่อและสถานะ และภาษาเวียดนาม สเปน โปรตุเกส รัสเซีย ฝรั่งเศสไม่มีแถบเลื่อนแนวนอนในหน้าต่างที่แคบที่สุดอีก",
+      "กล่องบันทึกการอัปเดตกว้างและสูงขึ้น อ่านรายการยาวๆ ได้ง่ายขึ้น และสีเขียวที่หมายถึง \"ปกติ\" ไม่เปลี่ยนตามสีธีมอีก (สีกุหลาบไม่ดูเหมือนข้อผิดพลาดแล้ว)"
+    ],
+    "id": [
+      "Peringatan mikrofon: beberapa mikrofon mengirim nol saja saat tidak ada yang bicara, sehingga beberapa detik setelah berhenti bicara muncul \"mikrofon benar-benar hening\". Sekarang hanya muncul bila mikrofon hening sejak dinyalakan.",
+      "Pengingat versi baru: bila LiveLingo dibiarkan terbuka (di baki sistem), ia mengecek tiap beberapa jam dan menampilkan bilah kecil di layar utama. Lihat perubahan dulu; tidak ada pembaruan otomatis. Matikan \"Cek versi baru\" agar offline.",
+      "Layar kesalahan: selain \"Coba lagi\", kini ada \"Laporkan masalah\" (membuka laporan masalah) dan \"Buka folder\" (tempat file log).",
+      "Pengaturan awal: saat daftar perangkat panjang, tombol di bawah tidak lagi menutupi daftar dan bisa digulir sampai akhir.",
+      "Jendela sempit: kartu sumber di layar utama tetap menampilkan nama dan status, dan bahasa Vietnam, Spanyol, Portugis, Rusia, dan Prancis tidak lagi punya bilah gulir horizontal di jendela tersempit.",
+      "Kotak catatan pembaruan lebih lebar dan tinggi agar daftar panjang mudah dibaca, dan hijau tanda \"baik\" tidak lagi berubah mengikuti warna aksen (warna mawar tidak lagi tampak seperti kesalahan)."
+    ],
+    "es": [
+      "Aviso del micrófono: algunos micrófonos envían solo ceros cuando nadie habla, y unos segundos después de callar aparecía \"el micrófono está completamente en silencio\". Ahora solo avisa si está en silencio desde que se activó.",
+      "Aviso de versión nueva: con LiveLingo abierto (en la bandeja), busca cada pocas horas y muestra un aviso sobre la pantalla principal. Lee los cambios antes; nada se actualiza solo. Sin \"Buscar una versión nueva\" no se conecta.",
+      "Pantalla de error: además de \"Reintentar\", ahora hay \"Informar de un problema\" (abre el informe) y \"Abrir carpeta\" (donde están los archivos de registro).",
+      "Primer ajuste: con una lista de dispositivos larga, los botones de abajo ya no tapan la lista y se puede desplazar hasta el final.",
+      "Ventanas estrechas: las tarjetas de fuentes de la pantalla principal conservan nombre y estado, y en vietnamita, español, portugués, ruso y francés ya no aparece barra de desplazamiento horizontal en la ventana más estrecha.",
+      "El cuadro de novedades de la actualización es más ancho y alto para leer mejor listas largas, y el verde que significa \"bien\" ya no cambia con el color de acento (el rosa ya no parece un error)."
+    ],
+    "pt": [
+      "Aviso do microfone: alguns microfones enviam só zeros quando ninguém fala, então segundos depois de você parar de falar aparecia \"o microfone está totalmente em silêncio\". Agora só avisa se ele está em silêncio desde que foi ligado.",
+      "Aviso de versão nova: com o LiveLingo aberto (na bandeja), ele verifica a cada poucas horas e mostra um aviso acima da tela principal. Leia as mudanças antes; nada é atualizado sozinho. Sem \"Procurar uma versão nova\", não conecta.",
+      "Tela de erro: além de \"Tentar de novo\", agora há \"Relatar um problema\" (abre o relatório) e \"Abrir pasta\" (onde ficam os arquivos de registro).",
+      "Primeira configuração: com uma lista de dispositivos longa, os botões de baixo não cobrem mais a lista e dá para rolar até o fim.",
+      "Janelas estreitas: os cartões de fontes da tela principal mantêm nome e estado, e em vietnamita, espanhol, português, russo e francês não aparece mais barra de rolagem horizontal na janela mais estreita.",
+      "A caixa de notas da atualização ficou mais larga e alta para ler listas longas, e o verde que significa \"bem\" não muda mais com a cor de destaque (o rosa não parece mais um erro)."
+    ],
+    "ru": [
+      "Предупреждение о микрофоне: некоторые микрофоны шлют одни нули, когда никто не говорит, и после паузы появлялось «Микрофон полностью молчит». Теперь оно появляется, только если микрофон молчит с момента включения.",
+      "Напоминание о новой версии: пока LiveLingo открыт (в трее), он раз в несколько часов проверяет обновления и показывает полоску над главным экраном. Сам не обновляется. Выключите «Проверять новую версию» — выхода в сеть не будет.",
+      "Экран ошибки: кроме «Повторить» появились «Сообщить о проблеме» (открывает отчёт) и «Открыть папку» (где лежат файлы журнала).",
+      "Первая настройка: при длинном списке устройств кнопки внизу больше не закрывают список, его можно прокрутить до конца.",
+      "Узкие окна: карточки источников на главном экране сохраняют название и состояние, а во вьетнамском, испанском, португальском, русском и французском интерфейсе в самом узком окне больше нет горизонтальной полосы прокрутки.",
+      "Окно с описанием обновления стало шире и выше, длинные списки читать удобнее; зелёный цвет «всё хорошо» больше не меняется вместе с акцентным цветом (розовый больше не похож на ошибку)."
+    ],
+    "de": [
+      "Mikrofon-Hinweis: Manche Mikrofone senden nur Nullen, wenn niemand spricht, deshalb erschien kurz nach einer Sprechpause \"Das Mikrofon ist völlig still\". Jetzt erscheint der Hinweis nur noch, wenn es seit dem Einschalten still ist.",
+      "Neue-Version-Hinweis: Bleibt LiveLingo geöffnet (im Infobereich), sucht es alle paar Stunden und zeigt oben einen kleinen Hinweis. Nichts wird von selbst aktualisiert. Bei ausgeschaltetem \"Nach einer neuen Version suchen\" bleibt es offline.",
+      "Fehlerbildschirm: Neben \"Erneut versuchen\" gibt es jetzt \"Problem melden\" (öffnet die Problemmeldung) und \"Ordner öffnen\" (dort liegen die Protokolldateien).",
+      "Ersteinrichtung: Bei einer langen Geräteliste verdecken die Schaltflächen unten die Liste nicht mehr; man kann bis zum Ende scrollen.",
+      "Schmale Fenster: Die Quellenkarten auf dem Hauptbildschirm behalten Namen und Status, und in Vietnamesisch, Spanisch, Portugiesisch, Russisch und Französisch gibt es im schmalsten Fenster keine waagerechte Bildlaufleiste mehr.",
+      "Das Feld mit den Update-Hinweisen ist breiter und höher, damit lange Listen besser lesbar sind, und das Grün für \"in Ordnung\" ändert sich nicht mehr mit der Akzentfarbe (Rosé wirkt nicht mehr wie ein Fehler)."
+    ],
+    "fr": [
+      "Alerte du micro : certains micros n'envoient que des zéros quand personne ne parle, d'où \"le micro est totalement silencieux\" quelques secondes après une pause. L'alerte n'apparaît plus que si le micro est silencieux depuis son activation.",
+      "Rappel de nouvelle version : si LiveLingo reste ouvert (zone de notification), il vérifie toutes les quelques heures et affiche un petit rappel. Rien ne se met à jour seul. Sans \"Chercher une nouvelle version\", il reste hors ligne.",
+      "Écran d'erreur : en plus de \"Réessayer\", il y a maintenant \"Signaler un problème\" (ouvre le signalement) et \"Ouvrir le dossier\" (où se trouvent les fichiers journaux).",
+      "Première configuration : avec une longue liste d'appareils, les boutons du bas ne cachent plus la liste ; on peut la faire défiler jusqu'au bout.",
+      "Fenêtres étroites : les cartes de sources de l'écran principal gardent leur nom et leur état, et en vietnamien, espagnol, portugais, russe et français il n'y a plus de barre de défilement horizontale dans la fenêtre la plus étroite.",
+      "Le cadre des notes de mise à jour est plus large et plus haut pour mieux lire les longues listes, et le vert qui signifie \"OK\" ne change plus avec la couleur d'accent (le rose ne ressemble plus à une erreur)."
+    ]
+  },
   "2.11.0": {
     "zh-TW": [
       "翻選取的字：選取一段字、按 Ctrl+C，再按 Ctrl+Alt+X，翻譯就跳在滑鼠旁邊的小卡上，不用切視窗。打開「先替我按 Ctrl+C」連複製都省了（預設關）。",

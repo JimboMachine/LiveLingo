@@ -640,6 +640,145 @@ def test_quiet_microphone_and_levels():
     assert seen[-1][1] == 0.0 and seen[-1][2] > 0.2                             # 之後一直沒聲音，秒數會累加
 
 
+def test_mic_silent_warning_is_only_for_a_mic_that_never_worked(tmp_path):
+    """有些麥克風沒人說話時送來的是一串 0：說過話之後停下來不能每六秒就跳出「麥克風完全沒有聲音」（Jimbo 的 USB 麥克風實際發生過，紀錄檔一天幾十次）。
+    只有開起來之後一直沒聲音才提醒；重開收音之後重新算。"""
+    from livelingo.service import MIC_HEARD_LEVEL, Service
+
+    service = Service(tmp_path)
+    service.hub.publish = lambda *a: None
+    service.sources["mic"].update(on=True, device="USB mic")
+    # 一開始就一直沒聲音：六秒後提醒
+    service._on_level("mic", 0.0, 3.0)
+    assert service.sources["mic"]["quiet"] == ""
+    service._on_level("mic", 0.0, 6.5)
+    assert service.sources["mic"]["quiet"] == "silent"
+    # 底噪不算聽到說話；真的有聲音就收回提醒
+    service._on_level("mic", MIC_HEARD_LEVEL / 2, 0.0)
+    assert service.sources["mic"]["quiet"] == "" and service._mic_heard is False
+    service._on_level("mic", 0.0, 7.0)
+    assert service.sources["mic"]["quiet"] == "silent"
+    service._on_level("mic", 0.6, 0.0)
+    assert service.sources["mic"]["quiet"] == "" and service._mic_heard is True
+    # 說過話之後安靜一分鐘、十分鐘：不提醒
+    for seconds in (6.5, 60.0, 600.0):
+        service._on_level("mic", 0.0, seconds)
+        assert service.sources["mic"]["quiet"] == ""
+    # 對方的聲音（電腦播放的）本來就不提醒
+    service._on_level("loopback", 0.0, 100.0)
+    assert service.sources["listen"]["quiet"] == ""
+
+
+def test_update_reminder_while_the_app_stays_open(tmp_path, monkeypatch):
+    """縮在系統匣好幾天的程式：開啟時查過之後就沒人再看了，新版本出來也不知道。現在每隔幾個小時再查一次，
+    有新版本就在畫面上小小提醒（不擋住、不自己更新）；按了「現在更新」才走和開啟時一樣的下載安裝。"""
+    from pathlib import Path
+
+    from livelingo.service import UPDATE_RECHECK, Service
+
+    hits = []
+
+    class Hub(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):  # noqa: N802
+            hits.append(self.path)
+            base = f"http://127.0.0.1:{self.server.server_address[1]}"
+            if self.path == "/notes":
+                body = json.dumps({"9.9.9": {"en": ["Faster"], "zh-TW": ["更快"]}}).encode()
+            else:
+                body = json.dumps({"tag_name": "v9.9.9", "assets": [
+                    {"name": "LiveLingo-Setup.exe", "size": 123, "browser_download_url": base + "/setup"},
+                    {"name": "changes.json", "browser_download_url": base + "/notes"}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    assert 3600 <= UPDATE_RECHECK <= 24 * 3600      # 幾個小時看一次：不能密到像在一直打擾 GitHub，也不能久到等於沒有
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Hub)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    monkeypatch.setenv("LIVELINGO_UPDATE_API", f"http://127.0.0.1:{httpd.server_address[1]}/latest")
+    service = Service(tmp_path)
+    try:
+        events = []
+        service.hub.publish = lambda kind, data=None: events.append((kind, data))
+        offer = {"version": "9.9.9", "size": 123, "notes": [{"version": "9.9.9", "items": {"en": ["Faster"], "zh-TW": ["更快"]}}]}
+
+        # 還沒準備好（正在載入、下載）：先不查；使用者在設定裡關掉了：不連網路
+        service.phase = "loading"
+        assert service.update_recheck() is False and not hits
+        service.phase = "ready"
+        service.cfg.set(update_check=False)
+        assert service.update_recheck() is False and not hits
+        service.cfg.set(update_check=True)
+
+        # 有新版本：畫面上提醒（事件和狀態都帶著這一版改了什麼）；同一版不重複提醒
+        assert service.update_recheck() is True
+        assert service.update_offer == offer and events[-1] == ("update_offer", offer) and service.state()["update_offer"] == offer
+        count = len(events)
+        assert service.update_recheck() is False and len(events) == count
+
+        # 按「這次先不要」：收起來，這一次開著的時候不再提醒這一版（下次開啟時會再問）
+        service.update_choice("later")
+        assert service.update_offer is None and events[-1] == ("update_offer", {}) and service.state()["update_offer"] == {}
+        assert service.update_recheck() is False and service._update_declined == "9.9.9"
+        service._update_declined = ""
+
+        # 剛裝過還是舊的那一版、使用者退回來的那一版：不提醒
+        updater.Attempts(tmp_path).record("9.9.9")
+        assert service.update_recheck() is False
+        (tmp_path / "update.json").unlink()
+
+        # 按「現在更新」：走和開啟時一樣的下載安裝（_install_update）；沒成功（沒網路、取消）就回到原本的畫面
+        assert service.update_recheck() is True
+        installs = []
+        service._install_update = lambda info, attempts: installs.append(info["version"]) or False
+        seen = []
+        service.set_phase = lambda phase, **detail: seen.append((phase, detail))
+        service.update_choice("now")
+        deadline = time.time() + 5
+        while not seen and time.time() < deadline:
+            time.sleep(0.02)
+        assert installs == ["9.9.9"] and seen == [("ready", {})]
+    finally:
+        service.shutdown()
+        httpd.shutdown()
+
+    # 介面：提醒有地方放、有接事件，按鈕都接得到
+    root = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    js, html = ((root / n).read_text(encoding="utf-8") for n in ("app.js", "index.html"))
+    assert 'id="up-banner"' in html and "update_offer: (d)" in js and "renderUpdateBanner()" in js
+    assert all(f'"{act}"' in js for act in ("up-review", "update-now", "update-later"))
+
+
+def test_error_screen_can_report_and_open_the_log_folder(tmp_path, monkeypatch):
+    """翻譯引擎或開啟時出錯的畫面：除了「重試」，也要有「回報問題」和「打開資料夾」（紀錄檔放的地方），不能只剩一個按鈕。"""
+    from pathlib import Path
+
+    from livelingo.service import Service
+
+    opened = []
+    monkeypatch.setattr("livelingo.service.oswin.open_path", lambda p: opened.append(Path(p)) or True)
+    service = Service(tmp_path)
+    try:
+        assert service.logs_open() == {"ok": True} and opened == [tmp_path]
+
+        def boom():
+            raise RuntimeError("boom")
+
+        service._installers_cleanup = boom
+        service._boot()      # 開啟時就出錯：畫面上也要指得到紀錄檔
+        assert service.phase == "error" and service.detail["message"] == "boom" and service.detail["log"] == str(tmp_path / "app.log")
+    finally:
+        service.shutdown()
+    root = Path(__file__).resolve().parent.parent / "livelingo"
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'data-act="err-report"' in js and 'data-act="err-logs"' in js and '"/api/storage", { open_logs: true }' in js
+    assert 'body.get("open_logs")' in (root / "server.py").read_text(encoding="utf-8")
+
+
 def test_find_my_microphone(tmp_path):
     """「自動找麥克風」：說話時最大聲的那一支會被選起來；全部沒聲音就回報找不到。"""
     import numpy as np
@@ -3504,7 +3643,9 @@ def test_update_prompt_says_what_changed(tmp_path, monkeypatch):
     assert updater.just_updated(folder) == ""
 
     js = (root / "ui" / "app.js").read_text(encoding="utf-8")
-    assert "changesHTML(d.notes" in js and 'post("/api/seen"' in js and "aboutChangesHTML()" in js
+    assert "const notes = d.notes" in js and "changesHTML(notes" in js and "html = updateAskHTML(d)" in js      # 開啟時的詢問帶著這一版改了什麼
+    assert "html = updateAskHTML(S.updateOffer)" in js      # 程式開著時畫面上的提醒按了「看改了什麼」，看到的是同一張
+    assert 'post("/api/seen"' in js and "aboutChangesHTML()" in js
     assert not re.search(r"<li>\$\{(?!esc\()", js)      # 說明是從網路來的字：一定當作純文字放進畫面
     ci = (root.parent / "packaging" / "ci_install_test.py").read_text(encoding="utf-8")
     assert "the update prompt does not carry what changed" in ci

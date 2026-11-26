@@ -31,7 +31,7 @@
 
 ## 更新
 
-每次開啟 LiveLingo 都會檢查有沒有新版本。有的話會先問你：按「現在更新」會自動下載、安裝，然後重新開啟；按「這次先不要」就繼續用現在的版本，下次開啟時會再問。下載到一半也可以取消。沒有網路時會照常使用，下次開啟再檢查。不想讓它開啟時連網路的話，到「關於」把「開啟時檢查有沒有新版本」關掉。
+每次開啟 LiveLingo 都會檢查有沒有新版本；程式一直開著（縮在系統匣）的話，每隔幾個小時會再檢查一次。開啟時有新版本會先問你：按「現在更新」會自動下載、安裝，然後重新開啟；按「這次先不要」就繼續用現在的版本，下次開啟時會再問。一直開著的時候查到新版本，只會在主畫面上方出現一條小提醒（可以先看這一版改了什麼），不會自己更新。下載到一半也可以取消。沒有網路時會照常使用，下次再檢查。不想讓它連網路的話，到「關於」把「檢查有沒有新版本」關掉。
 
 ## 卸載
 
@@ -80,7 +80,7 @@ python -m livelingo --selftest out.json --no-window
 | `livelingo/service.py` | 程式主體：管理翻譯引擎、三種來源、設定、詞彙表 |
 | `livelingo/server.py` | 只開在本機的 API 和事件串流，介面透過它和主體溝通 |
 | `livelingo/ui/` | 介面（HTML、CSS、JavaScript，每種介面語言的文字在 `i18n.js`） |
-| `livelingo/updater.py` | 更新（開啟時發現新版本會先問，可以略過） |
+| `livelingo/updater.py` | 更新（開啟時發現新版本會先問，可以略過；一直開著時每隔幾小時再查，用主畫面上的小提醒告知） |
 | `livelingo/transcript.py` | 字幕記錄（存成 txt 檔） |
 | `livelingo/ui/brand.js` | 品牌標誌和名稱，介面裡每個地方都從這裡拿 |
 | `packaging/` | PyInstaller 設定、Inno Setup 安裝程式、圖示（`livelingo.ico`，由標誌的定稿檔做成）、安裝測試 |
@@ -89,6 +89,6 @@ python -m livelingo --selftest out.json --no-window
 
 改任何東西之後，先到 `docs/dependencies.md` 找到你改的那一項，把列出來的地方都檢查一遍。新增模組、文字表或共用的名稱時，`docs/dependencies.json` 要一起補，再跑 `python docs/make_dependencies.py`。
 
-發佈新版本：改 `livelingo/__init__.py` 裡的版本號，合併到 `main`。GitHub Actions 會在 Windows 上打包、把安裝檔真的安裝／更新／卸載測一次，通過後自動發佈成 Release，使用者下次開啟時會被問要不要更新。
+發佈新版本：改 `livelingo/__init__.py` 裡的版本號，合併到 `main`。GitHub Actions 會在 Windows 上打包、把安裝檔真的安裝／更新／卸載測一次，通過後自動發佈成 Release，使用者下次開啟時會被問要不要更新（程式一直開著的話，幾個小時內也會在主畫面上被提醒）。
 
 設定、詞彙表、模型和紀錄檔都放在 `%LOCALAPPDATA%\LiveLingo`。

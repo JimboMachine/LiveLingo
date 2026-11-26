@@ -15,6 +15,7 @@
   --me-line: #5C4A1E;
   --me-dim: #C9B88E;
   --danger: #FF8A80;
+  --ok: #4ADE9A;
   color-scheme: dark;
 }
 /* 淺色主題 */
@@ -22,7 +23,7 @@
   --ground: #F5F6F8; --surface: #FFFFFF; --surface-2: #ECEEF2; --line: #DDE1E7; --line-2: #C3C9D2;
   --text: #15181C; --dim: #4C5560; --faint: #5F6975;
   --accent: #076F49; --accent-ink: #FFFFFF;
-  --me: #8A5A00; --me-bg: #FFF5DD; --me-line: #E8C36B; --me-dim: #7A6532; --danger: #C62828;
+  --me: #8A5A00; --me-bg: #FFF5DD; --me-line: #E8C36B; --me-dim: #7A6532; --danger: #C62828; --ok: #0B7A4D;
   color-scheme: light;
 }
 /* 強調色：深色主題用亮的，淺色主題用深的，文字才看得清楚 */
@@ -175,7 +176,7 @@ input::placeholder { color: var(--faint); }
 .status { display: flex; align-items: center; gap: 6px; margin-left: 4px; font-size: 12px; color: var(--dim); min-width: 0; }
 .status span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
-.status[data-phase="ready"] .dot { background: var(--accent); }
+.status[data-phase="ready"] .dot { background: var(--ok); }
 .status[data-phase="error"] .dot { background: var(--danger); }
 .status[data-phase="loading"] .dot, .status[data-phase="downloading"] .dot, .status[data-phase="starting"] .dot { background: var(--me); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
@@ -184,11 +185,24 @@ input::placeholder { color: var(--faint); }
 .quality-chip[data-q="high"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .quality-chip[data-q="fallback"] { color: var(--me); border-color: color-mix(in srgb, var(--me) 45%, transparent); }
 
+/* 程式開著時查到新版本：一條小小的提醒，不擋住任何東西 */
+.up-banner { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 10px max(16px, calc((100% - 820px) / 2)) 0; padding: 4px 4px 4px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); font-size: 13px; }
+.up-banner > svg { color: var(--accent); flex: none; }
+.up-banner > span { flex: 1 1 150px; min-width: 0; padding: 6px 0; line-height: 1.35; }
+.up-banner .ghost { flex: none; height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
+.up-banner .icon-btn { flex: none; width: 32px; height: 32px; }
 .sources { flex: none; padding: 14px max(16px, calc((100% - 820px) / 2)) 12px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
 .sources-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }      /* 說明太長時，語言按鈕自己換到下一行，不擠在一起 */
 .sources-head .chip { margin-left: auto; }
 .chip { height: 36px; padding: 0 10px 0 12px; border: 1.5px solid var(--line-2); border-radius: 18px; background: var(--surface); font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; flex: none; }
 .chip[aria-expanded="true"] { border-color: var(--accent); }
+.chip { max-width: 100%; }
+.chip #pair-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 520px) {
+  .topbar { gap: 6px; padding-left: 12px; }
+  .status span:last-child { display: none; }      /* 只留圓點（顏色就是狀態，滑鼠停上去有文字） */
+  .quality-chip { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+}
 .lang-picker { padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line-2); display: flex; flex-direction: column; gap: 10px; }
 .lang-picker .group { display: flex; flex-direction: column; gap: 6px; }
 .lang-picker .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }      /* 十幾種語言排成整齊的格子，不會東一顆西一顆 */
@@ -210,6 +224,14 @@ input::placeholder { color: var(--faint); }
 .card[data-speaking="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .card .vu { grid-area: vu; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 4px; }
 .card .vu i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.12s linear; }
+/* 視窗窄的時候（例如貼在遊戲旁邊）：三張卡片改成圖示在上、名字在中間、狀態在下，名字才不會被「已關閉」擠掉 */
+@media (max-width: 640px) {
+  .card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "icon" "name" "state" "hint" "vu"; justify-items: center; text-align: center; row-gap: 2px; padding: 8px 6px 9px; }
+  .card .name { white-space: normal; font-size: 13px; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+  .card .hint { display: none; }
+  .card[data-error="true"] .hint, .card[data-busy="true"] .hint { display: block; white-space: normal; font-size: 12px; line-height: 1.3; }
+  .card .vu { width: 100%; }
+}
 .mic-row { margin-top: 8px; }
 .mic-note + .mic-note { margin-top: 6px; }
 .mic-note .detail { margin-top: 4px; font-size: 12px; color: var(--dim); overflow-wrap: anywhere; user-select: text; }
@@ -360,7 +382,7 @@ input::placeholder { color: var(--faint); }
 .steps li.now .num { border-color: var(--accent); color: var(--accent); }
 .steps li.now .lbl span { color: var(--accent); }
 .steps li.done .num { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.wz-body { flex: 1; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+.wz-body { flex: 1 0 auto; display: flex; flex-direction: column; gap: 18px; }      /* 不縮：裝置清單比視窗長時整頁捲動，不會被下面的按鈕蓋住 */
 .wz-body section { display: flex; flex-direction: column; gap: 10px; }
 .wz-body .sub { font-size: 13px; color: var(--dim); line-height: 1.5; margin-top: 4px; }
 .wz-split { display: flex; gap: 28px; align-items: stretch; }
@@ -373,7 +395,7 @@ input::placeholder { color: var(--faint); }
 .wz-art .ln b { height: 10px; border-radius: 4px; background: var(--line-2); }
 .wz-art .inp { height: 34px; border-radius: 8px; background: var(--surface-2); display: flex; align-items: center; padding: 0 12px; font-size: 12px; color: var(--dim); }
 .wz-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; justify-content: center; align-items: flex-start; }
-.wz-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.wz-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; position: sticky; bottom: -20px; z-index: 2; margin-bottom: -20px; padding: 12px 0 20px; background: var(--ground); }      /* 捲動時按鈕一直在視窗下緣 */
 .wz-try { display: flex; gap: 8px; max-width: 560px; }
 .wz-try input { flex: 1; width: 0; height: 46px; font-size: 15px; }
 .wz-result { max-width: 560px; }
@@ -388,6 +410,7 @@ input::placeholder { color: var(--faint); }
 .panel h2 { margin: 0; font-size: 18px; }
 .panel p { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .panel .bar { width: 100%; }
+.panel.wide { max-width: 640px; }
 .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-2); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .toast { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 10px 14px; background: var(--surface-2); border-color: var(--line-2); z-index: 30; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); animation: view-in 0.16s ease-out; }
@@ -508,11 +531,11 @@ input::placeholder { color: var(--faint); }
 .health-row .desc { overflow-wrap: anywhere; }
 .health-row > button { flex: none; align-self: center; height: 36px; padding: 0 12px; border-radius: 8px; font-size: 13px; }
 .lamp { flex: none; width: 12px; height: 12px; margin-top: 5px; border-radius: 50%; background: var(--faint); box-shadow: 0 0 0 4px color-mix(in srgb, var(--faint) 18%, transparent); }
-.health-row[data-state="ok"] .lamp { background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
+.health-row[data-state="ok"] .lamp { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 20%, transparent); }
 .health-row[data-state="warn"] .lamp { background: var(--me); box-shadow: 0 0 0 4px color-mix(in srgb, var(--me) 20%, transparent); }
 .health-row[data-state="bad"] .lamp { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 22%, transparent); }
 .health-state { margin-left: 6px; font-size: 12px; color: var(--dim); }
-.health-row[data-state="ok"] .health-state { color: var(--accent); }
+.health-row[data-state="ok"] .health-state { color: var(--ok); }
 .health-row[data-state="warn"] .health-state { color: var(--me); }
 .health-row[data-state="bad"] .health-state { color: var(--danger); }
 #health-summary small { color: var(--dim); }
@@ -534,7 +557,7 @@ input::placeholder { color: var(--faint); }
 .changes ul { margin: 6px 0 0; padding-left: 20px; }
 .changes li { margin: 3px 0; }
 .changes-version { margin-top: 12px; font-weight: 700; color: var(--dim); }
-.panel .changes { text-align: left; max-height: 240px; overflow-y: auto; margin: 4px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.panel .changes { text-align: left; max-height: clamp(180px, 52vh, 460px); width: 100%; overflow-y: auto; margin: 4px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
 .changes-older > summary { cursor: pointer; font-size: 13px; color: var(--dim); padding: 6px 0; }
 .changes-older > summary:hover { color: var(--text); }
 
