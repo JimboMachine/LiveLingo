@@ -16,6 +16,63 @@ _KO_TOKEN = re.compile(r"[가-힣]+")
 _JAMO_TOKEN = re.compile(r"[ㄱ-ㅎ]+")      # 只有子音的縮寫：ㄱㄱ、ㅈㅅ、ㅊㅋㅊㅋ
 
 PACKS = ("lol", "chat")      # 內建的用語包，檔案是 data/terms_<名字>.json；介面上的名字是 i18n 的 pack_<名字>
+# 只跟某一個遊戲有關的用語包 → 那個遊戲的程式檔名（小寫）。開了「照正在玩的遊戲自動切換」時，
+# 這些包只有在那個遊戲開著的時候才用；不在這裡的包（chat 聊天縮寫）哪個遊戲都用得到，一直開著
+GAME_PACKS = {"lol": ("league of legends.exe",)}
+# 認得出來的遊戲：程式檔名（小寫）→ 顯示的名字。只用來在畫面上說「現在在玩什麼」、讓使用者替它加專用詞；
+# 不在這裡的程式，使用者也可以從「開著的程式」挑一個當成遊戲
+GAMES = {
+    "league of legends.exe": "League of Legends",
+    "valorant-win64-shipping.exe": "VALORANT",
+    "overwatch.exe": "Overwatch 2",
+    "tslgame.exe": "PUBG: BATTLEGROUNDS",
+    "cs2.exe": "Counter-Strike 2",
+    "r5apex.exe": "Apex Legends",
+    "r5apex_dx12.exe": "Apex Legends",
+    "dota2.exe": "Dota 2",
+    "fortniteclient-win64-shipping.exe": "Fortnite",
+    "maplestory.exe": "MapleStory",
+    "lostark.exe": "Lost Ark",
+    "genshinimpact.exe": "Genshin Impact",
+    "starrail.exe": "Honkai: Star Rail",
+    "eldenring.exe": "ELDEN RING",
+    "minecraft.windows.exe": "Minecraft",
+    "rocketleague.exe": "Rocket League",
+    "fc25.exe": "EA SPORTS FC 25",
+    "deltaforce-win64-shipping.exe": "Delta Force",
+    "marvel-win64-shipping.exe": "Marvel Rivals",
+}
+
+
+def game_name(exe: str) -> str:
+    """遊戲顯示的名字：認得的用固定的名字，不認得的用程式檔名（去掉 .exe）。"""
+    low = (exe or "").lower()
+    if low in GAMES:
+        return GAMES[low]
+    return exe[:-4] if low.endswith(".exe") else exe
+
+
+def find_game(windows: list[dict], own: set[str] | None = None) -> str:
+    """現在在玩哪個遊戲：畫面上開著的視窗（apps.windows()，最上面的在前）裡，
+    第一個是認得的遊戲、或使用者替它加過專用詞的程式。回傳程式檔名（小寫），沒有就是空字串。
+    看最上面的那一個：同時開著兩個遊戲時，以正在玩（在前面）的為準；切到 Discord 打字時遊戲還開著，照樣算。"""
+    own = {o.lower() for o in (own or set())}
+    for w in windows:
+        exe = str(w.get("exe") or "").lower()
+        if exe and (exe in GAMES or exe in own) and not w.get("minimized"):
+            return exe
+    for w in windows:      # 遊戲都縮到工作列了：還開著也算
+        exe = str(w.get("exe") or "").lower()
+        if exe and (exe in GAMES or exe in own):
+            return exe
+    return ""
+
+
+def packs_for(chosen: list[str], game: str, auto: bool) -> list[str]:
+    """實際要用哪幾包。auto 關掉：使用者選的全部用。auto 開著：只跟某個遊戲有關的包，只有那個遊戲開著時才用。"""
+    if not auto:
+        return [p for p in chosen if p in PACKS]
+    return [p for p in chosen if p in PACKS and (p not in GAME_PACKS or game in GAME_PACKS[p])]
 
 
 class TermPack:

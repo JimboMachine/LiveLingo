@@ -31,6 +31,7 @@ from pathlib import Path
 
 FILE = "memory.db"
 KIND = "livelingo-translations"         # 分享檔的 kind
+TONES = ("casual", "polite", "casual+keep", "polite+keep")      # 記住的翻法分開存的語氣（+keep = 保留語氣，Translator.memory_tone）
 MAX_MINE = 100000                       # 我的（沒教過的）最多留這麼多句，再多就丟掉最久沒用到的
 MAX_IMPORT = 50000                      # 一個分享檔最多收幾句
 MAX_TEXT = 500
@@ -41,7 +42,6 @@ VERSION = 2                             # 分享檔的版本；第 2 版多了 w
 SUBTITLE = 2                            # memory.fixed 的值：從字幕檔匯入的（人翻的，但常常濃縮過）
 SHOWN = 3                               # memory.fixed 的值：畫面上雙語字幕現成的翻譯（origin = SCREEN）
 SCREEN = "screen"                       # 畫面上現成的翻譯用的 origin（不是一包，不會匯出；清除我翻過的時一起清掉）
-TONES = ("casual", "polite")
 NEAR = 0.85                             # 同一部裡「幾乎一樣」的句子要多像才拿來用
 NEAR_MIN = 4                            # 太短的句子不找幾乎一樣的（「好」「對啊」差一個字就是別的意思）
 NEAR_SCAN = 5000                        # 同一部裡最多比對幾句
@@ -320,7 +320,7 @@ class Memory:
             src, dst = key_text(item.get("src")), str(item.get("dst") or "").strip()[:MAX_TEXT * 2]
             lang, target, tone = str(item.get("lang") or ""), str(item.get("target") or ""), str(item.get("tone") or "casual")
             if (not src or not dst or src == dst or lang not in sources or target not in targets
-                    or tone not in ("casual", "polite") or (src, lang, target, tone) in seen):
+                    or tone not in TONES or (src, lang, target, tone) in seen):
                 continue
             seen.add((src, lang, target, tone))
             model = str(item.get("model") or "")

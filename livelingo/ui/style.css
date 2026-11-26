@@ -570,6 +570,11 @@ input::placeholder { color: var(--faint); }
 .help-list li::marker { color: var(--dim); }
 .help-list kbd { display: inline-block; padding: 0 6px; margin: 0 1px; border-radius: 6px; border: 1px solid var(--line-2); border-bottom-width: 2px; background: var(--surface-2); color: var(--text); font: 600 12px/1.7 ui-monospace, Consolas, "Cascadia Mono", monospace; white-space: nowrap; }
 
+/* 2.8.0：遊戲專用詞的標籤、直播字幕的網址 */
+.game-tag { margin-left: 6px; font-size: 12px; vertical-align: middle; }
+.gloss-game select { max-width: 220px; }
+.stream-url { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.stream-url code { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 12px; user-select: all; }
 /* 翻過的句子：用的是記住的翻法時，訊息下方的小字 */
 .msg .meta .kept { color: var(--faint); }
 

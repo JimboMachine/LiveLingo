@@ -57,7 +57,7 @@
 
   const SAVE_TARGET = {      // 「已儲存」出現在哪個控制項旁邊（沒列的：用 data-key 或 data-change 找）
     theme: '[data-act="theme"][aria-pressed="true"]', accent: '[data-act="accent"][aria-pressed="true"]',
-    ui_lang: '[data-act="ui-lang"][aria-pressed="true"]', tone: '[data-act="tone"][aria-pressed="true"]',
+    ui_lang: '[data-act="ui-lang"][aria-pressed="true"]', tone: '[data-act="tone"][aria-pressed="true"]', tone_keep: '[data-act="tone-keep"][aria-pressed="true"]',
     quality: '[data-act="quality"][aria-pressed="true"]', my_lang: "#sel-my", their_lang: "#sel-their", their_auto: "#sel-their",
     speaker_device: '[data-act="device"][data-key="speaker"]', mic_device: '[data-act="device"][data-key="mic"]',
     transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]', overlay_map: "#screen-map",
@@ -616,7 +616,7 @@
   // 打開某個設定分頁時要另外去拿的資料：聲音頁要裝置和音量，聲音頁和螢幕頁都要開著的程式清單
   function tabOpened() {
     if (S.ui.tab === "audio") openDevices();
-    if (S.ui.tab === "screen") loadApps();
+    if (S.ui.tab === "screen" || S.ui.tab === "quality") loadApps();
     if (S.ui.tab === "overlay") loadScreens();
     if (S.ui.tab === "history") { S.ui.hist = null; loadHistory(); }
     if (S.ui.tab === "health") { S.ui.useAsk = false; loadHealth(); loadUsage(); }
@@ -626,7 +626,7 @@
 
   async function loadApps() {
     S.ui.apps = await get("/api/apps") || null;
-    if (S.view === "settings" && (S.ui.tab === "audio" || S.ui.tab === "screen")) renderSettingsPage();
+    if (S.view === "settings" && (S.ui.tab === "audio" || S.ui.tab === "screen" || S.ui.tab === "quality")) renderSettingsPage();
   }
 
   function refreshDevicePanels() {
@@ -671,10 +671,23 @@
     // 語氣的說明照「會翻成哪個語言」寫：韓文、日文有明確的說法（半語／タメ口、해요體／です・ます）
     const toneOf = ["ko", "ja"].find((l) => S.cfg.their_lang === l) || ["ko", "ja"].find((l) => S.cfg.my_lang === l) || "";
     const tk = (key) => t(toneOf ? `${key}_${toneOf}` : key);
+    const game = S.game || {};
+    const gameNames = {};
+    (game.own || []).forEach((g) => { gameNames[g.exe] = g.name; });
+    if (game.exe) gameNames[game.exe] = game.name;
+    const useGames = S.cfg.game_terms && S.cfg.game_auto;      // 遊戲專用詞只有開著自動切換時才有用
     const rows = S.glossary.length
-      ? S.glossary.map((g) => `<div class="grow-row"><span>${esc(g.src)}</span><span>${esc(g.dst)}</span>
-          <button data-act="gloss-remove" data-src="${esc(g.src)}" aria-label="${esc(t("remove", { word: g.src }))}">${ICON.x}</button></div>`).join("")
+      ? S.glossary.map((g) => `<div class="grow-row"><span>${esc(g.src)}</span><span>${esc(g.dst)}${g.game ? ` <span class="tag plain game-tag">${esc(gameNames[g.game] || g.game)}</span>` : ""}</span>
+          <button data-act="gloss-remove" data-src="${esc(g.src)}" data-game="${esc(g.game || "")}" aria-label="${esc(t("remove", { word: g.src }))}">${ICON.x}</button></div>`).join("")
       : `<div class="none">${esc(t("gloss_empty"))}</div>`;
+    // 「用在」的選項：所有遊戲、現在認出來的遊戲、已經有專用詞的遊戲、現在開著的程式（不在清單上的遊戲也能自己挑）
+    const gameOpts = [["", t("gloss_game_all")]];
+    const seenOpt = new Set([""]);
+    const addOpt = (exe, name) => { const k = (exe || "").toLowerCase(); if (!seenOpt.has(k)) { seenOpt.add(k); gameOpts.push([k, name]); } };
+    if (game.exe) addOpt(game.exe, game.name);
+    (game.own || []).forEach((g) => addOpt(g.exe, g.name));
+    ((S.ui.apps && S.ui.apps.apps) || []).filter((a) => a.running).forEach((a) => addOpt(a.exe, a.name));
+    const pick = S.ui.glossGame !== undefined && seenOpt.has(S.ui.glossGame) ? S.ui.glossGame : (game.exe || "");
     const taught = S.lessons.length
       ? S.lessons.slice().reverse().map((l) => `<div class="grow-row"><span>${esc(l.src)}</span><span>${esc(l.dst)}</span>
           <button data-act="lesson-remove" data-src="${esc(l.src)}" data-target="${esc(l.target)}" aria-label="${esc(t("remove", { word: l.src }))}">${ICON.x}</button></div>`).join("")
@@ -702,12 +715,18 @@
           <button class="pill tall" data-act="tone" data-tone="casual" aria-pressed="${S.cfg.tone === "casual"}">${esc(tk("tone_casual"))}</button>
           <button class="pill tall" data-act="tone" data-tone="polite" aria-pressed="${S.cfg.tone === "polite"}">${esc(tk("tone_polite"))}</button>
         </div>
+        <div class="setting-row choice"><div>${esc(t("tone_keep_title"))}</div><div class="pills">
+          <button class="pill" data-act="tone-keep" data-value="" aria-pressed="${!S.cfg.tone_keep}">${esc(t("tone_keep_off"))}</button>
+          <button class="pill" data-act="tone-keep" data-value="1" aria-pressed="${!!S.cfg.tone_keep}">${esc(t("tone_keep_on"))}</button></div></div>
+        <div class="dnote">${esc(t(S.cfg.tone_keep ? "tone_keep_on_desc" : "tone_keep_off_desc"))}</div>
       </section>
       <section>${switchRow("use_context", t("use_context"), t("use_context_desc"))}
         ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>
       <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}
         ${S.cfg.game_terms ? `<div class="packs">${["lol", "chat"].map((p) => `<button class="pack" id="pack-${p}" data-act="pack" data-pack="${p}" aria-pressed="${(S.cfg.term_packs || []).indexOf(p) >= 0}">
-          <span class="name">${ICON.check}${esc(t("pack_" + p))}</span><span class="desc">${esc(t("pack_" + p + "_desc"))}</span></button>`).join("")}</div>` : ""}</section>
+          <span class="name">${ICON.check}${esc(t("pack_" + p))}</span><span class="desc">${esc(t("pack_" + p + "_desc"))}</span></button>`).join("")}</div>
+          ${switchRow("game_auto", t("game_auto"), t("game_auto_desc"))}
+          ${S.cfg.game_auto ? `<div class="note" id="game-now">${ICON.info}<span>${esc(game.exe ? t("game_now", { game: game.name }) : t("game_none"))}</span></div>` : ""}` : ""}</section>
       <section>
         <div><h2>${esc(t("gloss_title"))}</h2><div class="sub">${esc(t("gloss_hint"))}</div></div>
         <form class="gloss-form" id="gloss-form">
@@ -715,6 +734,8 @@
           <input name="dst" aria-label="${esc(t("gloss_dst"))}" placeholder="${esc(t("gloss_dst"))}" maxlength="80">
           <button class="primary" type="submit">${esc(t("gloss_add"))}</button>
         </form>
+        ${useGames ? `<div class="setting-row choice gloss-game"><div><div>${esc(t("gloss_game"))}</div><div class="desc">${esc(t("gloss_game_desc"))}</div></div>
+          <select id="gloss-game" aria-label="${esc(t("gloss_game"))}">${gameOpts.map(([v, n]) => `<option value="${esc(v)}" ${v === pick ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>` : ""}
         <div class="gloss"><div class="grow-head"><span>${esc(t("gloss_src"))}</span><span>${esc(t("gloss_dst"))}</span><span></span></div>${rows}</div>
       </section>
       <section>
@@ -1005,6 +1026,7 @@
         ${on ? `<div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>` : ""}
         ${switchRow("share_visible", t("share_visible"), t("share_visible_desc"))}
       </section>
+      ${streamHTML()}
       ${mapHTML()}
       <section><div><h2>${esc(t("ov_presets"))}</h2><div class="sub">${esc(t("ov_presets_hint"))}</div></div>
         <div class="quality presets">${["chat", "subtitle", "quiet"].map((id) => `<button class="qcard" data-act="overlay-preset" data-code="${id}">
@@ -1036,6 +1058,26 @@
         ${switchRow("overlay_mine", t("ov_mine"))}
       </section>
       <section><div class="btn-row"><button class="ghost" data-act="overlay-look-reset">${esc(t("ov_look_reset"))}</button></div></section>`;
+  }
+
+  // 直播模式：OBS 的「瀏覽器來源」貼這個網址，就有乾淨的雙語字幕（網址固定，重開也不變）
+  function streamHTML() {
+    const st = S.stream || {};
+    const on = !!S.cfg.stream;
+    let body = "";
+    if (on && st.url) {
+      body = `<div class="stream-url"><code id="stream-url">${esc(st.url)}</code>
+          <button class="ghost" data-act="stream-copy" id="stream-copy">${esc(S.ui.streamCopied ? t("stream_copied") : t("stream_copy"))}</button></div>
+        <div class="dnote">${esc(t("stream_how"))}</div>
+        ${st.port && st.wanted && st.port !== st.wanted ? `<div class="note warn">${ICON.info}<span>${esc(t("stream_port_moved", { port: st.wanted, used: st.port }))}</span></div>` : ""}
+        <div class="note">${ICON.info}<span>${esc(st.viewers ? t("stream_viewers", { n: st.viewers }) : t("stream_waiting"))}</span></div>
+        ${switchRow("stream_original", t("stream_original"))}
+        ${switchRow("stream_mine", t("stream_mine"))}`;
+    } else if (on && st.error) {
+      body = `<div class="note warn">${ICON.info}<span>${esc(t("stream_port_busy", { port: st.wanted }))}</span></div>`;
+    }
+    return `<section id="stream-section"><div><h2>${esc(t("stream_title"))}</h2><div class="sub">${esc(t("stream_hint"))}</div></div>
+        ${switchRow("stream", t("stream_on"))}${body}</section>`;
   }
 
   let previewTurn = 0;
@@ -1747,6 +1789,11 @@
     },
     quality: (el) => saveCfg({ quality: el.dataset.q }),
     tone: (el) => saveCfg({ tone: el.dataset.tone }),
+    "tone-keep": (el) => saveCfg({ tone_keep: !!el.dataset.value }),
+    "stream-copy": async () => {
+      const r = await post("/api/stream", { action: "copy" });
+      if (r && r.ok) { S.ui.streamCopied = true; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); setTimeout(() => { S.ui.streamCopied = false; }, 3000); }
+    },
     app: (el) => {      // 勾或取消一個程式
       const exe = el.dataset.exe, now = (S.cfg.listen_apps || []).slice();
       const has = now.some((c) => c.toLowerCase() === exe.toLowerCase());
@@ -1836,7 +1883,7 @@
       if (prev) post("/api/config", { mic_device: prev.id, mic_name: prev.name });
     },
     "mic-settings": () => post("/api/mic_settings"),
-    "gloss-remove": (el) => post("/api/glossary/remove", { src: el.dataset.src }),
+    "gloss-remove": (el) => post("/api/glossary/remove", { src: el.dataset.src, game: el.dataset.game || "" }),
     "lesson-remove": (el) => post("/api/lessons/remove", { src: el.dataset.src, target: el.dataset.target }),
     "ocr-test": async (el) => {
       S.ui.ocrId = el.dataset.id || "";
@@ -2143,6 +2190,7 @@
         .catch(() => toast(t("mem_bad"), 9000, "warn"));
       return;
     }
+    if (e.target.id === "gloss-game") { S.ui.glossGame = e.target.value; return; }      // 只記下來，加詞的時候才用
     if (e.target.id === "sub-file") {      // 字幕檔：一個雙語的，或原文、翻譯各一個；在這裡讀檔，配對交給程式
       const all = [...(e.target.files || [])];
       if (!all.length) return;
@@ -2264,7 +2312,8 @@
     } else if (form.id === "gloss-form") {
       const src = form.elements.src.value.trim(), dst = form.elements.dst.value.trim();
       if (!src || !dst) { (src ? form.elements.dst : form.elements.src).focus(); return; }
-      const r = await post("/api/glossary/add", { src, dst });
+      const sel = $("gloss-game");
+      const r = await post("/api/glossary/add", { src, dst, game: sel ? sel.value : "" });
       if (r.ok) { form.reset(); form.elements.src.focus(); }
     } else if (form.id === "wz-try") {
       const text = $("wz-say").value.trim();
@@ -2361,6 +2410,8 @@
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
+    stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
+    game: (g) => { S.game = g; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
     memory: (m) => { S.memory = m; if (S.view === "settings" && S.ui.tab === "quality" && !document.activeElement.closest("form")) renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
@@ -2442,7 +2493,7 @@
     const st = await get("/api/state");
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
-    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];

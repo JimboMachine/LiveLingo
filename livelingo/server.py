@@ -224,9 +224,9 @@ class Server:
                         service.lesson_remove(str(body.get("src") or ""), str(body.get("target") or ""))
                         return self._json({"ok": True})
                     if route == "/api/glossary/add":
-                        return self._json({"ok": service.glossary_add(str(body.get("src") or ""), str(body.get("dst") or ""))})
+                        return self._json({"ok": service.glossary_add(str(body.get("src") or ""), str(body.get("dst") or ""), str(body.get("game") or ""))})
                     if route == "/api/glossary/remove":
-                        service.glossary_remove(str(body.get("src") or ""))
+                        service.glossary_remove(str(body.get("src") or ""), str(body.get("game") or ""))
                         return self._json({"ok": True})
                     if route == "/api/speakers":      # 分辨說話者：取名字、設語言、全部重來、模型沒準備好時再試一次
                         if body.get("action") == "rename":
@@ -262,6 +262,8 @@ class Server:
                         if action == "forget":
                             return self._json(service.memory_forget())
                         return self._json(service.memory_import(body.get("data"), str(body.get("name") or "")[:120]))
+                    if route == "/api/stream":      # 直播模式：複製給 OBS 的網址
+                        return self._json(service.stream_action(str(body.get("action") or "")))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
                     if route == "/api/settings":      # 設定的匯出、匯入、恢復預設、復原

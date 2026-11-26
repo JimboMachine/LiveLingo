@@ -1345,6 +1345,8 @@ def test_term_packs(tmp_path):
     assert HINT_INTRO + "ㄱㄱ = 走吧" in build_prompt("ㄱㄱ", "ko", "zh-TW", {}, "casual", [("ㄱㄱ", "走吧")])
 
     service = Service(tmp_path)
+    assert service.terms.names == ["chat"]          # 照遊戲自動切換（預設開著）：沒在玩英雄聯盟，它的用語包先不用
+    service.update_config({"game_auto": False})
     assert service.terms.names == list(PACKS) and service.translator.hint_intro == HINT_INTRO
     result = service.update_config({"term_packs": ["chat", "lol", "nope"]})
     assert result["saved"] and "term_packs" not in result["changed"]                    # 整理之後跟原本一樣：沒有變
@@ -6050,6 +6052,95 @@ def test_whats_new_is_told_after_every_update_or_reinstall(tmp_path):
     js = (root / "ui" / "app.js").read_text(encoding="utf-8")
     assert 'S.whatsNew' in js and '"wn-done"' in js and '/api/seen", { whats_new: true }' in js and "up-notes-missing" in js
     assert 'body.get("whats_new")' in (root / "server.py").read_text(encoding="utf-8")
+
+
+def test_seven_features_part_one(tmp_path, monkeypatch):
+    """2.8.0：照正在玩的遊戲切換用語包和遊戲專用詞、保留語氣、給 OBS 的直播字幕。"""
+    import socket
+    import urllib.error
+    import urllib.request
+
+    from livelingo.config import Glossary
+    from livelingo.core.translate import HINT_INTRO, KEEP_TONE, build_prompt
+    from livelingo.memory import TONES
+    from livelingo.service import Service
+    from livelingo.terms import find_game, game_name, packs_for
+
+    # ---- 認出遊戲：最上面、沒縮小的那個；使用者自己加過專用詞的程式也算
+    wins = [{"exe": "Discord.exe"}, {"exe": "League of Legends.exe"}, {"exe": "MyGame.exe"}]
+    assert find_game(wins) == "league of legends.exe" and find_game(wins[:1]) == ""
+    assert find_game([{"exe": "MyGame.exe"}] + wins, {"MyGame.exe"}) == "mygame.exe"
+    assert find_game([{"exe": "League of Legends.exe", "minimized": True}, {"exe": "VALORANT-Win64-Shipping.exe"}]) == "valorant-win64-shipping.exe"
+    assert game_name("league of legends.exe") == "League of Legends" and game_name("MyGame.exe") == "MyGame"
+    assert packs_for(["lol", "chat"], "", True) == ["chat"] and packs_for(["lol", "chat"], "league of legends.exe", True) == ["lol", "chat"]
+    assert packs_for(["lol", "chat"], "", False) == ["lol", "chat"]
+
+    # ---- 遊戲專用詞：只在那個遊戲用；同一個詞可以通用一個、遊戲專用一個；舊檔案（沒有 game）照讀
+    g = Glossary(tmp_path)
+    g.add("딜", "輸出")
+    g.add("딜", "傷害", "MyGame.exe")
+    assert g.as_dict()["딜"] == "輸出" and g.as_dict("mygame.exe")["딜"] == "傷害" and g.games() == {"mygame.exe"}
+    g.remove("딜", "mygame.exe")
+    assert g.games() == set() and g.as_dict()["딜"] == "輸出"
+    assert g.merge([{"src": "딜", "dst": "x", "game": "Other.exe"}, {"src": "딜", "dst": "y"}]) == 1 and Glossary(tmp_path).games() == {"other.exe"}
+
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Discord.exe|Discord - 一般;League of Legends.exe|League of Legends (TM) Client")
+    service = Service(tmp_path / "svc")
+    events = []
+    service.hub.publish = lambda event, data: events.append((event, data))
+    assert service.terms.names == ["chat"]
+    assert service.check_game() == "league of legends.exe"
+    assert service.terms.names == ["lol", "chat"] and service.translator.hint_intro == HINT_INTRO
+    assert any(e == "notice" and d["code"] == "game_now" and d["game"] == "League of Legends" for e, d in events)
+    assert service.glossary_add("한타", "團戰", "League of Legends.exe")
+    assert service.translator.glossary()["한타"] == "團戰"                      # 正在玩：遊戲專用詞有用到
+    assert service.state()["game"]["name"] == "League of Legends"
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "Discord.exe|Discord - 一般")
+    assert service.check_game() == "" and service.terms.names == ["chat"] and "한타" not in service.translator.glossary()
+    service.update_config({"game_auto": False})
+    assert service.terms.names == ["lol", "chat"] and "한타" not in service.translator.glossary()      # 不自動切換：遊戲專用詞不用
+
+    # ---- 保留語氣：提示多一段（有當地說法的例子），記住的翻法跟直翻分開
+    plain = build_prompt("아 씨 또 졌네", "ko", "zh-TW", {}, "casual")
+    keep = build_prompt("아 씨 또 졌네", "ko", "zh-TW", {}, "casual", keep=True)
+    assert "Do not soften" not in plain and KEEP_TONE.split("{")[0] in keep and "靠北" in keep
+    assert "Do not soften" not in build_prompt("x", "ko", "zh-TW", {}, "casual", style="plain", keep=True)
+    assert service.translator.memory_tone() == "casual"
+    service.update_config({"tone_keep": True})
+    assert service.translator.keep_tone and service.translator.memory_tone() == "casual+keep" and "casual+keep" in TONES
+
+    # ---- 直播字幕：固定網址、通行碼不對就擋、OBS 連上之後有字幕
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        free = probe.getsockname()[1]
+    service.cfg.set(stream_port=free)
+    assert service.stream.url() == ""
+    service.update_config({"stream": True})
+    url = service.stream.url()
+    key = service.cfg["stream_key"]
+    assert url == f"http://127.0.0.1:{free}/obs?k={key}" and len(key) >= 12
+    assert "stream_key" not in service._settings_now() and "stream_port" in service._settings_now()      # 匯出的設定檔不帶通行碼
+    with urllib.request.urlopen(url, timeout=5) as r:
+        assert r.status == 200 and b"EventSource" in r.read()
+    try:
+        urllib.request.urlopen(url.replace(key, "wrong"), timeout=5)
+        raise AssertionError("wrong key must be refused")
+    except urllib.error.HTTPError as ex:
+        assert ex.code == 403
+    msg = {"id": 7, "who": "them", "via": "heard", "original": "탑 갈게", "translated": "我去上路", "pending": False, "error": "", "lang": "ko"}
+    service._post(msg)                                                         # OBS 連上之前的：連上時補給它
+    stream = urllib.request.urlopen(url.replace("/obs?", "/obs/events?"), timeout=5)
+    got = b""
+    while b"\xe6\x88\x91\xe5\x8e\xbb\xe4\xb8\x8a\xe8\xb7\xaf" not in got:     # 「我去上路」
+        got += stream.read1(4096)
+    assert b"event: style" in got and "탑 갈게".encode() in got
+    assert service.stream.state()["viewers"] == 1
+    service._post(dict(msg, id=8, who="me", via="typed", original="好", translated="좋아"))
+    service.update_config({"stream_mine": False})
+    assert service.stream.line_of(dict(msg, who="me")) is None and service.stream.line_of(dict(msg, pending=True)) is None
+    stream.close()
+    service.update_config({"stream": False})
+    assert service.stream.url() == "" and service.cfg["stream_key"] == key       # 關掉再開，網址還是同一個
 
 
 def test_faster_translation_warm_up_turns_and_quick_window(tmp_path):

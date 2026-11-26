@@ -34,7 +34,8 @@ from .hotkeys import Hotkeys
 from .hotkeys import normalize as hotkey_normalize
 from .overlay import BAR_LOOK, Overlay
 from .paths import self_command
-from .terms import PACKS, TermPack
+from .terms import PACKS, TermPack, find_game, game_name, packs_for
+from .stream import StreamOut
 from .transcript import Transcript
 from .tray import Tray
 from .usage import Usage
@@ -54,16 +55,18 @@ RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔�
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
-SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover")
+SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
 RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir")
-ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64)}
+ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64),
+                  "stream_port": (1024, 65000)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
 
 
 REVIVE_TIMES = 3            # 翻譯引擎自己停掉時，最多自動重開幾次……
 REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
 WHATS_NEW_FLOOR = "2.5.0"      # 沒有「上次看到哪一版」的紀錄（這個功能出現以前就裝好的）：把這一版以後錯過的改動一次說完
+GAME_EVERY = 5.0            # 每隔幾秒看一次現在在玩哪個遊戲（遊戲用語自動切換）
 ENGINE_REST = (0, 10, 30, 60)    # 設定「幾分鐘沒翻譯就讓翻譯引擎休息」可以選的值，0 = 一直開著
 SPEECH_REST = 120.0         # 兩邊收音都關掉這麼多秒：把語音辨識模型（約 1 GB）放掉，下次開收音再載入
 
@@ -164,9 +167,10 @@ class Service:
         self.memory = Memory(data)        # 翻過的句子：同一句再出現就直接用；也可以匯出給朋友、匯入朋友的
         self.memory.mine_on, self.memory.shared_on = bool(self.cfg["remember_translations"]), bool(self.cfg["use_shared"])
         self._memory_told = 0.0
+        self.game = ""                 # 現在在玩的遊戲（程式檔名小寫，terms.find_game），空的 = 沒認出來
         self._work_seen = (0.0, "", "", "")      # (什麼時候看的, via, place, work key)：視窗標題最多兩秒看一次
         self._work_told: set[str] = set()        # 這次開程式已經提示過「這部翻過了」的作品
-        self.terms = TermPack(self.cfg["term_packs"])
+        self.terms = TermPack(packs_for(self.cfg["term_packs"], self.game, bool(self.cfg["game_auto"])))
         self.audio = audio or RealAudio()
         from .core import audio as audio_core
 
@@ -175,9 +179,10 @@ class Service:
         self.mode = {"model": "4b", "engine": "cpu", "quality": "standard"}
         self.fallback = False          # 高品質開不起來，自動退回標準
         self.engine: Engine | None = None
-        self.translator = Translator("http://127.0.0.1:8177", glossary=self.glossary.as_dict,
+        self.translator = Translator("http://127.0.0.1:8177", glossary=lambda: self.glossary.as_dict(self._game_words()),
                                      tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list,
                                      memory=self.memory)
+        self.translator.keep_tone = bool(self.cfg["tone_keep"])
         # 翻譯引擎和語音辨識都用處理器的電腦上，兩個輪流跑（見 _cpu_turn）
         self._cpu_lock = threading.Lock()
         self.translator.turn = self._cpu_turn
@@ -258,6 +263,7 @@ class Service:
         self.on_quit = lambda: None    # 請視窗關閉、讓程式正常結束（介面按離開）
         self.exit_now = lambda: self.on_quit()   # 立刻結束整個程式（更新時用；__main__ 會換成真的）
         self.overlay = Overlay(self)   # 浮動留言
+        self.stream = StreamOut(self)  # 直播模式：給 OBS 的字幕頁（stream.py）
 
     # ------------------------------------------------------------------ 給介面的狀態
 
@@ -302,6 +308,7 @@ class Service:
             "sources": self.sources,
             "messages": list(self.messages),
             "glossary": self.glossary.list(),
+            "game": self.game_state(),
             "lessons": self.lessons.list(),
             "memory": self.memory.state(),
             "langs": {k: v["family"] for k, v in LANGS.items()},
@@ -309,6 +316,7 @@ class Service:
             "can_window": bool(self.window or self.can_window),
             "view": self.view,
             "overlay": self.overlay.state(),
+            "stream": self.stream.state(),
             "record": self.record_state(),
             "hotkeys": self.hotkeys_state(),
             "history": self.history.state(),
@@ -354,6 +362,7 @@ class Service:
         threading.Thread(target=self._translate_worker, daemon=True, name="translate").start()
         threading.Thread(target=self._engine_guard, daemon=True, name="engine-guard").start()
         threading.Thread(target=self._boot, daemon=True, name="boot").start()
+        threading.Thread(target=self._game_watch, daemon=True, name="game-watch").start()
 
     def _boot(self) -> None:
         try:
@@ -361,6 +370,7 @@ class Service:
             if self._update_if_needed():
                 return
             self.overlay.apply()
+            self.stream.apply()
             self.start_hotkeys()
             self._storage_cleanup()
             self.gpu = gpu.detect()
@@ -795,12 +805,49 @@ class Service:
         return self.terms.find(text, source, target)
 
     def _terms_changed(self) -> None:
-        """換了用語包：重新載入，提示前面那句話也跟著換（沒有選英雄聯盟就不說是在聊英雄聯盟）。"""
+        """換了用語包（或換了遊戲）：重新載入，提示前面那句話也跟著換（沒有選英雄聯盟就不說是在聊英雄聯盟）。"""
         from .core.translate import HINT_INTRO, HINT_INTRO_CHAT
 
-        self.terms = TermPack(self.cfg["term_packs"])
+        self.terms = TermPack(packs_for(self.cfg["term_packs"], self.game, bool(self.cfg["game_auto"])))
         self.translator.hint_intro = HINT_INTRO if "lol" in self.terms.names else HINT_INTRO_CHAT
         self.translator.clear_cache()
+
+    def stream_action(self, action: str) -> dict:
+        """直播模式的按鈕：copy = 把給 OBS 的網址複製起來。"""
+        if action == "copy":
+            url = self.stream.url()
+            return {"ok": bool(url) and oswin.copy_text(url), "url": url}
+        return {"ok": False}
+
+    def _game_words(self) -> str:
+        """遊戲專用詞要用哪個遊戲的：開著「照遊戲自動切換」而且認出了遊戲才有。"""
+        return self.game if self.cfg["game_auto"] and self.cfg["game_terms"] else ""
+
+    def game_state(self) -> dict:
+        return {"exe": self.game, "name": game_name(self.game) if self.game else "", "auto": bool(self.cfg["game_auto"]),
+                "packs": list(self.terms.names),
+                "own": [{"exe": g, "name": game_name(g)} for g in sorted(self.glossary.games())]}
+
+    def _game_watch(self) -> None:
+        """每幾秒看一次現在在玩什麼遊戲；換了就換用語包和遊戲專用詞，並告訴使用者。只看視窗標題和程式檔名。"""
+        while not self.closing.wait(GAME_EVERY):
+            try:
+                self.check_game()
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+
+    def check_game(self) -> str:
+        found = ""
+        if self.cfg["game_terms"] and self.cfg["game_auto"]:
+            found = find_game(apps.windows(), self.glossary.games())
+        if found != self.game:
+            self.game = found
+            self._terms_changed()
+            self.log(f"game now: {found or '-'} packs={self.terms.names}")
+            self.hub.publish("game", self.game_state())
+            if found:
+                self.notice("game_now", game=game_name(found))
+        return found
 
     def _pronunciation(self, text: str, target: str) -> str:
         # 不管「顯示唸法」有沒有開都先算好，介面照設定決定要不要顯示，這樣開關一切換舊的句子也會跟著變
@@ -819,6 +866,7 @@ class Service:
                 self.messages.append(msg)
         self.hub.publish("message", msg)
         self.overlay.on_message(msg)
+        self.stream.on_message(msg)
         if self.history.add(msg):
             self.hub.publish("history", self.history.state())
         if self.transcript.on:
@@ -834,6 +882,7 @@ class Service:
                     self.messages.remove(old)
         self.hub.publish("message_removed", {"id": msg_id})
         self.overlay.on_removed(msg_id)
+        self.stream.on_removed(msg_id)
         self.transcript.drop(msg_id)
         self.history.drop(msg_id)
 
@@ -1090,6 +1139,7 @@ class Service:
             sent[0] = now
             self.hub.publish("partial", {"id": msg["id"], "text": text})
             self.overlay.on_partial(msg, text)
+            self.stream.on_partial(msg, text)
 
         out = fn(msg["original"], target, msg["lang"], self._context_for(msg), on_part=part, **more)
         came = self.translator.came_from() if more and hasattr(self.translator, "came_from") else None
@@ -1183,6 +1233,7 @@ class Service:
                 self._set_live(kind, dict(live, partial=text))
                 self.hub.publish("partial", {"id": job["id"], "text": text})
                 self.overlay.on_partial(job, text)
+                self.stream.on_partial(job, text)
 
         import inspect
 
@@ -1321,7 +1372,7 @@ class Service:
         if not self.lessons.add(msg["original"], dst, msg["lang"], msg["target"]):
             return False
         if msg.get("lang"):
-            self.memory.fix(msg["original"], msg["lang"], msg["target"], self.cfg["tone"], dst, self.mode.get("model", ""),
+            self.memory.fix(msg["original"], msg["lang"], msg["target"], getattr(self.translator, "memory_tone", lambda: self.cfg["tone"])(), dst, self.mode.get("model", ""),
                             msg.get("work") or "")
             self.hub.publish("memory", self.memory.state())
         self.translator.clear_cache()
@@ -1341,17 +1392,23 @@ class Service:
         self.hub.publish("lessons", self.lessons.list())
         self.hub.publish("memory", self.memory.state())
 
-    def glossary_add(self, src: str, dst: str) -> bool:
-        ok = self.glossary.add(src, dst)
+    def glossary_add(self, src: str, dst: str, game: str = "") -> bool:
+        """game：只在這個遊戲用（程式檔名）；空的 = 每個遊戲都用。"""
+        had = self.glossary.games()
+        ok = self.glossary.add(src, dst, game)
+        if ok and game and game.lower() not in had:      # 第一次替這個程式加專用詞：馬上看它是不是正開著
+            threading.Thread(target=self.check_game, daemon=True).start()
         if ok:
             self.translator.clear_cache()
             self.hub.publish("glossary", self.glossary.list())
+            self.hub.publish("game", self.game_state())
         return ok
 
-    def glossary_remove(self, src: str) -> None:
-        self.glossary.remove(src)
+    def glossary_remove(self, src: str, game: str = "") -> None:
+        self.glossary.remove(src, game)
         self.translator.clear_cache()
         self.hub.publish("glossary", self.glossary.list())
+        self.hub.publish("game", self.game_state())
 
     def export_library(self) -> dict:
         """把我的詞彙表和教過的句子存成一個檔案（放在字幕記錄的資料夾），可以備份或傳給朋友。"""
@@ -2172,6 +2229,7 @@ class Service:
             self._live.clear()
         self.hub.publish("cleared", {})
         self.overlay.clear()
+        self.stream.clear()
 
     # ------------------------------------------------------------------ 設定
 
@@ -2288,8 +2346,13 @@ class Service:
             self.translator.tone = after["tone"]
             self.translator.clear_cache()
             self._warm_engine()      # 語氣不一樣，提示的開頭也不一樣
-        if changed("game_terms"):
+        if changed("tone_keep"):
+            self.translator.keep_tone = bool(after["tone_keep"])
             self.translator.clear_cache()
+            self._warm_engine()      # 保留語氣的提示不一樣
+        if changed("game_terms", "game_auto"):
+            threading.Thread(target=self.check_game, daemon=True).start()
+            self._terms_changed()
         if changed("use_shown_translation", "my_lang") and self.watcher is not None:
             self.watcher.pair_lang = self._shown_pair_lang()
         if changed("remember_translations", "use_shared"):
@@ -2297,6 +2360,9 @@ class Service:
             self.translator.clear_cache()
         if changed("term_packs"):
             self._terms_changed()
+        if changed("stream", "stream_original", "stream_mine", "overlay_seconds", "overlay_font"):
+            self.stream.apply()
+            self.hub.publish("stream", self.stream.state())
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
         if changed("share_visible"):
@@ -3278,6 +3344,7 @@ class Service:
             return
         self.tray.stop()
         self.hotkeys.stop()
+        self.stream.stop()
         if self._quick is not None and self._quick.poll() is None:
             self._quick.kill()
         if self.transcript.on:      # 記錄到一半就關程式：先存起來，不要弄丟
