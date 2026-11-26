@@ -20,6 +20,11 @@ _HALLUCINATIONS = re.compile(
     r"thanks for watching|thank you for watching|subscribe", re.IGNORECASE)
 
 
+# 還在說就先辨識（即時字幕）的時候，聲音補到幾秒就好。整句一樣補到 15 秒（Recognizer.window）。
+# 實測（4 核心處理器，FLEURS 韓文 60 句）：補到 10 秒每次 2.0 → 1.3 秒；整句也這樣做的話有幾句會變不準
+# （重複一段、漏字），所以只用在半句：半句之後一定會被整句的結果取代。
+QUICK_WINDOW = 10
+
 QUIET = 0.0008      # 整段聲音的最大值比這個還小，就當成完全沒聲音（關掉的麥克風送來的是一串 0）
 MAX_GAIN = 30.0     # 太小聲的聲音最多放大這麼多倍
 OWN_STAY = 1.5      # 設過語言的人：主語言比副語言優先這麼多（短短一兩個字不會被聽成副語言；整句說副語言還是換得過去）
@@ -128,6 +133,9 @@ class LivePacer:
 
 
 class Recognizer:
+    turn = None            # 見 __init__
+    window = 15
+    _now_window = 15
     def __init__(self, model_dir: Path, threads: int = 4, device: str = "cpu", compute_type: str = "int8",
                  window: int = 15, on_fallback=None):
         import faster_whisper.transcribe as fw
@@ -143,6 +151,9 @@ class Recognizer:
             self._load("cpu", "int8")
             self.on_fallback(ex)
         self.window = window
+        self._now_window = window      # 這一次辨識補到幾秒（半句用 QUICK_WINDOW）
+        # turn()：回傳「輪到我用處理器」的鎖，跟翻譯引擎輪流（見 Service._cpu_turn）。None = 不用輪流
+        self.turn = None
         self.beam = 1          # 1 = 快；5 = 比較準、慢大約一倍（設定裡的「比較準」）
         self._quick = False    # 這一次是「還在說就先辨識」：一律用快的
         self._lock = threading.Lock()
@@ -150,10 +161,8 @@ class Recognizer:
         # 實測準確度一樣、速度快一倍以上（4 核心 CPU：3.6 秒 → 1.6 秒）。
         self._fw = fw
         self._orig_pad = fw.pad_or_trim
-        frames = window * 100
-
         def short_pad(array, length: int = 3000, *, axis: int = -1):
-            return self._orig_pad(array, frames, axis=axis)
+            return self._orig_pad(array, getattr(self, "_now_window", self.window) * 100, axis=axis)
 
         self._short_pad = short_pad
 
@@ -180,7 +189,7 @@ class Recognizer:
     def _decode(self, audio: np.ndarray, lang: str | None):
         return self.model.transcribe(
             audio, language=lang, beam_size=1 if self._quick else self.beam, temperature=0.0, condition_on_previous_text=False,
-            without_timestamps=True, chunk_length=self.window,
+            without_timestamps=True, chunk_length=self._now_window,
             initial_prompt="以下是繁體中文的句子。" if lang == "zh" else None)
 
     def _run(self, audio: np.ndarray, langs: list[str], share_encoder: bool = True, stay: float = 1.0):
@@ -190,7 +199,7 @@ class Recognizer:
             # 先判斷這句是哪個語言（只在指定的幾個語言裡選）
             if share_encoder:
                 # 判斷語言和辨識文字要用到同一份「聲音編碼」，算一次就好，省掉一半時間
-                feat = m.feature_extractor(audio, chunk_length=self.window)
+                feat = m.feature_extractor(audio, chunk_length=self._now_window)
                 seg = self._short_pad(feat[:, :min(m.feature_extractor.nb_max_frames, feat.shape[-1] - 1)])
                 enc = m.encode(seg)
                 probs = [(tok[2:-2], p) for tok, p in m.model.detect_language(enc)[0]]
@@ -218,9 +227,13 @@ class Recognizer:
         """audio：16 kHz 單聲道。langs：可能的語言（zh / ko / en / ja），多於一個時會自動判斷是哪個。
         quick：話還沒說完、先看看目前聽到什麼（即時字幕）：用最快的算法，結果之後會被整句的取代。
         回傳（文字, 語言, 是不是沒把握）。"""
+        import contextlib
+
         langs = list(langs)      # 辨識到一半時清單可能被換掉（自動偵測換語言），先留一份
-        with self._lock:
+        with self._lock, (self.turn() if self.turn else contextlib.nullcontext()):
             self._quick = bool(quick)
+            # 半句補到 QUICK_WINDOW 秒就好（比較快）；聲音比那還長就照整句的做法
+            self._now_window = QUICK_WINDOW if quick and len(audio) < (QUICK_WINDOW - 1) * SR else self.window
             self._fw.pad_or_trim = self._short_pad
             try:
                 try:
@@ -237,6 +250,7 @@ class Recognizer:
             finally:
                 self._fw.pad_or_trim = self._orig_pad
                 self._quick = False
+                self._now_window = self.window
         if not text or _HALLUCINATIONS.search(text):
             return None
         if len(re.sub(r"[\W_]+", "", text)) < 2:

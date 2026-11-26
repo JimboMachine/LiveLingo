@@ -176,6 +176,9 @@ class Service:
         self.translator = Translator("http://127.0.0.1:8177", glossary=self.glossary.as_dict,
                                      tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list,
                                      memory=self.memory)
+        # 翻譯引擎和語音辨識都用處理器的電腦上，兩個輪流跑（見 _cpu_turn）
+        self._cpu_lock = threading.Lock()
+        self.translator.turn = self._cpu_turn
         self._terms_changed()
         self.phase = "starting"        # starting / updating / need_download / downloading / loading / ready / error
         self.detail: dict = {}
@@ -592,6 +595,37 @@ class Service:
         self.translator.clear_cache()
         self.set_phase("ready")
         self._resume_sources()
+        self._warm_engine()
+
+    def _cpu_turn(self):
+        """「輪到誰用處理器」的鎖。翻譯引擎和語音辨識都用處理器的時候，兩個同時跑會互搶，
+        實測（4 核心）：一句正在翻、下一句同時在辨識，翻譯 2.3 → 8.5 秒、辨識 3.7 → 6.6 秒；輪流跑的話
+        翻譯照樣 2.3 秒就好，辨識排在後面也只多等那一點時間。任何一邊用顯示卡就不用輪流（回傳一個什麼都不擋的鎖）。"""
+        import contextlib
+
+        recognizer = self.recognizer
+        if self.mode.get("engine") == "cpu" and getattr(recognizer, "device", "cpu") == "cpu":
+            return self._cpu_lock
+        return contextlib.nullcontext()
+
+    def _warm_directions(self) -> list[tuple[str, str]]:
+        """會用到的翻譯方向：對方的語言 → 我的語言，我的語言 → 對方的語言。"""
+        my, their = self.cfg["my_lang"], self.cfg["their_lang"]
+        return [(LANGS[their]["family"], my), (LANGS[my]["family"], their)]
+
+    def _warm_engine(self) -> None:
+        """引擎剛開好（或換了語言、語氣）：在背景先暖機，第一句不用多等那 2 秒左右（見 Translator.warm）。"""
+        warm = getattr(self.translator, "warm", None)
+        if not warm or self.phase != "ready":
+            return
+
+        def work():
+            started = time.time()
+            done = warm(self._warm_directions())
+            if done:
+                self.log(f"translation engine warmed up for {done} direction(s) in {time.time() - started:.1f} s")
+
+        threading.Thread(target=work, daemon=True, name="warm").start()
 
     def _new_engine(self) -> Engine:
         return Engine(
@@ -2126,6 +2160,7 @@ class Service:
         if changed("tone"):
             self.translator.tone = after["tone"]
             self.translator.clear_cache()
+            self._warm_engine()      # 語氣不一樣，提示的開頭也不一樣
         if changed("game_terms"):
             self.translator.clear_cache()
         if changed("remember_translations", "use_shared"):
@@ -2173,6 +2208,8 @@ class Service:
                     self.recognizer.beam = BEAMS[after["speech_mode"]]
         if changed("my_lang", "their_lang", "their_auto", "also_english"):
             threading.Thread(target=self._languages_changed, daemon=True).start()
+        if changed("my_lang", "their_lang"):
+            self._warm_engine()
         if changed("speaker_device") and self.sources["listen"]["on"]:
             self._restart_voice("listen")
         if changed("mic_device") and self.sources["mic"]["on"]:
@@ -2507,6 +2544,7 @@ class Service:
                 device, compute = self._speech_engine()
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]), device=device,
                                              compute_type=compute, on_fallback=self._speech_gpu_failed)
+                self.recognizer.turn = self._cpu_turn
             recognizer = self.recognizer
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
             capture = None

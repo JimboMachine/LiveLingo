@@ -5834,3 +5834,57 @@ def test_whats_new_is_told_after_every_update_or_reinstall(tmp_path):
     js = (root / "ui" / "app.js").read_text(encoding="utf-8")
     assert 'S.whatsNew' in js and '"wn-done"' in js and '/api/seen", { whats_new: true }' in js and "up-notes-missing" in js
     assert 'body.get("whats_new")' in (root / "server.py").read_text(encoding="utf-8")
+
+
+def test_faster_translation_warm_up_turns_and_quick_window(tmp_path):
+    """加快翻譯（2.6.1）：引擎開好先暖機（每個方向的固定提示先算好）；翻譯引擎和語音辨識都用處理器時輪流跑，
+    不會互搶；即時字幕的半句只補到 QUICK_WINDOW 秒，整句照舊補到 15 秒（整句變短會不準）。"""
+    import contextlib
+    import numpy as np
+
+    from livelingo.core import speech
+    from livelingo.core.speech import QUICK_WINDOW, Recognizer
+    from livelingo.core.translate import Translator
+    from livelingo.service import Service
+
+    # 暖機：兩個方向各問一次、只要 1 個字，不記進快取；同一種語言的方向跳過
+    asked = []
+    tr = Translator("http://engine")
+    tr._ask = lambda text, source, target, hints, examples=None, style="full", context=None, **kw: asked.append(
+        (source, target, kw.get("max_tokens"))) or "x"
+    assert tr.warm([("ko", "zh-TW"), ("zh", "ko"), ("zh", "zh-CN")]) == 2
+    assert asked == [("ko", "zh-TW", 1), ("zh", "ko", 1)] and not tr._cache
+
+    # 輪流：兩邊都用處理器才是同一把鎖；引擎用顯示卡就不擋
+    service = Service(tmp_path)
+    assert service.translator.turn == service._cpu_turn
+    service.mode = {"model": "4b", "engine": "cpu"}
+    service.recognizer = type("R", (), {"device": "cpu"})()
+    assert service._cpu_turn() is service._cpu_lock
+    service.recognizer.device = "cuda"
+    assert isinstance(service._cpu_turn(), contextlib.nullcontext)
+    service.recognizer.device = "cpu"
+    service.mode = {"model": "12b", "engine": "cuda"}
+    assert isinstance(service._cpu_turn(), contextlib.nullcontext)
+    service.cfg.set(my_lang="zh-TW", their_lang="ko")
+    assert service._warm_directions() == [("ko", "zh-TW"), ("zh", "ko")]
+    service.closing.set()
+
+    # 辨識時拿著同一把鎖；半句用短的補法，整句和太長的半句照舊
+    lock, seen = threading.Lock(), []
+    rec = Recognizer.__new__(Recognizer)
+    rec._lock, rec.window, rec._now_window, rec._quick = threading.Lock(), 15, 15, False
+    rec._fw = type("FW", (), {})()
+    rec._orig_pad = rec._short_pad = None
+    rec.turn = lambda: lock
+
+    def run(audio, langs, share_encoder=True, stay=1.0):
+        seen.append((rec._now_window, lock.locked()))
+        return "안녕하세요 여러분", "ko", False
+
+    rec._run = run
+    sr = speech.SR
+    rec.transcribe(np.zeros(3 * sr, dtype=np.float32), ["ko"], quick=True)
+    rec.transcribe(np.zeros(3 * sr, dtype=np.float32), ["ko"])
+    rec.transcribe(np.zeros(12 * sr, dtype=np.float32), ["ko"], quick=True)
+    assert seen == [(QUICK_WINDOW, True), (15, True), (15, True)] and rec._now_window == 15 and not lock.locked()
