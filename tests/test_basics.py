@@ -1529,6 +1529,222 @@ def test_translation_memory_and_share_files(tmp_path):
     assert me.memory.mine_on and me.memory.shared_on and me.memory_forget()["ok"]
 
 
+def test_works_recognise_what_is_watched_and_share_one(tmp_path, monkeypatch):
+    """作品：從視窗標題認出在看哪一部；同一部翻過的直接用、同一部裡幾乎一樣的句子也用（別部的不拿）；
+    只匯出某一部、朋友匯入後同一部就認得；第 1 版的分享檔照樣能匯入；這部不用別人的、忘掉這部。"""
+    import json
+    from pathlib import Path
+
+    from livelingo import works
+    from livelingo.memory import KIND, VERSION, Memory
+    from livelingo.service import Service
+
+    # ---- 標題整理：瀏覽器、網站、通知數字拿掉；首頁、新分頁不算一部
+    assert works.clean_title("(3) 【原神】4.2 劇情 - YouTube - Google Chrome") == "【原神】4.2 劇情"
+    assert works.clean_title("ドラマ 第5話 | Netflix — Mozilla Firefox") == "ドラマ 第5話"
+    assert works.clean_title("Some Stream - Twitch - 個人 - Microsoft\u200b Edge") == "Some Stream"
+    assert works.work_key("YouTube - Google Chrome") == "" and works.work_key("新分頁 - Google Chrome") == "" and works.work_key("ab") == ""
+    key = works.work_key("(1) 【原神】4.2 劇情 - YouTube - Google Chrome")
+    assert key and key == works.work_key("【原神】4.2 劇情 - YouTube - Microsoft Edge") != works.work_key("【原神】4.3 劇情 - YouTube")
+    wins = [{"exe": "LiveLingo.exe", "title": "LiveLingo", "rect": (0, 0, 500, 500)},
+            {"exe": "Discord.exe", "title": "#general - Discord", "rect": (600, 0, 400, 400)},
+            {"exe": "chrome.exe", "title": "影片 - YouTube - Google Chrome", "rect": (0, 0, 1920, 1080)}]
+    assert works.pick_window(wins)["exe"] == "Discord.exe"                                       # 最前面的（自己的不算）
+    assert works.pick_window(wins, point=(100, 100))["exe"] == "chrome.exe"                      # 區域中間那一點
+    assert works.pick_window(wins, exe="CHROME.EXE")["exe"] == "chrome.exe"
+    assert works.pick_window(wins, exe="nothing.exe") is None
+
+    # ---- 同一部：一模一樣的直接用；語音辨識差一兩個字的也用；別部的、太短的不拿
+    mem = Memory(tmp_path / "m")
+    other = works.work_key("別的影片 - YouTube")
+    mem.saw(key, "【原神】4.2 劇情")
+    mem.store("我們一起去蒙德城看看吧", "zh", "ko", "casual", "같이 몬드성에 가 보자.", "12b", "", "heard", key)
+    mem.store("好啊", "zh", "ko", "casual", "좋아.", "12b", "", "heard", key)
+    assert mem.find("我們一起去蒙德城看看吧", "zh", "ko", "casual", "12b", "", key) == ("같이 몬드성에 가 보자.", "mine", False)
+    assert mem.find("我們一起去蒙得城看看吧", "zh", "ko", "casual", "12b", "", key) == ("같이 몬드성에 가 보자.", "mine", True)
+    assert mem.find("我們一起去蒙得城看看吧", "zh", "ko", "casual", "12b", "", other) is None     # 別部不找幾乎一樣的
+    assert mem.find("我們一起去蒙得城看看吧", "zh", "ko", "casual", "12b", "abc", key) is None    # 詞彙表跟這句有關：重翻
+    assert mem.find("好呀", "zh", "ko", "casual", "12b", "", key) is None                          # 太短的不找
+    info = mem.work_info(key)
+    assert info["title"] == "【原神】4.2 劇情" and info["mine"] == 2 and info["shared"] == 0
+    assert [w["key"] for w in mem.state()["works"]] == [key]
+
+    # ---- 只匯出這一部：帶著標題（可以改名）；沒選某一部時不帶任何標題
+    data = mem.export(work=key, title="原神 4.2")
+    assert data["version"] == VERSION == 2 and data["works"] == [{"key": key, "title": "原神 4.2"}]
+    assert len(data["items"]) == 2 and all(i["works"] == [0] for i in data["items"])
+    assert mem.export("all")["works"] == [] and all("works" not in i for i in mem.export("all")["items"])
+
+    # ---- 朋友匯入：同一部就認得（key 用標題重算，不信檔案寫的），也有提示的數字
+    friend = Memory(tmp_path / "f")
+    langs = ("zh", "ko", "en", "ja")
+    sent = json.loads(json.dumps(data))
+    sent["works"][0]["key"] = "假的key"
+    got = friend.import_pack(sent, "原神", sources=langs, targets=("ko",))
+    assert got["ok"] and got["added"] == 2 and got["works"] == 1
+    fkey = works.work_key("原神 4.2")
+    assert friend.work_info(fkey)["shared"] == 2 and friend.work_info("假的key") is None
+    assert friend.find("我們一起去蒙得城看看吧", "zh", "ko", "casual", "12b", "", fkey) == ("같이 몬드성에 가 보자.", "shared", True)
+    friend.set_own_only(fkey, True)                                                                # 這部不用別人的
+    assert friend.find("我們一起去蒙德城看看吧", "zh", "ko", "casual", "12b", "", fkey) is None
+    assert friend.find("我們一起去蒙德城看看吧", "zh", "ko", "casual", "12b", "") is not None       # 別的地方照樣能用
+    friend.set_own_only(fkey, False)
+    friend.remove_pack(got["pack"]["id"])
+    assert friend.work_info(fkey) is None and friend.state()["works"] == []                       # 只有朋友那包的作品跟著刪掉
+    v1 = {"kind": KIND, "version": 1, "items": [{"src": "你好嗎", "dst": "잘 지내?", "lang": "zh", "target": "ko"}]}
+    assert friend.import_pack(v1, "舊的", sources=langs, targets=("ko",))["added"] == 1             # 第 1 版的檔
+    bad = dict(data, works=["x", {"title": ""}, {"title": "YouTube"}])
+    assert friend.import_pack(bad, "怪", sources=langs, targets=("ko",))["works"] == 0               # 認不得的作品不收，句子照收
+
+    # ---- 忘掉這部：標題和我在這部翻的都刪掉
+    mem.forget_work(key)
+    assert mem.work_info(key) is None and mem.lookup("好啊", "zh", "ko", "casual", "12b", "") is None
+    old = Memory(tmp_path / "m")                                                                   # 舊的資料庫打開也沒問題
+    assert old.state()["works"] == []
+
+    # ---- 整個程式：讀畫面的句子記下是哪一部、第一次看到翻過的那部會提示、匯出檔名帶標題、關掉就不記
+    monkeypatch.setenv("LIVELINGO_FAKE_APPS", "chrome.exe|(2) 某部動畫 第3集 - YouTube - Google Chrome|0,0,1920,1080")
+    me = Service(tmp_path / "me")
+    me.cfg.set(transcript_dir=str(tmp_path / "out"))
+    told = []
+    me.notice = lambda code, **kw: told.append((code, kw))
+    me.cfg.set(regions=[{"id": "r1", "name": "", "on": True, "app": "", "anchor": None, "left": 100, "top": 900, "width": 800, "height": 100}])
+    wkey = works.work_key("某部動畫 第3集")
+    assert me._work_now("screen") == wkey and me._work_now("typed") == "" and told == []
+    me.memory.store("ありがとう", "ja", "zh-TW", me.cfg["tone"], "謝謝", "12b", "", "screen", wkey)
+    me._work_seen = (0.0, "", "", "")
+    me._work_told.clear()
+    other_win = works.work_key("別的")
+    me._work_seen = (0.0, "screen", "", other_win)
+    assert me._work_now("screen") == wkey and told and told[0][0] == "work_known" and told[0][1]["n"] == 1
+    out = me.memory_export(work=wkey)
+    assert out["ok"] and "某部動畫 第3集" in Path(out["path"]).name
+    assert me.memory_work(wkey, "own_only", True)["ok"] and me.memory.own_only(wkey)
+    assert me.memory_work(wkey, "bogus")["ok"] is False
+    assert me.memory_work(wkey, "forget")["ok"] and me.memory.work_info(wkey) is None
+    me.update_config({"remember_works": False})
+    me._work_seen = (0.0, "", "", "")
+    assert me._work_now("screen") == ""
+
+
+def test_subtitle_files_become_translations(tmp_path):
+    """匯入字幕檔：.srt、.vtt 都讀得懂；兩個檔照時間配對、雙語檔照語言分；字幕比機器翻的優先、比教過的後面；
+    記在選的那一部底下；可以整包刪；壞檔不會出錯。"""
+    from livelingo import subtitles, works
+    from livelingo.core.translate import detect_language
+    from livelingo.memory import Memory
+    from livelingo.service import Service
+
+    ja = "\ufeff1\n00:00:01,000 --> 00:00:03,000\n<i>もう行こう。</i>\n\n2\n00:00:04,000 --> 00:00:06,500\n- 魔法は\n想像の世界だ。\n\n3\n00:00:10,000 --> 00:00:11,000\n誰？\n\nbroken\nno time here\n"
+    zh = "WEBVTT\n\nNOTE 這是註解\n\n00:01.100 --> 00:03.100\n走吧。\n\n00:04.200 --> 00:06.400 align:start\n魔法是想像的世界。\n\n00:20.000 --> 00:21.000\n對不上的一句\n"
+    a, b = subtitles.parse(ja), subtitles.parse(zh)
+    assert [c["lines"] for c in a] == [["もう行こう。"], ["魔法は", "想像の世界だ。"], ["誰？"]] and a[1]["end"] == 6.5
+    assert len(b) == 3 and b[0]["start"] == 1.1
+    assert subtitles.language_of(a, detect_language) == "ja" and subtitles.language_of(b, detect_language) == "zh"
+    assert subtitles.pair_two(a, b) == [("もう行こう。", "走吧。"), ("魔法は 想像の世界だ。", "魔法是想像的世界。")]
+    both = "1\n00:00:01,000 --> 00:00:02,000\n안녕하세요\nHello\n\n2\n00:00:03,000 --> 00:00:04,000\n고마워요\nThank you\n\n3\n00:00:05,000 --> 00:00:06,000\n네\n"
+    pairs, lang, fam = subtitles.split_one(subtitles.parse(both), detect_language)
+    assert pairs == [("안녕하세요", "Hello"), ("고마워요", "Thank you")] and (lang, fam) == ("ko", "en")
+    assert subtitles.split_one(subtitles.parse(both), detect_language, swap=True)[0][0] == ("Hello", "안녕하세요")
+    latin = "1\n00:00:01,000 --> 00:00:02,000\nGood morning\nBuenos días\n"
+    assert subtitles.split_one(subtitles.parse(latin), detect_language)[0] == [("Good morning", "Buenos días")]
+    assert subtitles.parse("") == [] and subtitles.parse("x" * 10) == [] and subtitles.parse(None) == []
+
+    # ---- 優先順序：我教過的 > 字幕 > 我機器翻的；記在那一部底下；整包刪
+    mem = Memory(tmp_path / "m")
+    key = works.work_key("葬送的芙莉蓮 第 1 集")
+    mem.store("もう行こう。", "ja", "zh-TW", "casual", "機器翻的", "12b", "", "heard", key)
+    got = mem.import_subtitles([("もう行こう。", "走吧。"), ("魔法は想像の世界だ。", "魔法是想像的世界。"), ("", "x"), ("同じ", "同じ")],
+                               "ja", "zh-TW", "第1集", key, "葬送的芙莉蓮 第 1 集")
+    assert got["ok"] and got["added"] == 2
+    assert mem.find("もう行こう。", "ja", "zh-TW", "casual", "12b", "", key) == ("走吧。", "subtitle", False)
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "polite", "12b", "") == "走吧。"            # 字幕不分語氣
+    assert mem.find("魔法は想像の世界た。", "ja", "zh-TW", "casual", "12b", "", key)[0] == "魔法是想像的世界。"   # 聽錯一個字
+    mem.fix("もう行こう。", "ja", "zh-TW", "casual", "我們走吧。")
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == "我們走吧。"
+    info = mem.work_info(key)
+    assert info["shared"] == 2 and info["mine"] == 1
+    st = mem.state()
+    assert next(p for p in st["packs"] if p["id"] == got["pack"]["id"])["count"] == 2
+    assert mem.import_subtitles([], "ja", "zh-TW", "x")["ok"] is False
+    mem.remove_pack(got["pack"]["id"])
+    assert mem.lookup("魔法は想像の世界だ。", "ja", "zh-TW", "casual", "12b", "") is None
+
+    # ---- 整個程式：預覽、對調、選哪一部、錯的檔
+    me = Service(tmp_path / "me")
+    me.cfg.set(my_lang="zh-TW", their_lang="ja")
+    files = [{"name": "ep1.zh.vtt", "text": zh}, {"name": "ep1.ja.srt", "text": ja}]     # 順序反過來也認得哪個是原文
+    pre = me.subtitles_preview(files)
+    assert pre["ok"] and pre["count"] == 2 and (pre["lang"], pre["target"]) == ("ja", "zh-TW") and pre["sample"][0] == ["もう行こう。", "走吧。"]
+    assert pre["now"] is None
+    flip = me.subtitles_preview(files, swap=True)                                              # 對調：中文翻成日文（我說中文時用得到）
+    assert (flip["lang"], flip["target"], flip["sample"][0]) == ("zh", "ja", ["走吧。", "もう行こう。"])
+    done = me.subtitles_import(files, title="葬送的芙莉蓮 第 1 集 - YouTube", name="ep1.ja.srt")
+    assert done["ok"] and done["added"] == 2 and done["work"] == key and done["pack"]["name"] == "ep1.ja"
+    assert me.memory.work_info(key)["title"] == "葬送的芙莉蓮 第 1 集"
+    me._work_seen = (0.0, "screen", "", key)
+    assert me.subtitles_preview(files)["now"] == {"key": key, "title": "葬送的芙莉蓮 第 1 集"}
+    assert me.subtitles_preview([{"name": "a.srt", "text": "nothing"}])["error"] == "sub_unreadable"
+    assert me.subtitles_preview([{"name": "a", "text": zh}, {"name": "b", "text": zh}])["error"] == "sub_same_lang"
+    far = zh.replace("00:01.100 --> 00:03.100", "05:01.100 --> 05:03.100").replace("00:04.200 --> 00:06.400", "06:04.200 --> 06:06.400")
+    assert me.subtitles_preview([{"name": "a", "text": ja}, {"name": "b", "text": far}])["error"] == "sub_no_pairs"
+    assert me.subtitles_preview("nope")["error"] == "sub_unreadable"
+
+
+def test_bilingual_subtitles_on_screen(tmp_path):
+    """畫面上的雙語字幕：開著「用畫面上現成的翻譯」才配對；緊鄰的那一行是我的語言才算；
+    配到的直接用（不叫模型翻），也記下來，排在字幕檔後面、機器翻的前面；關掉就照常翻。"""
+    from types import SimpleNamespace
+
+    from livelingo.core.watcher import ScreenWatcher
+    from livelingo.memory import Memory
+    from livelingo.service import Service
+
+    w = ScreenWatcher(ocr=None, on_message=lambda *a: None, source_langs={"ja"})
+    rows = [(SimpleNamespace(text=t), []) for t in ("もう行こう。", "我們走吧。", "魔法は想像の世界だ。", "次の話へ", "OK")]
+    assert w._pairs(rows) == {}                                     # 沒開：不配
+    w.pair_lang = "zh"
+    assert w._pairs(rows) == {0: 1}                                 # 下面一行是中文；一行翻譯只配一次，其他行照常翻
+    rows2 = [(SimpleNamespace(text=t), []) for t in ("走吧。", "もう行こう。", "魔法は想像の世界だ。", "魔法是想像的世界。")]
+    assert w._pairs(rows2) == {1: 0, 2: 3}                          # 上面一行也算
+
+    mem = Memory(tmp_path / "m")
+    mem.store("もう行こう。", "ja", "zh-TW", "casual", "機器翻的", "12b", "", "screen")
+    mem.seen_on_screen("もう行こう。", "ja", "zh-TW", "我們走吧。")
+    assert mem.find("もう行こう。", "ja", "zh-TW", "polite", "12b", "") == ("我們走吧。", "screen", False)
+    assert mem.find("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == ("我們走吧。", "screen", False)
+    mem.import_subtitles([("もう行こう。", "走吧。")], "ja", "zh-TW", "字幕")
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == "走吧。"      # 字幕檔 > 畫面上的
+    assert all(i["src"] != "もう行こう。" or i["dst"] == "機器翻的" for i in mem.export("all")["items"])   # 畫面上的不匯出
+    mem.forget_mine()
+    assert mem.lookup("もう行こう。", "ja", "zh-TW", "casual", "12b", "") == "走吧。"
+
+    asked = []
+
+    class Echo:
+        tone = "casual"
+
+        def translate(self, text, target, source=None, context=None):
+            asked.append(text)
+            return "模型翻的"
+
+        def clear_cache(self):
+            pass
+
+    me = Service(tmp_path / "me")
+    me.translator = Echo()
+    me.cfg.set(my_lang="zh-TW", their_lang="ja", use_shown_translation=True)
+    msg = {"id": 1, "who": "them", "via": "screen", "original": "魔法は想像の世界だ。", "lang": "ja", "shown": "这是魔法的世界。"}
+    assert me._translate(msg, "zh-TW") == "這是魔法的世界。" and msg["kept"] == "screen" and asked == []   # 簡體轉成繁體
+    assert me.memory.lookup("魔法は想像の世界だ。", "ja", "zh-TW", "casual", "12b", "") == "這是魔法的世界。"
+    me.cfg.set(use_shown_translation=False)
+    msg = {"id": 2, "who": "them", "via": "screen", "original": "次へ", "lang": "ja", "shown": "下一個"}
+    assert me._translate(msg, "zh-TW") == "模型翻的" and asked == ["次へ"]
+    assert me._shown_pair_lang() is None
+    me.cfg.set(use_shown_translation=True)
+    assert me._shown_pair_lang() == "zh"
+
+
 def test_voice_tuning_delay_echo_and_push_to_talk(tmp_path):
     """聲音設定：靈敏度、斷句、快／準收音中直接換；延遲有記；喇叭回音不算我說的；按住才說話只收按著的那一段。"""
     import numpy as np

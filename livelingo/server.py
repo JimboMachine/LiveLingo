@@ -72,7 +72,7 @@ class Server:
 
             def _body(self) -> dict:
                 length = int(self.headers.get("Content-Length") or 0)
-                if length <= 0 or length > 2_000_000:      # 匯入的詞彙檔可能有幾百句
+                if length <= 0 or length > 8_000_000:      # 匯入的詞彙檔可能有幾百句；兩個字幕檔加起來也要放得下
                     return {}
                 try:
                     value = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -247,7 +247,16 @@ class Server:
                     if route == "/api/memory":      # 翻過的句子：匯出分享檔、匯入朋友的、刪一包、清除我的
                         action = body.get("action")
                         if action == "export":
-                            return self._json(service.memory_export(str(body.get("range") or "all"), bool(body.get("with_mine"))))
+                            return self._json(service.memory_export(str(body.get("range") or "all"), bool(body.get("with_mine")),
+                                                                    str(body.get("work") or "")[:40], str(body.get("title") or "")[:120]))
+                        if action == "subtitles_preview":      # 字幕檔：先看配出來的樣子
+                            return self._json(service.subtitles_preview(body.get("files"), bool(body.get("swap"))))
+                        if action == "subtitles_import":
+                            return self._json(service.subtitles_import(body.get("files"), bool(body.get("swap")), str(body.get("work") or "")[:40],
+                                                                       str(body.get("title") or "")[:120], str(body.get("name") or "")[:120]))
+                        if action in ("own_only", "forget_work"):      # 作品清單：這部不用別人的、忘掉這部
+                            return self._json(service.memory_work(str(body.get("work") or "")[:40],
+                                                                  "forget" if action == "forget_work" else action, bool(body.get("on"))))
                         if action == "remove_pack":
                             return self._json(service.memory_remove_pack(str(body.get("pack") or "")))
                         if action == "forget":

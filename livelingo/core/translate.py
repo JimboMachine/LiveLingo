@@ -571,9 +571,15 @@ class Translator:
         self.max_chars = max_chars
         self._lock = threading.Lock()  # 一次只翻一則，其他排隊
         self._cache: dict[tuple, str] = {}
+        self._came = threading.local()    # 這條執行緒上一次翻譯用了記住的翻法的話，是哪來的
         # turn()：回傳「輪到我用處理器」的鎖（翻譯引擎和語音辨識都用處理器的電腦上，兩個輪流跑，見 Service._cpu_turn）。
         # None = 不用輪流
         self.turn = None
+
+    def came_from(self) -> dict | None:
+        """上一次 translate() 用的是記住的翻法：{"from": "mine" | "shared" | "subtitle", "near": 是不是同一部裡幾乎一樣的句子}；
+        是模型翻的（或沒用記憶）就 None。"""
+        return getattr(self._came, "value", None)
 
     def _my_turn(self):
         import contextlib
@@ -763,14 +769,18 @@ class Translator:
         return best
 
     def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None,
-                  on_part=None, unfinished: bool = False, stop: Stop | None = None, remember: str | None = None) -> str:
+                  on_part=None, unfinished: bool = False, stop: Stop | None = None, remember: str | None = None,
+                  work: str = "") -> str:
         """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
         context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。
         on_part(目前的譯文)：翻的時候一邊出字一邊叫（只是先給人看；最後回傳的才是整理過、核對過的譯文）。
         on_part 回傳 False 就停下來不翻了，丟出 Stopped（對方還在說、這半句已經過時的時候用）。
         unfinished：還沒說完的半句（即時字幕）。只翻一次、不補句尾、不核對；結果另外記，不會被當成整句的譯文。
         stop：一個 Stop；別的地方呼叫它的 stop() 就馬上中斷這一次（丟出 Stopped）。
-        remember：這句話從哪來的（訊息的 via）；有給的話，翻好的會記進翻過的句子（memory），下次同一句不用重翻。"""
+        remember：這句話從哪來的（訊息的 via）；有給的話，翻好的會記進翻過的句子（memory），下次同一句不用重翻。
+        work：在看哪一部（works.work_key）；同一部翻過的先用，也記下這句是在這部看到的。
+        用了記住的翻法時，came_from() 會說是哪來的（同一條執行緒裡、下一次翻譯之前有效）。"""
+        self._came.value = None
         text = text.strip()[:MAX_TEXT]
         source = source or detect_language(text) or "en"
         if source == LANGS[target]["family"]:
@@ -781,7 +791,7 @@ class Translator:
             for i, part in enumerate(parts):
                 done = joiner.join(outs)
                 outs.append(self.translate(part, target, source, context if i == 0 else None, unfinished=unfinished, stop=stop,
-                                       remember=remember,
+                                       remember=remember, work=work,
                                            on_part=(lambda t, done=done: on_part((done + joiner if done else "") + t)) if on_part else None))
             return joiner.join(o for o in outs if o)
         context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
@@ -798,10 +808,10 @@ class Translator:
 
             words = self.glossary()
             terms = terms_print([(k, v) for k, v in words.items() if k and k in text] + [tuple(h) for h in hints])
-            known = self.memory.lookup(text, source, target, self.tone, self.model, terms)
-            if known:
-                self._cache[key] = known
-                return known
+            found = self.memory.find(text, source, target, self.tone, self.model, terms, work)
+            if found:
+                self._came.value = {"from": found[1], "near": found[2]}
+                return found[0]      # 不放進暫存：暫存不知道是哪來的，下次也要能說出來
         kind = sentence_kind(text, source)
         sent = text if unfinished else with_end_mark(text, source, kind)
         show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
@@ -839,5 +849,5 @@ class Translator:
         if (remember is not None and self.memory is not None and out and out.strip() != text
                 and not numbers_lost(sent, out, target, source) and not _leftover(out, source, target)):
             # 只記沒問題的：數字對得上、沒有留著原文的字。有問題的下次再翻一次
-            self.memory.store(text, source, target, self.tone, out, self.model, terms, remember)
+            self.memory.store(text, source, target, self.tone, out, self.model, terms, remember, work)
         return out

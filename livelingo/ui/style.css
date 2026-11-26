@@ -569,3 +569,29 @@ input::placeholder { color: var(--faint); }
 .help-list li { margin: 8px 0; font-size: 14px; line-height: 1.7; color: var(--text); overflow-wrap: anywhere; }
 .help-list li::marker { color: var(--dim); }
 .help-list kbd { display: inline-block; padding: 0 6px; margin: 0 1px; border-radius: 6px; border: 1px solid var(--line-2); border-bottom-width: 2px; background: var(--surface-2); color: var(--text); font: 600 12px/1.7 ui-monospace, Consolas, "Cascadia Mono", monospace; white-space: nowrap; }
+
+/* 翻過的句子：用的是記住的翻法時，訊息下方的小字 */
+.msg .meta .kept { color: var(--faint); }
+
+/* 記過的作品（哪一部影片、哪一個網頁）：收合的清單 */
+.works { border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; }
+.works-toggle { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.works-list { padding-bottom: 6px; }
+.work-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.work-name { flex: 1 1 220px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.work-name .desc, .work-export .desc { font-size: 12px; color: var(--dim); }
+.work-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.work-acts > button:last-child { width: 44px; height: 44px; border: 0; background: transparent; color: var(--dim); display: flex; align-items: center; justify-content: center; }
+.work-acts > button:last-child:hover { color: var(--danger); }
+.work-acts > button:last-child svg { width: 16px; height: 16px; }
+.work-export { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.work-export input { flex: 1 1 200px; min-width: 0; }
+.work-export .desc { flex: 1 1 100%; }
+
+/* 匯入字幕檔的預覽 */
+.sub-preview { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.sub-sample { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.sub-pair { padding: 6px 8px; border-radius: 8px; background: var(--panel-2, rgba(127,127,127,0.08)); overflow-wrap: anywhere; }
+.sub-pair .dim { color: var(--dim); }
+.sub-preview input { width: 100%; min-width: 0; }
+.sub-preview .pills { flex-wrap: wrap; }
