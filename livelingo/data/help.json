@@ -29,7 +29,8 @@
      "在對話頁最下面打字，按 [[Enter]]。翻譯好會自動複製，到遊戲或聊天軟體按 [[Ctrl+V]] 貼上就可以送出。",
      "遊戲中不想切視窗：按 [[{quick}]] 叫出快速輸入框，打完按 [[Enter]]，翻譯一樣會自動複製。",
      "LiveLingo 不會替你在別的程式裡打字或送出訊息，貼上和送出都由你自己按。",
-     "你說的、打的句子下面會有一行翻回你的語言的意思，可以確認有沒有翻錯。"
+     "你說的、打的句子下面會有一行翻回你的語言的意思，可以確認有沒有翻錯。",
+     "在「語言與一般」的「常用句庫」存好常說的話，LiveLingo 事先翻成對方的語言；遊戲裡按 [[{phrase}]]，再按數字就複製那一句，貼上就好。"
     ]
    },
    {
@@ -39,14 +40,15 @@
      "在「顯示與字幕」可以選浮動留言（位置自己擺）或底部字幕條，也可以選顯示在哪一個螢幕。",
      "字體大小、顏色、停留幾秒、透明度都可以調，改了馬上看得到。",
      "遊戲要用「無邊框」或「視窗」模式。選「全螢幕」的話，字幕會被遊戲蓋住。",
-     "按 [[{overlay}]] 可以隨時開關字幕。"
+     "按 [[{overlay}]] 可以隨時開關字幕。",
+     "在「語言與一般」的「喊我名字提醒」填上你的名字或關鍵字，對方的話裡出現時，那一則會用紅色標出來，還可以響一聲。"
     ]
    },
    {
     "id": "keys",
     "title": "快速鍵和鍵盤",
     "items": [
-     "[[{overlay}]] 開關字幕，[[{mic}]] 開關麥克風，[[{copy}]] 複製我上一句的翻譯，[[{quick}]] 快速輸入框。在任何程式裡都有用，可以在「語言與一般」裡改。 對方講完按 [[{reply}]]，會跳出 3 句回話建議。",
+     "[[{overlay}]] 開關字幕，[[{mic}]] 開關麥克風，[[{copy}]] 複製我上一句的翻譯，[[{quick}]] 快速輸入框。在任何程式裡都有用，可以在「語言與一般」裡改。 對方講完按 [[{reply}]]，會跳出 3 句回話建議。 選取一段字並按 [[Ctrl+C]] 後按 [[{pick}]]，翻譯會跳在滑鼠旁邊；按 [[{snap}]] 拉一個框，只翻框裡的字；按 [[{phrase}]] 叫出事先翻好的常用句。",
      "在 LiveLingo 視窗裡：[[Ctrl+1]] 到 [[Ctrl+9]] 切換左邊的頁面，[[↑]] [[↓]] 在左邊的清單移動，[[Esc]] 關掉詢問，[[F1]] 打開這一頁說明。",
      "框選聊天區時：用滑鼠拖，或用方向鍵移動、[[Shift]] 加方向鍵調整大小，[[Enter]] 確定，[[Esc]] 取消。"
     ]
@@ -136,7 +138,8 @@
      "在对话页最下面打字，按 [[Enter]]。翻译好会自动复制，到游戏或聊天软件按 [[Ctrl+V]] 粘贴就可以发送。",
      "游戏中不想切窗口：按 [[{quick}]] 叫出快速输入框，打完按 [[Enter]]，翻译一样会自动复制。",
      "LiveLingo 不会替你在别的程序里打字或发送消息，粘贴和发送都由你自己按。",
-     "你说的、打的句子下面会有一行翻回你的语言的意思，可以确认有没有翻错。"
+     "你说的、打的句子下面会有一行翻回你的语言的意思，可以确认有没有翻错。",
+     "在「语言与常规」的「常用句库」存好常说的话，LiveLingo 事先翻成对方的语言；游戏里按 [[{phrase}]]，再按数字就复制那一句，粘贴就好。"
     ]
    },
    {
@@ -146,14 +149,15 @@
      "在“显示与字幕”可以选浮动留言（位置自己摆）或底部字幕条，也可以选显示在哪一个屏幕。",
      "字体大小、颜色、停留几秒、透明度都可以调，改了马上看得到。",
      "游戏要用“无边框”或“窗口”模式。选“全屏”的话，字幕会被游戏盖住。",
-     "按 [[{overlay}]] 可以随时开关字幕。"
+     "按 [[{overlay}]] 可以随时开关字幕。",
+     "在「语言与常规」的「喊我名字提醒」填上你的名字或关键字，对方的话里出现时，那一则会用红色标出来，还可以响一声。"
     ]
    },
    {
     "id": "keys",
     "title": "快捷键和键盘",
     "items": [
-     "[[{overlay}]] 开关字幕，[[{mic}]] 开关麦克风，[[{copy}]] 复制我上一句的翻译，[[{quick}]] 快速输入框。在任何程序里都有用，可以在“语言与常规”里改。 对方说完按 [[{reply}]]，会弹出 3 句回话建议。",
+     "[[{overlay}]] 开关字幕，[[{mic}]] 开关麦克风，[[{copy}]] 复制我上一句的翻译，[[{quick}]] 快速输入框。在任何程序里都有用，可以在“语言与常规”里改。 对方说完按 [[{reply}]]，会弹出 3 句回话建议。 选中一段字并按 [[Ctrl+C]] 后按 [[{pick}]]，翻译会弹在鼠标旁边；按 [[{snap}]] 拉一个框，只翻框里的字；按 [[{phrase}]] 叫出事先翻好的常用句。",
      "在 LiveLingo 窗口里：[[Ctrl+1]] 到 [[Ctrl+9]] 切换左边的页面，[[↑]] [[↓]] 在左边的列表移动，[[Esc]] 关掉询问，[[F1]] 打开这一页说明。",
      "框选聊天区时：用鼠标拖，或用方向键移动、[[Shift]] 加方向键调整大小，[[Enter]] 确定，[[Esc]] 取消。"
     ]
@@ -243,7 +247,8 @@
      "Type at the bottom of the Chat page and press [[Enter]]. The translation is copied automatically; press [[Ctrl+V]] in your game or chat app to paste and send it.",
      "Without leaving the game: press [[{quick}]] for the quick input box, type, press [[Enter]], and the translation is copied the same way.",
      "LiveLingo never types or sends messages in other programs for you. Pasting and sending stay in your hands.",
-     "Under what you say or type there is a line that translates it back into your language, so you can check the meaning."
+     "Under what you say or type there is a line that translates it back into your language, so you can check the meaning.",
+     "Save phrases you say often in “Phrasebook” under “Language & general”. LiveLingo translates them ahead of time; in a game press [[{phrase}]], then a number to copy one, and paste it."
     ]
    },
    {
@@ -253,14 +258,15 @@
      "In “Display” choose floating chat (place it yourself) or a subtitle bar at the bottom, and which screen it appears on.",
      "Font size, colour, how long a line stays, and opacity can all be changed, and you see the change at once.",
      "Run the game in “Borderless” or “Windowed” mode. In exclusive “Fullscreen” the game covers the subtitles.",
-     "Press [[{overlay}]] to show or hide the subtitles at any time."
+     "Press [[{overlay}]] to show or hide the subtitles at any time.",
+     "Enter your name or keywords under “Call-out alert” in “Language & general”. When their message contains one, it is marked in red and can beep."
     ]
    },
    {
     "id": "keys",
     "title": "Hotkeys and keyboard",
     "items": [
-     "[[{overlay}]] shows or hides subtitles, [[{mic}]] turns the microphone on or off, [[{copy}]] copies your last translation, [[{quick}]] opens the quick input box. They work in any program and can be changed in “Language & general”. Press [[{reply}]] after the other person speaks to get 3 reply ideas.",
+     "[[{overlay}]] shows or hides subtitles, [[{mic}]] turns the microphone on or off, [[{copy}]] copies your last translation, [[{quick}]] opens the quick input box. They work in any program and can be changed in “Language & general”. Press [[{reply}]] after the other person speaks to get 3 reply ideas. Select some text and press [[Ctrl+C]], then [[{pick}]] shows its translation next to the mouse; [[{snap}]] lets you drag a box and translates only that; [[{phrase}]] opens your pre-translated phrases.",
      "Inside the LiveLingo window: [[Ctrl+1]] to [[Ctrl+9]] switch pages, [[↑]] [[↓]] move through the list on the left, [[Esc]] closes a question, [[F1]] opens this Help page.",
      "While framing a chat area: drag with the mouse, or move with the arrow keys, resize with [[Shift]] plus the arrow keys, [[Enter]] to confirm, [[Esc]] to cancel."
     ]
@@ -350,7 +356,8 @@
      "대화 페이지 맨 아래에 입력하고 [[Enter]]를 누릅니다. 번역이 끝나면 자동으로 복사되니, 게임이나 채팅 프로그램에서 [[Ctrl+V]]로 붙여 넣어 보내면 됩니다.",
      "게임 중에 창을 바꾸기 싫을 때: [[{quick}]]를 눌러 빠른 입력 상자를 열고, 입력한 뒤 [[Enter]]를 누르면 번역이 똑같이 복사됩니다.",
      "LiveLingo는 다른 프로그램에 대신 입력하거나 메시지를 보내지 않습니다. 붙여 넣기와 보내기는 직접 합니다.",
-     "내가 말하거나 입력한 문장 아래에는 내 언어로 다시 번역한 줄이 나와서 뜻이 맞는지 확인할 수 있습니다."
+     "내가 말하거나 입력한 문장 아래에는 내 언어로 다시 번역한 줄이 나와서 뜻이 맞는지 확인할 수 있습니다.",
+     "'언어 및 일반'의 '자주 쓰는 문구'에 자주 하는 말을 저장해 두면 LiveLingo가 미리 번역합니다. 게임 중에 [[{phrase}]]를 누르고 숫자를 누르면 복사되니 붙여 넣기만 하면 됩니다."
     ]
    },
    {
@@ -360,14 +367,15 @@
      "‘표시와 자막’에서 떠 있는 채팅(위치는 직접 정함)이나 아래쪽 자막 바를 고르고, 어느 모니터에 표시할지도 정할 수 있습니다.",
      "글자 크기, 색, 표시 시간, 투명도를 바꿀 수 있고, 바꾸면 바로 반영됩니다.",
      "게임은 ‘테두리 없는 창’이나 ‘창 모드’로 실행하세요. ‘전체 화면’에서는 자막이 게임에 가려집니다.",
-     "[[{overlay}]]를 누르면 언제든지 자막을 켜고 끌 수 있습니다."
+     "[[{overlay}]]를 누르면 언제든지 자막을 켜고 끌 수 있습니다.",
+     "'언어 및 일반'의 '내 이름 알림'에 이름이나 키워드를 입력하면, 상대의 말에 그 단어가 나올 때 빨간색으로 표시하고 소리를 낼 수 있습니다."
     ]
    },
    {
     "id": "keys",
     "title": "단축키와 키보드",
     "items": [
-     "[[{overlay}]] 자막 켜기/끄기, [[{mic}]] 마이크 켜기/끄기, [[{copy}]] 내 마지막 번역 복사, [[{quick}]] 빠른 입력 상자. 어떤 프로그램에서도 동작하며 ‘언어 및 일반’에서 바꿀 수 있습니다. 상대가 말한 뒤 [[{reply}]]를 누르면 추천 답장 3개가 떠요.",
+     "[[{overlay}]] 자막 켜기/끄기, [[{mic}]] 마이크 켜기/끄기, [[{copy}]] 내 마지막 번역 복사, [[{quick}]] 빠른 입력 상자. 어떤 프로그램에서도 동작하며 ‘언어 및 일반’에서 바꿀 수 있습니다. 상대가 말한 뒤 [[{reply}]]를 누르면 추천 답장 3개가 떠요. 글자를 선택하고 [[Ctrl+C]]를 누른 뒤 [[{pick}]]를 누르면 마우스 옆에 번역이 나타나고, [[{snap}]]는 상자로 지정한 부분만 번역하며, [[{phrase}]]는 미리 번역해 둔 문구를 엽니다.",
      "LiveLingo 창 안에서: [[Ctrl+1]]부터 [[Ctrl+9]]까지 페이지 전환, [[↑]] [[↓]]로 왼쪽 목록 이동, [[Esc]]로 확인 창 닫기, [[F1]]로 이 도움말 열기.",
      "채팅 영역을 지정할 때: 마우스로 끌거나, 방향키로 이동하고 [[Shift]]와 방향키로 크기를 조절합니다. [[Enter]]로 확정, [[Esc]]로 취소."
     ]
@@ -457,7 +465,8 @@
      "会話ページのいちばん下に入力して [[Enter]] を押します。翻訳が終わると自動でコピーされるので、ゲームやチャットアプリで [[Ctrl+V]] で貼り付けて送信します。",
      "ゲーム中にウィンドウを切り替えたくないとき：[[{quick}]] でクイック入力ボックスを開き、入力して [[Enter]] を押すと、同じように翻訳がコピーされます。",
      "LiveLingo がほかのアプリに代わりに入力したり送信したりすることはありません。貼り付けと送信は自分で行います。",
-     "自分が話した文や入力した文の下には、自分の言語に訳し戻した 1 行が表示され、意味が合っているか確認できます。"
+     "自分が話した文や入力した文の下には、自分の言語に訳し戻した 1 行が表示され、意味が合っているか確認できます。",
+     "「言語と一般」の「定型文」によく使う言葉を保存すると、LiveLingo があらかじめ翻訳します。ゲーム中に [[{phrase}]] を押して数字を押すとコピーされるので、貼り付けるだけです。"
     ]
    },
    {
@@ -467,14 +476,15 @@
      "「表示と字幕」で、フローティングチャット（位置は自分で決める）か下部の字幕バーを選べます。どの画面に表示するかも選べます。",
      "文字の大きさ、色、表示時間、不透明度を変えられ、変更はすぐに反映されます。",
      "ゲームは「ボーダーレス」か「ウィンドウ」モードで実行してください。「フルスクリーン」では字幕がゲームに隠れます。",
-     "[[{overlay}]] でいつでも字幕の表示と非表示を切り替えられます。"
+     "[[{overlay}]] でいつでも字幕の表示と非表示を切り替えられます。",
+     "「言語と一般」の「名前を呼ばれたら通知」に自分の名前やキーワードを入れると、相手の発言に出てきたとき赤で目印が付き、音も鳴らせます。"
     ]
    },
    {
     "id": "keys",
     "title": "ホットキーとキーボード",
     "items": [
-     "[[{overlay}]] 字幕の表示／非表示、[[{mic}]] マイクのオン／オフ、[[{copy}]] 自分の直前の翻訳をコピー、[[{quick}]] クイック入力ボックス。どのアプリを使っていても動作し、「言語と一般」で変更できます。 相手が話したあとに [[{reply}]] を押すと、返信の候補が 3 つ出ます。",
+     "[[{overlay}]] 字幕の表示／非表示、[[{mic}]] マイクのオン／オフ、[[{copy}]] 自分の直前の翻訳をコピー、[[{quick}]] クイック入力ボックス。どのアプリを使っていても動作し、「言語と一般」で変更できます。 相手が話したあとに [[{reply}]] を押すと、返信の候補が 3 つ出ます。 文字を選んで [[Ctrl+C]] を押してから [[{pick}]] を押すとマウスのそばに翻訳が出ます。[[{snap}]] は枠で囲んだ部分だけを翻訳し、[[{phrase}]] はあらかじめ翻訳した定型文を開きます。",
      "LiveLingo のウィンドウ内：[[Ctrl+1]] から [[Ctrl+9]] でページ切り替え、[[↑]] [[↓]] で左の一覧を移動、[[Esc]] で確認を閉じ、[[F1]] でこのヘルプを開きます。",
      "チャット欄を範囲指定するとき：マウスでドラッグするか、矢印キーで移動、[[Shift]] と矢印キーで大きさを調整し、[[Enter]] で確定、[[Esc]] でキャンセルします。"
     ]
@@ -564,7 +574,8 @@
      "Gõ ở dưới cùng trang Chat rồi nhấn [[Enter]]. Bản dịch được sao chép tự động; nhấn [[Ctrl+V]] trong game hoặc ứng dụng chat để dán và gửi.",
      "Không cần rời game: nhấn [[{quick}]] để mở ô nhập nhanh, gõ, nhấn [[Enter]], bản dịch được sao chép như vậy.",
      "LiveLingo không bao giờ tự gõ hay gửi tin nhắn trong chương trình khác thay bạn. Dán và gửi là việc của bạn.",
-     "Dưới những gì bạn nói hoặc gõ có một dòng dịch ngược lại sang ngôn ngữ của bạn, để bạn kiểm tra ý nghĩa."
+     "Dưới những gì bạn nói hoặc gõ có một dòng dịch ngược lại sang ngôn ngữ của bạn, để bạn kiểm tra ý nghĩa.",
+     "Lưu những câu hay nói trong “Câu hay dùng” ở mục “Ngôn ngữ và chung”. LiveLingo dịch sẵn; trong game bấm [[{phrase}]] rồi bấm số để sao chép, sau đó dán vào chat."
     ]
    },
    {
@@ -574,14 +585,15 @@
      "Trong “Hiển thị”, chọn chat nổi (tự đặt vị trí) hoặc thanh phụ đề ở dưới, và màn hình nào để hiện.",
      "Cỡ chữ, màu, thời gian mỗi dòng hiện và độ đục đều chỉnh được, và bạn thấy thay đổi ngay.",
      "Chạy game ở chế độ “Borderless” hoặc “Windowed”. Ở chế độ “Fullscreen” độc quyền, game sẽ che mất phụ đề.",
-     "Nhấn [[{overlay}]] để hiện hoặc ẩn phụ đề bất cứ lúc nào."
+     "Nhấn [[{overlay}]] để hiện hoặc ẩn phụ đề bất cứ lúc nào.",
+     "Nhập tên hoặc từ khóa của bạn ở “Báo khi bị gọi tên” trong “Ngôn ngữ và chung”. Khi tin nhắn của họ có từ đó, tin sẽ được đánh dấu đỏ và có thể kêu một tiếng."
     ]
    },
    {
     "id": "keys",
     "title": "Phím tắt và bàn phím",
     "items": [
-     "[[{overlay}]] hiện hoặc ẩn phụ đề, [[{mic}]] bật hoặc tắt micro, [[{copy}]] sao chép bản dịch gần nhất của bạn, [[{quick}]] mở ô nhập nhanh. Chúng chạy trong mọi chương trình và đổi được trong “Ngôn ngữ và chung”. Bấm [[{reply}]] sau khi người kia nói để có 3 gợi ý trả lời.",
+     "[[{overlay}]] hiện hoặc ẩn phụ đề, [[{mic}]] bật hoặc tắt micro, [[{copy}]] sao chép bản dịch gần nhất của bạn, [[{quick}]] mở ô nhập nhanh. Chúng chạy trong mọi chương trình và đổi được trong “Ngôn ngữ và chung”. Bấm [[{reply}]] sau khi người kia nói để có 3 gợi ý trả lời. Chọn văn bản và bấm [[Ctrl+C]], rồi [[{pick}]] hiện bản dịch cạnh con trỏ chuột; [[{snap}]] cho kéo một khung và chỉ dịch phần đó; [[{phrase}]] mở các câu đã dịch sẵn.",
      "Trong cửa sổ LiveLingo: [[Ctrl+1]] đến [[Ctrl+9]] để chuyển trang, [[↑]] [[↓]] để đi qua danh sách bên trái, [[Esc]] để đóng câu hỏi, [[F1]] để mở trang Trợ giúp này.",
      "Khi khoanh vùng chat: kéo bằng chuột, hoặc di chuyển bằng phím mũi tên, đổi kích thước bằng [[Shift]] cùng phím mũi tên, [[Enter]] để xác nhận, [[Esc]] để hủy."
     ]
@@ -671,7 +683,8 @@
      "พิมพ์ที่ด้านล่างของหน้า แชท แล้วกด [[Enter]] คำแปลจะถูกคัดลอกอัตโนมัติ กด [[Ctrl+V]] ในเกมหรือแอปแชทเพื่อวางแล้วส่ง",
      "ไม่ต้องออกจากเกม: กด [[{quick}]] เพื่อเปิดช่องพิมพ์ด่วน พิมพ์ กด [[Enter]] แล้วคำแปลจะถูกคัดลอกแบบเดียวกัน",
      "LiveLingo ไม่พิมพ์หรือส่งข้อความในโปรแกรมอื่นแทนคุณเลย การวางและการส่งเป็นของคุณเอง",
-     "ใต้สิ่งที่คุณพูดหรือพิมพ์มีบรรทัดที่แปลกลับเป็นภาษาของคุณ เพื่อให้คุณตรวจความหมายได้"
+     "ใต้สิ่งที่คุณพูดหรือพิมพ์มีบรรทัดที่แปลกลับเป็นภาษาของคุณ เพื่อให้คุณตรวจความหมายได้",
+     "บันทึกประโยคที่พูดบ่อยใน “ประโยคที่ใช้บ่อย” ในหน้า “ภาษาและทั่วไป” LiveLingo จะแปลไว้ล่วงหน้า ในเกมกด [[{phrase}]] แล้วกดตัวเลขเพื่อคัดลอก จากนั้นวางในแชต"
     ]
    },
    {
@@ -681,14 +694,15 @@
      "ใน “การแสดงผล” เลือกแชทลอย (วางตำแหน่งเอง) หรือแถบซับไตเติลด้านล่าง และเลือกว่าจะแสดงบนหน้าจอไหน",
      "ขนาดตัวอักษร สี เวลาที่แต่ละบรรทัดแสดง และความทึบ ปรับได้ทั้งหมด และเห็นผลทันที",
      "เล่นเกมในโหมด “Borderless” หรือ “Windowed” ในโหมด “Fullscreen” แบบเอกสิทธิ์ เกมจะบังซับไตเติล",
-     "กด [[{overlay}]] เพื่อแสดงหรือซ่อนซับไตเติลได้ทุกเมื่อ"
+     "กด [[{overlay}]] เพื่อแสดงหรือซ่อนซับไตเติลได้ทุกเมื่อ",
+     "ใส่ชื่อหรือคำสำคัญของคุณใน “แจ้งเตือนเมื่อถูกเรียกชื่อ” ในหน้า “ภาษาและทั่วไป” เมื่อข้อความของอีกฝ่ายมีคำนั้น จะถูกทำเครื่องหมายสีแดงและส่งเสียงได้"
     ]
    },
    {
     "id": "keys",
     "title": "คีย์ลัดและแป้นพิมพ์",
     "items": [
-     "[[{overlay}]] แสดงหรือซ่อนซับไตเติล [[{mic}]] เปิดหรือปิดไมโครโฟน [[{copy}]] คัดลอกคำแปลล่าสุดของคุณ [[{quick}]] เปิดช่องพิมพ์ด่วน ใช้ได้ในทุกโปรแกรม และเปลี่ยนได้ใน “ภาษาและทั่วไป” กด [[{reply}]] หลังอีกฝ่ายพูดจบ จะได้คำตอบแนะนำ 3 แบบ",
+     "[[{overlay}]] แสดงหรือซ่อนซับไตเติล [[{mic}]] เปิดหรือปิดไมโครโฟน [[{copy}]] คัดลอกคำแปลล่าสุดของคุณ [[{quick}]] เปิดช่องพิมพ์ด่วน ใช้ได้ในทุกโปรแกรม และเปลี่ยนได้ใน “ภาษาและทั่วไป” กด [[{reply}]] หลังอีกฝ่ายพูดจบ จะได้คำตอบแนะนำ 3 แบบ เลือกข้อความแล้วกด [[Ctrl+C]] จากนั้นกด [[{pick}]] คำแปลจะแสดงข้างเมาส์ [[{snap}]] ให้ลากกรอบและแปลเฉพาะส่วนนั้น [[{phrase}]] เปิดประโยคที่แปลไว้ล่วงหน้า",
      "ในหน้าต่าง LiveLingo: [[Ctrl+1]] ถึง [[Ctrl+9]] สลับหน้า [[↑]] [[↓]] เลื่อนในรายการด้านซ้าย [[Esc]] ปิดคำถาม [[F1]] เปิดหน้าความช่วยเหลือนี้",
      "ขณะกรอบพื้นที่แชท: ลากด้วยเมาส์ หรือย้ายด้วยปุ่มลูกศร ปรับขนาดด้วย [[Shift]] กับปุ่มลูกศร [[Enter]] เพื่อยืนยัน [[Esc]] เพื่อยกเลิก"
     ]
@@ -778,7 +792,8 @@
      "Ketik di bagian bawah halaman Chat lalu tekan [[Enter]]. Terjemahannya otomatis tersalin; tekan [[Ctrl+V]] di game atau aplikasi chat untuk menempel dan mengirimnya.",
      "Tanpa keluar dari game: tekan [[{quick}]] untuk kotak input cepat, ketik, tekan [[Enter]], dan terjemahannya tersalin dengan cara yang sama.",
      "LiveLingo tidak pernah mengetik atau mengirim pesan di program lain untukmu. Menempel dan mengirim tetap di tanganmu.",
-     "Di bawah yang kamu ucapkan atau ketik ada baris yang menerjemahkannya kembali ke bahasamu, supaya kamu bisa memeriksa artinya."
+     "Di bawah yang kamu ucapkan atau ketik ada baris yang menerjemahkannya kembali ke bahasamu, supaya kamu bisa memeriksa artinya.",
+     "Simpan kalimat yang sering dipakai di “Kalimat favorit” pada halaman “Bahasa & umum”. LiveLingo menerjemahkannya lebih dulu; di dalam game tekan [[{phrase}]], lalu angka untuk menyalin, dan tempel ke obrolan."
     ]
    },
    {
@@ -788,14 +803,15 @@
      "Di “Tampilan layar”, pilih chat melayang (kamu atur posisinya sendiri) atau bar subtitle di bawah, dan di layar mana munculnya.",
      "Ukuran huruf, warna, berapa lama satu baris tampil, dan opasitas bisa diubah semua, dan perubahannya langsung terlihat.",
      "Jalankan game dalam mode “Borderless” atau “Windowed”. Di “Fullscreen” eksklusif, game menutupi subtitle.",
-     "Tekan [[{overlay}]] untuk menampilkan atau menyembunyikan subtitle kapan saja."
+     "Tekan [[{overlay}]] untuk menampilkan atau menyembunyikan subtitle kapan saja.",
+     "Isi nama atau kata kunci Anda di “Pemberitahuan saat namaku disebut” pada “Bahasa & umum”. Saat pesan lawan bicara memuatnya, pesan ditandai merah dan bisa berbunyi."
     ]
    },
    {
     "id": "keys",
     "title": "Tombol pintas dan keyboard",
     "items": [
-     "[[{overlay}]] menampilkan atau menyembunyikan subtitle, [[{mic}]] menyalakan atau mematikan mikrofon, [[{copy}]] menyalin terjemahan terakhirmu, [[{quick}]] membuka kotak input cepat. Semuanya bekerja di program apa pun dan bisa diubah di “Bahasa & umum”. Tekan [[{reply}]] setelah lawan bicara selesai untuk 3 ide balasan.",
+     "[[{overlay}]] menampilkan atau menyembunyikan subtitle, [[{mic}]] menyalakan atau mematikan mikrofon, [[{copy}]] menyalin terjemahan terakhirmu, [[{quick}]] membuka kotak input cepat. Semuanya bekerja di program apa pun dan bisa diubah di “Bahasa & umum”. Tekan [[{reply}]] setelah lawan bicara selesai untuk 3 ide balasan. Pilih teks dan tekan [[Ctrl+C]], lalu [[{pick}]] menampilkan terjemahan di dekat mouse; [[{snap}]] untuk menyeret kotak dan menerjemahkan bagian itu saja; [[{phrase}]] membuka kalimat yang sudah diterjemahkan lebih dulu.",
      "Di dalam jendela LiveLingo: [[Ctrl+1]] sampai [[Ctrl+9]] berpindah halaman, [[↑]] [[↓]] bergerak di daftar sebelah kiri, [[Esc]] menutup pertanyaan, [[F1]] membuka halaman Bantuan ini.",
      "Saat menandai area chat: seret dengan mouse, atau pindahkan dengan tombol panah, ubah ukuran dengan [[Shift]] plus tombol panah, [[Enter]] untuk konfirmasi, [[Esc]] untuk batal."
     ]
@@ -885,7 +901,8 @@
      "Escribe abajo en la página Chat y pulsa [[Enter]]. La traducción se copia sola; pulsa [[Ctrl+V]] en tu juego o app de chat para pegarla y enviarla.",
      "Sin salir del juego: pulsa [[{quick}]] para abrir la caja de escritura rápida, escribe, pulsa [[Enter]] y la traducción se copia igual.",
      "LiveLingo nunca escribe ni envía mensajes en otros programas por ti. Pegar y enviar queda en tus manos.",
-     "Debajo de lo que dices o escribes hay una línea que lo traduce de vuelta a tu idioma, para que compruebes el sentido."
+     "Debajo de lo que dices o escribes hay una línea que lo traduce de vuelta a tu idioma, para que compruebes el sentido.",
+     "Guarda las frases habituales en «Frases frecuentes», dentro de «Idioma y general». LiveLingo las traduce de antemano; en el juego pulsa [[{phrase}]] y luego un número para copiar una, y pégala en el chat."
     ]
    },
    {
@@ -895,14 +912,15 @@
      "En “Pantalla” elige chat flotante (lo colocas tú) o una barra de subtítulos abajo, y en qué pantalla aparece.",
      "El tamaño de letra, el color, cuánto dura cada línea y la opacidad se pueden cambiar, y ves el cambio al momento.",
      "Juega en modo “Sin bordes” o “Ventana”. En “Pantalla completa” exclusiva el juego tapa los subtítulos.",
-     "Pulsa [[{overlay}]] para mostrar u ocultar los subtítulos cuando quieras."
+     "Pulsa [[{overlay}]] para mostrar u ocultar los subtítulos cuando quieras.",
+     "Escribe tu nombre o palabras clave en «Aviso cuando dicen mi nombre», dentro de «Idioma y general». Cuando un mensaje suyo las contiene, se marca en rojo y puede sonar un pitido."
     ]
    },
    {
     "id": "keys",
     "title": "Atajos y teclado",
     "items": [
-     "[[{overlay}]] muestra u oculta los subtítulos, [[{mic}]] activa o desactiva el micrófono, [[{copy}]] copia tu última traducción, [[{quick}]] abre la caja de escritura rápida. Funcionan en cualquier programa y se cambian en “Idioma y general”. Pulsa [[{reply}]] cuando la otra persona termine para ver 3 ideas de respuesta.",
+     "[[{overlay}]] muestra u oculta los subtítulos, [[{mic}]] activa o desactiva el micrófono, [[{copy}]] copia tu última traducción, [[{quick}]] abre la caja de escritura rápida. Funcionan en cualquier programa y se cambian en “Idioma y general”. Pulsa [[{reply}]] cuando la otra persona termine para ver 3 ideas de respuesta. Selecciona texto y pulsa [[Ctrl+C]]; luego [[{pick}]] muestra la traducción junto al ratón; [[{snap}]] te deja arrastrar un recuadro y traduce solo eso; [[{phrase}]] abre tus frases ya traducidas.",
      "Dentro de la ventana de LiveLingo: [[Ctrl+1]] a [[Ctrl+9]] cambian de página, [[↑]] [[↓]] recorren la lista de la izquierda, [[Esc]] cierra una pregunta, [[F1]] abre esta página de Ayuda.",
      "Al enmarcar una zona de chat: arrastra con el ratón, o mueve con las flechas, cambia el tamaño con [[Shift]] más las flechas, [[Enter]] para confirmar, [[Esc]] para cancelar."
     ]
@@ -992,7 +1010,8 @@
      "Digite embaixo na página Chat e aperte [[Enter]]. A tradução é copiada sozinha; aperte [[Ctrl+V]] no jogo ou no app de chat para colar e enviar.",
      "Sem sair do jogo: aperte [[{quick}]] para abrir a caixa de digitação rápida, digite, aperte [[Enter]] e a tradução é copiada do mesmo jeito.",
      "O LiveLingo nunca digita nem envia mensagens em outros programas por você. Colar e enviar fica com você.",
-     "Embaixo do que você fala ou digita há uma linha que traduz de volta para o seu idioma, para você conferir o sentido."
+     "Embaixo do que você fala ou digita há uma linha que traduz de volta para o seu idioma, para você conferir o sentido.",
+     "Guarde as frases habituais em “Frases frequentes”, em “Idioma e geral”. O LiveLingo as traduz antecipadamente; no jogo aperte [[{phrase}]] e depois um número para copiar uma e cole no chat."
     ]
    },
    {
@@ -1002,14 +1021,15 @@
      "Em “Exibição”, escolha chat flutuante (você posiciona) ou uma barra de legendas embaixo, e em qual tela ela aparece.",
      "Tamanho da letra, cor, quanto tempo cada linha fica e opacidade podem ser mudados, e você vê a mudança na hora.",
      "Rode o jogo no modo “Sem bordas” ou “Janela”. Em “Tela cheia” exclusiva o jogo cobre as legendas.",
-     "Aperte [[{overlay}]] para mostrar ou esconder as legendas a qualquer momento."
+     "Aperte [[{overlay}]] para mostrar ou esconder as legendas a qualquer momento.",
+     "Digite seu nome ou palavras-chave em “Aviso quando citarem meu nome”, em “Idioma e geral”. Quando uma mensagem deles as contém, ela é marcada de vermelho e pode apitar."
     ]
    },
    {
     "id": "keys",
     "title": "Atalhos e teclado",
     "items": [
-     "[[{overlay}]] mostra ou esconde as legendas, [[{mic}]] liga ou desliga o microfone, [[{copy}]] copia sua última tradução, [[{quick}]] abre a caixa de digitação rápida. Funcionam em qualquer programa e podem ser mudados em “Idioma e geral”. Aperte [[{reply}]] quando a outra pessoa terminar para ver 3 ideias de resposta.",
+     "[[{overlay}]] mostra ou esconde as legendas, [[{mic}]] liga ou desliga o microfone, [[{copy}]] copia sua última tradução, [[{quick}]] abre a caixa de digitação rápida. Funcionam em qualquer programa e podem ser mudados em “Idioma e geral”. Aperte [[{reply}]] quando a outra pessoa terminar para ver 3 ideias de resposta. Selecione um texto e aperte [[Ctrl+C]]; depois [[{pick}]] mostra a tradução ao lado do mouse; [[{snap}]] deixa você arrastar um quadro e traduz só ele; [[{phrase}]] abre suas frases já traduzidas.",
      "Dentro da janela do LiveLingo: [[Ctrl+1]] a [[Ctrl+9]] trocam de página, [[↑]] [[↓]] percorrem a lista da esquerda, [[Esc]] fecha uma pergunta, [[F1]] abre esta página de Ajuda.",
      "Ao marcar uma área de chat: arraste com o mouse, ou mova com as setas, mude o tamanho com [[Shift]] mais as setas, [[Enter]] para confirmar, [[Esc]] para cancelar."
     ]
@@ -1099,7 +1119,8 @@
      "Пишите внизу страницы «Чат» и нажмите [[Enter]]. Перевод копируется автоматически; нажмите [[Ctrl+V]] в игре или мессенджере, чтобы вставить и отправить.",
      "Не выходя из игры: нажмите [[{quick}]], чтобы открыть поле быстрого ввода, напишите, нажмите [[Enter]], и перевод скопируется так же.",
      "LiveLingo никогда не печатает и не отправляет сообщения в других программах за вас. Вставляете и отправляете вы сами.",
-     "Под тем, что вы сказали или написали, есть строка с обратным переводом на ваш язык, чтобы проверить смысл."
+     "Под тем, что вы сказали или написали, есть строка с обратным переводом на ваш язык, чтобы проверить смысл.",
+     "Сохраняйте частые фразы в разделе «Частые фразы» на странице «Язык и общие». LiveLingo переведёт их заранее; в игре нажмите [[{phrase}]], затем цифру, чтобы скопировать фразу, и вставьте её в чат."
     ]
    },
    {
@@ -1109,14 +1130,15 @@
      "В «Отображении» выберите плавающий чат (размещаете сами) или полосу субтитров внизу, и на каком экране они показываются.",
      "Размер текста, цвет, время показа строки и прозрачность можно менять, и изменения видны сразу.",
      "Запускайте игру в режиме «Без рамки» или «В окне». В эксклюзивном «Полноэкранном» режиме игра перекрывает субтитры.",
-     "Нажмите [[{overlay}]], чтобы в любой момент показать или скрыть субтитры."
+     "Нажмите [[{overlay}]], чтобы в любой момент показать или скрыть субтитры.",
+     "Впишите своё имя или ключевые слова в «Оповещение, когда называют моё имя» на странице «Язык и общие». Когда они встречаются в сообщении, оно выделяется красным и может подать звук."
     ]
    },
    {
     "id": "keys",
     "title": "Горячие клавиши и клавиатура",
     "items": [
-     "[[{overlay}]] показывает или скрывает субтитры, [[{mic}]] включает или выключает микрофон, [[{copy}]] копирует ваш последний перевод, [[{quick}]] открывает поле быстрого ввода. Работают в любой программе и меняются в разделе «Язык и общие». Нажмите [[{reply}]], когда собеседник договорит, — появятся 3 варианта ответа.",
+     "[[{overlay}]] показывает или скрывает субтитры, [[{mic}]] включает или выключает микрофон, [[{copy}]] копирует ваш последний перевод, [[{quick}]] открывает поле быстрого ввода. Работают в любой программе и меняются в разделе «Язык и общие». Нажмите [[{reply}]], когда собеседник договорит, — появятся 3 варианта ответа. Выделите текст и нажмите [[Ctrl+C]], затем [[{pick}]] покажет перевод рядом с курсором; [[{snap}]] позволит обвести рамкой область и перевести только её; [[{phrase}]] откроет заранее переведённые фразы.",
      "В окне LiveLingo: [[Ctrl+1]]–[[Ctrl+9]] переключают страницы, [[↑]] [[↓]] перемещают по списку слева, [[Esc]] закрывает вопрос, [[F1]] открывает эту справку.",
      "При выделении области чата: тяните мышью или двигайте стрелками, меняйте размер с [[Shift]] и стрелками, [[Enter]] подтверждает, [[Esc]] отменяет."
     ]
@@ -1206,7 +1228,8 @@
      "Tippe unten auf der Chat-Seite und drücke [[Enter]]. Die Übersetzung wird automatisch kopiert; drücke [[Ctrl+V]] in deinem Spiel oder deiner Chat-App, um sie einzufügen und zu senden.",
      "Ohne das Spiel zu verlassen: Drücke [[{quick}]] für das Schnelleingabefeld, tippe, drücke [[Enter]], und die Übersetzung wird genauso kopiert.",
      "LiveLingo tippt oder sendet nie Nachrichten in anderen Programmen für dich. Einfügen und Senden bleibt bei dir.",
-     "Unter dem, was du sagst oder tippst, steht eine Zeile, die es zurück in deine Sprache übersetzt, damit du die Bedeutung prüfen kannst."
+     "Unter dem, was du sagst oder tippst, steht eine Zeile, die es zurück in deine Sprache übersetzt, damit du die Bedeutung prüfen kannst.",
+     "Speichere oft gesagte Sätze unter „Satzsammlung“ in „Sprache und Allgemeines“. LiveLingo übersetzt sie vorab; im Spiel [[{phrase}]] und dann eine Zahl drücken, um einen Satz zu kopieren, und einfügen."
     ]
    },
    {
@@ -1216,14 +1239,15 @@
      "Wähle unter „Anzeige“ den schwebenden Chat (du platzierst ihn selbst) oder eine Untertitelleiste unten, und auf welchem Bildschirm sie erscheint.",
      "Schriftgröße, Farbe, wie lange eine Zeile bleibt, und Deckkraft lassen sich ändern, und du siehst die Änderung sofort.",
      "Starte das Spiel im Modus „Rahmenlos“ oder „Fenster“. Im exklusiven „Vollbild“ verdeckt das Spiel die Untertitel.",
-     "Drücke [[{overlay}]], um die Untertitel jederzeit ein- oder auszublenden."
+     "Drücke [[{overlay}]], um die Untertitel jederzeit ein- oder auszublenden.",
+     "Trage deinen Namen oder Schlüsselwörter unter „Hinweis, wenn mein Name fällt“ in „Sprache und Allgemeines“ ein. Kommen sie in einer Nachricht vor, wird sie rot markiert und kann piepen."
     ]
    },
    {
     "id": "keys",
     "title": "Tastenkürzel und Tastatur",
     "items": [
-     "[[{overlay}]] blendet Untertitel ein oder aus, [[{mic}]] schaltet das Mikrofon an oder aus, [[{copy}]] kopiert deine letzte Übersetzung, [[{quick}]] öffnet das Schnelleingabefeld. Sie funktionieren in jedem Programm und lassen sich unter „Sprache und Allgemeines“ ändern. Drücke [[{reply}]], wenn die andere Person fertig ist, für 3 Antwortideen.",
+     "[[{overlay}]] blendet Untertitel ein oder aus, [[{mic}]] schaltet das Mikrofon an oder aus, [[{copy}]] kopiert deine letzte Übersetzung, [[{quick}]] öffnet das Schnelleingabefeld. Sie funktionieren in jedem Programm und lassen sich unter „Sprache und Allgemeines“ ändern. Drücke [[{reply}]], wenn die andere Person fertig ist, für 3 Antwortideen. Text markieren und [[Ctrl+C]] drücken, dann zeigt [[{pick}]] die Übersetzung neben dem Mauszeiger; mit [[{snap}]] ziehst du einen Rahmen und übersetzt nur diesen; [[{phrase}]] öffnet deine vorübersetzten Sätze.",
      "Im LiveLingo-Fenster: [[Ctrl+1]] bis [[Ctrl+9]] wechseln die Seite, [[↑]] [[↓]] bewegen sich durch die Liste links, [[Esc]] schließt eine Frage, [[F1]] öffnet diese Hilfeseite.",
      "Beim Einrahmen eines Chat-Bereichs: mit der Maus ziehen, oder mit den Pfeiltasten verschieben, Größe mit [[Shift]] plus Pfeiltasten ändern, [[Enter]] zum Bestätigen, [[Esc]] zum Abbrechen."
     ]
@@ -1313,7 +1337,8 @@
      "Écrivez en bas de la page Chat et appuyez sur [[Enter]]. La traduction est copiée automatiquement ; appuyez sur [[Ctrl+V]] dans votre jeu ou votre appli de discussion pour la coller et l'envoyer.",
      "Sans quitter le jeu : appuyez sur [[{quick}]] pour ouvrir la zone de saisie rapide, écrivez, appuyez sur [[Enter]], et la traduction est copiée de la même façon.",
      "LiveLingo ne tape ni n'envoie jamais de messages dans d'autres programmes à votre place. Coller et envoyer restent entre vos mains.",
-     "Sous ce que vous dites ou écrivez, une ligne le retraduit dans votre langue, pour vérifier le sens."
+     "Sous ce que vous dites ou écrivez, une ligne le retraduit dans votre langue, pour vérifier le sens.",
+     "Enregistrez vos phrases courantes dans « Phrases courantes », sous « Langue et général ». LiveLingo les traduit à l'avance ; en jeu, appuyez sur [[{phrase}]] puis sur un chiffre pour en copier une, et collez-la dans le chat."
     ]
    },
    {
@@ -1323,14 +1348,15 @@
      "Dans « Affichage », choisissez le chat flottant (que vous placez vous-même) ou une barre de sous-titres en bas, et l'écran sur lequel ils s'affichent.",
      "Taille du texte, couleur, durée d'affichage d'une ligne et opacité se règlent, et vous voyez le changement aussitôt.",
      "Lancez le jeu en mode « Sans bordure » ou « Fenêtré ». En « Plein écran » exclusif, le jeu recouvre les sous-titres.",
-     "Appuyez sur [[{overlay}]] pour afficher ou masquer les sous-titres à tout moment."
+     "Appuyez sur [[{overlay}]] pour afficher ou masquer les sous-titres à tout moment.",
+     "Saisissez votre nom ou des mots-clés sous « Alerte quand on dit mon nom », dans « Langue et général ». Quand un message en contient, il est marqué en rouge et peut émettre un bip."
     ]
    },
    {
     "id": "keys",
     "title": "Raccourcis et clavier",
     "items": [
-     "[[{overlay}]] affiche ou masque les sous-titres, [[{mic}]] active ou coupe le micro, [[{copy}]] copie votre dernière traduction, [[{quick}]] ouvre la zone de saisie rapide. Ils marchent dans n'importe quel programme et se changent dans « Langue et général ». Appuyez sur [[{reply}]] quand l'autre a fini de parler pour 3 idées de réponse.",
+     "[[{overlay}]] affiche ou masque les sous-titres, [[{mic}]] active ou coupe le micro, [[{copy}]] copie votre dernière traduction, [[{quick}]] ouvre la zone de saisie rapide. Ils marchent dans n'importe quel programme et se changent dans « Langue et général ». Appuyez sur [[{reply}]] quand l'autre a fini de parler pour 3 idées de réponse. Sélectionnez du texte et appuyez sur [[Ctrl+C]], puis [[{pick}]] affiche la traduction à côté de la souris ; [[{snap}]] permet de tracer un cadre et de ne traduire que cela ; [[{phrase}]] ouvre vos phrases déjà traduites.",
      "Dans la fenêtre LiveLingo : [[Ctrl+1]] à [[Ctrl+9]] changent de page, [[↑]] [[↓]] parcourent la liste de gauche, [[Esc]] ferme une question, [[F1]] ouvre cette page d'aide.",
      "Pendant l'encadrement d'une zone de chat : faites glisser à la souris, ou déplacez avec les flèches, redimensionnez avec [[Shift]] et les flèches, [[Enter]] pour valider, [[Esc]] pour annuler."
     ]

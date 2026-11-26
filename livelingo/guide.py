@@ -2,7 +2,7 @@
 說明：程式裡的說明頁，和一頁可以傳給朋友的快速上手（一個獨立的 HTML 檔）。
 
 內容寫在 data/help.json（每種介面語言、結構一樣），兩邊用同一份，不會各說各的。
-句子裡的 {overlay} {mic} {copy} {quick} {reply} 是快速鍵、{ptt} 是按住才說話的鍵、{version} 是版本、{download} 是下載網址；
+句子裡的 {overlay} {mic} {copy} {quick} {reply} {pick} {snap} {phrase} 是快速鍵、{ptt} 是按住才說話的鍵、{version} 是版本、{download} 是下載網址；
 [[…]] 包起來的是鍵盤上的鍵（畫面上會畫成按鍵的樣子）。
 給朋友的那一頁用的是預設快速鍵（朋友是新裝的），只放「開始用、打字、快速鍵、隱私」加上安裝步驟。
 """
@@ -17,7 +17,7 @@ from .paths import resource_dir
 FILE = "help.json"
 DOWNLOAD = "https://github.com/JimboMachine/LiveLingo/releases/latest"
 FRIEND_SECTIONS = ("start", "typing", "keys", "privacy")
-VALUES = ("overlay", "mic", "copy", "quick", "reply", "ptt", "version", "download")
+VALUES = ("overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "ptt", "version", "download")
 _cache: dict | None = None
 
 

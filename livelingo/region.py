@@ -21,6 +21,23 @@ HINTS = {
     "de": "Linke Maustaste gedrückt halten und einen Rahmen um die Chat-Nachrichten ziehen (Esc zum Abbrechen)\nTastatur: Pfeiltasten verschieben, Shift + Pfeiltasten ändern die Größe, Enter bestätigt",
     "fr": "Maintenez le bouton gauche de la souris et tracez un cadre autour des messages du chat (Esc pour annuler)\nClavier : les flèches déplacent, Shift + flèches redimensionnent, Enter valide",
 }
+# 框選翻譯（只翻一次）用的說明：第一行不一樣，第二行（用鍵盤）跟框聊天區一樣
+SNAP_FIRST = {
+    "zh-TW": "按住滑鼠左鍵，框住要翻的字（按 Esc 取消）",
+    "zh-CN": "按住鼠标左键，框住要翻的字（按 Esc 取消）",
+    "en": "Hold the left mouse button and drag a box around the text to translate (Esc to cancel)",
+    "ko": "마우스 왼쪽 버튼을 누른 채로 번역할 글자를 드래그해서 감싸세요 (Esc: 취소)",
+    "ja": "マウスの左ボタンを押したまま、翻訳したい文字を囲んでください（Esc でキャンセル）",
+    "vi": "Giữ chuột trái và kéo một khung quanh chữ cần dịch (Esc để hủy)",
+    "th": "กดเมาส์ซ้ายค้างไว้แล้วลากกรอบรอบข้อความที่ต้องการแปล (Esc เพื่อยกเลิก)",
+    "id": "Tahan tombol kiri mouse dan seret kotak di sekitar teks yang ingin diterjemahkan (Esc untuk batal)",
+    "es": "Mantén pulsado el botón izquierdo y arrastra un recuadro alrededor del texto que quieres traducir (Esc para cancelar)",
+    "pt": "Segure o botão esquerdo do mouse e arraste um quadro em volta do texto a traduzir (Esc para cancelar)",
+    "ru": "Удерживая левую кнопку мыши, обведите рамкой текст для перевода (Esc для отмены)",
+    "de": "Linke Maustaste gedrückt halten und einen Rahmen um den zu übersetzenden Text ziehen (Esc zum Abbrechen)",
+    "fr": "Maintenez le bouton gauche de la souris et tracez un cadre autour du texte à traduire (Esc pour annuler)",
+}
+SNAP_HINTS = {lang: SNAP_FIRST[lang] + "\n" + HINTS[lang].split("\n")[1] for lang in HINTS}
 STEP = 20                 # 方向鍵按一下動幾個像素
 SMALLEST = (60, 30)       # 用鍵盤縮小的時候，框最小這麼大
 FONTS = {"zh-TW": "Microsoft JhengHei UI", "zh-CN": "Microsoft YaHei UI", "ko": "Malgun Gothic", "ja": "Yu Gothic UI", "en": "Segoe UI", "vi": "Segoe UI", "th": "Leelawadee UI", "id": "Segoe UI", "es": "Segoe UI", "pt": "Segoe UI", "ru": "Segoe UI", "de": "Segoe UI", "fr": "Segoe UI"}
@@ -67,7 +84,8 @@ def nudge(box: tuple[int, int, int, int], dx: int, dy: int, grow: bool, width: i
     return x1, y1, x2, y2
 
 
-def select(out_path: Path, lang: str = "zh-TW") -> None:
+def select(out_path: Path, lang: str = "zh-TW", mode: str = "chat") -> None:
+    """mode：chat = 框聊天區（存起來一直讀）；snap = 框一次只翻這一次的字。"""
     if sys.platform == "win32":
         try:  # 讓框選的座標和螢幕擷取的座標一致（高 DPI 螢幕需要）
             import ctypes
@@ -92,7 +110,7 @@ def select(out_path: Path, lang: str = "zh-TW") -> None:
     canvas.pack(fill="both", expand=True)
     family = FONTS.get(lang, "Segoe UI")
     # 說明放在主螢幕上方正中間的圓角框裡，跟主程式同一套顏色
-    hint = canvas.create_text(0, 0, anchor="n", fill=TEXT, font=(family, 17, "bold"), text=HINTS.get(lang, HINTS["en"]),
+    hint = canvas.create_text(0, 0, anchor="n", fill=TEXT, font=(family, 17, "bold"), text=(SNAP_HINTS if mode == "snap" else HINTS).get(lang, HINTS["en"]),
                               width=max(320, root.winfo_screenwidth() - 240), justify="center")
     canvas.coords(hint, -min(left, 0) + root.winfo_screenwidth() // 2, -min(top, 0) + 56)
     x1, y1, x2, y2 = canvas.bbox(hint)

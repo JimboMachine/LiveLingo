@@ -18,7 +18,7 @@ from pathlib import Path
 def run(out: Path, window: bool = True) -> int:
     results: dict = {}
     soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray", "app_audio", "hotkeys", "quick_input", "reply_box",
-            "speak_voice"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
+            "phrase_box", "result_card", "speak_voice"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
 
     def check(name, fn):
         started = time.time()
@@ -216,6 +216,37 @@ def run(out: Path, window: bool = True) -> int:
         assert done.returncode == 0 and info.get("text") == "잠깐만", {"exit": done.returncode, **info}
         return {"exit": done.returncode, "text": info["text"]}
 
+    def phrase_box():
+        """常用句庫的小框：開得起來，讀得到句子，選的那句譯文有交回來。"""
+        import subprocess
+
+        if sys.platform != "win32":
+            return {"available": False}
+        box, result = tmp / "phrases-in.json", tmp / "phrases-out.json"
+        box.write_text(json.dumps({"items": [{"text": "等我一下", "tr": "잠깐만요"}, {"text": "謝謝", "tr": ""}]}, ensure_ascii=False), encoding="utf-8")
+        head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        done = subprocess.run([*head, "--phrase-box", str(box), "--phrase-out", str(result), "--lang", "zh-TW", "--their", "ko"],
+                              timeout=60, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              creationflags=subprocess.CREATE_NO_WINDOW, env={**os.environ, "LIVELINGO_FAKE_PHRASE": "1"})
+        info = json.loads(result.read_text(encoding="utf-8")) if result.exists() else {}
+        assert done.returncode == 0 and info.get("text") == "잠깐만요", {"exit": done.returncode, **info}
+        return {"exit": done.returncode, "text": info["text"]}
+
+    def result_card():
+        """翻譯結果小卡：開得起來、讀得到結果、翻完會自己收掉。"""
+        import subprocess
+
+        if sys.platform != "win32":
+            return {"available": False}
+        card = tmp / "card.json"
+        card.write_text(json.dumps({"items": [{"original": "안녕하세요", "translated": "你好"}], "done": True}, ensure_ascii=False), encoding="utf-8")
+        head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        done = subprocess.run([*head, "--card", str(card), "--lang", "zh-TW", "--their", "ko"], timeout=60, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW,
+                              env={**os.environ, "LIVELINGO_FAKE_CARD": "1"})
+        assert done.returncode == 0, {"exit": done.returncode}
+        return {"exit": done.returncode}
+
     def speak_voice():
         """念出譯文：Windows 的語音清單拿得到，英文念得出一個 WAV 檔（雲端的測試機不一定有語音，所以算軟性的）。"""
         from .core.speak import WindowsVoice, read_wav
@@ -408,6 +439,8 @@ def run(out: Path, window: bool = True) -> int:
     check("hotkeys", hotkeys)
     check("quick_input", quick_input)
     check("reply_box", reply_box)
+    check("phrase_box", phrase_box)
+    check("result_card", result_card)
     check("speak_voice", speak_voice)
     check("screen_grab", screen_grab)
     check("floating_chat", floating_chat)
