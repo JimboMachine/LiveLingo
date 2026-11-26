@@ -601,7 +601,7 @@ class Overlay:
         kind = "me" if msg.get("who") == "me" else ("screen" if msg.get("via") == "screen" else "heard")
         if kind == "me" and not self.service.cfg["overlay_mine"]:
             return
-        self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"], who=self._who(msg))
+        self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"], who=self._who(msg), mention=bool(msg.get("mention")))
 
     def _who(self, msg: dict) -> tuple | None:
         """這一則是第幾個說話者、叫什麼名字（有開「分辨說話者」而且分得出來才有）。"""
@@ -614,17 +614,17 @@ class Overlay:
             return
         self.push("heard", text, msg.get("original", ""), key=msg["id"], who=self._who(msg))
 
-    def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0, who: tuple | None = None) -> None:
+    def push(self, kind: str, text: str, original: str = "", key=None, life: float = 0.0, who: tuple | None = None, mention: bool = False) -> None:
         """life：這一則自己停留幾秒（0 = 照設定的停留時間）。who：（第幾個說話者, 取的名字），名字用那個人的顏色。"""
         with self._lock:
             now = time.monotonic()
             for item in self.items:
                 if key is not None and item["key"] == key:      # 同一則（例如按了「翻錯了」重翻）：換掉內容
-                    item.update(text=text, original=original, at=now - FADE_IN, version=item["version"] + 1, who=who or item.get("who"))
+                    item.update(text=text, original=original, at=now - FADE_IN, version=item["version"] + 1, who=who or item.get("who"), mention=mention)
                     break
             else:
                 self.items.append({"key": key if key is not None else f"x{now}", "kind": kind, "text": text,
-                                   "original": original, "at": now, "version": 0, "life": float(life), "who": who})
+                                   "original": original, "at": now, "version": 0, "life": float(life), "who": who, "mention": mention})
                 del self.items[:-MAX_ITEMS]
         self._wake.set()
 
@@ -825,7 +825,7 @@ class Overlay:
 
     def _tile(self, item: dict, width: int, size: int, cfg: dict):
         style = chatpaint.style_of(cfg)
-        key = (item["key"], item["version"], width, size, cfg["overlay_original"], cfg["overlay_backdrop"],
+        key = (item["key"], item["version"], bool(item.get("mention")), width, size, cfg["overlay_original"], cfg["overlay_backdrop"],
                cfg["ui_lang"], cfg["my_lang"], cfg["their_lang"], chatpaint.style_key(style))
         tile = self._tiles.get(key)
         if tile is None:
@@ -834,6 +834,8 @@ class Overlay:
             name, tint = names.get(item["kind"], chatpaint.NOTE_NAME), None
             if item.get("who"):      # 分得出是誰：名字換成那個人的，顏色也是他的
                 name, tint = chatpaint.speaker_name(item["who"][0], cfg["ui_lang"] or "en", item["who"][1]), chatpaint.speaker_color(item["who"][0])
+            if item.get("mention"):      # 提到我：名字前面加 @、換成紅色，在一排字幕裡一眼就看得到
+                name, tint = "@" + name, chatpaint.MENTION_COLOR
             tile = chatpaint.paint_message(item["kind"], name, item["text"], width, size,
                                            original=original, backdrop=int(cfg["overlay_backdrop"]),
                                            han=chatpaint.han_kind(cfg["my_lang"], cfg["their_lang"]), style=style, name_color=tint)

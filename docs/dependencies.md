@@ -287,6 +287,36 @@
 
 自動把關：測試用假的模型回答檢查切段、解析和流程；摘要好不好要用真的模型看。
 
+### 改翻選取的字、框選翻譯（翻譯結果小卡）
+
+1. `snap.py`：paragraphs：上下緊貼、左邊對齊才接成一段；一個框最多幾段
+2. `service.py`：pick_text、snap_text、_snap_read、_card_show、_card_done（翻好、略過、失敗三條路都要叫）；submit 的 asked
+3. `quickbox.py`、`__main__.py`、`region.py`：小卡（card）、13 種語言的 CARD_TEXTS；--card 參數；框選的 --mode snap 和 SNAP_HINTS
+4. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 pick（Ctrl+Alt+X）、snap（Ctrl+Alt+F）；NOTES 的 pick_empty、snap_nothing；pick_copy 預設關；說明裡的 {pick} {snap}
+5. `app.js`、`i18n.js`：快速鍵清單、hk_pick、hk_snap、pick_copy 的文字（13 種語言）
+
+自動把關：測試用假的辨識和假的框選結果檢查接段、翻譯、小卡內容、翻不出來和沒讀到字的提示；真的按快速鍵、框選畫面有沒有跑到遊戲上面、替人按 Ctrl+C 有沒有用，只能在 Windows 上試。
+
+### 改常用句庫
+
+1. `phrases.py`：phrases.json 的格式（items、tr、fixed）、MAX_PHRASES、起手的句子（STARTERS）
+2. `service.py`、`server.py`：phrase_action、_phrases_fill（換對方語言時補翻）、phrase_box、_phrase_box_write；/api/phrases；phrases 事件
+3. `quickbox.py`、`__main__.py`：小框（phrases）、13 種語言的 PHRASE_TEXTS；--phrase-box / --phrase-out
+4. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 phrase（Ctrl+Alt+P）、NOTES 的 phrase_empty、phrase_copied；說明裡的 {phrase}
+5. `app.js`、`i18n.js`：設定頁的「常用句庫」段落、ph_ 開頭的文字（13 種語言）
+
+自動把關：測試會擋：加、刪、改譯文、重複和滿了的處理、檔案壞了照樣開、換對方語言後補翻、改過的譯文不被蓋掉、小框的檔案交接。小框長什麼樣、數字鍵有沒有反應，只能在 Windows 上試。
+
+### 改喊我名字提醒
+
+1. `mention.py`：clean_words、find
+2. `service.py`：_mention_of、_alert；alert_words 在 update_config 整理
+3. `overlay.py`、`chatpaint.py`：浮動留言標紅（MENTION_COLOR）；快取的 key 要含 mention
+4. `config.py`：alert_words、alert_sound
+5. `app.js`、`style.css`、`i18n.js`：訊息上的標籤（mention-tag）、設定頁的段落、al_ 開頭的文字
+
+自動把關：測試會擋：名字整理（逗號、重複、大小寫）、英文名字要整個字才算、中文包含就算、只看對方的話、關掉就不標、響一次不連響。畫面上標紅看起來對不對、真的響不響，要自己看。
+
 ### 改念出我的譯文
 
 1. `core/speak.py`：PowerShell 腳本（SCRIPT）、語音的語言對照（VOICE_LANG）、試聽句（SAMPLES，每種語言）、WAV 讀取和播放
@@ -310,10 +340,10 @@
 
 ### 改翻譯的做法
 
-1. `translate.py`：提示、整理輸出、補救；數字核對（numbers_lost）認得的寫法：新增語言時要補那個語言的數字寫法和數字用語
+1. `translate.py`：提示、整理輸出、補救；數字核對（numbers_lost）認得的寫法：新增語言時要補那個語言的數字寫法和數字用語；超譯檢查（trim_extra、meta_reply、too_long）：新增語言時要補那個語言「跟人說話」的說法（_META）和長度比例（_RATE）
 2. `terms.py`：遊戲用語；照正在玩的遊戲切換（GAME_PACKS、GAMES）
 3. `config.py`：詞彙表（有 game 的是遊戲專用詞）、學過的句子
-4. `memory.py`：記住的翻法照語氣分開存（memory.TONES、Translator.memory_tone：保留語氣是 +keep）
+4. `memory.py`：記住的翻法照語氣分開存（memory.TONES、Translator.memory_tone：保留語氣是 +keep）；機器翻的要過 find 的 ok（over_translated），超譯的不拿出來用
 5. `service.py`：翻成哪種語言、重試；留言的 lost 欄位（譯文裡找不到的數字）
 6. `app.js`、`style.css`、`i18n.js`：留言下面的提醒（numbers_lost）
 7. `index.html`、`app.js`：輸入框和「改原文」的字數上限要跟 translate.MAX_TEXT 一樣（測試會擋）；超過 500 個字的會切段分開翻
@@ -468,7 +498,7 @@
 | 浮動留言 | `livelingo/overlay.py` | `hotkeys.py`：短提示顯示在浮動留言上（note）（改壞不會報錯）<br>`service.py`：浮動留言（改壞會報錯） |
 | 直播字幕（給 OBS 的網頁） | `livelingo/stream.py` | `service.py`：直播字幕：每則留言、翻到一半的譯文、刪掉、清空（on_message、on_partial、on_removed、clear）（改壞會報錯） |
 | 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯） |
-| 框選聊天區 | `livelingo/region.py` | `quickbox.py`：顏色和字型（改壞會報錯）<br>`__main__.py`：框選模式（改壞會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
+| 框選聊天區 | `livelingo/region.py` | `quickbox.py`：顏色和字型（改壞會報錯）<br>`__main__.py`：框選模式（改壞會報錯）<br>`__main__.py`：框選翻譯用同一個框選程式（--mode snap）（改壞不會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
 | 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼；程式自己的短提示（略過幾則、引擎重開）也用 NOTES，介面那邊要有同名的 n_ 文字（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯）<br>`guide.py`：四個全域快速鍵的名稱（overlay、mic、copy、quick）（改壞不會報錯） |
 | 快速輸入框 | `livelingo/quickbox.py` | `service.py`：打的字（另開一個程式）（改壞不會報錯）<br>`__main__.py`：快速輸入模式（--quick-input）（改壞會報錯） |
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
@@ -476,6 +506,9 @@
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
 | 語言學習：挑生字、單字本、複習 | `livelingo/learn.py` | `service.py`：學習模式挑生字（Wordbook.fresh）、單字本的收、刪、複習（改壞會報錯） |
 | 對話摘要：切出一段段對話、存摘要、搜尋 | `livelingo/recap.py` | `service.py`：切出對話（sessions、worth、GAP）、存摘要、搜尋（改壞會報錯） |
+| 框選翻譯：把辨識出的一列列字接成一段段 | `livelingo/snap.py` | `service.py`：框選翻譯把辨識出的字接成段（paragraphs）（改壞會報錯） |
+| 喊我名字提醒：名字和關鍵字的整理、比對 | `livelingo/mention.py` | `service.py`：名字、關鍵字的整理（clean_words）和比對（find）；訊息的 mention 欄位（改壞會報錯） |
+| 常用句庫：存句子和各語言的譯文（phrases.json） | `livelingo/phrases.py` | `service.py`：常用句庫（Phrasebook：add、remove、set_translation、missing、listing、state）（改壞會報錯） |
 | 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs、works）（改壞不會報錯） |
 | 讀 .srt / .vtt 字幕檔，配成原文和翻譯 | `livelingo/subtitles.py` | `service.py`：字幕檔的預覽和匯入（_subtitle_pairs）；語言用 detect_language 判斷（改壞會報錯） |
 | 作品：從視窗標題認出在看哪一部影片、哪一個網頁 | `livelingo/works.py` | `service.py`：每一句是在哪一部看到的（_work_now）：挑視窗、整理標題、算 key（改壞會報錯）<br>`memory.py`：匯入第 2 版分享檔時用標題重算作品的 key（改壞會報錯） |
@@ -492,7 +525,7 @@
 | --- | --- | --- |
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
-| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯）<br>`quickbox.py`：回話小框：replies-in.json（建議）→ replies-out.json（選的那句），--reply-box / --reply-out / --their（改壞不會報錯）<br>`stream.py`：留言的欄位（who、via、original、translated、pending、error）、說話者名字（speaker_tag）（改壞不會報錯） |
+| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯）<br>`overlay.py`：訊息的 mention 欄位：浮動留言把提到我的那一則名字標紅（MENTION_COLOR）（改壞不會報錯）<br>`quickbox.py`：翻譯結果小卡：card.json（{items: [{original, translated}], done}）；常用句庫小框：phrases-in.json → phrases-out.json，--card / --phrase-box / --phrase-out（改壞不會報錯）<br>`app.js`：常用句庫（/api/phrases、phrases 事件、S.phrases）；提到我的那一則（mention 欄位）（改壞不會報錯）<br>`quickbox.py`：回話小框：replies-in.json（建議）→ replies-out.json（選的那句），--reply-box / --reply-out / --their（改壞不會報錯）<br>`stream.py`：留言的欄位（who、via、original、translated、pending、error）、說話者名字（speaker_tag）（改壞不會報錯） |
 | 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：介面語言清單（UI_LANGS，十三種）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：每種介面語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：每種介面語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：每種介面語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、每種介面語言的短提示（改壞不會報錯）<br>`quickbox.py`：每種介面語言的提示（改壞不會報錯）<br>`transcript.py`：每種介面語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、每種介面語言的標題（改壞不會報錯）<br>`changes.py`：每種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明每種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`guide.py`：每種介面語言都要寫；給朋友的那一頁用預設快速鍵（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`stream.py`：stream、stream_original、stream_mine、stream_port、stream_key；字的大小和停留秒數跟 overlay_font、overlay_seconds（改壞不會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
@@ -502,7 +535,7 @@
 | 請翻譯模型做的小事：回話建議 | `livelingo/core/assist.py` | `service.py`：回話建議的提示和解析（reply_prompt、parse_replies）（改壞會報錯） |
 | 念出我的譯文（Windows 內建語音） | `livelingo/core/speak.py` | `service.py`：念出我的譯文（Speaker.say）；念出來的聲音又被收到時不要再翻（recent、_is_own_voice）（改壞會報錯） |
 | 看螢幕 | `livelingo/core/watcher.py` | `service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
-| 文字辨識 | `livelingo/core/ocr.py` | `service.py`：文字辨識；對方的語言用哪一個辨識模型（model_of），讀螢幕自動偵測時同一個模型的語言都會一起讀（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
+| 文字辨識 | `livelingo/core/ocr.py` | `snap.py`：辨識出的每一列（Line：text、x、y、h、w、score）（改壞不會報錯）<br>`service.py`：文字辨識；對方的語言用哪一個辨識模型（model_of），讀螢幕自動偵測時同一個模型的語言都會一起讀（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `core/speak.py`：播到選的播放裝置（_soundcard，跟「對方的聲音從哪個裝置出來」同一份清單）（改壞會報錯）<br>`service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
 | 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
 | 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字平常只在記憶體裡（改壞會報錯）<br>`voicebook.py`：聲紋的長度和模型（MODEL、DIM）要跟聲紋模型一致；換模型舊檔就作廢（改壞不會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |

@@ -138,10 +138,11 @@ class Memory:
         found = self.find(text, lang, target, tone, model, terms, work)
         return found[0] if found else None
 
-    def find(self, text: str, lang: str, target: str, tone: str, model: str, terms: str, work: str = ""):
+    def find(self, text: str, lang: str, target: str, tone: str, model: str, terms: str, work: str = "", ok=None):
         """記住的翻法和它是哪來的：(譯文, "mine" | "shared" | "subtitle", 是不是同一部裡幾乎一樣的句子)；沒有就 None。
         順序：我教過的 > 匯入的人工改過的 > 我翻過的 > 匯入的；同一級裡同一部的先。
-        work：現在在看的那一部（works.work_key）；那一部設了「不用別人的」就只用我的。"""
+        work：現在在看的那一部（works.work_key）；那一部設了「不用別人的」就只用我的。
+        ok(譯文)：機器翻的（沒教過、不是字幕）要過這一關才用；不過的當作沒記住，重翻（2.10.1 用來丟掉以前記下的超譯）。"""
         if not (self.mine_on or self.shared_on):
             return None
         shared_on = self.shared_on and not (work and self.own_only(work))
@@ -162,12 +163,14 @@ class Memory:
                     continue
                 if (row_terms if mine else "") != terms:
                     continue
+                if ok is not None and not ok(dst):
+                    continue
             score = (_tier(mine, fixed), origin in here, _rank(row_model), at)
             if best_score is None or score > best_score:
                 best, best_score = (origin, dst, src, fixed), score
         near = False
         if best is None and work and not terms and len(src) >= NEAR_MIN:
-            best, near = self._near(src, lang, target, tone, model, work, shared_on), True
+            best, near = self._near(src, lang, target, tone, model, work, shared_on, ok), True
         if best is None:
             return None
         origin, dst, row_src, fixed = best
@@ -176,7 +179,7 @@ class Memory:
         kind = "screen" if origin == SCREEN else "mine" if origin == "" else "subtitle" if fixed == SUBTITLE else "shared"
         return dst, kind, near
 
-    def _near(self, src: str, lang: str, target: str, tone: str, model: str, work: str, shared_on: bool):
+    def _near(self, src: str, lang: str, target: str, tone: str, model: str, work: str, shared_on: bool, ok=None):
         """同一部裡「幾乎一樣」的句子（語音辨識差一兩個字）：(origin, 譯文, 那一句的原文, fixed)；沒有就 None。
         只用詞彙表、用語包跟它沒關係的（terms 空的），人工改過的除外。
         像不像用一個字一個字比（difflib）：11 個字差 1 個大約 0.91，差 2 個大約 0.82。"""
@@ -191,7 +194,7 @@ class Memory:
             mine = origin in ("", SCREEN)
             if (mine and not self.mine_on) or (not mine and not shared_on) or abs(len(other) - len(src)) > max(3, len(src) // 4):
                 continue
-            if not fixed and (_rank(row_model) < _rank(model) or row_terms):
+            if not fixed and (_rank(row_model) < _rank(model) or row_terms or (ok is not None and not ok(dst))):
                 continue
             score = SequenceMatcher(None, src, other, autojunk=False).ratio()
             if score >= best_score and (best is None or (score, _tier(mine, fixed)) > best_rank):

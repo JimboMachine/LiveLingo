@@ -92,7 +92,7 @@
       "Nouveau : « Langues de la détection automatique » (dans « Langue et général », visible avec la détection automatique) : ne sélectionnez que les langues parlées par l'autre personne, désélectionnez le reste pour moins d'erreurs."
     ]
   },
-  "2.10.1": {
+  "2.11.1": {
     "zh-TW": [
       "麥克風提醒：有些麥克風沒人說話時送來的是一串 0，以前說完話安靜幾秒就會跳出「麥克風完全沒有聲音」。現在只有開起來之後一直沒聲音才會提醒。",
       "新版本提醒：程式一直開著（縮在系統匣）時，每隔幾個小時會自己看一次有沒有新版本，有的話主畫面上方出現一條小提醒，按「看改了什麼」先看再決定要不要更新。不會自己更新；關掉「檢查有沒有新版本」就不連網路。",
@@ -196,6 +196,153 @@
       "Première configuration : avec une longue liste d'appareils, les boutons du bas ne cachent plus la liste ; on peut la faire défiler jusqu'au bout.",
       "Fenêtres étroites : les cartes de sources de l'écran principal gardent leur nom et leur état, et en vietnamien, espagnol, portugais, russe et français il n'y a plus de barre de défilement horizontale dans la fenêtre la plus étroite.",
       "Le cadre des notes de mise à jour est plus large et plus haut pour mieux lire les longues listes, et le vert qui signifie \"OK\" ne change plus avec la couleur d'accent (le rose ne ressemble plus à une erreur)."
+    ]
+  },
+  "2.11.0": {
+    "zh-TW": [
+      "翻選取的字：選取一段字、按 Ctrl+C，再按 Ctrl+Alt+X，翻譯就跳在滑鼠旁邊的小卡上，不用切視窗。打開「先替我按 Ctrl+C」連複製都省了（預設關）。",
+      "框選翻譯（Ctrl+Alt+F）：拉一個框，只讀按下去那一刻框裡的字、只翻一次，適合任務說明、道具描述、選單。",
+      "常用句庫（Ctrl+Alt+P）：先存好常說的話並事先翻好，遊戲裡按快速鍵再按 1 到 9 就複製，不用等翻譯。在「語言與一般」加句子，譯文可以自己改。",
+      "喊我名字提醒：填上你的名字或關鍵字，對方的話裡出現時，那一則會用紅色標出來，還可以響一聲。只在這台電腦上比對。"
+    ],
+    "zh-CN": [
+      "翻选取的字：选中一段字、按 Ctrl+C，再按 Ctrl+Alt+X，翻译就弹在鼠标旁边的小卡上，不用切窗口。打开「先替我按 Ctrl+C」连复制都省了（默认关）。",
+      "框选翻译（Ctrl+Alt+F）：拉一个框，只读按下去那一刻框里的字、只翻一次，适合任务说明、道具描述、菜单。",
+      "常用句库（Ctrl+Alt+P）：先存好常说的话并事先翻好，游戏里按快捷键再按 1 到 9 就复制，不用等翻译。在「语言与常规」加句子，译文可以自己改。",
+      "喊我名字提醒：填上你的名字或关键字，对方的话里出现时，那一则会用红色标出来，还可以响一声。只在这台电脑上比对。"
+    ],
+    "en": [
+      "Translate selected text: select text, press Ctrl+C, then Ctrl+Alt+X. The translation appears on a small card next to the mouse, no window switching. “Press Ctrl+C for me” can skip the copy (off by default).",
+      "Translate a box (Ctrl+Alt+F): drag a box and only the text in it, as it was when you pressed the key, is read and translated once. Good for quest text, item descriptions and menus.",
+      "Phrasebook (Ctrl+Alt+P): save phrases you say often, translated ahead of time. In a game press the hotkey, then 1–9 to copy one, no waiting. Add phrases under “Language & general”; you can edit the translations.",
+      "Call-out alert: enter your name or keywords and when their message contains one it is marked in red and can beep. Text is only compared on this computer."
+    ],
+    "ko": [
+      "선택한 글자 번역: 글자를 선택하고 Ctrl+C를 누른 뒤 Ctrl+Alt+X를 누르면 마우스 옆 작은 카드에 번역이 나타납니다. '단축키를 누르면 Ctrl+C를 대신 눌러 주기'를 켜면 복사도 생략됩니다(기본 꺼짐).",
+      "영역 지정 번역(Ctrl+Alt+F): 상자를 그리면 키를 누른 순간 그 안의 글자만 한 번 읽어 번역합니다. 퀘스트 설명, 아이템 설명, 메뉴에 좋습니다.",
+      "자주 쓰는 문구(Ctrl+Alt+P): 자주 하는 말을 저장해 미리 번역해 둡니다. 게임 중 단축키와 1–9를 누르면 복사되어 기다릴 필요가 없습니다. '언어 및 일반'에서 추가하고 번역은 직접 고칠 수 있습니다.",
+      "내 이름 알림: 이름이나 키워드를 입력하면 상대의 말에 나올 때 빨간색으로 표시하고 소리를 낼 수 있습니다. 비교는 이 컴퓨터에서만 합니다."
+    ],
+    "ja": [
+      "選択した文字を翻訳：文字を選んで Ctrl+C を押し、Ctrl+Alt+X を押すと、マウスのそばの小さなカードに翻訳が出ます。「Ctrl+C を代わりに押す」をオンにするとコピーも省けます（初期設定はオフ）。",
+      "範囲を選んで翻訳（Ctrl+Alt+F）：枠で囲むと、キーを押した瞬間の枠内の文字だけを一度読み取って翻訳します。クエストの説明、アイテムの説明、メニューに向いています。",
+      "定型文（Ctrl+Alt+P）：よく使う言葉を保存してあらかじめ翻訳。ゲーム中はショートカットのあと 1〜9 を押すだけでコピーされ、待ち時間がありません。「言語と一般」で追加し、翻訳は自分で直せます。",
+      "名前を呼ばれたら通知：自分の名前やキーワードを入れると、相手の発言に出てきたとき赤で目印が付き、音も鳴らせます。照合はこのパソコンの中だけです。"
+    ],
+    "vi": [
+      "Dịch văn bản đã chọn: chọn văn bản, bấm Ctrl+C rồi Ctrl+Alt+X, bản dịch hiện trên một thẻ nhỏ cạnh con trỏ chuột, không cần chuyển cửa sổ. Bật “Bấm Ctrl+C giúp tôi” để bỏ cả bước sao chép (mặc định tắt).",
+      "Dịch một khung (Ctrl+Alt+F): kéo một khung, chỉ chữ trong khung tại lúc bạn bấm phím được đọc và dịch một lần. Hợp với mô tả nhiệm vụ, mô tả vật phẩm và menu.",
+      "Câu hay dùng (Ctrl+Alt+P): lưu những câu hay nói, dịch sẵn. Trong game bấm phím tắt rồi 1–9 để sao chép, không phải chờ. Thêm câu ở “Ngôn ngữ và chung”; bạn có thể sửa bản dịch.",
+      "Báo khi bị gọi tên: nhập tên hoặc từ khóa, khi tin nhắn của họ có từ đó thì được đánh dấu đỏ và có thể kêu một tiếng. Việc so khớp chỉ diễn ra trên máy này."
+    ],
+    "th": [
+      "แปลข้อความที่เลือก: เลือกข้อความ กด Ctrl+C แล้วกด Ctrl+Alt+X คำแปลจะแสดงบนการ์ดเล็กข้างเมาส์ ไม่ต้องสลับหน้าต่าง เปิด “กด Ctrl+C ให้ก่อน” เพื่อข้ามขั้นคัดลอก (ค่าเริ่มต้นปิด)",
+      "แปลเฉพาะกรอบ (Ctrl+Alt+F): ลากกรอบ แล้วอ่านและแปลเฉพาะข้อความในกรอบ ณ ตอนที่กดปุ่ม หนึ่งครั้ง เหมาะกับคำอธิบายเควสต์ ไอเทม และเมนู",
+      "ประโยคที่ใช้บ่อย (Ctrl+Alt+P): บันทึกประโยคที่พูดบ่อยและแปลไว้ล่วงหน้า ในเกมกดปุ่มลัดแล้วกด 1–9 เพื่อคัดลอก ไม่ต้องรอ เพิ่มประโยคใน “ภาษาและทั่วไป” และแก้คำแปลเองได้",
+      "แจ้งเตือนเมื่อถูกเรียกชื่อ: ใส่ชื่อหรือคำสำคัญ เมื่อข้อความของอีกฝ่ายมีคำนั้นจะถูกทำเครื่องหมายสีแดงและส่งเสียงได้ เทียบข้อความในเครื่องนี้เท่านั้น"
+    ],
+    "id": [
+      "Terjemahkan teks terpilih: pilih teks, tekan Ctrl+C, lalu Ctrl+Alt+X. Terjemahan muncul di kartu kecil dekat mouse tanpa pindah jendela. Aktifkan “Tekan Ctrl+C untuk saya” untuk melewati penyalinan (default mati).",
+      "Terjemahkan satu kotak (Ctrl+Alt+F): seret kotak, hanya teks di dalamnya saat Anda menekan tombol yang dibaca dan diterjemahkan sekali. Cocok untuk deskripsi misi, item, dan menu.",
+      "Kalimat favorit (Ctrl+Alt+P): simpan kalimat yang sering dipakai, diterjemahkan lebih dulu. Di dalam game tekan tombol pintas lalu 1–9 untuk menyalin, tanpa menunggu. Tambahkan di “Bahasa & umum”; terjemahan bisa diedit.",
+      "Pemberitahuan saat namaku disebut: isi nama atau kata kunci; saat pesan lawan bicara memuatnya, pesan ditandai merah dan bisa berbunyi. Pencocokan hanya di komputer ini."
+    ],
+    "es": [
+      "Traducir el texto seleccionado: selecciona texto, pulsa Ctrl+C y luego Ctrl+Alt+X. La traducción aparece en una tarjeta junto al ratón, sin cambiar de ventana. «Pulsar Ctrl+C por mí» evita incluso copiar (desactivado por defecto).",
+      "Traducir un recuadro (Ctrl+Alt+F): arrastra un recuadro y solo el texto de dentro, tal como estaba al pulsar la tecla, se lee y traduce una vez. Útil para misiones, objetos y menús.",
+      "Frases frecuentes (Ctrl+Alt+P): guarda las frases que dices a menudo, traducidas de antemano. En el juego pulsa el atajo y 1–9 para copiar, sin esperar. Añádelas en «Idioma y general»; puedes editar las traducciones.",
+      "Aviso cuando dicen mi nombre: escribe tu nombre o palabras clave y, si un mensaje suyo las contiene, se marca en rojo y puede sonar un pitido. Solo se compara en este equipo."
+    ],
+    "pt": [
+      "Traduzir o texto selecionado: selecione um texto, aperte Ctrl+C e depois Ctrl+Alt+X. A tradução aparece num cartão ao lado do mouse, sem trocar de janela. “Apertar Ctrl+C por mim” dispensa até a cópia (desligado por padrão).",
+      "Traduzir um quadro (Ctrl+Alt+F): arraste um quadro e só o texto dentro dele, como estava ao apertar a tecla, é lido e traduzido uma vez. Bom para missões, itens e menus.",
+      "Frases frequentes (Ctrl+Alt+P): guarde as frases que você diz com frequência, traduzidas antecipadamente. No jogo aperte o atalho e 1–9 para copiar, sem esperar. Adicione em “Idioma e geral”; dá para editar as traduções.",
+      "Aviso quando citarem meu nome: digite seu nome ou palavras-chave e, quando uma mensagem deles as contiver, ela é marcada de vermelho e pode apitar. A comparação é só neste computador."
+    ],
+    "ru": [
+      "Перевод выделенного текста: выделите текст, нажмите Ctrl+C, затем Ctrl+Alt+X. Перевод появится на карточке рядом с курсором, без переключения окон. «Нажимать Ctrl+C за меня» убирает даже копирование (по умолчанию выключено).",
+      "Перевод области (Ctrl+Alt+F): обведите область — прочитается и переведётся один раз только текст в ней, каким он был при нажатии клавиши. Для заданий, предметов и меню.",
+      "Частые фразы (Ctrl+Alt+P): сохраните фразы, которые часто говорите; они переведены заранее. В игре нажмите сочетание клавиш и 1–9, чтобы скопировать. Добавляйте в «Язык и общие»; переводы можно править.",
+      "Оповещение, когда называют моё имя: введите имя или ключевые слова — если они есть в сообщении, оно выделится красным и может подать звук. Сравнение только на этом компьютере."
+    ],
+    "de": [
+      "Markierten Text übersetzen: Text markieren, Strg+C drücken, dann Strg+Alt+X. Die Übersetzung erscheint auf einer Karte neben dem Mauszeiger, ohne Fensterwechsel. „Strg+C für mich drücken“ spart sogar das Kopieren (standardmäßig aus).",
+      "Bereich übersetzen (Strg+Alt+F): Rahmen ziehen – nur der Text darin, so wie er beim Tastendruck war, wird einmal gelesen und übersetzt. Gut für Quests, Gegenstände und Menüs.",
+      "Satzsammlung (Strg+Alt+P): oft gesagte Sätze speichern, vorübersetzt. Im Spiel Tastenkürzel und 1–9 drücken zum Kopieren, ohne Warten. Sätze unter „Sprache und Allgemeines“ hinzufügen; Übersetzungen sind änderbar.",
+      "Hinweis, wenn mein Name fällt: Namen oder Schlüsselwörter eintragen; kommen sie in einer Nachricht vor, wird sie rot markiert und kann piepen. Verglichen wird nur auf diesem Computer."
+    ],
+    "fr": [
+      "Traduire le texte sélectionné : sélectionnez du texte, Ctrl+C, puis Ctrl+Alt+X. La traduction s'affiche sur une carte près de la souris, sans changer de fenêtre. « Appuyer sur Ctrl+C pour moi » évite même la copie (désactivé par défaut).",
+      "Traduire un cadre (Ctrl+Alt+F) : tracez un cadre ; seul le texte qu'il contenait au moment de l'appui est lu et traduit une fois. Pratique pour les quêtes, objets et menus.",
+      "Phrases courantes (Ctrl+Alt+P) : enregistrez vos phrases courantes, traduites à l'avance. En jeu, raccourci puis 1–9 pour copier, sans attendre. Ajoutez-les dans « Langue et général » ; les traductions sont modifiables.",
+      "Alerte quand on dit mon nom : saisissez votre nom ou des mots-clés ; si un message en contient, il est marqué en rouge et peut émettre un bip. Comparaison uniquement sur cet ordinateur."
+    ]
+  },
+  "2.10.1": {
+    "zh-TW": [
+      "減少超譯：譯文不會再把前一句的意思接進來，也不會自己多加原文沒有的話。翻得比平常長很多時會自動重翻；模型自己加的括號註解、多編出來的幾行會拿掉。",
+      "台灣的地名（台北、高雄…）照原文翻，不會被換成對方國家的城市；「很色」「A片」這類說法也會翻成正確的意思。",
+      "畫面上讀到的亂碼不會再翻成「請提供要翻譯的文字」這種話，翻不出來就不顯示。以前記下來的超譯不會再拿出來用，下次遇到會重翻。"
+    ],
+    "zh-CN": [
+      "减少过度翻译：译文不会再把前一句的意思接进来，也不会自己多加原文没有的话。翻得比平常长很多时会自动重翻；模型自己加的括号注释、多编出来的几行会去掉。",
+      "台湾的地名（台北、高雄…）照原文翻，不会被换成对方国家的城市；「很色」「A片」这类说法也会翻成正确的意思。",
+      "屏幕上读到的乱码不会再翻成「请提供要翻译的文字」这种话，翻不出来就不显示。以前记下来的过度翻译不会再拿出来用，下次遇到会重翻。"
+    ],
+    "en": [
+      "Less over-translation: a translation no longer pulls in the previous message or adds things the original did not say. Unusually long results are translated again; notes in brackets and extra made-up lines are removed.",
+      "Taiwanese place names (Taipei, Kaohsiung…) stay as they are instead of becoming cities of the other person's country, and slang like 很色 and A片 gets its real meaning.",
+      "Garbled text read from the screen is no longer turned into replies like \"please provide the text\"; it is simply not shown. Over-translations saved earlier are no longer reused and get translated again."
+    ],
+    "ko": [
+      "과잉 번역 줄임: 번역에 앞 메시지 내용이 섞이거나 원문에 없는 말이 붙지 않아요. 평소보다 훨씬 길게 나오면 다시 번역하고, 모델이 붙인 괄호 설명이나 지어낸 줄은 지워요.",
+      "타이완 지명(타이베이, 가오슝…)은 그대로 번역하고 상대 나라 도시로 바꾸지 않아요. ‘很色’, ‘A片’ 같은 표현도 맞는 뜻으로 번역해요.",
+      "화면에서 읽은 깨진 글자를 ‘번역할 텍스트를 주세요’ 같은 말로 바꾸지 않고 그냥 표시하지 않아요. 예전에 저장된 과잉 번역은 다시 쓰지 않고 새로 번역해요."
+    ],
+    "ja": [
+      "訳しすぎを減らしました：前のメッセージの内容が混ざったり、原文にない言葉が足されたりしなくなります。いつもよりずっと長い訳は訳し直し、モデルが付けた括弧の注釈や作り足した行は消します。",
+      "台湾の地名（台北、高雄など）はそのまま訳し、相手の国の都市に置き換えません。「很色」「A片」などの言い方も正しい意味で訳します。",
+      "画面から読んだ文字化けを「翻訳する文字を入力してください」のような文にせず、表示しません。以前保存された訳しすぎの訳は使わず、訳し直します。"
+    ],
+    "vi": [
+      "Bớt dịch quá lời: bản dịch không còn kéo nội dung tin nhắn trước vào hay thêm điều bản gốc không nói. Bản dịch dài bất thường sẽ được dịch lại; ghi chú trong ngoặc và dòng bịa thêm bị bỏ.",
+      "Địa danh Đài Loan (Đài Bắc, Cao Hùng…) giữ nguyên, không bị đổi thành thành phố nước của người kia; từ lóng như 很色, A片 được dịch đúng nghĩa.",
+      "Chữ rác đọc từ màn hình không còn bị dịch thành câu kiểu \"hãy cung cấp văn bản\", mà đơn giản là không hiện. Bản dịch quá lời đã lưu trước đây không được dùng lại và sẽ được dịch lại."
+    ],
+    "th": [
+      "ลดการแปลเกิน: คำแปลจะไม่ดึงเนื้อหาของข้อความก่อนหน้าเข้ามา และไม่เติมสิ่งที่ต้นฉบับไม่ได้พูด ถ้ายาวผิดปกติจะแปลใหม่ หมายเหตุในวงเล็บและบรรทัดที่แต่งเพิ่มจะถูกตัดออก",
+      "ชื่อสถานที่ในไต้หวัน (ไทเป เกาสง…) แปลตามเดิม ไม่ถูกเปลี่ยนเป็นเมืองของประเทศอีกฝ่าย และคำอย่าง 很色 กับ A片 แปลได้ความหมายที่ถูก",
+      "ตัวอักษรเพี้ยนที่อ่านจากหน้าจอจะไม่ถูกแปลเป็นประโยคอย่าง \"โปรดให้ข้อความที่จะแปล\" อีก แต่จะไม่แสดงเลย คำแปลเกินที่บันทึกไว้ก่อนหน้าจะไม่ถูกใช้ซ้ำและจะแปลใหม่"
+    ],
+    "id": [
+      "Lebih sedikit terjemahan berlebihan: terjemahan tidak lagi menarik isi pesan sebelumnya atau menambah hal yang tidak ada di aslinya. Hasil yang terlalu panjang diterjemahkan ulang; catatan dalam kurung dan baris karangan dihapus.",
+      "Nama tempat di Taiwan (Taipei, Kaohsiung…) tetap seperti aslinya, tidak diganti kota negara lawan bicara, dan slang seperti 很色 dan A片 diterjemahkan dengan arti yang benar.",
+      "Teks rusak yang terbaca dari layar tidak lagi jadi kalimat seperti \"silakan berikan teksnya\", melainkan tidak ditampilkan. Terjemahan berlebihan yang tersimpan sebelumnya tidak dipakai lagi dan diterjemahkan ulang."
+    ],
+    "es": [
+      "Menos traducción de más: la traducción ya no mezcla el mensaje anterior ni añade cosas que el original no dice. Los resultados demasiado largos se traducen de nuevo; se quitan notas entre paréntesis y líneas inventadas.",
+      "Los nombres de lugares de Taiwán (Taipéi, Kaohsiung…) se mantienen en vez de cambiarse por ciudades del país de la otra persona, y expresiones como 很色 y A片 se traducen con su sentido real.",
+      "El texto ilegible leído de la pantalla ya no se convierte en frases como «proporciona el texto»; simplemente no se muestra. Las traducciones de más guardadas antes ya no se reutilizan y se traducen otra vez."
+    ],
+    "pt": [
+      "Menos tradução a mais: a tradução não puxa mais a mensagem anterior nem acrescenta o que o original não disse. Resultados longos demais são traduzidos de novo; notas entre parênteses e linhas inventadas são removidas.",
+      "Nomes de lugares de Taiwan (Taipé, Kaohsiung…) ficam como estão em vez de virar cidades do país da outra pessoa, e gírias como 很色 e A片 são traduzidas com o sentido certo.",
+      "Texto ilegível lido da tela não vira mais frases como \"forneça o texto\"; ele simplesmente não aparece. Traduções a mais salvas antes não são reutilizadas e são traduzidas de novo."
+    ],
+    "ru": [
+      "Меньше лишнего в переводе: перевод больше не подтягивает предыдущее сообщение и не добавляет того, чего нет в оригинале. Слишком длинный результат переводится заново; примечания в скобках и придуманные строки убираются.",
+      "Названия мест Тайваня (Тайбэй, Гаосюн…) остаются как есть, а не заменяются городами страны собеседника; сленг вроде 很色 и A片 переводится правильно.",
+      "Нечитаемый текст с экрана больше не превращается в фразы вроде «предоставьте текст» — он просто не показывается. Сохранённые раньше переводы с лишним больше не используются и переводятся заново."
+    ],
+    "de": [
+      "Weniger Hinzugedichtetes: Die Übersetzung übernimmt nicht mehr die vorige Nachricht und fügt nichts hinzu, was nicht im Original steht. Zu lange Ergebnisse werden neu übersetzt; Anmerkungen in Klammern und erfundene Zeilen fallen weg.",
+      "Ortsnamen aus Taiwan (Taipeh, Kaohsiung…) bleiben erhalten statt zu Städten im Land des Gegenübers zu werden, und Slang wie 很色 und A片 wird richtig übersetzt.",
+      "Unlesbarer Text vom Bildschirm wird nicht mehr zu Sätzen wie „Bitte gib den Text an“, sondern einfach nicht angezeigt. Früher gespeicherte Übersetzungen mit Hinzugedichtetem werden nicht mehr verwendet und neu übersetzt."
+    ],
+    "fr": [
+      "Moins de traduction en trop : la traduction n'intègre plus le message précédent et n'ajoute plus ce que l'original ne dit pas. Les résultats trop longs sont retraduits ; notes entre parenthèses et lignes inventées sont retirées.",
+      "Les noms de lieux de Taïwan (Taipei, Kaohsiung…) restent tels quels au lieu de devenir des villes du pays de l'autre, et l'argot comme 很色 et A片 est traduit avec son vrai sens.",
+      "Le texte illisible lu à l'écran ne devient plus des phrases comme « veuillez fournir le texte » ; il n'est simplement pas affiché. Les traductions en trop enregistrées avant ne sont plus réutilisées et sont retraduites."
     ]
   },
   "2.10.0": {

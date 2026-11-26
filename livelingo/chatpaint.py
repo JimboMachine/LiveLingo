@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 # 名字的顏色：對方說的、螢幕上讀到的、我自己的；note 是程式自己的短提示（例如按了快速鍵：麥克風開了）
+MENTION_COLOR = (255, 112, 112)      # 提到我的那一則，名字用這個顏色（喊我名字提醒）
 NAME_COLORS = {"heard": (196, 148, 255), "screen": (255, 196, 92), "me": (92, 222, 255), "note": (74, 222, 154)}
 NOTE_NAME = "LiveLingo"
 # 分辨說話者：第 1、2、3… 個人的名字顏色（輪著用）。避開「我」的青色和「聊天」的橘色，免得看錯是誰。
