@@ -28,6 +28,11 @@ def main() -> int:
 
         ask(Path(_arg("--quick-input")), _arg("--lang", "zh-TW"))
         return 0
+    if "--reply-box" in sys.argv:      # 回話建議的小框：選的那句寫到檔案就結束
+        from .quickbox import choose
+
+        choose(Path(_arg("--reply-box")), Path(_arg("--reply-out")), _arg("--lang", "zh-TW"), _arg("--their", "ko"))
+        return 0
     if "--remove-store" in sys.argv:      # 卸載程式叫的：大檔案搬到別的磁碟的話，那邊的也刪掉（只刪有記號檔的資料夾）
         import json
 

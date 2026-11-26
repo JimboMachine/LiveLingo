@@ -21,6 +21,7 @@ from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVER
                      Glossary, Lessons)
 from .core.engine import Engine
 from .core.romanize import romanize
+from .core.speak import Speaker
 from .core.translate import LANGS, MAX_TEXT, Stop, Stopped, Translator, detect_language, numbers_lost, similarity, why
 from .history import DAYS as HISTORY_DAYS
 from .jobs import Jobs
@@ -233,6 +234,8 @@ class Service:
         self.tray = Tray(self)
         self.hotkeys = Hotkeys(self._hotkey, on_state=lambda states: self.hub.publish("hotkeys", self.hotkeys_state()))
         self._quick = None             # 快速輸入框開著的時候是那個小程式
+        self._reply_child = None       # 回話小框開著的時候是那個小程式
+        self._replies: dict = {"id": 0, "state": "off", "items": []}      # 最近一次的回話建議（給介面）
         self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
         self._recent_voice: deque[dict] = deque(maxlen=12)      # 最近聽到的句子（兩邊都記），用來認出麥克風收到的喇叭聲音
         self.delays: deque[tuple[float, float]] = deque(maxlen=10)      # 最近幾句語音：（辨識秒數, 翻譯秒數）
@@ -264,6 +267,9 @@ class Service:
         self.exit_now = lambda: self.on_quit()   # 立刻結束整個程式（更新時用；__main__ 會換成真的）
         self.overlay = Overlay(self)   # 浮動留言
         self.stream = StreamOut(self)  # 直播模式：給 OBS 的字幕頁（stream.py）
+        # 念出我的譯文：Windows 內建語音念到選的播放裝置（core/speak.py）
+        self.speaker = Speaker(self.data, device=lambda: self.cfg["speak_device"], on_done=self._spoke, log=self.log)
+        self._speak: dict = {"voice": "", "lang": "", "error": ""}
 
     # ------------------------------------------------------------------ 給介面的狀態
 
@@ -317,6 +323,8 @@ class Service:
             "view": self.view,
             "overlay": self.overlay.state(),
             "stream": self.stream.state(),
+            "speak": self.speak_state(),
+            "replies": dict(self._replies),
             "record": self.record_state(),
             "hotkeys": self.hotkeys_state(),
             "history": self.history.state(),
@@ -1096,6 +1104,7 @@ class Service:
                 if msg["via"] == "typed" or self.cfg["copy_spoken"]:
                     msg["copied"] = oswin.copy_text(out)
             self._post(msg)
+            self._speak_mine(msg, target, out)
             self._want_back(msg)
         except Exception as ex:  # noqa: BLE001
             if not self._engine_gone():
@@ -2149,6 +2158,8 @@ class Service:
         """快速鍵被按下（在快速鍵那條執行緒上）。只做很快的事，慢的另外開執行緒。"""
         if name == "quick":
             self.quick_input()      # 要在收到快速鍵的這條執行緒上開，Windows 才會讓輸入框跑到最前面
+        elif name == "reply":
+            self.reply_box()        # 同上：小框要能跑到遊戲前面
         else:
             threading.Thread(target=self._hotkey_work, args=(name,), daemon=True, name="hotkey").start()
 
@@ -2223,6 +2234,114 @@ class Service:
         threading.Thread(target=wait, daemon=True, name="quick-input").start()
         return True
 
+    # ------------------------------------------------------------------ 回話建議（2.9.0）
+
+    def _reply_target(self, msg_id: int | None) -> dict | None:
+        """要幫哪一句想回話：指定的那一則，不然就是對方最近一句翻好的。"""
+        with self._lock:
+            pool = [m for m in self.messages if not m.get("pending") and not m.get("error") and m.get("translated")]
+        if msg_id is not None:
+            return next((m for m in pool if m["id"] == msg_id and m.get("who") == "them"), None)
+        theirs = [m for m in pool if m.get("who") == "them"]
+        return theirs[-1] if theirs else None
+
+    def _reply_lang(self, msg: dict) -> str:
+        """回話用哪個語言寫：對方那句是什麼語言就用什麼（跟設定的對方語言同一種時用設定的寫法，例如繁簡）。"""
+        their = self.cfg["their_lang"]
+        family = msg.get("lang") or LANGS[their]["family"]
+        if LANGS[their]["family"] == family:
+            return their
+        return next((code for code, v in LANGS.items() if v["family"] == family), their)
+
+    def replies(self, msg_id: int | None = None, box: Path | None = None) -> dict:
+        """幫對方的一句話想 3 句回覆（用對方的語言，附我的語言的意思）。在背景想，好了送 replies 事件；
+        box：回話小框在等的檔案，想好了也寫進去。回傳 {"ok", "id"} 或 {"ok": False, "error": not_ready / nothing / busy}。"""
+        from .core import assist
+
+        if self.phase != "ready":
+            return {"ok": False, "error": "not_ready"}
+        target = self._reply_target(msg_id)
+        if target is None:
+            return {"ok": False, "error": "nothing"}
+        if self._replies.get("state") == "thinking":
+            return {"ok": False, "error": "busy"}
+        with self._lock:
+            lines = [m for m in self.messages if m["id"] <= target["id"] and not m.get("error") and not m.get("pending")]
+        lines = [{"who": m.get("who"), "original": m.get("original", ""), "translated": m.get("translated", "")} for m in lines]
+        lang = self._reply_lang(target)
+        self._replies = {"id": target["id"], "state": "thinking", "items": [], "lang": lang}
+        self.hub.publish("replies", dict(self._replies))
+
+        def work():
+            items: list[dict] = []
+            try:
+                self._wake_engine()
+                out = self.translator.ask_free(assist.reply_prompt(lines, self.cfg["my_lang"], lang, self.cfg["tone"]), 320)
+                items = assist.parse_replies(out, self.cfg["my_lang"], their_lang=lang)
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+            self._replies = dict(self._replies, state="ready" if items else "failed", items=items)
+            self.hub.publish("replies", dict(self._replies))
+            if box is not None:
+                try:
+                    box.write_text(json.dumps({"items": items}, ensure_ascii=False), encoding="utf-8")
+                except OSError:
+                    pass
+
+        threading.Thread(target=work, daemon=True, name="replies").start()
+        return {"ok": True, "id": target["id"]}
+
+    def reply_copy(self, text: str) -> bool:
+        """選了一句回話建議：複製起來（使用者自己貼到聊天）。"""
+        text = str(text or "").strip()[:MAX_TEXT]
+        return bool(text) and oswin.copy_text(text)
+
+    def reply_box(self) -> bool:
+        """快速鍵：跳出回話小框（另外開的小程式，先顯示「正在想」），同時在背景想建議；選了就複製。"""
+        if self._reply_child is not None and self._reply_child.poll() is None:
+            return False
+        if self.phase != "ready":
+            self._note("not_ready")
+            return False
+        if self._reply_target(None) is None:
+            self._note("reply_nothing")
+            return False
+        box, out = self.data / "replies-in.json", self.data / "replies-out.json"
+        for f in (box, out):
+            f.unlink(missing_ok=True)
+        started = self.replies(None, box)
+        if not started.get("ok"):
+            self._note("reply_nothing" if started.get("error") == "nothing" else "not_ready")
+            return False
+        try:
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            child = subprocess.Popen([*self_command(), "--reply-box", str(box), "--reply-out", str(out), "--lang", self.cfg["ui_lang"],
+                                      "--their", self._replies.get("lang") or self.cfg["their_lang"]],
+                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+        except OSError as ex:
+            self.log(f"reply box could not start: {ex!r}")
+            return False
+        self._reply_child = child
+        oswin.allow_foreground(child.pid)
+
+        def wait():
+            try:
+                child.wait(timeout=240)
+            except subprocess.TimeoutExpired:
+                child.kill()
+            try:
+                if out.exists():
+                    text = str(json.loads(out.read_text(encoding="utf-8")).get("text", ""))
+                    out.unlink(missing_ok=True)
+                    if self.reply_copy(text):
+                        self._note("reply_copied")
+                box.unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+
+        threading.Thread(target=wait, daemon=True, name="reply-box").start()
+        return True
+
     def clear_messages(self) -> None:
         with self._lock:
             self.messages.clear()
@@ -2259,6 +2378,10 @@ class Service:
                 changes.pop("regions")
             else:
                 changes["regions"] = fixed
+        if "speak_device" in changes and not (changes["speak_device"] is None or isinstance(changes["speak_device"], str)):
+            changes.pop("speak_device")
+        if "speak_name" in changes:
+            changes["speak_name"] = str(changes["speak_name"] or "")[:120]
         if "term_packs" in changes:
             picked = changes["term_packs"] if isinstance(changes["term_packs"], list) else []
             changes["term_packs"] = [name for name in PACKS if name in picked]
@@ -3116,6 +3239,10 @@ class Service:
         if self.cfg["drop_echo"] and self._is_echo(kind, text, lang):
             self._end_live(kind)
             return
+        if self._is_own_voice(text):
+            self.log(f"{kind} sentence dropped: it is LiveLingo reading my translation aloud")
+            self._end_live(kind)
+            return
         own = self._speaker_langs.get(int(speaker)) if speaker and kind == "loopback" else None
         if kind == "loopback" and self.cfg["their_auto"] and not own:
             # 設過語言的人說的話不拿來猜「對方的語言」：他的語言是使用者指定的，不代表其他人也換了語言
@@ -3129,6 +3256,49 @@ class Service:
             if self._speaker_names.get(int(speaker)) and time.time() - self._voices_saved > VOICES_SAVE_EVERY:
                 self._voices_save()      # 記住的人：聲紋跟著今天的聲音調整過了，隔一陣子存一次
         self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
+
+    def _is_own_voice(self, text: str) -> bool:
+        """收到的是 LiveLingo 自己念出來的譯文（念到喇叭、被「聽對方」或麥克風收到）：不要再翻一次。"""
+        said = self.speaker.recent()
+        return bool(said) and any(similarity(t, text) >= 0.6 for t in said)
+
+    # ------------------------------------------------------------------ 念出我的譯文（2.9.0）
+
+    def _speak_mine(self, msg: dict, target: str, out: str) -> None:
+        if self.cfg["speak_out"] and msg.get("who") == "me" and target != self.cfg["my_lang"] and out.strip():
+            if not self.speaker.say(out, target):
+                self._speak_state(error="unavailable")
+
+    def _speak_state(self, **changes) -> None:
+        self._speak.update(changes)
+        self.hub.publish("speak", self.speak_state())
+
+    def speak_state(self) -> dict:
+        return dict(self._speak, available=self.speaker.available())
+
+    def _spoke(self, result: dict) -> None:
+        if result.get("ok"):
+            self._speak_state(voice=result.get("voice", ""), lang=result.get("lang", ""), error="")
+            return
+        error = result.get("error") or "failed"
+        if error == "no_voice":
+            if self._speak.get("error") != "no_voice" or self._speak.get("lang") != result.get("lang"):
+                self.notice("speak_no_voice", lang=result.get("lang", ""))
+        elif self._speak.get("error") != error:
+            self.notice("speak_failed", error=error)
+        self._speak_state(error=error, lang=result.get("lang", ""))
+
+    def speak_test(self) -> dict:
+        """設定頁的「試聽」：用對方的語言念一句範例。"""
+        from .core.speak import SAMPLES
+
+        lang = self.cfg["their_lang"]
+        ok = self.speaker.say(SAMPLES.get(lang, SAMPLES["en"]), lang)
+        return {"ok": ok, "lang": lang}
+
+    def speak_voices(self) -> dict:
+        voices = self.speaker.voices()
+        return {"ok": True, "voices": voices}
 
     def _voice_script(self, kind: str, text: str, lang: str | None, own: tuple[str, str] | None = None) -> str:
         """語音辨識給的中文有時是繁體有時是簡體：照說話的人那一邊選的語言統一。
@@ -3345,8 +3515,10 @@ class Service:
         self.tray.stop()
         self.hotkeys.stop()
         self.stream.stop()
-        if self._quick is not None and self._quick.poll() is None:
-            self._quick.kill()
+        self.speaker.stop()
+        for child in (self._quick, self._reply_child):
+            if child is not None and child.poll() is None:
+                child.kill()
         if self.transcript.on:      # 記錄到一半就關程式：先存起來，不要弄丟
             try:
                 self.transcript.stop(self.transcript_dir(), self.cfg["ui_lang"], bool(self.cfg["transcript_original"]))

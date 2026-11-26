@@ -10,7 +10,7 @@ import threading
 
 IS_WIN = sys.platform == "win32"
 
-ACTIONS = ("overlay", "mic", "copy", "quick")      # 開關字幕、開關麥克風、複製上一句翻譯、快速輸入框
+ACTIONS = ("overlay", "mic", "copy", "quick", "reply")      # 開關字幕、開關麥克風、複製上一句翻譯、快速輸入框、回話建議
 MODS = {"Ctrl": 0x2, "Alt": 0x1, "Shift": 0x4, "Win": 0x8}      # 也是顯示的順序
 _NOREPEAT = 0x4000                                  # 按住不放不要一直重複觸發
 KEYS = {**{chr(c): c for c in range(ord("A"), ord("Z") + 1)}, **{str(d): ord(str(d)) for d in range(10)},
@@ -18,44 +18,44 @@ KEYS = {**{chr(c): c for c in range(ord("A"), ord("Z") + 1)}, **{str(d): ord(str
 
 # 按了快速鍵之後顯示在浮動留言上的短提示（人在遊戲裡，看不到主視窗）
 NOTES = {
-    "zh-TW": {"mic_on": "麥克風：開", "mic_off": "麥克風：關", "copied": "已複製上一句翻譯", "nothing": "還沒有可以複製的翻譯",
+    "zh-TW": {"reply_nothing": "對方還沒說話，沒有可以回的", "reply_copied": "已複製回話，貼到聊天就好", "mic_on": "麥克風：開", "mic_off": "麥克風：關", "copied": "已複製上一句翻譯", "nothing": "還沒有可以複製的翻譯",
               "not_ready": "翻譯引擎還沒準備好",
               "skipped": "聊天太快，有 {n} 則來不及翻，已略過",
               "engine_restarting": "翻譯引擎停了，正在自動重開…",
               "engine_back": "翻譯引擎回來了，剛剛沒翻的句子現在補上",
               "engine_waking": "翻譯引擎剛剛在休息，正在叫醒（約 10 秒）…"},
-    "zh-CN": {"mic_on": "麦克风：开", "mic_off": "麦克风：关", "copied": "已复制上一句翻译", "nothing": "还没有可以复制的翻译",
+    "zh-CN": {"reply_nothing": "对方还没说话，没有可以回的", "reply_copied": "已复制回话，粘贴到聊天就好", "mic_on": "麦克风：开", "mic_off": "麦克风：关", "copied": "已复制上一句翻译", "nothing": "还没有可以复制的翻译",
               "not_ready": "翻译引擎还没准备好",
               "skipped": "聊天太快，有 {n} 条来不及翻，已略过",
               "engine_restarting": "翻译引擎停了，正在自动重启…",
               "engine_back": "翻译引擎恢复了，刚才没翻的句子现在补上",
               "engine_waking": "翻译引擎刚才在休息，正在唤醒（约 10 秒）…"},
-    "en": {"mic_on": "Microphone on", "mic_off": "Microphone off", "copied": "Last translation copied",
+    "en": {"reply_nothing": "Nothing to reply to yet", "reply_copied": "Reply copied. Paste it into the chat", "mic_on": "Microphone on", "mic_off": "Microphone off", "copied": "Last translation copied",
            "nothing": "Nothing to copy yet", "not_ready": "The translation engine is not ready yet",
            "skipped": "Chat is moving too fast: {n} lines were skipped",
            "engine_restarting": "The translation engine stopped. Restarting it…",
            "engine_back": "The translation engine is back. Waiting sentences are being translated",
            "engine_waking": "The translation engine was resting. Waking it up (about 10 s)…"},
-    "ko": {"mic_on": "마이크 켜짐", "mic_off": "마이크 꺼짐", "copied": "마지막 번역을 복사했습니다", "nothing": "아직 복사할 번역이 없습니다",
+    "ko": {"reply_nothing": "아직 답할 말이 없습니다", "reply_copied": "답장을 복사했습니다. 채팅에 붙여 넣으세요", "mic_on": "마이크 켜짐", "mic_off": "마이크 꺼짐", "copied": "마지막 번역을 복사했습니다", "nothing": "아직 복사할 번역이 없습니다",
            "not_ready": "번역 엔진이 아직 준비되지 않았습니다",
            "skipped": "채팅이 너무 빨라서 {n}줄을 건너뛰었습니다",
            "engine_restarting": "번역 엔진이 멈춰서 다시 시작하는 중입니다…",
            "engine_back": "번역 엔진이 다시 켜졌습니다. 밀린 문장을 이어서 번역합니다",
            "engine_waking": "번역 엔진이 쉬고 있어서 깨우는 중입니다(약 10초)…"},
-    "ja": {"mic_on": "マイク：オン", "mic_off": "マイク：オフ", "copied": "直前の翻訳をコピーしました", "nothing": "コピーできる翻訳がまだありません",
+    "ja": {"reply_nothing": "まだ返信する相手の発言がありません", "reply_copied": "返信をコピーしました。チャットに貼り付けてください", "mic_on": "マイク：オン", "mic_off": "マイク：オフ", "copied": "直前の翻訳をコピーしました", "nothing": "コピーできる翻訳がまだありません",
            "not_ready": "翻訳エンジンの準備がまだできていません",
            "skipped": "チャットの流れが速いため、{n} 件を飛ばしました",
            "engine_restarting": "翻訳エンジンが止まったため、再起動しています…",
            "engine_back": "翻訳エンジンが復帰しました。待っていた文をこれから翻訳します",
            "engine_waking": "翻訳エンジンが休止中だったため、起動しています（約 10 秒）…"},
-    "vi": {"mic_on": "Micro bật", "mic_off": "Micro tắt", "copied": "Đã sao chép bản dịch gần nhất", "nothing": "Chưa có gì để sao chép", "not_ready": "Bộ máy dịch chưa sẵn sàng", "skipped": "Chat chạy quá nhanh: đã bỏ qua {n} dòng", "engine_restarting": "Bộ máy dịch đã dừng. Đang khởi động lại…", "engine_back": "Bộ máy dịch đã trở lại. Đang dịch các câu đang chờ", "engine_waking": "Bộ máy dịch đang nghỉ. Đang đánh thức (khoảng 10 giây)…"},
-    "th": {"mic_on": "ไมโครโฟนเปิด", "mic_off": "ไมโครโฟนปิด", "copied": "คัดลอกคำแปลล่าสุดแล้ว", "nothing": "ยังไม่มีอะไรให้คัดลอก", "not_ready": "เครื่องมือแปลยังไม่พร้อม", "skipped": "แชทเร็วเกินไป: ข้ามไป {n} บรรทัด", "engine_restarting": "เครื่องมือแปลหยุดทำงาน กำลังเริ่มใหม่…", "engine_back": "เครื่องมือแปลกลับมาแล้ว กำลังแปลประโยคที่รออยู่", "engine_waking": "เครื่องมือแปลพักอยู่ กำลังปลุก (ประมาณ 10 วินาที)…"},
-    "id": {"mic_on": "Mikrofon menyala", "mic_off": "Mikrofon mati", "copied": "Terjemahan terakhir disalin", "nothing": "Belum ada yang bisa disalin", "not_ready": "Mesin terjemahan belum siap", "skipped": "Chat terlalu cepat: {n} baris dilewati", "engine_restarting": "Mesin terjemahan berhenti. Sedang dimulai ulang…", "engine_back": "Mesin terjemahan sudah kembali. Kalimat yang menunggu sedang diterjemahkan", "engine_waking": "Mesin terjemahan sedang istirahat. Membangunkannya (sekitar 10 dtk)…"},
-    "es": {"mic_on": "Micrófono activado", "mic_off": "Micrófono desactivado", "copied": "Última traducción copiada", "nothing": "Todavía no hay nada que copiar", "not_ready": "El motor de traducción aún no está listo", "skipped": "El chat va demasiado rápido: se saltaron {n} líneas", "engine_restarting": "El motor de traducción se detuvo. Reiniciándolo…", "engine_back": "El motor de traducción ha vuelto. Traduciendo las frases pendientes", "engine_waking": "El motor de traducción estaba descansando. Despertándolo (unos 10 s)…"},
-    "pt": {"mic_on": "Microfone ligado", "mic_off": "Microfone desligado", "copied": "Última tradução copiada", "nothing": "Ainda não há nada para copiar", "not_ready": "O motor de tradução ainda não está pronto", "skipped": "O chat está rápido demais: {n} linhas foram puladas", "engine_restarting": "O motor de tradução parou. Reiniciando…", "engine_back": "O motor de tradução voltou. As frases em espera estão sendo traduzidas", "engine_waking": "O motor de tradução estava descansando. Acordando (uns 10 s)…"},
-    "ru": {"mic_on": "Микрофон включён", "mic_off": "Микрофон выключен", "copied": "Последний перевод скопирован", "nothing": "Пока нечего копировать", "not_ready": "Движок перевода ещё не готов", "skipped": "Чат идёт слишком быстро: пропущено строк: {n}", "engine_restarting": "Движок перевода остановился. Перезапуск…", "engine_back": "Движок перевода вернулся. Переводятся ожидающие фразы", "engine_waking": "Движок перевода отдыхал. Пробуждаем (около 10 с)…"},
-    "de": {"mic_on": "Mikrofon an", "mic_off": "Mikrofon aus", "copied": "Letzte Übersetzung kopiert", "nothing": "Noch nichts zum Kopieren", "not_ready": "Die Übersetzungs-Engine ist noch nicht bereit", "skipped": "Der Chat ist zu schnell: {n} Zeilen wurden übersprungen", "engine_restarting": "Die Übersetzungs-Engine wurde beendet. Sie wird neu gestartet…", "engine_back": "Die Übersetzungs-Engine ist zurück. Wartende Sätze werden übersetzt", "engine_waking": "Die Übersetzungs-Engine hat geruht. Sie wird geweckt (etwa 10 s)…"},
-    "fr": {"mic_on": "Micro activé", "mic_off": "Micro désactivé", "copied": "Dernière traduction copiée", "nothing": "Rien à copier pour l'instant", "not_ready": "Le moteur de traduction n'est pas encore prêt", "skipped": "Le chat va trop vite : {n} lignes ont été ignorées", "engine_restarting": "Le moteur de traduction s'est arrêté. Redémarrage…", "engine_back": "Le moteur de traduction est de retour. Les phrases en attente sont traduites", "engine_waking": "Le moteur de traduction était au repos. Réveil en cours (environ 10 s)…"},
+    "vi": {"reply_nothing": "Chưa có gì để trả lời", "reply_copied": "Đã sao chép câu trả lời. Dán vào chat là xong", "mic_on": "Micro bật", "mic_off": "Micro tắt", "copied": "Đã sao chép bản dịch gần nhất", "nothing": "Chưa có gì để sao chép", "not_ready": "Bộ máy dịch chưa sẵn sàng", "skipped": "Chat chạy quá nhanh: đã bỏ qua {n} dòng", "engine_restarting": "Bộ máy dịch đã dừng. Đang khởi động lại…", "engine_back": "Bộ máy dịch đã trở lại. Đang dịch các câu đang chờ", "engine_waking": "Bộ máy dịch đang nghỉ. Đang đánh thức (khoảng 10 giây)…"},
+    "th": {"reply_nothing": "ยังไม่มีอะไรให้ตอบ", "reply_copied": "คัดลอกคำตอบแล้ว วางในแชตได้เลย", "mic_on": "ไมโครโฟนเปิด", "mic_off": "ไมโครโฟนปิด", "copied": "คัดลอกคำแปลล่าสุดแล้ว", "nothing": "ยังไม่มีอะไรให้คัดลอก", "not_ready": "เครื่องมือแปลยังไม่พร้อม", "skipped": "แชทเร็วเกินไป: ข้ามไป {n} บรรทัด", "engine_restarting": "เครื่องมือแปลหยุดทำงาน กำลังเริ่มใหม่…", "engine_back": "เครื่องมือแปลกลับมาแล้ว กำลังแปลประโยคที่รออยู่", "engine_waking": "เครื่องมือแปลพักอยู่ กำลังปลุก (ประมาณ 10 วินาที)…"},
+    "id": {"reply_nothing": "Belum ada yang bisa dibalas", "reply_copied": "Balasan disalin. Tempel ke obrolan", "mic_on": "Mikrofon menyala", "mic_off": "Mikrofon mati", "copied": "Terjemahan terakhir disalin", "nothing": "Belum ada yang bisa disalin", "not_ready": "Mesin terjemahan belum siap", "skipped": "Chat terlalu cepat: {n} baris dilewati", "engine_restarting": "Mesin terjemahan berhenti. Sedang dimulai ulang…", "engine_back": "Mesin terjemahan sudah kembali. Kalimat yang menunggu sedang diterjemahkan", "engine_waking": "Mesin terjemahan sedang istirahat. Membangunkannya (sekitar 10 dtk)…"},
+    "es": {"reply_nothing": "Todavía no hay nada que responder", "reply_copied": "Respuesta copiada. Pégala en el chat", "mic_on": "Micrófono activado", "mic_off": "Micrófono desactivado", "copied": "Última traducción copiada", "nothing": "Todavía no hay nada que copiar", "not_ready": "El motor de traducción aún no está listo", "skipped": "El chat va demasiado rápido: se saltaron {n} líneas", "engine_restarting": "El motor de traducción se detuvo. Reiniciándolo…", "engine_back": "El motor de traducción ha vuelto. Traduciendo las frases pendientes", "engine_waking": "El motor de traducción estaba descansando. Despertándolo (unos 10 s)…"},
+    "pt": {"reply_nothing": "Ainda não há nada para responder", "reply_copied": "Resposta copiada. Cole no chat", "mic_on": "Microfone ligado", "mic_off": "Microfone desligado", "copied": "Última tradução copiada", "nothing": "Ainda não há nada para copiar", "not_ready": "O motor de tradução ainda não está pronto", "skipped": "O chat está rápido demais: {n} linhas foram puladas", "engine_restarting": "O motor de tradução parou. Reiniciando…", "engine_back": "O motor de tradução voltou. As frases em espera estão sendo traduzidas", "engine_waking": "O motor de tradução estava descansando. Acordando (uns 10 s)…"},
+    "ru": {"reply_nothing": "Пока не на что отвечать", "reply_copied": "Ответ скопирован. Вставьте его в чат", "mic_on": "Микрофон включён", "mic_off": "Микрофон выключен", "copied": "Последний перевод скопирован", "nothing": "Пока нечего копировать", "not_ready": "Движок перевода ещё не готов", "skipped": "Чат идёт слишком быстро: пропущено строк: {n}", "engine_restarting": "Движок перевода остановился. Перезапуск…", "engine_back": "Движок перевода вернулся. Переводятся ожидающие фразы", "engine_waking": "Движок перевода отдыхал. Пробуждаем (около 10 с)…"},
+    "de": {"reply_nothing": "Noch nichts zum Antworten", "reply_copied": "Antwort kopiert. Einfach in den Chat einfügen", "mic_on": "Mikrofon an", "mic_off": "Mikrofon aus", "copied": "Letzte Übersetzung kopiert", "nothing": "Noch nichts zum Kopieren", "not_ready": "Die Übersetzungs-Engine ist noch nicht bereit", "skipped": "Der Chat ist zu schnell: {n} Zeilen wurden übersprungen", "engine_restarting": "Die Übersetzungs-Engine wurde beendet. Sie wird neu gestartet…", "engine_back": "Die Übersetzungs-Engine ist zurück. Wartende Sätze werden übersetzt", "engine_waking": "Die Übersetzungs-Engine hat geruht. Sie wird geweckt (etwa 10 s)…"},
+    "fr": {"reply_nothing": "Rien à quoi répondre pour l'instant", "reply_copied": "Réponse copiée. Collez-la dans le chat", "mic_on": "Micro activé", "mic_off": "Micro désactivé", "copied": "Dernière traduction copiée", "nothing": "Rien à copier pour l'instant", "not_ready": "Le moteur de traduction n'est pas encore prêt", "skipped": "Le chat va trop vite : {n} lignes ont été ignorées", "engine_restarting": "Le moteur de traduction s'est arrêté. Redémarrage…", "engine_back": "Le moteur de traduction est de retour. Les phrases en attente sont traduites", "engine_waking": "Le moteur de traduction était au repos. Réveil en cours (environ 10 s)…"},
 }
 
 

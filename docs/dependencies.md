@@ -250,6 +250,29 @@
 
 自動把關：測試會擋：舊設定檔沒搬過來、介面改得到位置大小、統計數字對不起來。區域多一個欄位時下面每一處都要認得它。
 
+### 改回話建議
+
+1. `core/assist.py`：提示（reply_prompt）和解析（parse_replies：一行一句、||| 分開）要一起改
+2. `translate.py`：ask_free：跟翻譯同一條排隊
+3. `service.py`、`server.py`：replies、reply_box、reply_copy；/api/replies；replies 事件
+4. `quickbox.py`、`__main__.py`：回話小框（choose）、命令列參數；13 種語言的 REPLY_TEXTS
+5. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 reply（ACTIONS、預設 Ctrl+Alt+R、NOTES 的 reply_nothing / reply_copied、說明頁的 {reply}）
+6. `app.js`、`i18n.js`、`style.css`：對方那句下面的「怎麼回？」和建議
+7. `selftest.py`：reply_box
+8. `test_basics.py`：test_seven_features_part_two
+
+自動把關：測試用假的模型回答檢查解析和流程；建議好不好要用真的模型看。
+
+### 改念出我的譯文
+
+1. `core/speak.py`：PowerShell 腳本（SCRIPT）、語音的語言對照（VOICE_LANG）、試聽句（SAMPLES，每種語言）、WAV 讀取和播放
+2. `config.py`：speak_out、speak_device、speak_name
+3. `service.py`：翻好我的話之後念（_speak_mine）；念出來的又被收到時丟掉（_is_own_voice）；speak 事件、沒有語音的提醒
+4. `app.js`、`i18n.js`：「聲音裝置」頁的段落、VB-CABLE 的說明、試聽
+5. `selftest.py`：speak_voice
+
+自動把關：測試用假的語音和播放；真的 Windows 語音只有自動打包的自我檢查（speak_voice）會試。
+
 ### 改直播字幕（OBS）
 
 1. `stream.py`：網頁本身（PAGE）、哪些留言出現（line_of）、連接埠被佔用時往後找、通行碼和 Host 檢查
@@ -432,21 +455,23 @@
 | --- | --- | --- |
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
-| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯）<br>`stream.py`：留言的欄位（who、via、original、translated、pending、error）、說話者名字（speaker_tag）（改壞不會報錯） |
+| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯）<br>`quickbox.py`：回話小框：replies-in.json（建議）→ replies-out.json（選的那句），--reply-box / --reply-out / --their（改壞不會報錯）<br>`stream.py`：留言的欄位（who、via、original、translated、pending、error）、說話者名字（speaker_tag）（改壞不會報錯） |
 | 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：介面語言清單（UI_LANGS，十三種）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：每種介面語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：每種介面語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：每種介面語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、每種介面語言的短提示（改壞不會報錯）<br>`quickbox.py`：每種介面語言的提示（改壞不會報錯）<br>`transcript.py`：每種介面語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、每種介面語言的標題（改壞不會報錯）<br>`changes.py`：每種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明每種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`guide.py`：每種介面語言都要寫；給朋友的那一頁用預設快速鍵（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`stream.py`：stream、stream_original、stream_mine、stream_port、stream_key；字的大小和停留秒數跟 overlay_font、overlay_seconds（改壞不會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
 
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
+| 請翻譯模型做的小事：回話建議 | `livelingo/core/assist.py` | `service.py`：回話建議的提示和解析（reply_prompt、parse_replies）（改壞會報錯） |
+| 念出我的譯文（Windows 內建語音） | `livelingo/core/speak.py` | `service.py`：念出我的譯文（Speaker.say）；念出來的聲音又被收到時不要再翻（recent、_is_own_voice）（改壞會報錯） |
 | 看螢幕 | `livelingo/core/watcher.py` | `service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
 | 文字辨識 | `livelingo/core/ocr.py` | `service.py`：文字辨識；對方的語言用哪一個辨識模型（model_of），讀螢幕自動偵測時同一個模型的語言都會一起讀（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
-| 收音 | `livelingo/core/audio.py` | `service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
+| 收音 | `livelingo/core/audio.py` | `core/speak.py`：播到選的播放裝置（_soundcard，跟「對方的聲音從哪個裝置出來」同一份清單）（改壞會報錯）<br>`service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
 | 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
 | 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字平常只在記憶體裡（改壞會報錯）<br>`voicebook.py`：聲紋的長度和模型（MODEL、DIM）要跟聲紋模型一致；換模型舊檔就作廢（改壞不會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
-| 翻譯 | `livelingo/core/translate.py` | `service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言；拉丁字母的語言（LATIN）分不清時歸給唯一在讀的那一種（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
+| 翻譯 | `livelingo/core/translate.py` | `core/assist.py`：語言名稱（LANGS）、韓日文的說法（REGISTER）、繁簡轉換；用 Translator.ask_free 送給模型（改壞會報錯）<br>`service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言；拉丁字母的語言（LATIN）分不清時歸給唯一在讀的那一種（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
 | 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）；每次啟動把新的網址和金鑰交給翻譯（改壞會報錯）<br>`translate.py`：引擎每次啟動的金鑰（環境變數 LLAMA_API_KEY；請求要帶 Authorization: Bearer）（改壞不會報錯） |
 | 用語包（可多選） | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json`<br>`livelingo/data/terms_chat.json` | `service.py`：現在在玩哪個遊戲（find_game）、照遊戲挑用語包（packs_for）、遊戲名字（game_name）（改壞會報錯）<br>`service.py`：遊戲用語（改壞會報錯） |
 | 韓文唸法 | `livelingo/core/romanize.py` | `service.py`：韓文唸法（改壞會報錯） |

@@ -54,7 +54,10 @@ DEFAULTS = {
     "sources": {"screen": False, "listen": False, "mic": False},
     "on_top": True,
     "show_pronunciation": True,  # 韓文下面顯示唸法
-    "copy_spoken": True,         # 我用說的翻出來的句子也自動複製
+    "copy_spoken": True,
+    "speak_out": False,          # 我說的、打的翻成對方的語言之後，用 Windows 內建語音念出來（core/speak.py）
+    "speak_device": None,        # 念到哪個播放裝置（裝置 id，例如 VB-CABLE 的 CABLE Input），None = Windows 預設
+    "speak_name": "",         # 我用說的翻出來的句子也自動複製
     "update_check": True,        # 開啟時檢查有沒有新版本（關掉的話，模型都下載好之後 LiveLingo 完全不連網路）
     "setup_done": False,
     "history_keep": True,        # 對話歷史存在這台電腦上（history.jsonl）；關掉就不再記新的
@@ -69,8 +72,8 @@ DEFAULTS = {
     "usage_keep": True,          # 使用數字（每天幾句、失敗幾次、平均等多久）記在這台電腦上（usage.json）；只有數字
     "store_dir": "",             # 大檔案（模型、翻譯引擎）搬到哪個資料夾；空的 = 跟設定放一起（storage.py）
     "store_leftover": [],        # 搬完之後還刪不掉的舊資料夾（當時檔案還開著），下次開程式再刪
-    # 全域快速鍵（hotkeys.ACTIONS）：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框。空字串 = 不用
-    "hotkeys": {"overlay": "Ctrl+Alt+S", "mic": "Ctrl+Alt+M", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Alt+T"},
+    # 全域快速鍵（hotkeys.ACTIONS）：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框、回話建議。空字串 = 不用
+    "hotkeys": {"overlay": "Ctrl+Alt+S", "mic": "Ctrl+Alt+M", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Alt+T", "reply": "Ctrl+Alt+R"},
     "window": {"w": 980, "h": 720, "x": None, "y": None},
     "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
     "accent": "mint",            # 強調色：mint / blue / violet / rose / cyan
@@ -108,7 +111,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

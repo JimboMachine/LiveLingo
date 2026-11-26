@@ -1,4 +1,58 @@
 {
+  "2.9.0": {
+    "zh-TW": [
+      "回話助手：對方講完按 Ctrl+Alt+R，跳出 3 句用對方語言的回覆和中文意思，按 1／2／3 複製；對話頁每句對方的話下面也有「怎麼回？」。",
+      "念出我的譯文：我說的、打的翻好後，用 Windows 內建語音念出來。裝了 VB-CABLE 的話可以念進 Discord 讓對方聽到。設定在「聲音裝置」。"
+    ],
+    "zh-CN": [
+      "回话助手：对方说完按 Ctrl+Alt+R，弹出 3 句用对方语言的回复和中文意思，按 1／2／3 复制；对话页每句对方的话下面也有「怎么回？」。",
+      "读出我的译文：我说的、打的翻好后，用 Windows 自带语音读出来。装了 VB-CABLE 的话可以读进 Discord 让对方听到。设置在「声音设备」。"
+    ],
+    "en": [
+      "Reply helper: press Ctrl+Alt+R after the other person speaks to get 3 replies in their language with the meaning; press 1 / 2 / 3 to copy. Each of their lines in the chat also has Reply ideas.",
+      "Read my translation aloud: a built-in Windows voice reads what you said or typed after it is translated. With VB-CABLE it can go into Discord. See Audio devices."
+    ],
+    "ko": [
+      "답장 도우미: 상대가 말한 뒤 Ctrl+Alt+R을 누르면 상대 언어로 된 답장 3개와 뜻이 떠요. 1 / 2 / 3으로 복사하세요. 대화 화면의 상대 말 아래에도 '뭐라고 답하지?'가 있어요.",
+      "내 번역 읽어 주기: 내가 말하거나 입력한 것이 번역되면 Windows 기본 음성으로 읽어 줘요. VB-CABLE이 있으면 Discord로 보낼 수 있어요. 설정은 '오디오 장치'에 있어요."
+    ],
+    "ja": [
+      "返信アシスタント：相手が話したあとに Ctrl+Alt+R を押すと、相手の言語の返信 3 つと意味が出ます。1／2／3 でコピー。会話画面の相手の発言の下にも「返信の候補」があります。",
+      "自分の訳文を読み上げ：話した・入力した内容が訳されたあと、Windows 標準の音声で読み上げます。VB-CABLE があれば Discord に流せます。設定は「オーディオ機器」にあります。"
+    ],
+    "vi": [
+      "Trợ lý trả lời: bấm Ctrl+Alt+R sau khi người kia nói để có 3 câu trả lời bằng ngôn ngữ của họ kèm nghĩa; bấm 1 / 2 / 3 để sao chép. Mỗi câu của họ trong chat cũng có Gợi ý trả lời.",
+      "Đọc to bản dịch của tôi: giọng có sẵn của Windows đọc lời bạn nói hoặc gõ sau khi dịch. Có VB-CABLE thì có thể đưa vào Discord. Xem Thiết bị âm thanh."
+    ],
+    "th": [
+      "ผู้ช่วยตอบ: กด Ctrl+Alt+R หลังอีกฝ่ายพูดจบ จะได้คำตอบ 3 แบบเป็นภาษาของเขาพร้อมความหมาย กด 1 / 2 / 3 เพื่อคัดลอก ในหน้าสนทนาใต้ข้อความของเขาก็มี ตอบว่าอะไรดี",
+      "อ่านคำแปลของฉันออกเสียง: เสียงในตัวของ Windows อ่านสิ่งที่คุณพูดหรือพิมพ์หลังแปลแล้ว ถ้ามี VB-CABLE ส่งเข้า Discord ได้ ดูที่ อุปกรณ์เสียง"
+    ],
+    "id": [
+      "Asisten balasan: tekan Ctrl+Alt+R setelah lawan bicara selesai untuk 3 balasan dalam bahasanya beserta artinya; tekan 1 / 2 / 3 untuk menyalin. Tiap kalimat mereka di obrolan juga punya Ide balasan.",
+      "Bacakan terjemahan saya: suara bawaan Windows membacakan yang Anda ucapkan atau ketik setelah diterjemahkan. Dengan VB-CABLE bisa masuk ke Discord. Lihat Perangkat audio."
+    ],
+    "es": [
+      "Asistente de respuesta: pulsa Ctrl+Alt+R cuando la otra persona termine y salen 3 respuestas en su idioma con su significado; 1 / 2 / 3 copia. Cada frase suya en el chat también tiene Ideas de respuesta.",
+      "Leer en voz alta mi traducción: una voz de Windows lee lo que dices o escribes ya traducido. Con VB-CABLE puede ir a Discord. Está en Dispositivos de audio."
+    ],
+    "pt": [
+      "Assistente de resposta: aperte Ctrl+Alt+R quando a outra pessoa terminar e aparecem 3 respostas no idioma dela com o significado; 1 / 2 / 3 copia. Cada fala dela no chat também tem Ideias de resposta.",
+      "Ler minha tradução em voz alta: uma voz do Windows lê o que você fala ou digita depois de traduzido. Com VB-CABLE pode ir para o Discord. Veja em Dispositivos de áudio."
+    ],
+    "ru": [
+      "Помощник с ответом: нажмите Ctrl+Alt+R, когда собеседник договорит, — появятся 3 ответа на его языке с переводом; 1 / 2 / 3 копирует. Под каждой его фразой в чате есть «Варианты ответа».",
+      "Озвучивание моего перевода: встроенный голос Windows читает переведённое из того, что вы сказали или написали. С VB-CABLE звук может идти в Discord. См. «Аудиоустройства»."
+    ],
+    "de": [
+      "Antworthilfe: Drücke Ctrl+Alt+R, wenn die andere Person fertig ist, für 3 Antworten in ihrer Sprache mit Bedeutung; 1 / 2 / 3 kopiert. Unter jeder ihrer Zeilen im Chat gibt es auch Antwortideen.",
+      "Meine Übersetzung vorlesen: Eine Windows-Stimme liest übersetzt vor, was du sagst oder tippst. Mit VB-CABLE kann es in Discord gehen. Siehe Audiogeräte."
+    ],
+    "fr": [
+      "Aide à la réponse : appuyez sur Ctrl+Alt+R quand l'autre a fini pour 3 réponses dans sa langue avec leur sens ; 1 / 2 / 3 copie. Chaque phrase de l'autre dans le chat a aussi Idées de réponse.",
+      "Lire ma traduction à voix haute : une voix Windows lit ce que vous dites ou tapez une fois traduit. Avec VB-CABLE, cela peut aller dans Discord. Voir Appareils audio."
+    ]
+  },
   "2.8.0": {
     "zh-TW": [
       "會認出你正在玩的遊戲，自動換成那個遊戲的用語；也可以替某個遊戲加專用詞，只在玩它時用。設定在「翻譯品質」。",

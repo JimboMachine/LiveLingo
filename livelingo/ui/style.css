@@ -575,6 +575,17 @@ input::placeholder { color: var(--faint); }
 .gloss-game select { max-width: 220px; }
 .stream-url { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .stream-url code { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 12px; user-select: all; }
+
+/* 2.9.0：回話建議 */
+.replies { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.replies .pending { color: var(--dim); font-size: 13px; }
+.replies-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--accent); }
+.reply { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.reply:hover, .reply:focus-visible { border-color: var(--accent); }
+.reply-text { font-size: 14px; font-weight: 600; }
+.reply-meaning { grid-column: 1; font-size: 12px; color: var(--dim); }
+.reply-copy { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 12px; color: var(--accent); }
+
 /* 翻過的句子：用的是記住的翻法時，訊息下方的小字 */
 .msg .meta .kept { color: var(--faint); }
 

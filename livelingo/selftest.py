@@ -17,7 +17,8 @@ from pathlib import Path
 
 def run(out: Path, window: bool = True) -> int:
     results: dict = {}
-    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray", "app_audio", "hotkeys", "quick_input"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
+    soft = {"audio_devices", "mic_capture", "screen_grab", "engine_online", "tray", "app_audio", "hotkeys", "quick_input", "reply_box",
+            "speak_voice"}     # 這幾項跟電腦環境有關，失敗只記錄、不算錯
 
     def check(name, fn):
         started = time.time()
@@ -198,6 +199,42 @@ def run(out: Path, window: bool = True) -> int:
         assert done.returncode == 0 and info.get("text") == "等我一下", {"exit": done.returncode, **info}
         return {"exit": done.returncode, "text": info["text"]}
 
+    def reply_box():
+        """回話建議的小框：另外開的小程式開得起來，讀得到建議，選的那句有交回來。"""
+        import subprocess
+
+        if sys.platform != "win32":
+            return {"available": False}
+        box, result = tmp / "replies-in.json", tmp / "replies-out.json"
+        box.write_text(json.dumps({"items": [{"text": "좋아, 가자!", "meaning": "好，走吧！"}, {"text": "잠깐만", "meaning": "等一下"}]},
+                                  ensure_ascii=False), encoding="utf-8")
+        head = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "livelingo"]
+        done = subprocess.run([*head, "--reply-box", str(box), "--reply-out", str(result), "--lang", "zh-TW", "--their", "ko"],
+                              timeout=60, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              creationflags=subprocess.CREATE_NO_WINDOW, env={**os.environ, "LIVELINGO_FAKE_REPLY": "2"})
+        info = json.loads(result.read_text(encoding="utf-8")) if result.exists() else {}
+        assert done.returncode == 0 and info.get("text") == "잠깐만", {"exit": done.returncode, **info}
+        return {"exit": done.returncode, "text": info["text"]}
+
+    def speak_voice():
+        """念出譯文：Windows 的語音清單拿得到，英文念得出一個 WAV 檔（雲端的測試機不一定有語音，所以算軟性的）。"""
+        from .core.speak import WindowsVoice, read_wav
+
+        if sys.platform != "win32":
+            return {"available": False}
+        voice = WindowsVoice(tmp)
+        try:
+            voices = voice.voices()
+            wav = tmp / "say.wav"
+            got = voice.synth("Hello from LiveLingo.", "en", wav)
+            assert got.get("ok"), {"voices": len(voices), **got}
+            data, rate = read_wav(wav)
+            assert len(data) > rate // 4, len(data)
+            return {"voices": len(voices), "langs": sorted({v.get("lang", "") for v in voices})[:20], "voice": got.get("voice"),
+                    "seconds": round(len(data) / rate, 1)}
+        finally:
+            voice.stop()
+
     def screen_grab():
         import mss
         import numpy as np
@@ -370,6 +407,8 @@ def run(out: Path, window: bool = True) -> int:
     check("app_audio", app_audio)
     check("hotkeys", hotkeys)
     check("quick_input", quick_input)
+    check("reply_box", reply_box)
+    check("speak_voice", speak_voice)
     check("screen_grab", screen_grab)
     check("floating_chat", floating_chat)
 

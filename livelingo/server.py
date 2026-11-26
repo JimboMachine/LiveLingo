@@ -262,6 +262,15 @@ class Server:
                         if action == "forget":
                             return self._json(service.memory_forget())
                         return self._json(service.memory_import(body.get("data"), str(body.get("name") or "")[:120]))
+                    if route == "/api/replies":      # 回話建議：想 3 句（id：對方哪一句，沒給就是最近一句）、複製選的那句
+                        if body.get("action") == "copy":
+                            return self._json({"ok": service.reply_copy(str(body.get("text") or ""))})
+                        msg_id = body.get("id")
+                        return self._json(service.replies(int(msg_id) if isinstance(msg_id, int) else None))
+                    if route == "/api/speak":      # 念出我的譯文：試聽、列出裝好的語音
+                        if body.get("action") == "voices":
+                            return self._json(service.speak_voices())
+                        return self._json(service.speak_test())
                     if route == "/api/stream":      # 直播模式：複製給 OBS 的網址
                         return self._json(service.stream_action(str(body.get("action") or "")))
                     if route == "/api/copy":
