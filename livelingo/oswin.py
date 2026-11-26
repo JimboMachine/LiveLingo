@@ -53,6 +53,39 @@ def last_copied() -> str:
     return _last_copied
 
 
+SENTINEL = "\u200b\u200bLiveLingo-pick\u200b\u200b"      # 替人按 Ctrl+C 之前先放進剪貼簿的暗號：按完還是它，就是什麼都沒選到
+
+
+def press_copy(wait: float = 0.8) -> bool:
+    """替使用者按一下 Ctrl+C（只有「翻選取的字」打開「先替我複製」才會用，預設關）。
+    快速鍵本身（Ctrl+Alt+字母）還按著的時候先等放開，不然會變成 Ctrl+Alt+C。只送這一下，不讀、不記使用者按的鍵。
+    不是 Windows 回傳 False。"""
+    if not IS_WIN:
+        return False
+    import ctypes
+    import time
+
+    u32 = ctypes.windll.user32
+    end = time.monotonic() + wait
+    while time.monotonic() < end and any(u32.GetAsyncKeyState(vk) & 0x8000 for vk in (0x12, 0x11, 0x10)):
+        time.sleep(0.02)      # Alt、Ctrl、Shift 都放開了才按
+    for vk, up in ((0x11, 0), (0x43, 0), (0x43, 2), (0x11, 2)):
+        u32.keybd_event(vk, 0, up, 0)
+    return True
+
+
+def beep() -> None:
+    """短短響一聲（喊我名字提醒用）。不是 Windows 什麼都不做。"""
+    if not IS_WIN:
+        return
+    try:
+        import winsound
+
+        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def read_clipboard() -> str:
     """讀出剪貼簿裡的文字（自我檢查用）。"""
     if not IS_WIN:

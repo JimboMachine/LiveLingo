@@ -21,7 +21,7 @@ def main() -> int:
     if "--select-region" in sys.argv:
         from .region import select
 
-        select(Path(_arg("--select-region")), _arg("--lang", "zh-TW"))
+        select(Path(_arg("--select-region")), _arg("--lang", "zh-TW"), _arg("--mode", "chat"))
         return 0
     if "--quick-input" in sys.argv:      # 快速輸入框：打的字寫到檔案就結束
         from .quickbox import ask
@@ -32,6 +32,16 @@ def main() -> int:
         from .quickbox import choose
 
         choose(Path(_arg("--reply-box")), Path(_arg("--reply-out")), _arg("--lang", "zh-TW"), _arg("--their", "ko"))
+        return 0
+    if "--card" in sys.argv:      # 翻譯結果小卡（翻選取的字、框選翻譯）：只顯示，不寫東西
+        from .quickbox import card
+
+        card(Path(_arg("--card")), _arg("--lang", "zh-TW"), _arg("--their", "ko"))
+        return 0
+    if "--phrase-box" in sys.argv:      # 常用句庫的小框：選的那句譯文寫到檔案就結束
+        from .quickbox import phrases
+
+        phrases(Path(_arg("--phrase-box")), Path(_arg("--phrase-out")), _arg("--lang", "zh-TW"), _arg("--their", "ko"))
         return 0
     if "--remove-store" in sys.argv:      # 卸載程式叫的：大檔案搬到別的磁碟的話，那邊的也刪掉（只刪有記號檔的資料夾）
         import json
