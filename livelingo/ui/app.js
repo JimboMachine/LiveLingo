@@ -121,6 +121,7 @@
     help: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8M12 16.6h.01"/></svg>',
     back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    up: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16V8M8.5 11.5L12 8l3.5 3.5"/></svg>',
     book: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M9 8h7M9 12h5"/></svg>',
     clock: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
     frame: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>',
@@ -182,6 +183,7 @@
     const el = $("status");
     el.dataset.phase = S.phase;
     $("status-text").textContent = t("st_" + S.phase, { percent: percent() });
+    el.title = $("status-text").textContent;      // 視窗很窄的時候文字會收起來，只剩圓點：滑鼠停上去還看得到
     renderQualityChip();
   }
 
@@ -1338,10 +1340,15 @@
   }
   let healthTimer = null;
   async function loadHealth() {
+    const goReport = S.ui.goReport;      // 從出錯畫面按「回報問題」來的：頁面畫好之後直接捲到回報那一塊
+    S.ui.goReport = false;
     const r = await get("/api/health");
     if (!r || r.error) return;
     S.ui.health = r;
-    if (S.view === "settings" && S.ui.tab === "health") renderSettingsPage();
+    if (S.view === "settings" && S.ui.tab === "health") {
+      renderSettingsPage();
+      if (goReport && $("report")) $("report").scrollIntoView({ block: "start" });
+    }
   }
   function healthSoon() {      // 狀態變了（引擎好了、來源開關了）：正在看這一頁就等一下重查
     if (S.view !== "settings" || S.ui.tab !== "health") return;
@@ -1651,6 +1658,7 @@
     const wasAudio = S.ui.tab === "audio";
     S.ui.tab = tab;
     renderSettings();
+    renderOverlay();      // 出錯畫面的蓋板在「回報問題」那一頁會收起來，離開那一頁要再蓋回去
     const page = $("settings-page");
     page.scrollTop = 0;
     page.classList.remove("in"); void page.offsetWidth; page.classList.add("in");      // 換頁的淡入
@@ -1772,18 +1780,35 @@
 
   // ---------------------------------------------------------------- 蓋板
 
+  // 「有新版本」的詢問：開啟時的詢問，和程式開著的時候畫面上小小的提醒按了「看看改了什麼」之後，都是這一張
+  function updateAskHTML(d) {
+    const notes = d.notes || [];
+    return `<h2>${esc(t("up_ask_title", { version: d.version }))}</h2><p>${esc(t("up_ask_text"))}${d.size ? " " + esc(t("up_size", { size: sizeText(d.size) })) : ""}</p>
+      ${notes.length ? `<div class="changes" id="up-notes" tabindex="0" role="group" aria-label="${esc(t("up_notes_title"))}"><b>${esc(t("up_notes_title"))}</b>${changesHTML(notes, notes.length > 1)}</div>` : `<div class="note" id="up-notes-missing">${ICON.info}<span>${esc(t("up_notes_missing"))}</span></div>`}
+      <div class="btn-row center"><button class="primary" data-act="update-now">${esc(t("up_now"))}</button>
+      <button class="ghost" data-act="update-later">${esc(t("up_later"))}</button></div>`;
+  }
+
+  // 程式一直開著的時候查到新版本：主畫面上方一條小小的提醒（不擋住任何東西），按了才看這一版改了什麼、才決定要不要更新
+  function renderUpdateBanner() {
+    const el = $("up-banner"), o = S.updateOffer;
+    const show = !!(o && o.version) && S.phase === "ready" && S.view === "main";
+    el.hidden = !show;
+    el.innerHTML = show ? `${ICON.up}<span>${esc(t("up_ask_title", { version: o.version }))}</span>
+      <button class="ghost" data-act="up-review">${esc(t("up_review"))}</button>
+      <button class="icon-btn" data-act="update-later" aria-label="${esc(t("close"))}" title="${esc(t("close"))}">${ICON.x}</button>` : "";
+  }
+
   function renderOverlay() {
     const el = $("overlay");
     const d = S.detail || {};
-    let html = "";
+    let html = "", wide = false;      // wide：有一長串「這一版改了什麼」要放的時候，蓋板寬一點
     if (S.phase === "updating") {
       const text = d.step === "downloading" ? t("up_downloading", { version: d.version, percent: d.percent || 0 })
         : (d.step === "installing" ? t("up_installing", { version: d.version }) : t("up_checking"));
       if (d.step === "ask") {
-        html = `<h2>${esc(t("up_ask_title", { version: d.version }))}</h2><p>${esc(t("up_ask_text"))}${d.size ? " " + esc(t("up_size", { size: sizeText(d.size) })) : ""}</p>
-          ${(d.notes || []).length ? `<div class="changes" id="up-notes" tabindex="0" role="group" aria-label="${esc(t("up_notes_title"))}"><b>${esc(t("up_notes_title"))}</b>${changesHTML(d.notes, d.notes.length > 1)}</div>` : `<div class="note" id="up-notes-missing">${ICON.info}<span>${esc(t("up_notes_missing"))}</span></div>`}
-          <div class="btn-row center"><button class="primary" data-act="update-now">${esc(t("up_now"))}</button>
-          <button class="ghost" data-act="update-later">${esc(t("up_later"))}</button></div>`;
+        wide = (d.notes || []).length > 0;
+        html = updateAskHTML(d);
       } else {
         const title = d.back ? t("up_back_title") : t("st_updating");
         const line = !d.back ? text : d.step === "downloading" ? t("up_back_downloading", { version: d.version, percent: d.percent || 0 }) : t("up_back_installing", { version: d.version });
@@ -1791,23 +1816,29 @@
           (d.step === "downloading" ? `<div class="bar"><span style="width:${d.percent || 0}%"></span></div>
             <div class="btn-row center"><button class="ghost" data-act="update-cancel">${esc(t("cancel"))}</button></div>` : "");
       }
-    } else if (S.phase === "error") {
+    } else if (S.phase === "error" && !(S.view === "settings" && S.ui.tab === "health")) {      // 在「回報問題」那一頁時蓋板先收起來，才按得到那一頁
       html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.code ? t("err_" + d.code) : (d.message || ""))}</p>` +
         (d.log ? `<p>${esc(t("err_log", { path: d.log }))}</p>` : "") +
-        `<button class="primary" data-act="retry">${esc(t("retry"))}</button>`;
+        `<div class="btn-row center"><button class="primary" data-act="retry">${esc(t("retry"))}</button>
+          <button class="ghost" data-act="err-report">${esc(t("rep_title"))}</button>
+          ${d.log ? `<button class="ghost" data-act="err-logs">${esc(t("sto_open"))}</button>` : ""}</div>`;
     } else if (S.view !== "wizard" && S.phase === "need_download") {
       html = `<h2>${esc(t("st_need_download"))}</h2><p>${esc(d.error ? t("dl_error", { error: d.error }) : t("dl_need", { gb: gb(d.total_mb) }))}</p>
         <button class="primary" data-act="download">${esc(d.error ? t("retry") : t("dl_start"))}</button>` +
         (S.cfg.quality !== "standard" && S.mode.quality === "high" ? `<button class="link" data-act="quality" data-q="standard">${esc(t("q_standard"))}</button>` : "");
     } else if (S.view !== "wizard" && S.phase === "downloading") {
       html = `<h2>${esc(t("dl_title"))}</h2><p>${esc(downloadLine())}</p><div class="bar"><span style="width:${percent()}%"></span></div>`;
+    } else if (S.view !== "wizard" && S.phase === "ready" && S.ui.upReview && S.updateOffer) {      // 提醒上按了「看看改了什麼」
+      wide = (S.updateOffer.notes || []).length > 0;
+      html = updateAskHTML(S.updateOffer);
     } else if (S.view !== "wizard" && S.phase === "ready" && (S.whatsNew || []).length) {      // 更新（或重新安裝）完第一次開：這一版和跳過的每一版改了什麼，按「知道了」才關
+      wide = true;
       html = `<h2>${esc(t("wn_title", { version: S.version }))}</h2><p>${esc(t("wn_text"))}</p>
         <div class="changes" id="wn-notes" tabindex="0" role="group" aria-label="${esc(t("up_notes_title"))}">${changesHTML(S.whatsNew, S.whatsNew.length > 1)}</div>
         <div class="btn-row center"><button class="primary" id="wn-done" data-act="wn-done">${esc(t("wn_done"))}</button></div>`;
     }
     el.hidden = !html;
-    el.innerHTML = html ? `<div class="panel" role="alertdialog" aria-modal="true">${html}</div>` : "";
+    el.innerHTML = html ? `<div class="panel${wide ? " wide" : ""}" role="alertdialog" aria-modal="true">${html}</div>` : "";
     ["rail", "view-main", "view-settings", "view-wizard"].forEach((id) => { $(id).inert = !!html; });      // 蓋板開著：底下的不能按，Tab 也不會跑到底下
   }
 
@@ -1820,6 +1851,7 @@
     if (view === "settings") { renderSettingsPage(); tabOpened(); }
     if (view === "wizard") renderWizard();
     renderOverlay();
+    renderUpdateBanner();
   }
 
   function setView(view) {
@@ -1844,6 +1876,7 @@
     if (S.view === "settings") renderSettingsPage();
     if (S.view === "wizard") renderWizard();
     renderOverlay();
+    renderUpdateBanner();
     renderOverlayState();
   }
 
@@ -2059,8 +2092,9 @@
     },
     "rec-dismiss": () => { S.ui.recHidden = true; renderRecord(); },
     "rec-choose": () => post("/api/record", { choose: true }),
-    "update-now": () => post("/api/update", { choice: "now" }),
-    "update-later": () => post("/api/update", { choice: "later" }),
+    "update-now": () => { S.ui.upReview = false; post("/api/update", { choice: "now" }); },
+    "update-later": () => { S.ui.upReview = false; post("/api/update", { choice: "later" }); renderOverlay(); },
+    "up-review": () => { S.ui.upReview = true; renderOverlay(); },
     "wn-done": () => { S.whatsNew = []; renderOverlay(); post("/api/seen", { whats_new: true }); },
     "update-cancel": () => post("/api/update", { choice: "cancel" }),
     "find-cancel": () => post("/api/find_mic", { cancel: true }),
@@ -2212,7 +2246,10 @@
     "overlay-test": () => post("/api/overlay", { test: true }),
     "overlay-reset": () => post("/api/overlay", { reset: true }).then(loadScreens),
     download: () => post("/api/download"),
-    retry: () => post("/api/retry")
+    retry: () => post("/api/retry"),
+    // 出錯畫面：到「回報問題」（蓋板在那一頁會先收起來）、打開放紀錄檔的資料夾
+    "err-report": () => { S.ui.goReport = true; S.ui.tab = "health"; setView("settings"); },
+    "err-logs": () => post("/api/storage", { open_logs: true })
   };
 
   // 在字幕上選取一段對方語言的字：旁邊浮出「收進單字本」（中文、泰文這些不會自動標生字的語言也能收）
@@ -2576,7 +2613,7 @@
       if (d.mode) S.mode = d.mode;
       if (d.gpu) S.gpu = d.gpu;
       if (typeof d.fallback === "boolean") S.fallback = d.fallback;
-      renderStatus(); renderOverlay();
+      renderStatus(); renderOverlay(); renderUpdateBanner();
       if (S.view === "wizard") { if (before !== S.phase) renderWizard(); else renderWizardStrip(); }
       if (S.view === "settings" && S.ui.tab === "quality" && before !== S.phase) renderSettingsPage();
       if (before !== S.phase) healthSoon();
@@ -2693,6 +2730,11 @@
       clearTimeout(histTimer);
       histTimer = setTimeout(() => loadHistory(), 600);
     },
+    update_offer: (d) => {      // 程式開著的時候查到新版本（空的 = 提醒收起來了）
+      S.updateOffer = d && d.version ? d : null;
+      if (!S.updateOffer) S.ui.upReview = false;
+      renderUpdateBanner(); renderOverlay();
+    },
     storage: (d) => { S.ui.storage = d; if (S.view === "settings" && S.ui.tab === "storage") renderSettingsPage(); },
     storage_move: (d) => {      // 搬的進度：只改數字和進度條，不重畫整頁
       if (S.ui.storage) S.ui.storage.moving = d;
@@ -2731,6 +2773,7 @@
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];
     S.update = st.update || {};
+    S.updateOffer = st.update_offer && st.update_offer.version ? st.update_offer : null;
     if (st.updated_from && !S.whatsNew.length) {      // 剛自動更新（或退回）完第一次開：說一次
       toast(t(S.update.skipped === st.updated_from ? "up_back_done" : "up_done", { version: st.version }), 12000);
       post("/api/seen", { update: true });

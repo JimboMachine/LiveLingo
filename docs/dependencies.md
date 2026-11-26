@@ -131,13 +131,14 @@
 2. `build.yml`：讀版本、推到 main 就發佈
 3. `installer.iss`：安裝檔的版本和檔名
 4. `updater.py`：比較版本、下載、靜默安裝
-5. `service.py`、`config.py`、`app.js`、`README.md`、`guide.py`：開啟時要不要檢查更新是設定（update_check）；會連網路的地方變多或變少時，關於頁、README、說明頁那幾句要一起改
+5. `service.py`、`config.py`、`app.js`、`README.md`、`guide.py`：要不要檢查更新是設定（update_check）；檢查有兩個時間點（開啟時、程式一直開著時每隔幾小時），設定頁、關於頁、README、說明頁的說法要和這兩點一致；會連網路的地方變多或變少時，那幾句要一起改
 6. `changes.py`：data/changes.json 要有新版本那一段，13 種介面語言、句數一樣；那一段要寫完這一版真正放進去的所有改動，不能只寫自己做的那一件（和別的分支合併後要重讀一次，這一版的說明有沒有漏、有沒有放錯版本）；更新提示、關於頁、GitHub 發行說明、更新後第一次開啟的「這次改了什麼」都讀它
 7. `service.py`、`app.js`、`i18n.js`、`updater.py`：更新後第一次開啟要列出「上次看過之後所有的改動」（seen_version、Service._whats_new、/api/seen、介面的 #wn-notes），按「知道了」才關；新安裝、設定精靈還沒走完的不顯示；更新提示拿不到說明時要告訴使用者更新後會看到，不能什麼都不說（updater.fetch_notes 會重試）。test_whats_new_is_told_after_every_update_or_reinstall 在擋
 8. `updater.py`、`service.py`、`build.yml`：用過的安裝檔不留著：新版一開就刪（updater.tidy、_installers_cleanup），剛跑完的那一個等安裝程式結束再試；比現在新的（還沒裝的更新）不能刪。Windows 安裝測試會真的看它有沒有被刪掉
 9. `updater.py`、`service.py`、`app.js`、`i18n.js`：回上一版：update.json 記「從哪一版來的」，退回時重新下載那一版、核對雜湊才裝（介面和儲存空間頁的說明要跟著這個說法）；新版加了舊版不認得的東西（像搬過位置的大檔案），退回之前要先處理（STORE_BEFORE）
 10. `installer.iss`：[Files] 要有 ignoreversion，裝舊版才換得掉新版的檔案
 11. `installer.iss`、`__main__.py`、`build.yml`、`engine.py`：換檔前先把舊的 _internal、LiveLingo.exe 改名成 .old 留著（改名成功才表示檔案都放開了；等不到就用 KillFileHolders 關掉載入了程式資料夾或引擎資料夾裡檔案的程式，再等不到就什麼都不動），裝好才刪，沒裝好就換回去、自動更新時再打開舊版；不要再用 [InstallDelete] 先刪。exit_now 不能先放掉「我還開著」的記號（LiveLingoRunning），收尾出錯也要關引擎並結束；開引擎（和以後開任何外部程式）要包在 engine.own_dlls_only() 裡，否則它會載入並佔住 _internal 的 msvcp140.dll。Windows 安裝測試會在檔案被佔住時更新，看程式還打不打得開
+12. `service.py`、`updater.py`、`app.js`、`i18n.js`：程式一直開著（縮在系統匣）時每隔幾小時再查一次新版本（UPDATE_RECHECK、Service.update_recheck）：只在主畫面上提醒（update_offer 事件和狀態欄位、#up-banner），按了「現在更新」才走和開啟時一樣的下載安裝（_install_update）；使用者關掉 update_check、還沒準備好、說過「這次先不要」或退回來的那一版都不提醒；「看改了什麼」看到的和開啟時的詢問是同一張（updateAskHTML）。test_update_reminder_while_the_app_stays_open 在擋
 
 自動把關：測試會擋：更新程式下載的檔名和發佈的檔名不一樣。自動打包會真的安裝、更新、卸載一次。
 

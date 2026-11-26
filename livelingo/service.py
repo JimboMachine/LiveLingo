@@ -52,6 +52,7 @@ VOICE_FAMILIES = ("ko", "zh", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "d
 
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
 VAD_THRESHOLD = {1: 0.7, 2: 0.6, 3: 0.5, 4: 0.4, 5: 0.3}
+MIC_HEARD_LEVEL = 0.3      # 音量條（speech.level_of）到這麼高，才算麥克風真的收到了聲音（約 -45 dB；安靜房間的底噪不會到）
 PARTIAL_EVERY = 0.08      # 譯文邊翻邊顯示：最快多久更新一次畫面（秒）
 VOICES_SAVE_EVERY = 30.0      # 記住的聲音：聲紋跟著新的句子變了之後，最快多久存一次（秒）
 INSTALLER_RETRY = (20.0, 60.0, 300.0)      # 剛更新完刪不掉的安裝檔（安裝程式還沒結束）：隔這麼久再試（秒）
@@ -74,6 +75,7 @@ MAX_MARKED = 60            # 最近幾則訊息的生字標記留著（介面重
 RECAP_RECENT = 6 * 3600     # 自動摘要只補最近這麼久之內結束的對話
 RECAP_EVERY = 30.0          # 每隔幾秒看一次有沒有剛結束、還沒摘要的對話
 GAME_EVERY = 5.0            # 每隔幾秒看一次現在在玩哪個遊戲（遊戲用語自動切換）
+UPDATE_RECHECK = 4 * 3600   # 程式一直開著（縮在系統匣好幾天）的時候，每隔幾個小時再看一次有沒有新版本
 ENGINE_REST = (0, 10, 30, 60)    # 設定「幾分鐘沒翻譯就讓翻譯引擎休息」可以選的值，0 = 一直開著
 SPEECH_REST = 120.0         # 兩邊收音都關掉這麼多秒：把語音辨識模型（約 1 GB）放掉，下次開收音再載入
 
@@ -204,9 +206,13 @@ class Service:
         self._vu = {"listen": 0.0, "mic": 0.0}
         self._vu_sent = 0.0
         self._finding_mic = False
+        self._mic_heard = False      # 這一次收音開始之後，麥克風有沒有送來過像說話的聲音（有的話，之後的安靜就只是沒人在說話）
         self._find_cancel = threading.Event()
         self._update_choices: queue.Queue = queue.Queue()      # 使用者對「有新版本」的回答
         self._update_stop = threading.Event()
+        self.update_offer: dict | None = None     # 程式開著的時候查到的新版本：{"version", "size", "notes"}（畫面上小小提醒，使用者按了才更新）
+        self._update_info: dict | None = None     # 同一個新版本的下載資料（網址、核對碼）
+        self._update_declined = ""                # 使用者說「這次先不要」的那一版：這次開著的時候不再提醒
         self.messages: deque[dict] = deque(maxlen=200)
         self.jobs = Jobs()             # 翻譯的排隊：我自己的句子先翻，螢幕上讀到的排太久就略過（jobs.py）
         self._skipped = 0              # 略過了幾則還沒告訴使用者
@@ -348,6 +354,7 @@ class Service:
             "whats_new": self.whats_new,             # 更新後第一次開要說的：[{"version", "items"}]，新的在前；空的 = 不用說
             "updated_from": self.updated_from,       # 剛自動更新（或退回）完第一次開：之前的版本號（只說一次）
             "update": self.update_state(),
+            "update_offer": self.update_offer or {},      # 程式開著的時候查到的新版本（沒有就是空的）
         }
 
     def set_phase(self, phase: str, **detail) -> None:
@@ -386,6 +393,7 @@ class Service:
         threading.Thread(target=self._engine_guard, daemon=True, name="engine-guard").start()
         threading.Thread(target=self._boot, daemon=True, name="boot").start()
         threading.Thread(target=self._game_watch, daemon=True, name="game-watch").start()
+        threading.Thread(target=self._update_watch, daemon=True, name="update-watch").start()
 
     def _boot(self) -> None:
         try:
@@ -402,7 +410,7 @@ class Service:
             self._prepare()
         except Exception as ex:  # noqa: BLE001
             self.log(traceback.format_exc())
-            self.set_phase("error", message=str(ex))
+            self.set_phase("error", message=str(ex), log=str(self.data / "app.log"))
 
     def _whats_new(self) -> list[dict]:
         """
@@ -434,11 +442,64 @@ class Service:
         self.hub.publish("config", self.cfg.snapshot())
 
     def update_choice(self, choice: str) -> None:
-        """介面上按了「現在更新」（now）、「這次先不要」（later）或下載中的「取消」（cancel）。"""
-        if choice in ("now", "later", "cancel"):
-            self._update_choices.put(choice)
-            if choice != "now":
-                self._update_stop.set()
+        """介面上按了「現在更新」（now）、「這次先不要」（later）或下載中的「取消」（cancel）。
+        開啟時的詢問在等答案；程式開著的時候查到新版本、畫面上小小提醒著的那一種，答案由這裡直接處理。"""
+        if choice not in ("now", "later", "cancel"):
+            return
+        if self.update_offer and self.phase == "ready":
+            if choice == "now" and self._update_info and not self._move:
+                self._update_stop.clear()
+                threading.Thread(target=self._update_now, daemon=True, name="update-now").start()
+            elif choice == "later":
+                self._update_declined = self.update_offer["version"]
+                self.log(f"update to {self._update_declined} postponed by the user (reminder while the app was open)")
+                self._offer(None)
+            return
+        self._update_choices.put(choice)
+        if choice != "now":
+            self._update_stop.set()
+
+    def _offer(self, offer: dict | None, info: dict | None = None) -> None:
+        """畫面上「有新版本」的提醒換成這一版（None = 收起來）。"""
+        self.update_offer, self._update_info = offer, (info if offer else None)
+        self.hub.publish("update_offer", offer or {})
+
+    def _update_watch(self) -> None:
+        """程式一直開著不關（縮在系統匣）的時候，開啟時查過之後就沒人再看了：每隔幾小時再看一次，有新版本就在畫面上提醒。"""
+        while not self.closing.wait(UPDATE_RECHECK):
+            try:
+                self.update_recheck()
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+
+    def update_recheck(self) -> bool:
+        """查一次有沒有新版本；有（而且還沒提醒過、也不是使用者退回來或說先不要的那一版）就在畫面上提醒，回傳 True。
+        只提醒，不會自己下載或更新；使用者在設定裡關掉了檢查就不連網路。"""
+        if not updater.enabled() or not self.cfg["update_check"] or self.phase != "ready":
+            return False
+        try:
+            info = updater.check()
+        except Exception as ex:  # noqa: BLE001  沒有網路：下次再看
+            self.log(f"update re-check failed: {ex!r}")
+            return False
+        if not info:
+            return False
+        version = info["version"]
+        if version == (self.update_offer or {}).get("version") or version in (self._update_declined, updater.skipped(self.data)) \
+                or updater.Attempts(self.data).recently_tried(version):
+            return False
+        notes = changes.since(updater.fetch_notes(info.get("notes_url") or ""))      # 這次更新會改什麼（拿不到就不顯示）
+        self.log(f"update {version} is available (found while the app was open)")
+        self._offer({"version": version, "size": info.get("size") or 0, "notes": notes}, info)
+        return True
+
+    def _update_now(self) -> None:
+        """畫面上的提醒按了「現在更新」：照開啟時的流程下載、核對、安裝；沒成功（沒網路、按了取消）就回到原本的畫面照常用。"""
+        before = (self.phase, dict(self.detail))
+        info = self._update_info
+        if info and self._install_update(info, updater.Attempts(self.data)):
+            return
+        self.set_phase(before[0], **before[1])
 
     def _update_if_needed(self) -> bool:
         """有新版本就先問使用者。選「現在更新」才下載安裝並結束程式（回傳 True）；
@@ -475,7 +536,13 @@ class Service:
                 continue
         if choice != "now":
             self.log(f"update to {info['version']} skipped by the user")
+            self._update_declined = info["version"]
             return False
+        return self._install_update(info, attempts)
+
+    def _install_update(self, info: dict, attempts: "updater.Attempts") -> bool:
+        """下載新版的安裝檔、核對、啟動安裝程式，然後結束程式讓它換檔案（回傳 True）；
+        下載失敗或使用者按了取消就回傳 False，照常用現在的版本。"""
         try:
             self.set_phase("updating", step="downloading", version=info["version"], percent=0)
             last = [0.0]
@@ -2125,6 +2192,10 @@ class Service:
         oswin.open_path(self.store)
         return {"ok": True}
 
+    def logs_open(self) -> dict:
+        """出錯畫面上的「打開資料夾」：紀錄檔（app.log、engine.log）放的那個資料夾。"""
+        return {"ok": bool(oswin.open_path(self.data))}
+
     # ------------------------------------------------------------------ 全域快速鍵、快速輸入框
 
     def hotkeys_state(self) -> dict:
@@ -2917,6 +2988,8 @@ class Service:
             old = self.pipelines.pop(key, None)
             if old:
                 old.stop()
+            if key == "mic":
+                self._mic_heard = False
             pipe.start()
             self.pipelines[key] = pipe
             self._source(key, on=True, busy=False, quiet="")
@@ -2957,7 +3030,11 @@ class Service:
         if key != "mic":
             return          # 電腦沒在播聲音是正常的，只有麥克風完全沒聲音才需要提醒
         quiet = self.sources["mic"]["quiet"]
-        if silent_for >= 6 and not quiet:
+        if level >= MIC_HEARD_LEVEL:
+            self._mic_heard = True
+        # 只有「從開始就一直完全沒聲音」才提醒（選錯麥克風、被靜音、被 Windows 擋住）。
+        # 有些麥克風（USB 麥克風、有降噪的）沒人說話的時候送來的是一串 0：說過話之後的安靜是正常的，不能每停六秒就跳出「麥克風完全沒有聲音」
+        if silent_for >= 6 and not quiet and not self._mic_heard:
             blocked = oswin.mic_privacy_blocked()
             self.log(f"mic is silent for {silent_for:.0f}s on {self.sources['mic']['device']!r}, privacy blocked: {blocked}")
             self._source("mic", quiet="blocked" if blocked else "silent")
