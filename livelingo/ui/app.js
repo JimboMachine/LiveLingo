@@ -363,6 +363,7 @@
   function bubbleHTML(m) {
     // 對方還在說、先顯示出來的那一則（即時字幕）：原文後面有「…」，說完會換成整句
     let body = `<div class="orig${m.live ? " hearing" : ""}">${esc(m.original)}</div>`;
+    if (m.mention && !m.pending && !m.error) body = `<div class="mention-tag">${esc(t("mention_tag", { w: m.mention }))}</div>` + body;      // 對方提到我設的名字或關鍵字
     // 辨識的時候沒什麼把握：標出來，按下去可以把原文改對再重翻
     const unsure = m.unsure && !m.pending
       ? `<button class="unsure" data-act="fix" data-id="${m.id}">${ICON.info}<span>${esc(t(m.via === "screen" ? "unsure_seen" : "unsure_heard"))}</span></button>` : "";
@@ -1505,7 +1506,7 @@
   let histTimer = null;
 
   // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
-  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply"];
+  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase"];
   const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
   function hotkeysHTML() {
     const hk = S.hotkeys || { available: false, states: {} };
@@ -1524,8 +1525,32 @@
     };
     return (hk.available ? "" : `<div class="note">${ICON.info}<span>${esc(t("hk_unavailable"))}</span></div>`)
       + HOTKEYS.map(row).join("")
+      + switchRow("pick_copy", t("pick_copy"), t("pick_copy_desc"))
       + `<div class="btn-row"><button class="ghost" data-act="quick-try">${esc(t("hk_try"))}</button>
           <button class="ghost" data-act="hotkey-reset">${esc(t("hk_reset"))}</button></div>`;
+  }
+
+  // 常用句庫：事先存好常說的話，每一句已經翻成對方的語言（改了對方的語言會在背景補翻）
+  function phrasebookHTML() {
+    const ph = S.phrases || { items: [], max: 36 };
+    const rows = ph.items.map((it) => `<div class="setting-row phrase-row"><div class="phrase-text"><div>${esc(it.text)}</div>
+        <input type="text" class="phrase-tr" data-phrase-edit="${esc(it.id)}" maxlength="120" value="${esc(it.tr)}" placeholder="${esc(t("ph_translating"))}" aria-label="${esc(t("ph_edit"))}"></div>
+        <button class="icon-btn" data-act="phrase-remove" data-id="${esc(it.id)}" aria-label="${esc(t("ph_remove", { text: it.text }))}" title="${esc(t("ph_remove", { text: it.text }))}">${ICON.x}</button></div>`).join("");
+    return `<div class="phrase-add"><input type="text" id="phrase-new" maxlength="120" placeholder="${esc(t("ph_placeholder"))}" aria-label="${esc(t("ph_placeholder"))}">
+        <button class="primary" data-act="phrase-add">${esc(t("ph_add"))}</button></div>
+      ${rows || `<div class="hist-none">${esc(t("ph_empty"))}</div>`}
+      ${ph.items.length ? "" : `<div class="btn-row"><button class="ghost" data-act="phrase-starters">${esc(t("ph_starters"))}</button></div>`}`;
+  }
+  function alertHTML() {
+    return `<div class="setting-row choice"><input type="text" id="alert-words" class="hist-q" maxlength="200" data-change="alert_words" value="${esc((S.cfg.alert_words || []).join(", "))}"
+        placeholder="${esc(t("al_placeholder"))}" aria-label="${esc(t("al_placeholder"))}"></div>${switchRow("alert_sound", t("al_sound"))}`;
+  }
+  async function phraseDo(body) {
+    const r = await post("/api/phrases", body);
+    if (r && r.items) S.phrases = r;
+    if (r && !r.ok && body.action === "add") toast(t("ph_not_added"), 6000, "warn");
+    if (S.view === "settings" && S.ui.tab === "general") { const keep = document.activeElement && document.activeElement.id; renderSettingsPage(); if (keep) { const el = $(keep); if (el) el.focus(); } }
+    return r;
   }
   function hotkeyRecord(name) {      // name：開始等哪個動作的新組合；null：不等了
     if ((S.ui.hotkeyRec || null) === (name || null)) return;
@@ -1568,6 +1593,8 @@
         ${switchRow("copy_spoken", t("copy_spoken"))}
       </section>
       <section><div><h2>${esc(t("hk_title"))}</h2><div class="sub">${esc(t("hk_hint"))}</div></div>${hotkeysHTML()}</section>
+      <section id="phrase-section"><div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}</section>
+      <section><div><h2>${esc(t("al_title"))}</h2><div class="sub">${esc(t("al_hint"))}</div></div>${alertHTML()}</section>
       <section><div><h2>${esc(t("set_title"))}</h2><div class="sub">${esc(t("set_hint"))}</div></div>${settingsFileHTML()}</section>
       <section><div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div></section>`;
   }
@@ -2223,6 +2250,9 @@
     "hotkey-set": (el) => hotkeyRecord(S.ui.hotkeyRec === el.dataset.name ? null : el.dataset.name),
     "hotkey-clear": (el) => saveHotkey(el.dataset.name, ""),
     "hotkey-reset": () => saveCfg({ hotkeys: S.hotkeys.defaults || {} }),
+    "phrase-add": async () => { const el = $("phrase-new"); const text = el ? el.value.trim() : ""; if (text) await phraseDo({ action: "add", text }); },
+    "phrase-starters": () => phraseDo({ action: "starters" }),
+    "phrase-remove": (el) => phraseDo({ action: "remove", id: el.dataset.id }),
     "quick-try": async () => { const r = await post("/api/quick_input"); if (r && !r.ok && S.phase === "ready") toast(t("n_save_failed", { error: "" }), 5000, "warn"); },
     "wz-begin": () => { if (S.phase === "need_download") post("/api/download"); wizardGo(1); },
     "wz-next": () => wizardGo(S.ui.wz + 1),
@@ -2473,6 +2503,10 @@
         .catch(() => toast(t("lib_bad"), 9000, "warn"));
       return;
     }
+    if (e.target.dataset && e.target.dataset.phraseEdit) {      // 自己改這一句的譯文
+      post("/api/phrases", { action: "edit", id: e.target.dataset.phraseEdit, text: e.target.value }).then((r) => { if (r && r.items) S.phrases = r; });
+      return;
+    }
     const key = e.target.dataset && e.target.dataset.change;
     if (!key) return;
     if (key === "region-name" || key === "region-app") {
@@ -2529,6 +2563,9 @@
     mapKeyTimer = setTimeout(() => { S.ui.mapDrag = false; mapPlace(S.ui.screens.rect, true); }, 500);
   });
 
+  document.addEventListener("keydown", (e) => {      // 句庫的輸入框：Enter 就加進去
+    if (e.key === "Enter" && e.target && e.target.id === "phrase-new") { e.preventDefault(); const text = e.target.value.trim(); if (text) phraseDo({ action: "add", text }); }
+  });
   document.addEventListener("keydown", (e) => {      // 正在等新的快速鍵：這一下按鍵就是答案，不要讓它做別的事
     const name = S.ui.hotkeyRec;
     if (!name) return;
@@ -2678,6 +2715,7 @@
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
     replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
     words: (d) => { S.words[d.id] = d.items; const m = S.messages.find((x) => x.id === d.id); if (m) upsertMessage(m); },
+    phrases: (st) => { S.phrases = st; if (S.view === "settings" && S.ui.tab === "general" && !(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.phraseEdit)) { const sec = $("phrase-section"); if (sec) sec.innerHTML = `<div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}`; } },
     wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") loadWords(); },
     recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
@@ -2768,7 +2806,7 @@
     const st = await get("/api/state");
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
-    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];

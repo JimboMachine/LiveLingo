@@ -247,6 +247,71 @@ def test_built_in_examples():
     assert back.asked[-1][2] == []
 
 
+def test_over_translation_is_caught(tmp_path):
+    """超譯（2.10.1）：例子都是使用者翻譯紀錄裡真的發生過的。"""
+    from livelingo.core.translate import drop_notes, extra_lines, meta_reply, too_long
+
+    # 譯文長得不合理：把前一句「單純問問」也翻進來了
+    assert too_long("造成困擾 我先道歉。", "불편을 드렸다면 죄송해. 그냥 궁금해서 물어본 거야.", "zh", "ko")
+    assert not too_long("造成困擾 我先道歉。", "불편을 드렸다면 미안해.", "zh", "ko")
+    assert not too_long("Jillian or Nami?", "Jillian 還是 Nami？", "en", "zh-TW")      # 名字在哪種語言都算一個詞
+    assert not too_long("等一下", "잠깐만 기다려 줘.", "zh", "ko")                       # 太短的不判斷
+    # 模型在跟人說話，不是翻譯
+    assert meta_reply("好的，請提供您要翻譯的韓文文字。", "스")
+    assert meta_reply("這句話無法理解，無法翻譯。請提供更完整的句子或上下文。", "여가 p1i 0하금")
+    assert not meta_reply("我已經開啟翻譯功能了。", "나 번역 기능 켜놨어")
+    assert not meta_reply("請提供你的帳號", "請提供你的帳號")      # 原文本來就這樣說
+    # 原文一行，譯文多出來的行是模型接下去編的
+    assert extra_lines("Savi:\n你現在在幹嘛？", "Savi", "en", "zh-TW") == "Savi"
+    assert extra_lines("好的。\n裝飾。\n好的。", "보이오이", "ko", "zh-TW") == "好的。"
+    assert extra_lines("我觉得他们会来抓下路\n그들이 바텀에 올 것 같아.", "我覺得他們會來抓下路", "zh", "ko").count("\n") == 1
+    # 原文沒有括號：括號裡是模型自己加的註解
+    assert drop_notes("總是動不動就... (然後省略了後面的內容)", "자꾸 뭐만하면") == "總是動不動就..."
+    assert drop_notes("後面的！ (Hòu miàn de!)", "뒷무동!") == "後面的！"
+    assert drop_notes("我(笑)", "나(웃음)") == "我(笑)"
+
+    # 前文被翻進去：不給前文重翻，用長度正常的那次
+    tr = _FakeModel(lambda text, style, context: "불편을 드렸다면 죄송해. 그냥 궁금해서 물어본 거야." if context else "불편을 드렸다면 미안해.")
+    assert tr.translate("造成困擾 我先道歉", "ko", "zh", ["單純問問"]) == "불편을 드렸다면 미안해."
+    assert tr.contexts == [["單純問問"], []]
+    # 跟人說話：只用官方提示重翻；還是這樣就不翻（螢幕上的就不會顯示）
+    tr = _FakeModel({"full": "好的，請提供您要翻譯的韓文文字。", "plain": "好的，請提供您要翻譯的韓文文字。"})
+    assert tr.translate("스", "zh-TW", "ko") == "스"
+    tr = _FakeModel({"full": "沒問題。請提供您要翻譯的韓文文字。", "plain": "是。"})
+    assert tr.translate("이", "zh-TW", "ko") == "是。"
+    tr = _FakeModel("Savi:\n你現在在幹嘛？")
+    assert tr.translate("Savi", "zh-TW", "en") == "Savi" and len(tr.asked) == 1
+    tr = _FakeModel("嗨，好久不見！")                     # 正常的一句：只問一次
+    assert tr.translate("안녕, 오랜만이야!", "zh-TW", "ko") == "嗨，好久不見！" and len(tr.asked) == 1
+    # 以前記下來的超譯不再拿出來用：重翻，新的蓋掉舊的；教過的照用
+    from livelingo.memory import Memory
+
+    mem = Memory(tmp_path)
+    mem.store("造成困擾 我先道歉", "zh", "ko", "casual", "불편을 드렸다면 죄송해. 그냥 궁금해서 물어본 거야.", "12b", "")
+    tr = _FakeModel("불편을 드렸다면 미안해.", memory=mem)
+    tr.model = "12b"
+    assert tr.translate("造成困擾 我先道歉", "ko", "zh", remember="typed") == "불편을 드렸다면 미안해." and len(tr.asked) == 1
+    assert mem.find("造成困擾 我先道歉", "zh", "ko", "casual", "12b", "")[0] == "불편을 드렸다면 미안해."
+    mem.fix("單純問問", "zh", "ko", "casual", "그냥 물어보는 거야. 진짜 그냥 궁금해서 물어본 거야.")
+    assert tr.translate("單純問問", "ko", "zh", remember="typed") == "그냥 물어보는 거야. 진짜 그냥 궁금해서 물어본 거야."
+    mem.close()
+    # 規定寫在提示裡：名字、地名不換成對方國家的；台灣地名告訴模型是哪裡（前文在講台灣時，「台北人」曾被翻成「首爾人」）
+    from livelingo.core.translate import places_in, plain_zh, slang_in
+
+    assert places_in("因為我是臺北人") == [("台北", "Taipei (a city in Taiwan)")] and places_in("我去吃飯") == []
+    assert "Place names (keep them as these places): 台北 = Taipei" in build_prompt("因為我是台北人。", "zh", "ko", {}, "casual", [])
+    assert "Place names" not in build_prompt("因為我是台北人。", "zh", "ko", {}, "casual", [], style="plain")
+    # 模型常翻錯的口語：意思用目標語言給；「A片」送進模型前換成一般說法（不然 A片 會原樣留在譯文裡）
+    assert slang_in("我雖然溫柔，但比較色", "ko") == [("色", "야하다, 밝히다 (pervy, horny)")]
+    assert slang_in("顏色很好看", "ko") == [] and slang_in("很色彩繽紛", "ko") == []
+    assert "色 = 야하다" in build_prompt("我很色。", "zh", "ko", {}, "casual", [])
+    assert plain_zh("我記得韓國看A片犯法") == "我記得韓國看成人影片犯法"
+    tr = _FakeModel("한국에서 성인 영상 보는 거 불법이야.")
+    tr.translate("韓國看A片犯法", "ko", "zh")
+    assert tr.asked[0][0] == "韓國看成人影片犯法。"
+    assert "never swap them for ones from the reader's country" in build_prompt("因為我是台北人。", "zh", "ko", {}, "casual", [])
+
+
 def test_lessons(tmp_path):
     lessons = Lessons(tmp_path)
     assert lessons.list() == []
@@ -2666,7 +2731,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     try:
         service.start_hotkeys()
         state = service.state()["hotkeys"]
-        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok"}
+        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok"}
         assert state["defaults"] == DEFAULTS["hotkeys"]
 
         # 開關字幕
@@ -2962,7 +3027,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "麥克風 (HyperX)")
         assert (light("listen")["code"], light("listen")["name"]) == ("listen_found", "耳機 (HyperX)")
         assert (light("screen")["state"], light("screen")["code"]) == ("off", "screen_none")
-        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 5)
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 8)
         assert (light("saving")["state"], light("saving")["folder"]) == ("ok", str(tmp_path))
         assert first["worst"] == "warn"
 
@@ -6576,3 +6641,254 @@ def test_seven_features_part_three(tmp_path, monkeypatch):
         assert name in js, name
     server = (root / "livelingo" / "server.py").read_text(encoding="utf-8")
     assert "/api/words" in server and "/api/recaps" in server
+
+
+def test_snap_pick_phrases_and_call_outs(tmp_path, monkeypatch):
+    """2.11.0：翻選取的字、框選翻譯（結果小卡）、常用句庫、喊我名字提醒。"""
+    import json
+    import re
+    import time as _time
+    from pathlib import Path
+
+    import numpy as np
+
+    from livelingo import hotkeys, mention, oswin, quickbox, region, snap
+    from livelingo.config import DEFAULTS, EDITABLE, UI_LANGS
+    from livelingo.core.ocr import Line, model_of
+    from livelingo.phrases import MAX_PHRASES, Phrasebook
+    from livelingo.service import Service
+
+    # ---- 框選：一列列的字接成一段段（上下緊貼、左邊對齊才接；隔壁欄夾在中間也接得回；符號和低把握的不要）
+    row = lambda text, x, y, h=20, w=0, s=0.9: Line(text, x, y, h, s, w)      # noqa: E731
+    got = snap.paragraphs([row("Defeat 5 wolves in", 10, 10), row("12", 300, 10, s=0.99), row("the northern forest.", 10, 34),
+                           row("Reward: 200 gold", 10, 120), row("★", 5, 200), row("blurry", 10, 160, s=0.2)])
+    assert got == ["Defeat 5 wolves in the northern forest.", "Reward: 200 gold"]
+    assert snap.paragraphs([row("魔物を", 10, 10), row("倒せ", 10, 32)]) == ["魔物を倒せ"]      # 中日韓文字接起來不加空格
+    assert snap.paragraphs([row(f"line {n}", 10, n * 100) for n in range(20)]) == [f"line {n}" for n in range(snap.MAX_GROUPS)]
+    assert snap.paragraphs([]) == []
+
+    # ---- 提到我：整理名字、英文要整個字、中文包含就算
+    assert mention.clean_words("Jimbo, 小明、jimbo\n  ,阿") == ["Jimbo", "小明", "阿"] and mention.clean_words(None) == []
+    assert len(mention.clean_words([f"n{i}" for i in range(50)])) == mention.MAX_WORDS
+    assert mention.find(["hey jimbo!", ""], ["Jim", "jimbo"]) == "jimbo" and mention.find(["Jimmy"], ["Jim"]) == ""
+    assert mention.find(["小明你好"], ["小明"]) == "小明" and mention.find(["x"], []) == ""
+
+    # ---- 常用句庫：加、重複、滿了、改譯文（改過的不被機器蓋掉）、檔案壞了照樣開
+    book = Phrasebook(tmp_path / "book")
+    first = book.add("等我一下", "zh")
+    assert first and book.add("  等我一下 ") is None and book.add("   ") is None and [m["text"] for m in book.missing("ko")] == ["等我一下"]
+    assert book.set_translation(first["id"], "ko", "잠깐만요") and book.listing("ko") == [{"id": first["id"], "text": "等我一下", "tr": "잠깐만요", "fixed": False}]
+    assert book.set_translation(first["id"], "ko", "잠깐만", fixed=True) and not book.set_translation(first["id"], "ko", "다시 번역")      # 改過的不被蓋掉
+    assert book.listing("ko")[0]["tr"] == "잠깐만" and book.listing("ja")[0]["tr"] == "" and book.listing("ko")[0]["fixed"]
+    assert book.set_translation(first["id"], "ko", "", fixed=True) and book.missing("ko")      # 改成空的 = 回到沒有，會重翻
+    for n in range(MAX_PHRASES + 5):
+        book.add(f"句子 {n}")
+    assert len(book.items) == MAX_PHRASES and Phrasebook(tmp_path / "book").items == book.items      # 存起來、再開讀得回來
+    assert book.remove(first["id"]) and not book.remove("nope")
+    (tmp_path / "bad").mkdir()
+    (tmp_path / "bad" / "phrases.json").write_text("{壞掉了", encoding="utf-8")
+    assert Phrasebook(tmp_path / "bad").items == [] and Phrasebook(tmp_path / "bad").error
+    starter = Phrasebook(tmp_path / "starter")
+    assert starter.starters("ja", "ja") > 3 and starter.starters("ja", "ja") == 0 and starter.starters("xx") == 6      # 沒有這個語言的範例就用英文（gg 已經有了）
+
+    # ---- 每種語言都有字、快速鍵不撞、預設不替人按鍵、檔案格式
+    assert {"pick", "snap", "phrase"} <= set(hotkeys.ACTIONS) and set(DEFAULTS["hotkeys"]) == set(hotkeys.ACTIONS)
+    assert len(set(DEFAULTS["hotkeys"].values())) == len(hotkeys.ACTIONS) and all(hotkeys.normalize(c) == c for c in DEFAULTS["hotkeys"].values())
+    assert DEFAULTS["pick_copy"] is False and DEFAULTS["alert_words"] == [] and {"pick_copy", "alert_words", "alert_sound"} <= EDITABLE
+    for table in hotkeys.NOTES.values():
+        assert {"pick_empty", "snap_nothing", "phrase_empty", "phrase_copied"} <= set(table)
+    assert set(quickbox.CARD_TEXTS) == set(quickbox.PHRASE_TEXTS) == set(region.SNAP_HINTS) == set(UI_LANGS)
+    assert all(len(v) == 3 for v in quickbox.CARD_TEXTS.values()) and all(len(v) == 2 for v in quickbox.PHRASE_TEXTS.values())
+    assert all(region.SNAP_HINTS[lang] != region.HINTS[lang] and region.SNAP_HINTS[lang].endswith(region.HINTS[lang].split("\n")[1]) for lang in UI_LANGS)
+    root = Path(__file__).resolve().parent.parent / "livelingo"
+    i18n = (root / "ui" / "i18n.js").read_text(encoding="utf-8")
+    for key in ("hk_pick", "hk_pick_desc", "hk_snap", "hk_snap_desc", "hk_phrase", "hk_phrase_desc", "pick_copy", "pick_copy_desc", "ph_title", "ph_hint",
+                "ph_placeholder", "ph_add", "ph_starters", "ph_remove", "ph_empty", "ph_translating", "ph_edit", "ph_not_added", "al_title", "al_hint",
+                "al_placeholder", "al_sound", "mention_tag"):
+        assert len(re.findall(rf"\b{key}: \"", i18n)) == len(UI_LANGS), key
+    help_data = json.loads((root / "data" / "help.json").read_text(encoding="utf-8"))
+    assert all({"{pick}", "{snap}", "{phrase}"} <= {m for m in re.findall(r"\{\w+\}", next(s for s in v["sections"] if s["id"] == "keys")["items"][0])} for v in help_data.values())
+    server = (root / "server.py").read_text(encoding="utf-8")
+    app = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    assert 'route == "/api/phrases"' in server and "service.phrase_action(" in server
+    for piece in ('"phrase-add"', '"phrase-remove"', "data-phrase-edit", "mention-tag", '"pick", "snap", "phrase"'):
+        assert piece in app, piece
+    main = (root / "__main__.py").read_text(encoding="utf-8")
+    assert all(flag in main for flag in ("--card", "--phrase-box", "--phrase-out", '"--mode"'))
+    assert [c for c in re.findall(r"press_copy\(", (root / "service.py").read_text(encoding="utf-8"))] == ["press_copy("]      # 替人按 Ctrl+C 只有一個地方用，而且要設定打開
+
+    # ---- 主程式：假的翻譯、假的小程式（記下開了什麼、參數）
+    class Fake:
+        tone = "casual"
+
+        def __init__(self):
+            self.calls = []
+
+        def translate(self, text, target, source=None, context=None):
+            self.calls.append((text, target))
+            return text if text == "你好" else f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    started = []
+
+    class Proc:
+        def __init__(self, args, **kw):
+            started.append(args)
+            self.pid, self.gate = 4242, threading.Event()
+
+        def poll(self):
+            return None if not self.gate.is_set() else 0
+
+        def wait(self, timeout=None):
+            self.gate.wait(5)
+            return 0
+
+        def kill(self):
+            self.gate.set()
+
+    import subprocess as _sp
+
+    real_popen = _sp.Popen
+    monkeypatch.setattr(_sp, "Popen", lambda args, **kw: Proc(args, **kw) if args and args[0] == "livelingo" else real_popen(args, **kw))
+    monkeypatch.setattr("livelingo.service.self_command", lambda: ["livelingo"])
+    pressed, beeps, copied = [], [], []
+    selected = ["다음 퀘스트"]      # 「替我按 Ctrl+C」在 Windows 上會真的走這條：假的按鍵就把選取的字放進剪貼簿
+    monkeypatch.setattr(oswin, "press_copy", lambda *a, **k: pressed.append(1) or copied.append(selected[0]) or True)
+    monkeypatch.setattr(oswin, "beep", lambda: beeps.append(1))
+    monkeypatch.setattr(oswin, "copy_text", lambda text: copied.append(text) or True)
+    monkeypatch.setattr(oswin, "read_clipboard", lambda: copied[-1] if copied else "")
+    monkeypatch.setattr(oswin, "allow_foreground", lambda pid: True)
+
+    service = Service(tmp_path / "svc")
+    service.cfg.set(my_lang="zh-TW", their_lang="ko", ui_lang="zh-TW", back_translate=False)
+    service.translator = Fake()
+    service._wake_engine = lambda: None
+    notes = []
+    service.overlay.note = notes.append
+    service.hub.publish = lambda *a, **k: None
+    worker = threading.Thread(target=service._translate_worker, daemon=True)
+    worker.start()
+
+    def wait(test, seconds=5):
+        end = _time.time() + seconds
+        while _time.time() < end and not test():
+            _time.sleep(0.02)
+        assert test()
+
+    card = service.data / "card.json"
+    note_of = lambda key: hotkeys.NOTES["zh-TW"][key]      # noqa: E731
+    try:
+        # 引擎還沒好：不翻，說一聲
+        copied.append("안녕하세요")
+        assert service.pick_text() is False and service.snap_text() is False and notes == [note_of("not_ready")] * 2
+        service.phase = "ready"
+
+        # 翻選取的字：預設不替人按 Ctrl+C，用剪貼簿；小卡先顯示「翻譯中」，翻好更新成譯文，也進對話
+        copied[:] = ["안녕하세요\n반갑습니다"]
+        assert service.pick_text() is True and not pressed
+        wait(lambda: card.exists() and json.loads(card.read_text(encoding="utf-8"))["done"])
+        shown = json.loads(card.read_text(encoding="utf-8"))
+        assert shown == {"items": [{"original": "안녕하세요 반갑습니다", "translated": "<zh-TW>안녕하세요 반갑습니다"}], "done": True}
+        assert started[-1][:3] == ["livelingo", "--card", str(card)] and "--lang" in started[-1] and "ko" in started[-1]
+        assert [m["original"] for m in service.messages] == ["안녕하세요 반갑습니다"] and service.messages[0]["via"] == "screen"
+        # 本來就是我的語言：小卡上照原樣顯示，不會卡在「翻譯中」
+        copied[:] = ["你好"]
+        assert service.pick_text() is True
+        wait(lambda: json.loads(card.read_text(encoding="utf-8"))["items"][0]["original"] == "你好" and json.loads(card.read_text(encoding="utf-8"))["done"])
+        assert json.loads(card.read_text(encoding="utf-8"))["items"][0]["translated"] == "你好"
+        # 剪貼簿是空的：說怎麼做
+        copied[:] = ["  \n "]
+        notes.clear()
+        assert service.pick_text() is False and notes == [note_of("pick_empty")]
+        # 打開「先替我按 Ctrl+C」：非 Windows 沒有這個功能，照用剪貼簿；Windows 才會真的按（這裡不能試）
+        service.cfg.set(pick_copy=True)
+        copied[:] = ["이전에 복사한 글"]
+        assert service.pick_text() is True and bool(pressed) == oswin.IS_WIN
+        assert service.messages[-1]["original"] == ("다음 퀘스트" if oswin.IS_WIN else "이전에 복사한 글")
+        service.cfg.set(pick_copy=False)
+
+        # 框選翻譯：假的框選結果、假的畫面、假的辨識；兩段各翻各的，小卡一次列出
+        monkeypatch.setenv("LIVELINGO_FAKE_REGION", "0,0,400,200")
+        service.grab = lambda region: np.zeros((region["height"], region["width"], 3), dtype=np.uint8)
+
+        class Ocr:
+            model = model_of("ko")
+
+            def __init__(self, lines):
+                self.lines = lines
+
+            def read(self, bgr):
+                return self.lines
+
+        service.ocr = Ocr([row("몬스터 5마리를", 10, 10), row("처치하세요", 10, 34), row("보상: 금화 200", 10, 120)])
+        assert service.snap_text() is True
+        wait(lambda: not service._snap_busy and json.loads(card.read_text(encoding="utf-8")).get("done") and len(json.loads(card.read_text(encoding="utf-8"))["items"]) == 2)
+        shown = json.loads(card.read_text(encoding="utf-8"))["items"]
+        assert [i["original"] for i in shown] == ["몬스터 5마리를 처치하세요", "보상: 금화 200"] and all(i["translated"].startswith("<zh-TW>") for i in shown)
+        assert started[-1][1] == "--card" and "--select-region" not in started[-1]      # 假的框選結果：沒有另外開框選程式
+        service.ocr = Ocr([])
+        notes.clear()
+        assert service.snap_text() is True
+        wait(lambda: not service._snap_busy)
+        assert notes == [note_of("snap_nothing")]
+        monkeypatch.delenv("LIVELINGO_FAKE_REGION")
+        # 真的按快速鍵：開框選程式（--mode snap）而且在框之前就拍下畫面
+        service.grab = None
+        before = len(started)
+        assert service.snap_text() is True
+        assert started[before][:2] == ["livelingo", "--select-region"] and started[before][-2:] == ["--mode", "snap"]
+        assert service.snap_text() is False      # 框選還沒結束：不開第二個
+        service._snap_busy = False
+        service.cfg.set(their_lang="ko")
+
+        # ---- 常用句庫
+        assert service.phrase_box() is False and notes[-1] == note_of("phrase_empty")
+        assert service.phrase_action("add", "", "等我一下")["ok"] and service.phrase_action("add", "", "等我一下")["ok"] is False
+        assert service.phrase_action("nope")["ok"] is False
+        wait(lambda: service.phrases.listing("ko")[0]["tr"] == "<ko>等我一下")      # 在背景翻好
+        pid = service.phrases.items[0]["id"]
+        assert service.state()["phrases"]["items"][0]["tr"] == "<ko>等我一下" and service.state()["phrases"]["lang"] == "ko"
+        assert service.phrase_action("edit", pid, "잠깐만요")["items"][0]["fixed"]      # 自己改的
+        service.update_config({"their_lang": "ja"})
+        wait(lambda: service.phrases.listing("ja")[0]["tr"] == "<ja>等我一下")      # 換對方的語言：沒有的補翻
+        assert service.phrases.listing("ko")[0]["tr"] == "잠깐만요"                  # 改過的留著
+        service.update_config({"their_lang": "ko"})
+        # 小框：寫給它句子、選了就複製、說一聲
+        notes.clear()
+        copied.clear()
+        assert service.phrase_box() is True and service.phrase_box() is False
+        box = service.data / "phrases-in.json"
+        assert json.loads(box.read_text(encoding="utf-8"))["items"] == [{"id": pid, "text": "等我一下", "tr": "잠깐만요", "fixed": True}]
+        assert started[-1][1] == "--phrase-box" and "--phrase-out" in started[-1]
+        (service.data / "phrases-out.json").write_text(json.dumps({"text": "잠깐만요"}, ensure_ascii=False), encoding="utf-8")
+        service._phrase_child.gate.set()
+        wait(lambda: copied == ["잠깐만요"] and notes == [note_of("phrase_copied")])
+        assert service.phrase_action("remove", pid)["items"] == []
+
+        # ---- 喊我名字提醒：只看對方的話、英文名字要整個字、一則只響一次、三秒內最多響一次、可以關掉
+        service.messages.clear()
+        service.update_config({"alert_words": "Jimbo, 小明 ,jimbo"})
+        assert service.cfg["alert_words"] == ["Jimbo", "小明"]
+        service.submit("heard", "Jimbo 어디야?", "ko")
+        service.submit("heard", "Jimmy 어디야?", "ko")
+        service.submit("typed", "Jimbo 我在這", "zh")
+        wait(lambda: len([m for m in service.messages if not m.get("pending")]) == 3)
+        by = {m["original"]: m for m in service.messages}
+        assert by["Jimbo 어디야?"]["mention"] == "Jimbo" and not by["Jimmy 어디야?"]["mention"] and not by["Jimbo 我在這"]["mention"]
+        assert len(beeps) == 1 and [i["mention"] for i in service.overlay.items if i["key"] == by["Jimbo 어디야?"]["id"]] == [True]
+        service._alert_at -= 10
+        service._alert(dict(by["Jimbo 어디야?"]))      # 同一則不再響
+        assert len(beeps) == 1
+        service._alert(dict(by["Jimbo 어디야?"], id=99999))
+        assert len(beeps) == 2
+        service.cfg.set(alert_sound=False)
+        service._alert_at -= 10
+        service._alert(dict(by["Jimbo 어디야?"], id=100000))
+        assert len(beeps) == 2
+        service.update_config({"alert_words": []})
+        assert service._mention_of({"who": "them", "original": "Jimbo"}, "Jimbo") == ""      # 沒設關鍵字就不標
+    finally:
+        service.closing.set()
+        worker.join(2)

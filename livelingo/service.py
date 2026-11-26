@@ -16,7 +16,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, guide, oswin, paths, report, storage, subtitles, updater, voicebook, works
+from . import __version__, apps, assets, changes, chatpaint, gpu, guide, mention, oswin, paths, report, snap, storage, subtitles, updater, voicebook, works
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -37,6 +37,7 @@ from .hotkeys import NOTES as HOTKEY_NOTES
 from .hotkeys import Hotkeys
 from .hotkeys import normalize as hotkey_normalize
 from .overlay import BAR_LOOK, Overlay
+from .phrases import Phrasebook
 from .paths import self_command
 from .terms import PACKS, TermPack, find_game, game_name, packs_for
 from .stream import StreamOut
@@ -253,6 +254,16 @@ class Service:
         self.hotkeys = Hotkeys(self._hotkey, on_state=lambda states: self.hub.publish("hotkeys", self.hotkeys_state()))
         self._quick = None             # 快速輸入框開著的時候是那個小程式
         self._reply_child = None       # 回話小框開著的時候是那個小程式
+        self.phrases = Phrasebook(self.data)      # 常用句庫（phrases.py）
+        self._phrase_child = None      # 常用句庫小框開著的時候是那個小程式
+        self._phrase_filling = False   # 正在背景補翻常用句
+        self._phrase_lock = threading.Lock()
+        self._card_child = None        # 翻譯結果小卡開著的時候是那個小程式
+        self._card_gate = threading.RLock()      # 送去翻譯和登記小卡之間不讓翻好的結果插進來
+        self._cards: dict[int, dict] = {}        # 訊息編號 → 在等它的那張小卡
+        self._snap_busy = False        # 框選翻譯進行中
+        self._alerted: deque = deque(maxlen=200)      # 已經響過提醒的訊息編號
+        self._alert_at = 0.0
         self._replies: dict = {"id": 0, "state": "off", "items": []}      # 最近一次的回話建議（給介面）
         self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
         self._recent_voice: deque[dict] = deque(maxlen=12)      # 最近聽到的句子（兩邊都記），用來認出麥克風收到的喇叭聲音
@@ -345,6 +356,7 @@ class Service:
             "replies": dict(self._replies),
             "words": {str(k): v for k, v in self._words.items()},
             "wordbook": self.wordbook.state(),
+            "phrases": self.phrases_state(),
             "recaps": dict(self.recaps.state(), **self._recap),
             "record": self.record_state(),
             "hotkeys": self.hotkeys_state(),
@@ -1055,13 +1067,14 @@ class Service:
                 "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
 
     def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
-               place: str = "", live: dict | None = None, speaker: int | None = None, shown: str = "") -> int | None:
+               place: str = "", live: dict | None = None, speaker: int | None = None, shown: str = "", asked: bool = False) -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
         hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。
         live：這一句還在說的時候已經先顯示出來的那一則（即時字幕）；整句接手同一則，不另外多一則。
         speaker：第幾個說話者（有開「分辨說話者」而且分得出來才有）。
-        shown：畫面上現成的翻譯（雙語字幕裡我的語言那一行）；有的話直接用，不叫模型翻。回傳這則訊息的編號。"""
+        shown：畫面上現成的翻譯（雙語字幕裡我的語言那一行）；有的話直接用，不叫模型翻。
+        asked：使用者自己按快速鍵要翻的（翻選取的字、框選翻譯）：排在最前面，也不會因為等太久被略過。回傳這則訊息的編號。"""
         text = text.strip()[:MAX_TEXT]
         if not text:
             if live:
@@ -1082,7 +1095,7 @@ class Service:
             msg.update(id=live["id"], time=live["time"], at=live["at"], partial=live.get("partial", ""))
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
             self._post(msg)
-        self.jobs.put(msg)
+        self.jobs.put(msg, asked=asked)
         return msg["id"]
 
     def _work_now(self, via: str, place: str = "") -> str:
@@ -1159,6 +1172,7 @@ class Service:
         if late:      # 螢幕上讀到的、排了太久的：不翻了（還沒顯示過，所以畫面上不會留下半則）
             self._skipped += 1
             self._tell_skipped()
+            self._card_done(msg, None)
             return
         self._wake_engine()      # 引擎在休息的話先叫醒
         if not self._engine_ok.is_set():
@@ -1180,8 +1194,10 @@ class Service:
                 self.hub.publish("delay", self.delay())
                 msg = dict(msg, took=round(float(msg.get("hear") or 0.0) + spent, 1))
             if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
+                self._card_done(msg, out or msg["original"])      # 本來就是我的語言：小卡上照原樣顯示
                 return
             msg = dict(msg, translated=out, target=target, pending=False, error="", why="", back="",
+                       mention=self._mention_of(msg, out),      # 對方的話裡有我的名字或關鍵字
                        lost=numbers_lost(msg["original"], out, target, msg["lang"]),      # 原文有、譯文找不到的數字：畫面會提醒核對
                        pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
             self._count(msg)
@@ -1189,6 +1205,8 @@ class Service:
                 if msg["via"] == "typed" or self.cfg["copy_spoken"]:
                     msg["copied"] = oswin.copy_text(out)
             self._post(msg)
+            self._alert(msg)
+            self._card_done(msg, out)
             self._speak_mine(msg, target, out)
             self._learn(msg)
             self._want_back(msg)
@@ -1204,6 +1222,7 @@ class Service:
             self.log(traceback.format_exc())
             self._count(msg, failed=True)
             self._post(dict(msg, pending=False, error=str(ex), why=why(ex)))
+            self._card_done(msg, None)
 
     def _translate(self, msg: dict, target: str) -> str:
         """翻一則。翻的時候譯文一邊出來一邊送給畫面（即時），最後回傳的才是整理過的整句。"""
@@ -2250,6 +2269,12 @@ class Service:
             self.quick_input()      # 要在收到快速鍵的這條執行緒上開，Windows 才會讓輸入框跑到最前面
         elif name == "reply":
             self.reply_box()        # 同上：小框要能跑到遊戲前面
+        elif name == "phrase":
+            self.phrase_box()       # 同上
+        elif name == "snap":
+            self.snap_text()        # 同上：框選畫面要能跑到遊戲前面
+        elif name == "pick":
+            threading.Thread(target=self.pick_text, daemon=True, name="pick").start()      # 可能要等一下 Ctrl+C
         else:
             threading.Thread(target=self._hotkey_work, args=(name,), daemon=True, name="hotkey").start()
 
@@ -2432,6 +2457,314 @@ class Service:
         threading.Thread(target=wait, daemon=True, name="reply-box").start()
         return True
 
+    # ------------------------------------------------------------------ 翻選取的字、框選翻譯、翻譯結果小卡（2.11.0）
+
+    def _card_show(self, items: list[tuple[int, str]]) -> None:
+        """為這幾則（訊息編號, 原文）開一張翻譯結果小卡（滑鼠旁邊），翻好一則就更新一次。新的一張會換掉舊的。"""
+        if os.environ.get("LIVELINGO_NO_CARD"):      # 測試用：不開小卡
+            return
+        path = self.data / "card.json"
+        card = {"path": path, "order": [i for i, _ in items], "left": len(items),
+                "items": {i: {"original": text, "translated": ""} for i, text in items}}
+        with self._card_gate:
+            self._cards.clear()      # 舊的那張不再等結果（兩張共用一個檔案，晚到的結果不能蓋掉新的）
+            for i, _ in items:
+                self._cards[i] = card
+        self._card_write(card)
+        if self._card_child is not None and self._card_child.poll() is None:
+            self._card_child.kill()
+        try:
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            self._card_child = subprocess.Popen([*self_command(), "--card", str(path), "--lang", self.cfg["ui_lang"],
+                                                 "--their", self.cfg["their_lang"]],
+                                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                                creationflags=flags)
+        except OSError as ex:
+            self.log(f"result card could not start: {ex!r}")
+
+    def _card_write(self, card: dict) -> None:
+        data = {"items": [dict(card["items"][i]) for i in card["order"]], "done": card["left"] <= 0}
+        try:
+            tmp = card["path"].with_name(card["path"].name + ".tmp")
+            tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(card["path"])
+        except OSError:
+            pass
+
+    def _card_done(self, msg: dict, translated: str | None) -> None:
+        """一則翻好了（translated 是 None = 翻不出來）：有小卡在等它就更新。"""
+        if not self._cards:
+            return
+        with self._card_gate:
+            card = self._cards.pop(msg["id"], None)
+            if card is None:
+                return
+            card["items"][msg["id"]]["translated"] = translated or ""
+            card["left"] -= 1
+            self._card_write(card)
+
+    def pick_text(self) -> bool:
+        """快速鍵：翻剪貼簿裡的字，結果顯示在滑鼠旁邊的小卡上（也進對話）。
+        預設要使用者自己先選取、按 Ctrl+C；打開「先替我複製」就由這裡按一下 Ctrl+C（沒選到東西會把剪貼簿還原）。"""
+        if self.phase != "ready":
+            self._note("not_ready")
+            return False
+        text = ""
+        if self.cfg["pick_copy"] and oswin.IS_WIN:
+            before = oswin.read_clipboard()
+            oswin.copy_text(oswin.SENTINEL)
+            if oswin.press_copy():
+                for _ in range(12):
+                    time.sleep(0.05)
+                    text = oswin.read_clipboard()
+                    if text != oswin.SENTINEL:
+                        break
+            if text == oswin.SENTINEL or not text:
+                text = ""
+                oswin.copy_text(before)      # 什麼都沒選到：把使用者原本複製的還給他
+        else:
+            text = oswin.read_clipboard()
+        text = re.sub(r"\s*\n\s*", " ", text.strip())[:MAX_TEXT]      # 選取的文字常在行尾硬換行：接成一句翻
+        if not text:
+            self._note("pick_empty")
+            return False
+        with self._card_gate:
+            mid = self.submit("screen", text, None, asked=True)
+            if mid is not None:
+                self._card_show([(mid, text)])
+        return mid is not None
+
+    def _snap_shot(self):
+        """按下快速鍵的這一刻整個螢幕的畫面（框選畫面出來之前拍，之後從裡面切；測試時換了擷取函式就不拍）。"""
+        if getattr(self, "grab", None) is not None:
+            return None
+        try:
+            import mss
+            import numpy as np
+
+            with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                mon = sct.monitors[0]
+                return np.ascontiguousarray(np.asarray(sct.grab(mon))[:, :, :3]), int(mon["left"]), int(mon["top"])
+        except Exception:  # noqa: BLE001
+            self.log(traceback.format_exc())
+            return None
+
+    def snap_text(self) -> bool:
+        """快速鍵：先拍下現在的畫面，跳出框選，框好就只讀那一框、翻那一次，結果顯示在滑鼠旁邊的小卡上。"""
+        if self._snap_busy:
+            return False
+        if self.phase != "ready":
+            self._note("not_ready")
+            return False
+        shot = self._snap_shot()
+        fake = os.environ.get("LIVELINGO_FAKE_REGION")      # 測試用："left,top,width,height"
+        child, out = None, self.data / "snap.json"
+        if not fake:
+            out.unlink(missing_ok=True)
+            try:
+                flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                child = subprocess.Popen([*self_command(), "--select-region", str(out), "--lang", self.cfg["ui_lang"], "--mode", "snap"],
+                                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+            except OSError as ex:
+                self.log(f"snap selector could not start: {ex!r}")
+                return False
+            oswin.allow_foreground(child.pid)
+        self._snap_busy = True
+
+        def work():
+            region = None
+            try:
+                if fake:
+                    left, top, width, height = (int(v) for v in fake.split(","))
+                    region = {"left": left, "top": top, "width": width, "height": height}
+                else:
+                    try:
+                        child.wait(timeout=120)
+                    except subprocess.TimeoutExpired:
+                        child.kill()
+                    if out.exists():
+                        region = json.loads(out.read_text(encoding="utf-8"))
+                        out.unlink(missing_ok=True)
+                if region:
+                    self._snap_read({k: int(region[k]) for k in ("left", "top", "width", "height")}, shot)
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+            finally:
+                self._snap_busy = False
+
+        threading.Thread(target=work, daemon=True, name="snap").start()
+        return True
+
+    def _snap_read(self, region: dict, shot) -> None:
+        """讀框起來的那一塊，一段一段翻。"""
+        import numpy as np
+
+        if region["width"] < 24 or region["height"] < 12:
+            self.notice("region_small")
+            return
+        if shot is not None:
+            full, off_x, off_y = shot
+            x1, y1 = max(0, region["left"] - off_x), max(0, region["top"] - off_y)
+            bgr = np.ascontiguousarray(full[y1:y1 + region["height"], x1:x1 + region["width"]])
+        else:
+            grab = getattr(self, "grab", None)
+            if grab is None:
+                import mss
+
+                with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                    bgr = np.ascontiguousarray(np.asarray(sct.grab(region))[:, :, :3])
+            else:
+                bgr = np.ascontiguousarray(grab(region))
+        if bgr.size == 0:
+            self._note("snap_nothing")
+            return
+        from .core.watcher import blank_covers
+
+        covers = self.capture_mask()
+        if covers:
+            bgr = blank_covers(bgr, region, covers)
+        groups = snap.paragraphs(self._load_ocr().read(bgr))
+        if not groups:
+            self._note("snap_nothing")
+            return
+        shown: list[tuple[int, str]] = []
+        with self._card_gate:
+            for text in groups:
+                mid = self.submit("screen", text[:MAX_TEXT], None, asked=True)
+                if mid is not None:
+                    shown.append((mid, text[:MAX_TEXT]))
+            if shown:
+                self._card_show(shown)
+
+    # ------------------------------------------------------------------ 喊我名字提醒（2.11.0）
+
+    def _mention_of(self, msg: dict, translated: str) -> str:
+        """對方的這一句裡有沒有我設的名字或關鍵字（原文、譯文都找）；有的話回傳是哪一個。"""
+        if msg.get("who") != "them" or not self.cfg["alert_words"]:
+            return ""
+        return mention.find((msg.get("original", ""), translated), list(self.cfg["alert_words"]))
+
+    def _alert(self, msg: dict) -> None:
+        """有人提到我：響一聲（同一則只響一次，三秒內最多一次）。標出來是畫面和浮動留言各自照 msg["mention"] 做。"""
+        if not msg.get("mention") or msg["id"] in self._alerted:
+            return
+        self._alerted.append(msg["id"])
+        now = time.monotonic()
+        if self.cfg["alert_sound"] and now - self._alert_at > 3.0:
+            self._alert_at = now
+            oswin.beep()
+
+    # ------------------------------------------------------------------ 常用句庫（2.11.0）
+
+    def phrases_state(self) -> dict:
+        return self.phrases.state(self.cfg["their_lang"])
+
+    def phrase_action(self, action: str, pid: str = "", text: str = "") -> dict:
+        """句庫：add（加一句，我的語言）/ starters（放進幾句起手的）/ remove / edit（改譯成現在對方語言的那一句；空的 = 改回機器翻的）。"""
+        their = self.cfg["their_lang"]
+        if action == "add":
+            if self.phrases.add(text, LANGS[self.cfg["my_lang"]]["family"]) is None:
+                return {"ok": False, "error": "nothing", **self.phrases_state()}
+        elif action == "starters":
+            self.phrases.starters(self.cfg["ui_lang"], LANGS[self.cfg["my_lang"]]["family"])
+        elif action == "remove":
+            self.phrases.remove(str(pid))
+        elif action == "edit":
+            self.phrases.set_translation(str(pid), their, str(text or ""), fixed=bool(str(text or "").strip()))
+        else:
+            return {"ok": False, "error": "unknown", **self.phrases_state()}
+        self._phrases_fill()
+        state = self.phrases_state()
+        self.hub.publish("phrases", state)
+        self._phrase_box_write()
+        return {"ok": True, **state}
+
+    def _phrases_fill(self) -> None:
+        """還沒翻成現在對方語言的常用句，在背景一句一句補翻（翻不出來的這一輪就跳過，下次再試）。"""
+        if self.phase != "ready" or not self.phrases.missing(self.cfg["their_lang"]):
+            return
+        with self._phrase_lock:
+            if self._phrase_filling:
+                return
+            self._phrase_filling = True
+
+        def work():
+            tried: set[str] = set()
+            try:
+                while not self.closing.is_set():
+                    their = self.cfg["their_lang"]
+                    todo = [r for r in self.phrases.missing(their) if r["id"] not in tried]
+                    if not todo or self.phase != "ready":
+                        break
+                    row = todo[0]
+                    tried.add(row["id"])
+                    try:
+                        self._wake_engine()
+                        out = self.translator.translate(row["text"], their, row.get("lang") or LANGS[self.cfg["my_lang"]]["family"], [])
+                    except Exception:  # noqa: BLE001
+                        self.log(traceback.format_exc())
+                        continue
+                    if out and out.strip() and self.phrases.set_translation(row["id"], their, out):
+                        self.hub.publish("phrases", self.phrases_state())
+                        self._phrase_box_write()
+            finally:
+                self._phrase_filling = False
+
+        threading.Thread(target=work, daemon=True, name="phrases").start()
+
+    def _phrase_box_write(self) -> None:
+        """常用句庫的小框開著的話，把最新的句子和譯文寫給它。"""
+        child = self._phrase_child
+        if child is None or child.poll() is not None:
+            return
+        try:
+            (self.data / "phrases-in.json").write_text(json.dumps({"items": self.phrases.listing(self.cfg["their_lang"])}, ensure_ascii=False),
+                                                       encoding="utf-8")
+        except OSError:
+            pass
+
+    def phrase_box(self) -> bool:
+        """快速鍵：跳出常用句庫的小框，按 1 到 9 複製那一句翻好的話（使用者自己貼到聊天）。"""
+        if self._phrase_child is not None and self._phrase_child.poll() is None:
+            return False
+        items = self.phrases.listing(self.cfg["their_lang"])
+        if not items:
+            self._note("phrase_empty")
+            return False
+        box, out = self.data / "phrases-in.json", self.data / "phrases-out.json"
+        for f in (box, out):
+            f.unlink(missing_ok=True)
+        try:
+            box.write_text(json.dumps({"items": items}, ensure_ascii=False), encoding="utf-8")
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            child = subprocess.Popen([*self_command(), "--phrase-box", str(box), "--phrase-out", str(out), "--lang", self.cfg["ui_lang"],
+                                      "--their", self.cfg["their_lang"]],
+                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+        except OSError as ex:
+            self.log(f"phrase box could not start: {ex!r}")
+            return False
+        self._phrase_child = child
+        oswin.allow_foreground(child.pid)
+        self._phrases_fill()
+
+        def wait():
+            try:
+                child.wait(timeout=240)
+            except subprocess.TimeoutExpired:
+                child.kill()
+            try:
+                if out.exists():
+                    text = str(json.loads(out.read_text(encoding="utf-8")).get("text", ""))
+                    out.unlink(missing_ok=True)
+                    if text.strip() and oswin.copy_text(text.strip()[:MAX_TEXT]):
+                        self._note("phrase_copied")
+                box.unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+
+        threading.Thread(target=wait, daemon=True, name="phrase-box").start()
+        return True
+
     def clear_messages(self) -> None:
         with self._lock:
             self.messages.clear()
@@ -2472,6 +2805,8 @@ class Service:
             changes.pop("speak_device")
         if "speak_name" in changes:
             changes["speak_name"] = str(changes["speak_name"] or "")[:120]
+        if "alert_words" in changes:
+            changes["alert_words"] = mention.clean_words(changes["alert_words"])
         if "term_packs" in changes:
             picked = changes["term_packs"] if isinstance(changes["term_packs"], list) else []
             changes["term_packs"] = [name for name in PACKS if name in picked]
@@ -2563,6 +2898,9 @@ class Service:
             self.translator.keep_tone = bool(after["tone_keep"])
             self.translator.clear_cache()
             self._warm_engine()      # 保留語氣的提示不一樣
+        if changed("their_lang"):
+            self._phrases_fill()      # 句庫裡還沒翻成這個語言的，在背景補翻
+            self._phrase_box_write()
         if changed("game_terms", "game_auto"):
             threading.Thread(target=self.check_game, daemon=True).start()
             self._terms_changed()
@@ -3780,7 +4118,7 @@ class Service:
         self.hotkeys.stop()
         self.stream.stop()
         self.speaker.stop()
-        for child in (self._quick, self._reply_child):
+        for child in (self._quick, self._reply_child, self._phrase_child, self._card_child):
             if child is not None and child.poll() is None:
                 child.kill()
         if self.transcript.on:      # 記錄到一半就關程式：先存起來，不要弄丟

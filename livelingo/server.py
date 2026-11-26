@@ -274,6 +274,9 @@ class Server:
                             return self._json({"ok": service.reply_copy(str(body.get("text") or ""))})
                         msg_id = body.get("id")
                         return self._json(service.replies(int(msg_id) if isinstance(msg_id, int) else None))
+                    if route == "/api/phrases":      # 常用句庫：add / starters / remove / edit（id、text）
+                        return self._json(service.phrase_action(str(body.get("action") or ""), str(body.get("id") or "")[:20],
+                                                                str(body.get("text") or "")[:200]))
                     if route == "/api/speak":      # 念出我的譯文：試聽、列出裝好的語音
                         if body.get("action") == "voices":
                             return self._json(service.speak_voices())
