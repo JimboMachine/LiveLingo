@@ -247,6 +247,71 @@ def test_built_in_examples():
     assert back.asked[-1][2] == []
 
 
+def test_over_translation_is_caught(tmp_path):
+    """超譯（2.10.1）：例子都是使用者翻譯紀錄裡真的發生過的。"""
+    from livelingo.core.translate import drop_notes, extra_lines, meta_reply, too_long
+
+    # 譯文長得不合理：把前一句「單純問問」也翻進來了
+    assert too_long("造成困擾 我先道歉。", "불편을 드렸다면 죄송해. 그냥 궁금해서 물어본 거야.", "zh", "ko")
+    assert not too_long("造成困擾 我先道歉。", "불편을 드렸다면 미안해.", "zh", "ko")
+    assert not too_long("Jillian or Nami?", "Jillian 還是 Nami？", "en", "zh-TW")      # 名字在哪種語言都算一個詞
+    assert not too_long("等一下", "잠깐만 기다려 줘.", "zh", "ko")                       # 太短的不判斷
+    # 模型在跟人說話，不是翻譯
+    assert meta_reply("好的，請提供您要翻譯的韓文文字。", "스")
+    assert meta_reply("這句話無法理解，無法翻譯。請提供更完整的句子或上下文。", "여가 p1i 0하금")
+    assert not meta_reply("我已經開啟翻譯功能了。", "나 번역 기능 켜놨어")
+    assert not meta_reply("請提供你的帳號", "請提供你的帳號")      # 原文本來就這樣說
+    # 原文一行，譯文多出來的行是模型接下去編的
+    assert extra_lines("Savi:\n你現在在幹嘛？", "Savi", "en", "zh-TW") == "Savi"
+    assert extra_lines("好的。\n裝飾。\n好的。", "보이오이", "ko", "zh-TW") == "好的。"
+    assert extra_lines("我觉得他们会来抓下路\n그들이 바텀에 올 것 같아.", "我覺得他們會來抓下路", "zh", "ko").count("\n") == 1
+    # 原文沒有括號：括號裡是模型自己加的註解
+    assert drop_notes("總是動不動就... (然後省略了後面的內容)", "자꾸 뭐만하면") == "總是動不動就..."
+    assert drop_notes("後面的！ (Hòu miàn de!)", "뒷무동!") == "後面的！"
+    assert drop_notes("我(笑)", "나(웃음)") == "我(笑)"
+
+    # 前文被翻進去：不給前文重翻，用長度正常的那次
+    tr = _FakeModel(lambda text, style, context: "불편을 드렸다면 죄송해. 그냥 궁금해서 물어본 거야." if context else "불편을 드렸다면 미안해.")
+    assert tr.translate("造成困擾 我先道歉", "ko", "zh", ["單純問問"]) == "불편을 드렸다면 미안해."
+    assert tr.contexts == [["單純問問"], []]
+    # 跟人說話：只用官方提示重翻；還是這樣就不翻（螢幕上的就不會顯示）
+    tr = _FakeModel({"full": "好的，請提供您要翻譯的韓文文字。", "plain": "好的，請提供您要翻譯的韓文文字。"})
+    assert tr.translate("스", "zh-TW", "ko") == "스"
+    tr = _FakeModel({"full": "沒問題。請提供您要翻譯的韓文文字。", "plain": "是。"})
+    assert tr.translate("이", "zh-TW", "ko") == "是。"
+    tr = _FakeModel("Savi:\n你現在在幹嘛？")
+    assert tr.translate("Savi", "zh-TW", "en") == "Savi" and len(tr.asked) == 1
+    tr = _FakeModel("嗨，好久不見！")                     # 正常的一句：只問一次
+    assert tr.translate("안녕, 오랜만이야!", "zh-TW", "ko") == "嗨，好久不見！" and len(tr.asked) == 1
+    # 以前記下來的超譯不再拿出來用：重翻，新的蓋掉舊的；教過的照用
+    from livelingo.memory import Memory
+
+    mem = Memory(tmp_path)
+    mem.store("造成困擾 我先道歉", "zh", "ko", "casual", "불편을 드렸다면 죄송해. 그냥 궁금해서 물어본 거야.", "12b", "")
+    tr = _FakeModel("불편을 드렸다면 미안해.", memory=mem)
+    tr.model = "12b"
+    assert tr.translate("造成困擾 我先道歉", "ko", "zh", remember="typed") == "불편을 드렸다면 미안해." and len(tr.asked) == 1
+    assert mem.find("造成困擾 我先道歉", "zh", "ko", "casual", "12b", "")[0] == "불편을 드렸다면 미안해."
+    mem.fix("單純問問", "zh", "ko", "casual", "그냥 물어보는 거야. 진짜 그냥 궁금해서 물어본 거야.")
+    assert tr.translate("單純問問", "ko", "zh", remember="typed") == "그냥 물어보는 거야. 진짜 그냥 궁금해서 물어본 거야."
+    mem.close()
+    # 規定寫在提示裡：名字、地名不換成對方國家的；台灣地名告訴模型是哪裡（前文在講台灣時，「台北人」曾被翻成「首爾人」）
+    from livelingo.core.translate import places_in, plain_zh, slang_in
+
+    assert places_in("因為我是臺北人") == [("台北", "Taipei (a city in Taiwan)")] and places_in("我去吃飯") == []
+    assert "Place names (keep them as these places): 台北 = Taipei" in build_prompt("因為我是台北人。", "zh", "ko", {}, "casual", [])
+    assert "Place names" not in build_prompt("因為我是台北人。", "zh", "ko", {}, "casual", [], style="plain")
+    # 模型常翻錯的口語：意思用目標語言給；「A片」送進模型前換成一般說法（不然 A片 會原樣留在譯文裡）
+    assert slang_in("我雖然溫柔，但比較色", "ko") == [("色", "야하다, 밝히다 (pervy, horny)")]
+    assert slang_in("顏色很好看", "ko") == [] and slang_in("很色彩繽紛", "ko") == []
+    assert "色 = 야하다" in build_prompt("我很色。", "zh", "ko", {}, "casual", [])
+    assert plain_zh("我記得韓國看A片犯法") == "我記得韓國看成人影片犯法"
+    tr = _FakeModel("한국에서 성인 영상 보는 거 불법이야.")
+    tr.translate("韓國看A片犯法", "ko", "zh")
+    assert tr.asked[0][0] == "韓國看成人影片犯法。"
+    assert "never swap them for ones from the reader's country" in build_prompt("因為我是台北人。", "zh", "ko", {}, "casual", [])
+
+
 def test_lessons(tmp_path):
     lessons = Lessons(tmp_path)
     assert lessons.list() == []

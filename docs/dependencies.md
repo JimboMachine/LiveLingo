@@ -339,10 +339,10 @@
 
 ### 改翻譯的做法
 
-1. `translate.py`：提示、整理輸出、補救；數字核對（numbers_lost）認得的寫法：新增語言時要補那個語言的數字寫法和數字用語
+1. `translate.py`：提示、整理輸出、補救；數字核對（numbers_lost）認得的寫法：新增語言時要補那個語言的數字寫法和數字用語；超譯檢查（trim_extra、meta_reply、too_long）：新增語言時要補那個語言「跟人說話」的說法（_META）和長度比例（_RATE）
 2. `terms.py`：遊戲用語；照正在玩的遊戲切換（GAME_PACKS、GAMES）
 3. `config.py`：詞彙表（有 game 的是遊戲專用詞）、學過的句子
-4. `memory.py`：記住的翻法照語氣分開存（memory.TONES、Translator.memory_tone：保留語氣是 +keep）
+4. `memory.py`：記住的翻法照語氣分開存（memory.TONES、Translator.memory_tone：保留語氣是 +keep）；機器翻的要過 find 的 ok（over_translated），超譯的不拿出來用
 5. `service.py`：翻成哪種語言、重試；留言的 lost 欄位（譯文裡找不到的數字）
 6. `app.js`、`style.css`、`i18n.js`：留言下面的提醒（numbers_lost）
 7. `index.html`、`app.js`：輸入框和「改原文」的字數上限要跟 translate.MAX_TEXT 一樣（測試會擋）；超過 500 個字的會切段分開翻

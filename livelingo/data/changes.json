@@ -79,6 +79,73 @@
       "Alerte quand on dit mon nom : saisissez votre nom ou des mots-clés ; si un message en contient, il est marqué en rouge et peut émettre un bip. Comparaison uniquement sur cet ordinateur."
     ]
   },
+  "2.10.1": {
+    "zh-TW": [
+      "減少超譯：譯文不會再把前一句的意思接進來，也不會自己多加原文沒有的話。翻得比平常長很多時會自動重翻；模型自己加的括號註解、多編出來的幾行會拿掉。",
+      "台灣的地名（台北、高雄…）照原文翻，不會被換成對方國家的城市；「很色」「A片」這類說法也會翻成正確的意思。",
+      "畫面上讀到的亂碼不會再翻成「請提供要翻譯的文字」這種話，翻不出來就不顯示。以前記下來的超譯不會再拿出來用，下次遇到會重翻。"
+    ],
+    "zh-CN": [
+      "减少过度翻译：译文不会再把前一句的意思接进来，也不会自己多加原文没有的话。翻得比平常长很多时会自动重翻；模型自己加的括号注释、多编出来的几行会去掉。",
+      "台湾的地名（台北、高雄…）照原文翻，不会被换成对方国家的城市；「很色」「A片」这类说法也会翻成正确的意思。",
+      "屏幕上读到的乱码不会再翻成「请提供要翻译的文字」这种话，翻不出来就不显示。以前记下来的过度翻译不会再拿出来用，下次遇到会重翻。"
+    ],
+    "en": [
+      "Less over-translation: a translation no longer pulls in the previous message or adds things the original did not say. Unusually long results are translated again; notes in brackets and extra made-up lines are removed.",
+      "Taiwanese place names (Taipei, Kaohsiung…) stay as they are instead of becoming cities of the other person's country, and slang like 很色 and A片 gets its real meaning.",
+      "Garbled text read from the screen is no longer turned into replies like \"please provide the text\"; it is simply not shown. Over-translations saved earlier are no longer reused and get translated again."
+    ],
+    "ko": [
+      "과잉 번역 줄임: 번역에 앞 메시지 내용이 섞이거나 원문에 없는 말이 붙지 않아요. 평소보다 훨씬 길게 나오면 다시 번역하고, 모델이 붙인 괄호 설명이나 지어낸 줄은 지워요.",
+      "타이완 지명(타이베이, 가오슝…)은 그대로 번역하고 상대 나라 도시로 바꾸지 않아요. ‘很色’, ‘A片’ 같은 표현도 맞는 뜻으로 번역해요.",
+      "화면에서 읽은 깨진 글자를 ‘번역할 텍스트를 주세요’ 같은 말로 바꾸지 않고 그냥 표시하지 않아요. 예전에 저장된 과잉 번역은 다시 쓰지 않고 새로 번역해요."
+    ],
+    "ja": [
+      "訳しすぎを減らしました：前のメッセージの内容が混ざったり、原文にない言葉が足されたりしなくなります。いつもよりずっと長い訳は訳し直し、モデルが付けた括弧の注釈や作り足した行は消します。",
+      "台湾の地名（台北、高雄など）はそのまま訳し、相手の国の都市に置き換えません。「很色」「A片」などの言い方も正しい意味で訳します。",
+      "画面から読んだ文字化けを「翻訳する文字を入力してください」のような文にせず、表示しません。以前保存された訳しすぎの訳は使わず、訳し直します。"
+    ],
+    "vi": [
+      "Bớt dịch quá lời: bản dịch không còn kéo nội dung tin nhắn trước vào hay thêm điều bản gốc không nói. Bản dịch dài bất thường sẽ được dịch lại; ghi chú trong ngoặc và dòng bịa thêm bị bỏ.",
+      "Địa danh Đài Loan (Đài Bắc, Cao Hùng…) giữ nguyên, không bị đổi thành thành phố nước của người kia; từ lóng như 很色, A片 được dịch đúng nghĩa.",
+      "Chữ rác đọc từ màn hình không còn bị dịch thành câu kiểu \"hãy cung cấp văn bản\", mà đơn giản là không hiện. Bản dịch quá lời đã lưu trước đây không được dùng lại và sẽ được dịch lại."
+    ],
+    "th": [
+      "ลดการแปลเกิน: คำแปลจะไม่ดึงเนื้อหาของข้อความก่อนหน้าเข้ามา และไม่เติมสิ่งที่ต้นฉบับไม่ได้พูด ถ้ายาวผิดปกติจะแปลใหม่ หมายเหตุในวงเล็บและบรรทัดที่แต่งเพิ่มจะถูกตัดออก",
+      "ชื่อสถานที่ในไต้หวัน (ไทเป เกาสง…) แปลตามเดิม ไม่ถูกเปลี่ยนเป็นเมืองของประเทศอีกฝ่าย และคำอย่าง 很色 กับ A片 แปลได้ความหมายที่ถูก",
+      "ตัวอักษรเพี้ยนที่อ่านจากหน้าจอจะไม่ถูกแปลเป็นประโยคอย่าง \"โปรดให้ข้อความที่จะแปล\" อีก แต่จะไม่แสดงเลย คำแปลเกินที่บันทึกไว้ก่อนหน้าจะไม่ถูกใช้ซ้ำและจะแปลใหม่"
+    ],
+    "id": [
+      "Lebih sedikit terjemahan berlebihan: terjemahan tidak lagi menarik isi pesan sebelumnya atau menambah hal yang tidak ada di aslinya. Hasil yang terlalu panjang diterjemahkan ulang; catatan dalam kurung dan baris karangan dihapus.",
+      "Nama tempat di Taiwan (Taipei, Kaohsiung…) tetap seperti aslinya, tidak diganti kota negara lawan bicara, dan slang seperti 很色 dan A片 diterjemahkan dengan arti yang benar.",
+      "Teks rusak yang terbaca dari layar tidak lagi jadi kalimat seperti \"silakan berikan teksnya\", melainkan tidak ditampilkan. Terjemahan berlebihan yang tersimpan sebelumnya tidak dipakai lagi dan diterjemahkan ulang."
+    ],
+    "es": [
+      "Menos traducción de más: la traducción ya no mezcla el mensaje anterior ni añade cosas que el original no dice. Los resultados demasiado largos se traducen de nuevo; se quitan notas entre paréntesis y líneas inventadas.",
+      "Los nombres de lugares de Taiwán (Taipéi, Kaohsiung…) se mantienen en vez de cambiarse por ciudades del país de la otra persona, y expresiones como 很色 y A片 se traducen con su sentido real.",
+      "El texto ilegible leído de la pantalla ya no se convierte en frases como «proporciona el texto»; simplemente no se muestra. Las traducciones de más guardadas antes ya no se reutilizan y se traducen otra vez."
+    ],
+    "pt": [
+      "Menos tradução a mais: a tradução não puxa mais a mensagem anterior nem acrescenta o que o original não disse. Resultados longos demais são traduzidos de novo; notas entre parênteses e linhas inventadas são removidas.",
+      "Nomes de lugares de Taiwan (Taipé, Kaohsiung…) ficam como estão em vez de virar cidades do país da outra pessoa, e gírias como 很色 e A片 são traduzidas com o sentido certo.",
+      "Texto ilegível lido da tela não vira mais frases como \"forneça o texto\"; ele simplesmente não aparece. Traduções a mais salvas antes não são reutilizadas e são traduzidas de novo."
+    ],
+    "ru": [
+      "Меньше лишнего в переводе: перевод больше не подтягивает предыдущее сообщение и не добавляет того, чего нет в оригинале. Слишком длинный результат переводится заново; примечания в скобках и придуманные строки убираются.",
+      "Названия мест Тайваня (Тайбэй, Гаосюн…) остаются как есть, а не заменяются городами страны собеседника; сленг вроде 很色 и A片 переводится правильно.",
+      "Нечитаемый текст с экрана больше не превращается в фразы вроде «предоставьте текст» — он просто не показывается. Сохранённые раньше переводы с лишним больше не используются и переводятся заново."
+    ],
+    "de": [
+      "Weniger Hinzugedichtetes: Die Übersetzung übernimmt nicht mehr die vorige Nachricht und fügt nichts hinzu, was nicht im Original steht. Zu lange Ergebnisse werden neu übersetzt; Anmerkungen in Klammern und erfundene Zeilen fallen weg.",
+      "Ortsnamen aus Taiwan (Taipeh, Kaohsiung…) bleiben erhalten statt zu Städten im Land des Gegenübers zu werden, und Slang wie 很色 und A片 wird richtig übersetzt.",
+      "Unlesbarer Text vom Bildschirm wird nicht mehr zu Sätzen wie „Bitte gib den Text an“, sondern einfach nicht angezeigt. Früher gespeicherte Übersetzungen mit Hinzugedichtetem werden nicht mehr verwendet und neu übersetzt."
+    ],
+    "fr": [
+      "Moins de traduction en trop : la traduction n'intègre plus le message précédent et n'ajoute plus ce que l'original ne dit pas. Les résultats trop longs sont retraduits ; notes entre parenthèses et lignes inventées sont retirées.",
+      "Les noms de lieux de Taïwan (Taipei, Kaohsiung…) restent tels quels au lieu de devenir des villes du pays de l'autre, et l'argot comme 很色 et A片 est traduit avec son vrai sens.",
+      "Le texte illisible lu à l'écran ne devient plus des phrases comme « veuillez fournir le texte » ; il n'est simplement pas affiché. Les traductions en trop enregistrées avant ne sont plus réutilisées et sont retraduites."
+    ]
+  },
   "2.10.0": {
     "zh-TW": [
       "對話摘要：一場遊戲或通話結束（安靜 10 分鐘）後，自動把剛才的對話整理成幾個重點，用你的語言寫，在「歷史」頁看得到、搜得到；也可以按「現在摘要這段對話」。可能有漏或不準，原句都還在。",
