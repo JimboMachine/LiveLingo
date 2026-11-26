@@ -6297,3 +6297,141 @@ def test_faster_translation_warm_up_turns_and_quick_window(tmp_path):
     rec.transcribe(np.zeros(3 * sr, dtype=np.float32), ["ko"])
     rec.transcribe(np.zeros(12 * sr, dtype=np.float32), ["ko"], quick=True)
     assert seen == [(QUICK_WINDOW, True), (15, True), (15, True)] and rec._now_window == 15 and not lock.locked()
+
+
+def test_seven_features_part_three(tmp_path, monkeypatch):
+    """2.10.0：對話摘要（切段、提示和解析、自動和手動、存檔和搜尋）和語言學習（挑生字、單字本、複習的間隔、介面的流程）。"""
+    import json as _json
+    import time as _time
+    from pathlib import Path
+
+    from livelingo import learn, recap
+    from livelingo.core import assist
+    from livelingo.service import Service
+
+    # ---- 摘要的提示和解析：對方的話用譯文、我的話用原文；開場白和不是條列的行丟掉，轉成我的寫法
+    lines = [{"who": "them", "original": "다음 판 탑 갈게", "translated": "下一把我去上路"}, {"who": "me", "original": "好，九點再打", "translated": "좋아"}]
+    prompt = assist.summary_prompt(lines, "zh-TW")
+    assert "them: 下一把我去上路" in prompt and "me: 好，九點再打" in prompt and "Traditional Chinese" in prompt and "다음" not in prompt
+    got = assist.parse_summary("以下是摘要：\n- 下一把对方去上路\n* 晚上九点再一起打\n- 下一把对方去上路\n沒有符號的行", "zh-TW")
+    assert got == ["下一把對方去上路", "晚上九點再一起打"]
+
+    # ---- 生字的意思：模型回答的第一行，去掉標點和引號；整句翻出來、跟原字一樣的不要
+    assert "Sentence: we rotate now" in assist.gloss_prompt("rotate", "we rotate now", "zh-TW")
+    assert assist.parse_gloss("「轉線」。\n多的", "rotate", "zh-TW") == "轉線" and assist.parse_gloss("rotate", "rotate", "zh-TW") == ""
+    assert assist.parse_gloss("x" * 41, "a", "en") == "" and assist.parse_gloss("转线", "rotate", "zh-TW") == "轉線"
+
+    # ---- 切段：中間安靜超過 GAP 就是新的一段；要夠長、要有對方說的
+    rows = [{"at": 0, "who": "them"}, {"at": 60, "who": "me"}, {"at": 60 + recap.GAP + 1, "who": "me"}]
+    assert [len(p) for p in recap.sessions(rows)] == [2, 1]
+    assert not recap.worth([{"who": "me"}] * 9) and recap.worth([{"who": "me"}] * 5 + [{"who": "them"}]) and not recap.worth([{"who": "them"}] * 5)
+
+    # ---- 存檔、搜尋、刪除；壞掉的檔案照樣開
+    rc = recap.Recaps(tmp_path)
+    row = rc.add([{"at": 100.0}, {"at": 200.0}], ["約好九點", "買真眼"], "zh-TW")
+    assert row["id"] == "100-200" and rc.until == 200.0 and [r["id"] for r in recap.Recaps(tmp_path).search("真眼")] == ["100-200"]
+    assert recap.Recaps(tmp_path).search("沒有這個") == [] and rc.remove("100-200") and not (tmp_path / recap.FILE).exists()
+    (tmp_path / recap.FILE).write_text("{壞掉", encoding="utf-8")
+    assert recap.Recaps(tmp_path).items == []
+    (tmp_path / recap.FILE).unlink()
+
+    # ---- 挑生字：韓文拿掉助詞、日文只挑漢字詞和片假名詞、英文常見字不標、中文和泰文不自動標，最長的在前面
+    assert learn.candidates("이번 판은 정글이 너무 못해서 졌어", "ko")[:2] == ["못해서", "정글"]
+    assert set(learn.candidates("さっきの試合、めっちゃ惜しかったね。ドラゴンを取ろう", "ja")) == {"試合", "ドラゴン"}
+    assert learn.candidates("Honestly that flank was insane, we should rotate earlier", "en")[:3] == ["Honestly", "earlier", "insane"]
+    assert "should" not in learn.candidates("you should", "en") and learn.candidates("這把打野太菜了", "zh-TW") == [] and learn.candidates("แพ้แล้ว", "th") == []
+
+    # ---- 單字本：收過、說會了的不再標；複習記得往後排、忘了明天；檔案壞了照樣開
+    now = [1000.0]
+    wb = learn.Wordbook(tmp_path, now=lambda: now[0])
+    assert wb.fresh("Honestly that flank was insane", "en") == ["Honestly", "insane"]
+    wb.add("insane", "en", "瘋狂", "that flank was insane")
+    wb.know("Honestly", "en")
+    assert wb.fresh("Honestly that flank was insane", "en") == ["flank"] and wb.state() == {"count": 1, "due": 1, "error": ""}
+    assert wb.review("insane", "en", True)["due"] == 1000.0 + 86400 and wb.review("insane", "en", True)["due"] == 1000.0 + 3 * 86400
+    assert wb.review("insane", "en", False)["step"] == 0 and wb.due() == []
+    now[0] += 86400
+    assert [w["w"] for w in wb.due()] == ["insane"]
+    again = learn.Wordbook(tmp_path, now=lambda: now[0])
+    assert again.listing("瘋狂")[0]["example"] == "that flank was insane" and again.has("honestly", "en")
+    assert again.remove("insane", "en") and again.listing() == [] and wb.add("", "en") is None
+    (tmp_path / learn.FILE).write_text("[壞掉", encoding="utf-8")
+    assert learn.Wordbook(tmp_path).words == []
+    (tmp_path / learn.FILE).unlink()
+
+    # ---- 服務：學習模式打開才標；只標對方的、不是我的語言的；翻譯在排隊就先不查
+    service = Service(tmp_path)
+    events = []
+    service.hub.publish = lambda event, data: events.append((event, data))
+    service.phase = "ready"
+    service._wake_engine = lambda: None
+    glossed = []
+
+    def fake_translate(text, target, source=None, **kw):
+        glossed.append((text, target, source))
+        return {"flank": "側翼", "rotate": "轉線"}.get(text, text)
+
+    service.translator.translate = fake_translate
+    service.translator.ask_free = lambda body, max_tokens=300, stop=None: fake_translate(body.split('"')[1], "zh-TW", "en")
+    base = {"via": "heard", "pending": False, "error": "", "time": "", "at": _time.time()}
+    msg = dict(base, id=7, who="them", lang="en", original="we should rotate around the flank", translated="我們該繞側翼轉線")
+    service._learn(msg)
+    assert glossed == []      # 學習模式沒開
+    service.cfg.set(learn_mode=True)
+    service._learn(dict(msg, who="me"))
+    service._learn(dict(msg, lang="zh"))
+    service._learn(msg)
+    deadline = _time.time() + 5
+    while not any(e == "words" for e, _ in events) and _time.time() < deadline:
+        _time.sleep(0.05)
+    assert glossed == [("rotate", "zh-TW", "en"), ("flank", "zh-TW", "en")]
+    assert service._gloss("와드", "ko", "와드 좀 사줘") == "眼" and len(glossed) == 2      # 用語包裡有的不問模型
+    service.glossary.add("flank", "包抄")
+    assert service._gloss("Flank", "en") == "包抄" and len(glossed) == 2      # 詞彙表優先
+    assert service.state()["words"]["7"] == [{"w": "rotate", "lang": "en", "meaning": "轉線"}, {"w": "flank", "lang": "en", "meaning": "側翼"}]
+    service._post(dict(msg))
+    assert service.word_action("add", "rotate", "en", "轉線", 7)["count"] == 1
+    assert service.wordbook.listing()[0]["example"] == "we should rotate around the flank"
+    service.word_action("know", "flank", "en")
+    assert service._words[7] == [{"w": "rotate", "lang": "en", "meaning": "轉線"}]
+    assert service.word_action("review", "nothing", "en")["ok"] is False and service.word_action("jump", "a", "en")["error"] == "unknown"
+    assert service.words_list(review=True)["items"][0]["w"] == "rotate"
+
+    # ---- 摘要：自動的要等安靜夠久；現在摘要馬上做；做完存起來、送事件和通知
+    asked = []
+    service.translator.ask_free = lambda body, max_tokens=300, stop=None: asked.append(body) or "- 約好繞側翼\n- 九點再打"
+    old = _time.time() - recap.GAP - 60
+    for i in range(6):
+        service.history.add(dict(base, id=100 + i, who="them" if i % 2 else "me", lang="en", original=f"line {i}", translated=f"第 {i} 句", at=old + i))
+    service.history.add(dict(base, id=200, who="them", lang="en", original="still here", translated="還在", at=_time.time()))
+    service.history.add(dict(base, id=90, who="them", lang="en", original="long ago", translated="很久以前", at=_time.time() - 7 * 3600))
+    service.cfg.set(recap_auto=False)
+    service.recap_check()
+    assert asked == []      # 關掉自動摘要
+    service.cfg.set(recap_auto=True)
+    service.recap_check()
+    deadline = _time.time() + 5
+    while service._recap.get("state") == "thinking" and _time.time() < deadline:
+        _time.sleep(0.05)
+    assert len(asked) == 1 and "對方: 第 1 句" in asked[0] and '"我" and "對方"' in asked[0] and "還在" not in asked[0] and "很久以前" not in asked[0] and service._recap["state"] == "ready"
+    assert service.recaps.search()[0]["points"] == ["約好繞側翼", "九點再打"] and ("notice", {"code": "recap_ready", "n": 2}) in events
+    service.recap_check()
+    assert len(asked) == 1      # 摘要過的不再做
+    service.history.drop(200)
+    assert service.recap_now() == {"ok": False, "error": "nothing"}
+    service.history.add(dict(base, id=300, who="them", lang="en", original="gg", translated="打得好", at=_time.time()))
+    service.history.add(dict(base, id=301, who="me", lang="zh", original="明天見", translated="see you", at=_time.time()))
+    assert service.recap_now() == {"ok": True}
+    deadline = _time.time() + 5
+    while service._recap.get("state") == "thinking" and _time.time() < deadline:
+        _time.sleep(0.05)
+    assert len(service.recaps.search()) == 2 and service.recap_remove(service.recaps.search()[0]["id"])["ok"]
+    assert _json.loads((tmp_path / recap.FILE).read_text(encoding="utf-8"))[0]["points"] == ["約好繞側翼", "九點再打"]
+
+    # ---- 介面和文字：每種語言都有，換頁、事件、API 都接上
+    root = Path(__file__).resolve().parent.parent
+    js = (root / "livelingo" / "ui" / "app.js").read_text(encoding="utf-8")
+    for name in ("learnPage", "wordsHTML", "recapListHTML", '"word-add"', '"word-pick"', '"review-answer"', '"recap-now"', "words: (d)", "recaps: (st)", '["learn", "nav_learn", "book"]'):
+        assert name in js, name
+    server = (root / "livelingo" / "server.py").read_text(encoding="utf-8")
+    assert "/api/words" in server and "/api/recaps" in server

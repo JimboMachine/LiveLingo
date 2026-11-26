@@ -115,6 +115,13 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.storage_state())
+                if url.path in ("/api/words", "/api/recaps"):      # 單字本（review=1：該複習的）、對話摘要；q 搜尋的字
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    q = (query.get("q") or [""])[0]
+                    if url.path == "/api/words":
+                        return self._json(service.words_list(q, (query.get("review") or [""])[0] == "1"))
+                    return self._json({"items": service.recaps.search(q), **service.recaps.state()})
                 if url.path == "/api/history":      # 對話歷史：q 搜尋的字、offset 從第幾則開始、limit 幾則（最新的在前）
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -271,6 +278,15 @@ class Server:
                         if body.get("action") == "voices":
                             return self._json(service.speak_voices())
                         return self._json(service.speak_test())
+                    if route == "/api/words":      # 單字本：add / remove / know / review / meaning
+                        msg_id = body.get("id")
+                        return self._json(service.word_action(str(body.get("action") or ""), str(body.get("w") or ""),
+                                                              str(body.get("lang") or ""), str(body.get("meaning") or ""),
+                                                              msg_id if isinstance(msg_id, int) else None, bool(body.get("remembered"))))
+                    if route == "/api/recaps":      # 對話摘要：now（現在摘要）/ remove
+                        if body.get("action") == "remove":
+                            return self._json(service.recap_remove(str(body.get("id") or "")))
+                        return self._json(service.recap_now())
                     if route == "/api/stream":      # 直播模式：複製給 OBS 的網址
                         return self._json(service.stream_action(str(body.get("action") or "")))
                     if route == "/api/copy":

@@ -85,3 +85,68 @@ def parse_replies(out: str, my_lang: str, n: int = MAX_REPLIES, their_lang: str 
         if len(found) >= n:
             break
     return found
+
+
+# ---- 對話摘要（2.10.0）
+
+MAX_SUMMARY_LINES = 80     # 一段對話最多拿最後這麼多句來摘要（太長模型會漏，也太慢）
+MAX_POINTS = 6
+_BULLET = re.compile(r"^\s*(?:[-*•‧·]|\d+[.)、:：]|\(\d+\))\s*")
+
+
+def summary_lines(lines: list[dict], my_lang: str, names: dict | None = None) -> str:
+    """摘要用的對話：都寫成我的語言（對方的話用譯文），這樣模型直接用我的語言整理。
+    names：{"me", "them"} 用我的語言寫的稱呼（「我」「對方」）；模型會照著用，比較不會把誰說了什麼弄反。"""
+    names = names or {"me": "me", "them": "them"}
+    out = []
+    for line in lines[-MAX_SUMMARY_LINES:]:
+        me = line.get("who") == "me"
+        text = str((line.get("original") if me else line.get("translated")) or line.get("original") or "")
+        text = text.strip().replace("\n", " ")[:200]
+        if text:
+            out.append(f"{names['me' if me else 'them']}: {text}")
+    return "\n".join(out)
+
+
+def summary_prompt(lines: list[dict], my_lang: str, names: dict | None = None) -> str:
+    mine = _lang_name(my_lang)
+    names = names or {"me": "me", "them": "them"}
+    return (f"Summarize this game or voice chat in {mine} as 3 to 5 short bullet points: what was decided, plans, "
+            f"and anything to remember. Only use what is in the chat; do not add anything. "
+            f"Call the two people \"{names['me']}\" and \"{names['them']}\", exactly as in the chat.\n\n"
+            f"{summary_lines(lines, my_lang, names)}\n\n"
+            f"Output only the bullet points, each on its own line starting with \"- \".")
+
+
+def parse_summary(out: str, my_lang: str) -> list[str]:
+    """模型的摘要 → 一點一點的字串。不是條列的開場白（「以下是摘要：」）丟掉。"""
+    points: list[str] = []
+    for raw in out.splitlines():
+        if not _BULLET.match(raw):
+            continue
+        text = to_script(_BULLET.sub("", raw).strip().strip(_QUOTES).strip(), my_lang)
+        if text and len(text) <= 300 and text not in points:
+            points.append(text)
+        if len(points) >= MAX_POINTS:
+            break
+    return points
+
+
+# ---- 生字的意思（2.10.0）：一般翻譯把單一個字翻得很差（「와드」翻成「哇」），所以帶著整句、說明是遊戲聊天，只要那個字的意思
+
+def gloss_prompt(word: str, sentence: str, my_lang: str) -> str:
+    mine = _lang_name(my_lang)
+    sentence = str(sentence or "").strip().replace("\n", " ")[:300]
+    return (f"Translate only the word \"{word}\" from this sentence into {mine}, with the meaning it has in the sentence "
+            f"(this is a chat during an online game or a voice call).\nSentence: {sentence or word}\n"
+            f"Answer with the translation only, in a few words.")
+
+
+def parse_gloss(out: str, word: str, my_lang: str) -> str:
+    """模型回答的第一行，去掉引號和句尾的標點。太長（模型整句翻出來）或跟原字一樣就不要。"""
+    line = next((x for x in str(out or "").splitlines() if x.strip()), "")
+    line = _strip(line).rstrip("。.!！?？,，;；:：")
+    line = line.strip().strip(_QUOTES).strip()
+    if not line or len(line) > 40 or line.lower() == str(word).lower():
+        return ""
+    return to_script(line, my_lang)
