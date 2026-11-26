@@ -14,6 +14,7 @@ DEFAULTS = {
     "my_lang": "zh-TW",          # 我看得懂的語言
     "their_lang": "ko",          # 對方用的語言（開了自動偵測時：目前判斷到的語言）
     "their_auto": False,         # 自動偵測對方用的語言
+    "auto_langs": [],            # 自動偵測時只在這幾種語言裡判斷（語音辨識的語言名：ko、zh、en…）；空的 = 全部。目前的語言和我的語言一定算在裡面
     "transcript_dir": "",        # 字幕記錄存在哪個資料夾（空的：文件\\LiveLingo）
     "transcript_original": True, # 字幕記錄裡同時留原文
     "close_to_tray": True,       # 關掉視窗時收到系統匣，不結束程式
@@ -114,7 +115,7 @@ DEFAULTS = {
 # 介面可以改的設定（其他的只能直接改檔案）
 THEMES = ("dark", "light", "system")
 ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
-EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
+EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
             "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",

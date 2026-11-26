@@ -49,6 +49,12 @@ VOICE_KIND = {"listen": "loopback", "mic": "mic"}
 SOURCE_OF = {"loopback": "listen", "mic": "mic"}
 ALPHABETIC = ("en", "vi", "id", "es", "pt", "ru", "de", "fr")      # 一個字母不是一個字的語言：一句話要比較多字母才算夠長
 VOICE_FAMILIES = ("ko", "zh", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr")      # 語音辨識認得、我們也翻得了的語言
+# 自動偵測對方的語言：語音辨識對短句、背景音樂、遊戲音效常常猜錯是哪種語言（Jimbo 的紀錄：一天換了六十幾次，
+# 多半是一句英文被當成韓文或日文，每換一次還要重開讀螢幕和麥克風）。所以一句話不算數：
+SWITCH_RUN = 3                 # 連續幾句都像「同一個別的語言」，才把對方的語言換過去
+SWITCH_RUN_GAP = 120.0         # 這一串句子之間隔了這麼久（秒）就重新算
+SWITCH_COOLDOWN = 30.0         # 剛換過去之後，這麼久（秒）內不再換
+EVIDENCE_MIN = {True: 8, False: 3}      # 一句話至少幾個字（字母語言 8 個字母，其他 3 個字）才看得出是什麼語言；更短的不算也不打斷
 
 
 # 「靈敏度」1 到 5 各是多少的語音偵測門檻（越低越容易把聲音當成說話）
@@ -265,7 +271,8 @@ class Service:
         self._alerted: deque = deque(maxlen=200)      # 已經響過提醒的訊息編號
         self._alert_at = 0.0
         self._replies: dict = {"id": 0, "state": "off", "items": []}      # 最近一次的回話建議（給介面）
-        self._their_guess = ""      # 自動偵測：上一句聽起來像哪個別的語言（還不夠確定）
+        self._their_run = self._new_run()      # 自動偵測：現在連續幾句都像哪個別的語言（還不夠確定）
+        self._their_switched_at = float("-inf")      # 自動偵測上一次換過去的時間（time.monotonic）
         self._recent_voice: deque[dict] = deque(maxlen=12)      # 最近聽到的句子（兩邊都記），用來認出麥克風收到的喇叭聲音
         self.delays: deque[tuple[float, float]] = deque(maxlen=10)      # 最近幾句語音：（辨識秒數, 翻譯秒數）
         # 語音辨識用顯示卡：state = off（沒選）/ need（要先下載）/ downloading / ready / failed（試過不行，已改用處理器）
@@ -2810,6 +2817,10 @@ class Service:
         if "term_packs" in changes:
             picked = changes["term_packs"] if isinstance(changes["term_packs"], list) else []
             changes["term_packs"] = [name for name in PACKS if name in picked]
+        if "auto_langs" in changes:      # 自動偵測的候選語言：只收認得的、照固定順序；全部都選等於沒限制（存成空的）
+            picked = changes["auto_langs"] if isinstance(changes["auto_langs"], list) else []
+            kept = [f for f in VOICE_FAMILIES if f in picked]
+            changes["auto_langs"] = [] if len(kept) == len(VOICE_FAMILIES) else kept
         for key, allowed in (("overlay_family", chatpaint.FAMILIES), ("overlay_align", chatpaint.ALIGNS), ("overlay_grow", chatpaint.GROWS)):
             if key in changes and changes[key] not in allowed:
                 changes.pop(key)
@@ -2924,8 +2935,8 @@ class Service:
             self.overlay.apply()
             if changed("overlay"):
                 self.hub.publish("overlay", self.overlay.state())
-        if changed("their_auto"):
-            self._their_guess = ""
+        if changed("their_auto", "their_lang", "my_lang", "auto_langs"):
+            self._their_run = self._new_run()      # 語言是使用者改的：之前聽到一半的不再算
         if changed("hotkeys"):
             self.hotkeys.set(after["hotkeys"])
         if changed("history_keep", "history_days"):
@@ -2954,6 +2965,8 @@ class Service:
                     self.recognizer.beam = BEAMS[after["speech_mode"]]
         if changed("my_lang", "their_lang", "their_auto", "also_english"):
             threading.Thread(target=self._languages_changed, daemon=True).start()
+        elif changed("auto_langs"):      # 只是換了候選語言：收音和讀螢幕不用重開，直接換語言清單
+            threading.Thread(target=self._apply_langs, daemon=True).start()
         if changed("my_lang", "their_lang"):
             self._warm_engine()
         if changed("speaker_device") and self.sources["listen"]["on"]:
@@ -2989,7 +3002,7 @@ class Service:
             from .core.ocr import model_of
 
             model = model_of(their)
-            langs |= {f for f in VOICE_FAMILIES if model_of(f) == model and f != "en"} - {my}
+            langs |= {f for f in self._auto_families() if model_of(f) == model and f != "en"} - {my}
         if self.cfg["also_english"] and my != "en":
             langs.add("en")
         return langs
@@ -3238,47 +3251,79 @@ class Service:
     def _voice_langs(self, key: str) -> list[str]:
         my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
         if key == "listen":
-            # 自動偵測：四種語言都聽，目前判斷到的排第一個
-            return list(dict.fromkeys([their, *VOICE_FAMILIES])) if self.cfg["their_auto"] else [their]
+            # 自動偵測：在候選的語言裡聽，目前判斷到的排第一個
+            return self._auto_families() if self.cfg["their_auto"] else [their]
         return list(dict.fromkeys([my, their]))
+
+    def _auto_families(self) -> list[str]:
+        """
+        自動偵測時對方可能說的語言（語音辨識用的語言名）：設定裡選了哪些就是哪些，沒選過就是全部，目前的語言排第一個。
+        目前的語言和我的語言一定在裡面：少了它們，對方說我的語言時會被硬聽成別的語言。
+        """
+        my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
+        picked = {f for f in self.cfg["auto_langs"] if f in VOICE_FAMILIES}
+        allowed = {*picked, my, their} if picked else set(VOICE_FAMILIES)
+        return list(dict.fromkeys([their, *(f for f in VOICE_FAMILIES if f in allowed)]))
+
+    @staticmethod
+    def _new_run() -> dict:
+        """自動偵測「連續幾句都像同一個別的語言」的紀錄：這串是哪個語言、每句幾個字、什麼時候開始和最近一句、之前丟掉幾句。"""
+        return {"family": "", "letters": [], "first": 0.0, "last": 0.0, "ignored": 0}
 
     def _their_language_heard(self, family: str, text: str) -> None:
         """
-        自動偵測：對方這句話聽起來是 family 這個語言。跟目前以為的不一樣，而且夠確定
-        （句子夠長，或是連續兩句都是它），就把「對方用的語言」換過去。
-        對方說的剛好是我的語言時不換：那句話本來就看得懂，換了反而我說的話沒有東西可以翻。
+        自動偵測：對方這句話聽起來是 family 這個語言。一句話不算數（語音辨識對短句、背景音樂常猜錯），要連續
+        SWITCH_RUN 句都像「同一個別的語言」才把「對方用的語言」換過去；中間夾了一句現在的語言（或我的語言）就從頭算。
+        太短的句子（嗯、ok、哈哈）看不出是什麼語言：不算，也不打斷。剛換過去的 SWITCH_COOLDOWN 秒內先不再換，
+        免得兩邊來回跳。對方說的剛好是我的語言時不換：那句話本來就看得懂，換了反而我說的話沒有東西可以翻。
         """
         my, their = LANGS[self.cfg["my_lang"]]["family"], LANGS[self.cfg["their_lang"]]["family"]
-        if family in (their, my) or family not in VOICE_FAMILIES:
-            self._their_guess = ""
-            return
         letters = len(re.sub(r"[\W_]+", "", text))
-        solid = letters >= (16 if family in ALPHABETIC else 6)
-        if not solid and self._their_guess != family:
-            self._their_guess = family
+        if letters < EVIDENCE_MIN[family in ALPHABETIC]:
             return
-        self._their_guess = ""
+        run, now = self._their_run, time.monotonic()
+        if family in (their, my) or family not in self._auto_families():
+            run["ignored"] += len(run["letters"])      # 剛剛那幾句只是偶爾聽錯，不是真的換語言
+            run.update(family="", letters=[])
+            return
+        if run["family"] != family or now - run["last"] > SWITCH_RUN_GAP:
+            run["ignored"] += len(run["letters"])
+            run.update(family=family, letters=[], first=now)
+        run["letters"].append(letters)
+        run["last"] = now
+        if len(run["letters"]) < SWITCH_RUN or now - self._their_switched_at < SWITCH_COOLDOWN:
+            return
         code = family if family in LANGS else ("zh-CN" if self.cfg["ui_lang"] == "zh-CN" else "zh-TW")
-        before = self.cfg.snapshot()
+        before = self.cfg["their_lang"]
         self.cfg.set(their_lang=code)
-        self.log(f"auto-detect: the other person now speaks {code} (was {before['their_lang']})")
+        # 紀錄只寫語言代碼和句數，不寫說了什麼
+        self.log(f"auto-detect: the other person now speaks {code} (was {before}): {len(run['letters'])} sentences in a row over "
+                 f"{now - run['first']:.0f}s ({run['letters']} letters), {run['ignored']} one-off sentences ignored before")
+        self._their_run, self._their_switched_at = self._new_run(), now
         self.hub.publish("config", self.cfg.snapshot())
         self.notice("their_switched", lang=code)
         self.overlay.apply()
-        threading.Thread(target=self._their_language_switched, daemon=True).start()
+        threading.Thread(target=self._apply_langs, daemon=True).start()
 
-    def _their_language_switched(self) -> None:
+    def _apply_langs(self) -> None:
+        """
+        對方的語言（或候選語言）變了：收音和讀螢幕都不停下來，直接把新的語言給正在跑的那幾個。
+        以前每換一次，讀螢幕和麥克風都要重開：換得越勤越卡，重開之後畫面上最後幾行還會再翻一次。
+        """
         with self._lock:
-            pipe = self.pipelines.get("listen")
-            if pipe:
-                pipe.langs = self._voice_langs("listen")      # 不用重開收音，換個順序就好
-            if self.watcher:
-                was_on = self.sources["screen"]["on"]
+            for key, pipe in list(self.pipelines.items()):
+                pipe.langs = self._voice_langs(key)      # 辨識到一半的那一句已經留了一份清單，不受影響
+        watcher = self.watcher
+        if watcher is None:
+            return
+        try:
+            watcher.ocr = self._load_ocr()      # 文字辨識模型一樣就是原來那個；不一樣（韓文換英文）才載入新的，載入時照舊讀
+            watcher.source_langs = self._screen_langs()
+        except Exception as ex:  # noqa: BLE001
+            self.log(traceback.format_exc())
+            with self._lock:
                 self._stop_watcher()
-                if was_on:
-                    self._start_screen()
-            if self.sources["mic"]["on"]:
-                self._restart_voice("mic")
+            self._source("screen", on=False, busy=False, error=str(ex))
 
     def _start_voice(self, key: str, again: bool = False) -> None:
         """again：斷線之後自動重新連接的那幾次（失敗了不顯示錯誤，接著等下一次）。"""
