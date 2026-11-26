@@ -714,6 +714,49 @@ def test_error_screen_can_report_and_open_the_log_folder(tmp_path, monkeypatch):
     assert 'body.get("open_logs")' in (root / "server.py").read_text(encoding="utf-8")
 
 
+def test_quality_page_is_split_from_words_and_memory():
+    """「翻譯品質」一頁有兩千六百多像素高，要捲好幾屏才找得到詞彙表：引擎、語氣、參考上下文留在「翻譯品質」，
+    遊戲和聊天用語、詞彙表、教過的句子、翻過的句子、備份和分享搬到新的一頁「詞彙與記憶」。
+    搬家之後，介面提示和說明裡寫的頁面名字也要跟著改（每種語言），不然使用者照著說明會找不到。"""
+    import json
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "livelingo"
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    i18n = (root / "ui" / "i18n.js").read_text(encoding="utf-8")
+
+    def body(name):      # 一個函式：從 function name( 到下一個函式
+        start = js.index(f"  function {name}(")
+        return js[start:js.index("\n  function ", start + 10)]
+
+    quality, vocab = body("qualityPage"), body("vocabPage")
+    stay = ('data-act="quality"', 'data-act="tone"', 'switchRow("use_context"', 'switchRow("back_translate"')
+    moved = ('switchRow("game_terms"', 'data-act="pack"', 'id="gloss-form"', 'data-act="lesson-remove"', "memorySection()", 'data-act="lib-export"')
+    assert all(k in quality for k in stay) and not any(k in quality for k in moved)
+    assert all(k in vocab for k in moved) and not any(k in vocab for k in stay)
+
+    # 新的一頁接在「翻譯品質」後面、有圖示、能被打開；這四種資料搬過去了，就跟著新的一頁重畫
+    assert '["quality", "nav_quality", "quality"], ["vocab", "nav_vocab", "vocab"]' in js and "    vocab: '<svg" in js
+    assert 'else if (S.ui.tab === "vocab") page.innerHTML = vocabPage();' in js
+    for event in ("glossary", "game", "lessons", "memory"):
+        line = next(line for line in js.splitlines() if line.strip().startswith(f"{event}: ("))
+        assert 'S.ui.tab === "vocab"' in line and '"quality"' not in line, event
+
+    # 每種語言：新的頁面有自己的名字（放得進左邊的導覽），匯出設定的提示和說明都寫這個名字
+    blocks = re.split(r'\n  "([A-Za-z-]+)": \{', i18n)[1:]
+    texts = {blocks[i]: blocks[i + 1] for i in range(0, len(blocks), 2)}
+    assert set(texts) == set(UI_LANGS)
+    help_pages = json.loads((root / "data" / "help.json").read_text(encoding="utf-8"))
+    for lang, block in texts.items():
+        label = re.search(r'\bnav_vocab: "([^"]+)"', block).group(1)
+        quality_label = re.search(r'\bnav_quality: "([^"]+)"', block).group(1)
+        assert 2 <= len(label) <= 19 and label != quality_label, (lang, label)
+        assert label in re.search(r'\bset_hint: "([^"]+)"', block).group(1), lang
+        fix = next(s for s in help_pages[lang]["sections"] if s["id"] == "fix")
+        assert any(label in item for item in fix["items"]), lang      # 說明裡「翻過的句子」在哪一頁
+
+
 def test_find_my_microphone(tmp_path):
     """「自動找麥克風」：說話時最大聲的那一支會被選起來；全部沒聲音就回報找不到。"""
     import numpy as np
@@ -844,9 +887,12 @@ def test_update_asks_first(tmp_path, monkeypatch):
 
 
 def test_auto_detect_their_language(tmp_path):
+    """自動偵測對方的語言：一句話不算數。Jimbo 的紀錄裡一天換了六十幾次，多半是一句英文被當成韓文或日文，
+    換一次，翻譯的目標語言就跟著錯一次。現在要連續三句都像同一個別的語言才換。"""
     from livelingo.core.speech import Recognizer
-    from livelingo.service import VOICE_FAMILIES, Service
+    from livelingo.service import SWITCH_COOLDOWN, SWITCH_RUN, SWITCH_RUN_GAP, VOICE_FAMILIES, Service
 
+    assert SWITCH_RUN == 3 and 20 <= SWITCH_COOLDOWN <= 60 and 60 <= SWITCH_RUN_GAP <= 300
     pick = Recognizer.pick_language
     probs = [("en", 0.05), ("ko", 0.40), ("ja", 0.45), ("zh", 0.05), ("fr", 0.9)]
     assert pick(probs, ["ko", "ja"]) == "ja"                    # 沒有偏好：機率高的贏，不在清單裡的語言不算
@@ -864,39 +910,193 @@ def test_auto_detect_their_language(tmp_path):
     assert service._voice_langs("listen") == list(VOICE_FAMILIES) and VOICE_FAMILIES[:4] == ("ko", "zh", "en", "ja")
     assert service._voice_langs("mic") == ["zh", "ko"]
 
-    service._on_speech("loopback", "はい", "ja")                # 短短一句：先不換
+    def hear(text, lang):
+        service._on_speech("loopback", text, lang)
+
+    # 偶爾一句聽成別的語言：不換（這是紀錄裡最常見的情形）
+    hear("行こう行こう", "ja")
+    hear("탑 갈게", "ko")                                       # 又回到現在的語言：剛剛那句只是聽錯，從頭算
+    hear("そうだね、行こう", "ja")
+    hear("ありがとう", "ja")
+    assert service.cfg["their_lang"] == "ko" and notices == []     # 連續兩句還不夠
+    hear("はい", "ja")                                          # 太短（兩個字）：看不出是什麼語言，不算
+    hear("hm", "en")                                           # 太短的別種語言也不會打斷前面那串
     assert service.cfg["their_lang"] == "ko"
-    service._on_speech("loopback", "탑 갈게", "ko")              # 又回到韓文：剛剛那句不算
-    service._on_speech("loopback", "うん", "ja")
-    assert service.cfg["their_lang"] == "ko"
-    service._on_speech("loopback", "行こう", "ja")              # 連續兩句都是日文：換
+    hear("終わったら教えて", "ja")                               # 連續第三句：換
     assert service.cfg["their_lang"] == "ja" and notices[-1] == ("their_switched", {"lang": "ja"})
     assert service._voice_langs("listen") == ["ja", "ko", "zh", "en", *VOICE_FAMILIES[4:]]
     assert service._voice_langs("mic") == ["zh", "ja"]
     assert service._screen_langs() == {"ja"}                    # 我用中文：螢幕上的中文不用翻
     assert service._target_for({"who": "me", "lang": "zh"}) == "ja"
+    # 紀錄只寫語言代碼和句數，不寫對方說了什麼
+    log = (tmp_path / "app.log").read_text(encoding="utf-8")
+    assert "the other person now speaks ja (was ko): 3 sentences in a row" in log and "終わったら" not in log and "行こう" not in log
 
-    service._on_speech("loopback", "지금 용 잡으러 가자 빨리 와", "ko")   # 夠長的一句：馬上換
+    # 剛換過去：三十秒內不再換，來回跳最煩；時間過了，累積的證據還在，下一句就換
+    for text in ("Let's go take the dragon now", "I'm coming right now", "Wait for me at the river"):
+        hear(text, "en")
+    assert service.cfg["their_lang"] == "ja"
+    service._their_switched_at -= 31
+    hear("Okay see you there", "en")
+    assert service.cfg["their_lang"] == "en"
+
+    # 一串句子之間隔太久：重新算
+    service._their_switched_at -= 31
+    hear("지금 용 잡으러 가자", "ko")
+    hear("빨리 와 빨리", "ko")
+    service._their_run["last"] -= 130
+    hear("탑 갈게 잠깐만", "ko")
+    assert service.cfg["their_lang"] == "en"
+    hear("이거 진짜 되네", "ko")
+    hear("다시 한 번 해보자", "ko")
     assert service.cfg["their_lang"] == "ko"
-    service._on_speech("loopback", "我們現在去打龍，快點過來", "zh")       # 對方說的是我的語言：不換
-    assert service.cfg["their_lang"] == "ko" and service.cfg["their_auto"] is True
+
+    # 中間夾一句別的語言：從頭算（連續的意思是中間沒有別人）
+    service._their_switched_at -= 31
+    hear("It is a long way", "en")
+    hear("We need more time", "en")
+    hear("저기로 가자 빨리", "ko")
+    hear("Almost there now", "en")
+    assert service.cfg["their_lang"] == "ko"
+    hear("Let me check it", "en")
+    hear("One more minute please", "en")
+    assert service.cfg["their_lang"] == "en"
+
+    # 對方說的是我的語言：不換（也不算，那句話本來就看得懂）
+    service._their_switched_at -= 31
+    for text in ("我們現在去打龍，快點過來", "先去中路看一下", "等一下我也過去"):
+        hear(text, "zh")
+    assert service.cfg["their_lang"] == "en" and service._their_run["family"] == ""
 
     service.update_config({"my_lang": "ko", "their_lang": "en"})
     assert service._screen_langs() == {"en", "zh", "ja"}        # 中文、日文、英文同一個文字模型：都收
-    service._on_speech("loopback", "我們現在去打龍，快點過來", "zh")
+    service._their_switched_at -= 31
+    for text in ("我們現在去打龍，快點過來", "先去中路看一下", "等一下我也過去"):
+        hear(text, "zh")
     assert service.cfg["their_lang"] == "zh-TW"
 
     service.update_config({"my_lang": "zh-TW", "their_lang": "es"})
     assert service._screen_langs() == {"es", "pt", "fr", "de", "id", "vi"}      # 拉丁字母的語言同一個文字模型：都收
-    service._on_speech("loopback", "да", "ru")                               # 俄文短短一句：先不換
-    assert service.cfg["their_lang"] == "es"
-    service._on_speech("loopback", "Идём на дракона, у них нет флеша", "ru")  # 夠長：換過去，螢幕改用俄文的模型
-    assert service.cfg["their_lang"] == "ru" and service._screen_langs() == {"ru"}
+    service._their_switched_at -= 31
+    hear("да", "ru")                                                          # 俄文短短一句：不算
+    for text in ("Идём на дракона, у них нет флеша", "Подожди меня у реки", "Я уже иду к вам"):
+        hear(text, "ru")
+    assert service.cfg["their_lang"] == "ru" and service._screen_langs() == {"ru"}      # 換過去，螢幕改用俄文的模型
 
-    service.update_config({"their_lang": "ja", "their_auto": False})      # 自己選了語言：不再自動換
-    service._on_speech("loopback", "지금 용 잡으러 가자 빨리 와", "en")
-    assert service.cfg["their_lang"] == "ja" and service._voice_langs("listen") == ["ja"]
+    # 自己選了語言：不再自動換；改自動偵測的設定時，聽到一半的不再算
+    service._their_switched_at -= 31
+    hear("지금 용 잡으러 가자 빨리 와", "ko")
+    assert service._their_run["letters"]
+    service.update_config({"their_lang": "ja", "their_auto": False})
+    assert service._their_run["letters"] == [] and service._voice_langs("listen") == ["ja"]
+    for text in ("지금 용 잡으러 가자 빨리 와", "탑 갈게 잠깐만", "이거 진짜 되네"):
+        hear(text, "ko")
+    assert service.cfg["their_lang"] == "ja"
     service.shutdown()
+
+
+def test_auto_detect_follows_without_restarting_capture(tmp_path):
+    """自動偵測換了語言：收音、讀螢幕、麥克風都不能停下來重開（以前每換一次都重開，換得越勤越卡，重開之後畫面上最後幾行還會再翻一次）；
+    只選了幾種語言的話，只在那幾種裡判斷，改選的時候也不用重開。"""
+    from livelingo.service import SWITCH_RUN, VOICE_FAMILIES, Service
+
+    class Pipe:
+        langs = None
+
+        def stop(self):
+            pass
+
+    class Watcher:
+        ocr = "old ocr"
+        source_langs = {"ko"}
+        paused = False
+
+        def stop(self):
+            pass
+
+    def wait(condition, seconds=5.0):      # 換語言是在背景做的：等到做完（最多幾秒）
+        deadline = time.time() + seconds
+        while not condition() and time.time() < deadline:
+            time.sleep(0.02)
+        return condition()
+
+    service = Service(tmp_path)
+    service.notice = lambda *a, **kw: None
+    service.update_config({"my_lang": "zh-TW", "their_lang": "ko", "their_auto": True})
+    time.sleep(0.2)      # 剛剛換語言時開的背景工作做完了，下面才算得準有沒有重開
+
+    calls = []
+    service._stop_watcher = lambda: calls.append("stop watcher")
+    service._start_screen = lambda: calls.append("start screen")
+    service._restart_voice = lambda key: calls.append(f"restart {key}")
+    service._load_ocr = lambda: calls.append("load ocr") or f"ocr for {service.cfg['their_lang']}"
+    listen, mic, watcher = Pipe(), Pipe(), Watcher()
+    service.pipelines = {"listen": listen, "mic": mic}
+    service.watcher = watcher
+    service.sources["screen"]["on"] = service.sources["mic"]["on"] = service.sources["listen"]["on"] = True
+
+    for text in ("Let's go take the dragon now", "I'm coming right now", "Wait for me at the river"):
+        service._on_speech("loopback", text, "en")
+    assert service.cfg["their_lang"] == "en"
+    assert wait(lambda: watcher.source_langs == {"en", "ja"})
+    assert listen.langs == ["en", *[f for f in VOICE_FAMILIES if f != "en"]] and mic.langs == ["zh", "en"]
+    assert watcher.ocr == "ocr for en"      # 我用中文：中文不用讀；文字辨識換成英文那個
+    assert calls == ["load ocr"], calls      # 沒有停掉讀螢幕、沒有重開收音和麥克風
+    assert SWITCH_RUN == 3
+
+    # 只選了幾種語言：只在那幾種裡聽、只在那幾種裡換（目前的語言和我的語言一定算在裡面）
+    service.update_config({"auto_langs": ["ko", "ja", "ko", "xx", 5]})
+    assert service.cfg["auto_langs"] == ["ko", "ja"]      # 去掉重複的和不認得的，照固定順序
+    assert wait(lambda: listen.langs == ["en", "ko", "zh", "ja"] and calls == ["load ocr", "load ocr"]), (listen.langs, calls)
+    assert service._auto_families() == ["en", "ko", "zh", "ja"] and watcher.source_langs == {"en", "ja"}      # 候選變了：就地換，不重開
+    service._their_switched_at -= 31
+    for text in ("Il faut y aller maintenant", "On se retrouve au milieu", "Attends-moi près de la rivière"):
+        service._on_speech("loopback", text, "fr")      # 不在候選裡的語言：一直聽成法文也不會換
+    assert service.cfg["their_lang"] == "en" and service._their_run["family"] == ""
+    service._on_speech("loopback", "Пойдём к дракону сейчас же", "ru")
+    assert service._their_run["family"] == ""
+    for text in ("終わったら教えて", "もう少し待って", "ありがとう"):
+        service._on_speech("loopback", text, "ja")
+    assert service.cfg["their_lang"] == "ja" and wait(lambda: watcher.source_langs == {"ja"} and watcher.ocr == "ocr for ja")
+    assert not [c for c in calls if "restart" in c or "stop" in c or "start" in c], calls
+
+    service.update_config({"auto_langs": list(VOICE_FAMILIES)})      # 全部都選 = 沒限制
+    assert service.cfg["auto_langs"] == []
+    service.update_config({"auto_langs": "ko"})
+    assert service.cfg["auto_langs"] == []
+    assert service._auto_families() == ["ja", *[f for f in VOICE_FAMILIES if f != "ja"]]
+
+    # 自己改語言（按語言按鈕、換語言）才是重開：那是使用者自己的選擇，文字辨識的模型也可能要換
+    calls.clear()
+    service.update_config({"their_lang": "ko"})
+    assert wait(lambda: "restart mic" in calls and "stop watcher" in calls), calls
+    service.pipelines.clear()
+    service.watcher = None
+    service.shutdown()
+
+    # 讀螢幕的文字辨識模型載不進來：說清楚，不要裝作沒事
+    service = Service(tmp_path / "two")
+    service.update_config({"my_lang": "zh-TW", "their_lang": "ko", "their_auto": True})
+    time.sleep(0.2)
+    service.watcher = Watcher()
+    service.sources["screen"]["on"] = True
+
+    def broken():
+        raise RuntimeError("model missing")
+
+    service._load_ocr = broken
+    service._apply_langs()
+    assert service.watcher is None and service.sources["screen"]["on"] is False and service.sources["screen"]["error"] == "model missing"
+    service.shutdown()
+
+    # 介面：自動偵測開著才列出候選語言，按一下選或取消、至少留一種、全部選回來就存成「沒選過」
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "livelingo"
+    js = (root / "ui" / "app.js").read_text(encoding="utf-8")
+    assert "S.cfg.their_auto ? autoLangsHTML() : \"\"" in js and 'data-act="auto-lang"' in js and '"auto-lang": (el)' in js
+    assert "if (!next.some((x) => x !== mine && x !== theirs)) return;" in js
+    assert 'auto_langs: AUTO_FAMILIES.every' in js and 'const AUTO_FAMILIES = ["ko", "zh", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr"]' in js
 
 
 def test_subtitle_log(tmp_path):
@@ -5906,7 +6106,11 @@ def test_each_speaker_has_their_own_languages(tmp_path, monkeypatch):
         # 設過語言的人說了別的語言：不拿來把「對方的語言」換掉（那是他一個人的語言）
         said = hear(first, a, "this is a rather long english sentence indeed", "en")
         assert first.cfg["their_lang"] == "ko" and said["lang"] == "en" and said["speaker"] == 1
-        # 沒設的人照舊：自動偵測會換
+        # 沒設的人照舊：自動偵測會換（連續三句；設過語言的人說的不算，也不打斷）
+        for _ in range(2):
+            hear(first, b, "this is a rather long english sentence indeed", "en")
+        assert first.cfg["their_lang"] == "ko"
+        hear(first, a, "this is a rather long english sentence indeed", "en")
         hear(first, b, "this is a rather long english sentence indeed", "en")
         assert first.cfg["their_lang"] == "en"
         # 他說的中文照他設的那一種（簡體），不是照「對方的語言」

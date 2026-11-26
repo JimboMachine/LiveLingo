@@ -29,8 +29,10 @@
   }
   const lk = (code) => (code === "zh-TW" ? "zh" : (code === "zh-CN" ? "zhcn" : code));
   const PAIR_LANGS = ["zh-TW", "zh-CN", "ko", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr"];      // 可以選的翻譯語言
+  const AUTO_FAMILIES = ["ko", "zh", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr"];      // 自動偵測認得的語言（和 service.VOICE_FAMILIES 一樣；中文不分繁簡）
   const langName = (code) => t("lang_" + lk(code));
   const isChinese = (code) => code.startsWith("zh");
+  const familyOf = (code) => (isChinese(code) ? "zh" : code);
   // 卡片和輸入框上用的短名字：繁體和簡體都只寫「中文」，免得字太多擠成好幾行；兩邊都是中文時才寫清楚是哪一種
   function shortNames() {
     const mine = S.cfg.my_lang, theirs = S.cfg.their_lang, both = isChinese(mine) && isChinese(theirs);
@@ -59,7 +61,7 @@
   const SAVE_TARGET = {      // 「已儲存」出現在哪個控制項旁邊（沒列的：用 data-key 或 data-change 找）
     theme: '[data-act="theme"][aria-pressed="true"]', accent: '[data-act="accent"][aria-pressed="true"]',
     ui_lang: '[data-act="ui-lang"][aria-pressed="true"]', tone: '[data-act="tone"][aria-pressed="true"]', tone_keep: '[data-act="tone-keep"][aria-pressed="true"]',
-    quality: '[data-act="quality"][aria-pressed="true"]', my_lang: "#sel-my", their_lang: "#sel-their", their_auto: "#sel-their",
+    quality: '[data-act="quality"][aria-pressed="true"]', my_lang: "#sel-my", their_lang: "#sel-their", their_auto: "#sel-their", auto_langs: ".auto-langs .pills",
     speaker_device: '[data-act="device"][data-key="speaker"]', mic_device: '[data-act="device"][data-key="mic"]',
     transcript_dir: '[data-act="rec-choose"]', region: '[data-act="region"]', overlay_rect: '[data-act="overlay-edit"]', overlay_map: "#screen-map",
     overlay_look: '[data-act="overlay-look-reset"]', hotkeys: '[data-act="hotkey-reset"]'
@@ -115,6 +117,7 @@
     mic: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
     quality: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 6h9M8 4v2M6 6c0 4 3 7 6 8M12 6c0 3-3 7-7 8"/><path d="M13 20l4-9 4 9M14.5 17h5"/></svg>',
     globe: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>',
+    vocab: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h4"/></svg>',
     check: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" style="stroke-width:3"><path d="M5 12l5 5 9-10"/></svg>',
     back: '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M20 5v7a4 4 0 0 1-4 4H5m4-4l-4 4 4 4"/></svg>',
     info: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
@@ -667,7 +670,7 @@
   // 打開某個設定分頁時要另外去拿的資料：聲音頁要裝置和音量，聲音頁和螢幕頁都要開著的程式清單
   function tabOpened() {
     if (S.ui.tab === "audio") openDevices();
-    if (S.ui.tab === "screen" || S.ui.tab === "quality") loadApps();
+    if (S.ui.tab === "screen" || S.ui.tab === "vocab") loadApps();      // 詞彙表的「用在」要列出現在開著的程式
     if (S.ui.tab === "overlay") loadScreens();
     if (S.ui.tab === "history") { S.ui.hist = null; S.ui.recapList = null; loadHistory(); loadRecaps(); }
     if (S.ui.tab === "learn") { S.ui.review = null; loadWords(); }
@@ -678,7 +681,7 @@
 
   async function loadApps() {
     S.ui.apps = await get("/api/apps") || null;
-    if (S.view === "settings" && (S.ui.tab === "audio" || S.ui.tab === "screen" || S.ui.tab === "quality")) renderSettingsPage();
+    if (S.view === "settings" && (S.ui.tab === "audio" || S.ui.tab === "screen" || S.ui.tab === "vocab")) renderSettingsPage();
   }
 
   function refreshDevicePanels() {
@@ -688,7 +691,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["history", "nav_history", "clock"], ["learn", "nav_learn", "book"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["help", "nav_help", "help"], ["about", "nav_about", "info"]];
+  const TABS = [["history", "nav_history", "clock"], ["learn", "nav_learn", "book"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["vocab", "nav_vocab", "vocab"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["help", "nav_help", "help"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
@@ -724,27 +727,6 @@
     // 語氣的說明照「會翻成哪個語言」寫：韓文、日文有明確的說法（半語／タメ口、해요體／です・ます）
     const toneOf = ["ko", "ja"].find((l) => S.cfg.their_lang === l) || ["ko", "ja"].find((l) => S.cfg.my_lang === l) || "";
     const tk = (key) => t(toneOf ? `${key}_${toneOf}` : key);
-    const game = S.game || {};
-    const gameNames = {};
-    (game.own || []).forEach((g) => { gameNames[g.exe] = g.name; });
-    if (game.exe) gameNames[game.exe] = game.name;
-    const useGames = S.cfg.game_terms && S.cfg.game_auto;      // 遊戲專用詞只有開著自動切換時才有用
-    const rows = S.glossary.length
-      ? S.glossary.map((g) => `<div class="grow-row"><span>${esc(g.src)}</span><span>${esc(g.dst)}${g.game ? ` <span class="tag plain game-tag">${esc(gameNames[g.game] || g.game)}</span>` : ""}</span>
-          <button data-act="gloss-remove" data-src="${esc(g.src)}" data-game="${esc(g.game || "")}" aria-label="${esc(t("remove", { word: g.src }))}">${ICON.x}</button></div>`).join("")
-      : `<div class="none">${esc(t("gloss_empty"))}</div>`;
-    // 「用在」的選項：所有遊戲、現在認出來的遊戲、已經有專用詞的遊戲、現在開著的程式（不在清單上的遊戲也能自己挑）
-    const gameOpts = [["", t("gloss_game_all")]];
-    const seenOpt = new Set([""]);
-    const addOpt = (exe, name) => { const k = (exe || "").toLowerCase(); if (!seenOpt.has(k)) { seenOpt.add(k); gameOpts.push([k, name]); } };
-    if (game.exe) addOpt(game.exe, game.name);
-    (game.own || []).forEach((g) => addOpt(g.exe, g.name));
-    ((S.ui.apps && S.ui.apps.apps) || []).filter((a) => a.running).forEach((a) => addOpt(a.exe, a.name));
-    const pick = S.ui.glossGame !== undefined && seenOpt.has(S.ui.glossGame) ? S.ui.glossGame : (game.exe || "");
-    const taught = S.lessons.length
-      ? S.lessons.slice().reverse().map((l) => `<div class="grow-row"><span>${esc(l.src)}</span><span>${esc(l.dst)}</span>
-          <button data-act="lesson-remove" data-src="${esc(l.src)}" data-target="${esc(l.target)}" aria-label="${esc(t("remove", { word: l.src }))}">${ICON.x}</button></div>`).join("")
-      : `<div class="none">${esc(t("lessons_empty"))}</div>`;
     return `
       <section>
         <div><h2>${esc(t("engine_title"))}</h2><div class="sub">${esc(t("engine_hint"))}</div></div>
@@ -774,7 +756,34 @@
         <div class="dnote">${esc(t(S.cfg.tone_keep ? "tone_keep_on_desc" : "tone_keep_off_desc"))}</div>
       </section>
       <section>${switchRow("use_context", t("use_context"), t("use_context_desc"))}
-        ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>
+        ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>`;
+  }
+
+  // 詞彙與記憶（2.12.0 從「翻譯品質」拆出來）：遊戲和聊天用語、我的詞彙表、教過的句子、翻過的句子、備份和分享。
+  // 「翻譯品質」只留引擎、語氣、前後文；要找詞彙表不用再捲過整個引擎設定。
+  function vocabPage() {
+    const game = S.game || {};
+    const gameNames = {};
+    (game.own || []).forEach((g) => { gameNames[g.exe] = g.name; });
+    if (game.exe) gameNames[game.exe] = game.name;
+    const useGames = S.cfg.game_terms && S.cfg.game_auto;      // 遊戲專用詞只有開著自動切換時才有用
+    const rows = S.glossary.length
+      ? S.glossary.map((g) => `<div class="grow-row"><span>${esc(g.src)}</span><span>${esc(g.dst)}${g.game ? ` <span class="tag plain game-tag">${esc(gameNames[g.game] || g.game)}</span>` : ""}</span>
+          <button data-act="gloss-remove" data-src="${esc(g.src)}" data-game="${esc(g.game || "")}" aria-label="${esc(t("remove", { word: g.src }))}">${ICON.x}</button></div>`).join("")
+      : `<div class="none">${esc(t("gloss_empty"))}</div>`;
+    // 「用在」的選項：所有遊戲、現在認出來的遊戲、已經有專用詞的遊戲、現在開著的程式（不在清單上的遊戲也能自己挑）
+    const gameOpts = [["", t("gloss_game_all")]];
+    const seenOpt = new Set([""]);
+    const addOpt = (exe, name) => { const k = (exe || "").toLowerCase(); if (!seenOpt.has(k)) { seenOpt.add(k); gameOpts.push([k, name]); } };
+    if (game.exe) addOpt(game.exe, game.name);
+    (game.own || []).forEach((g) => addOpt(g.exe, g.name));
+    ((S.ui.apps && S.ui.apps.apps) || []).filter((a) => a.running).forEach((a) => addOpt(a.exe, a.name));
+    const pick = S.ui.glossGame !== undefined && seenOpt.has(S.ui.glossGame) ? S.ui.glossGame : (game.exe || "");
+    const taught = S.lessons.length
+      ? S.lessons.slice().reverse().map((l) => `<div class="grow-row"><span>${esc(l.src)}</span><span>${esc(l.dst)}</span>
+          <button data-act="lesson-remove" data-src="${esc(l.src)}" data-target="${esc(l.target)}" aria-label="${esc(t("remove", { word: l.src }))}">${ICON.x}</button></div>`).join("")
+      : `<div class="none">${esc(t("lessons_empty"))}</div>`;
+    return `
       <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}
         ${S.cfg.game_terms ? `<div class="packs">${["lol", "chat"].map((p) => `<button class="pack" id="pack-${p}" data-act="pack" data-pack="${p}" aria-pressed="${(S.cfg.term_packs || []).indexOf(p) >= 0}">
           <span class="name">${ICON.check}${esc(t("pack_" + p))}</span><span class="desc">${esc(t("pack_" + p + "_desc"))}</span></button>`).join("")}</div>
@@ -1165,6 +1174,19 @@
       <button class="swap" data-act="swap" aria-label="${esc(t("swap"))}" title="${esc(t("swap"))}">${ICON.swap}</button>
       <div class="field"><label for="sel-my">${esc(t("my_lang"))}</label><select id="sel-my" data-change="my_lang">${options(S.cfg.my_lang)}</select></div>
     </div>`;
+  }
+
+  // 自動偵測的候選語言（開著自動偵測才顯示）：預設全部都選；對方不會說的語言取消選取，誤判會少很多。
+  // 我自己的語言不列（對方說我的語言時本來就不換）；現在判斷到的語言一定在裡面，不能取消。
+  function autoLangsHTML() {
+    const mine = familyOf(S.cfg.my_lang), theirs = familyOf(S.cfg.their_lang);
+    const picked = (S.cfg.auto_langs || []).length ? S.cfg.auto_langs : AUTO_FAMILIES;
+    const pills = AUTO_FAMILIES.filter((f) => f !== mine).map((f) => {
+      const here = f === theirs;
+      return `<button class="pill" data-act="auto-lang" data-family="${f}" aria-pressed="${here || picked.includes(f)}" ${here ? "disabled" : ""}>${esc(t("short_" + f))}</button>`;
+    }).join("");
+    return `<div class="auto-langs"><div><div class="auto-title">${esc(t("auto_langs_title"))}</div><div class="sub">${esc(t("auto_langs_desc"))}</div></div>
+      <div class="pills">${pills}</div></div>`;
   }
 
   function uiLangsHTML() {
@@ -1558,7 +1580,7 @@
   function generalPage() {
     return `
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
-      <section><div><h2>${esc(t("trans_title"))}</h2><div class="sub">${esc(t("trans_hint"))}</div></div>${pairSelectHTML()}</section>
+      <section><div><h2>${esc(t("trans_title"))}</h2><div class="sub">${esc(t("trans_hint"))}</div></div>${pairSelectHTML()}${S.cfg.their_auto ? autoLangsHTML() : ""}</section>
       <section><div><h2>${esc(t("theme_title"))}</h2><div class="sub">${esc(t("theme_hint"))}</div></div>${themeHTML()}</section>
       <section><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
       <section><h2>${esc(t("window_title"))}</h2>
@@ -1637,6 +1659,7 @@
     else if (S.ui.tab === "storage") page.innerHTML = storagePage();
     else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + speakHTML() + voiceTuningHTML();
     else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
+    else if (S.ui.tab === "vocab") page.innerHTML = vocabPage();
     else if (S.ui.tab === "screen") page.innerHTML = screenPage();
     else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
     else if (S.ui.tab === "about") page.innerHTML = aboutPage();
@@ -1888,6 +1911,13 @@
     "set-lang": (el) => saveCfg(el.dataset.side === "their_lang"
       ? { their_lang: el.dataset.code, their_auto: false } : { [el.dataset.side]: el.dataset.code }),
     "set-auto": () => saveCfg({ their_auto: true }),
+    "auto-lang": (el) => {      // 候選語言：沒選過 = 全部；全部選回來就存成「沒選過」；至少留一種別的語言，不然就沒有東西可以偵測了
+      const mine = familyOf(S.cfg.my_lang), theirs = familyOf(S.cfg.their_lang), f = el.dataset.family;
+      const now = (S.cfg.auto_langs || []).length ? S.cfg.auto_langs : AUTO_FAMILIES;
+      const next = now.includes(f) ? now.filter((x) => x !== f) : now.concat(f);
+      if (!next.some((x) => x !== mine && x !== theirs)) return;
+      saveCfg({ auto_langs: AUTO_FAMILIES.every((x) => next.includes(x) || x === mine || x === theirs) ? [] : next });
+    },
     source: (el) => {
       const key = el.dataset.key;
       post("/api/source", { key, on: !(S.sources[key] || {}).on });
@@ -2674,16 +2704,16 @@
       if (S.view === "settings" && S.ui.tab === "overlay" && ["overlay", "overlay_form", "overlay_monitor", "overlay_font"].some((k) => before[k] !== cfg[k])) loadScreens();
       if (S.view === "wizard" && (S.ui.wz !== 3)) renderWizard();
     },
-    glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
+    glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "vocab") renderSettingsPage(); },
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
     replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
     words: (d) => { S.words[d.id] = d.items; const m = S.messages.find((x) => x.id === d.id); if (m) upsertMessage(m); },
     wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") loadWords(); },
     recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
-    game: (g) => { S.game = g; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
-    lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "quality") renderSettingsPage(); },
-    memory: (m) => { S.memory = m; if (S.view === "settings" && S.ui.tab === "quality" && !document.activeElement.closest("form")) renderSettingsPage(); },
+    game: (g) => { S.game = g; if (S.view === "settings" && S.ui.tab === "vocab") renderSettingsPage(); },
+    lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "vocab") renderSettingsPage(); },
+    memory: (m) => { S.memory = m; if (S.view === "settings" && S.ui.tab === "vocab" && !document.activeElement.closest("form")) renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
     speakers: (d) => {      // 分辨說話者：模型的狀態、多了一個人、有人改了名字
       const before = S.speakers || {};

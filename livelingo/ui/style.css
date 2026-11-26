@@ -359,6 +359,8 @@ input::placeholder { color: var(--faint); }
 .gloss .grow-row button:hover { color: var(--danger); }
 .gloss .none { padding: 14px; font-size: 13px; color: var(--dim); border-top: 1px solid var(--line); }
 .pair-select { display: flex; align-items: flex-end; gap: 12px; }
+.auto-langs { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.auto-title { font-size: 14px; font-weight: 700; }
 .pair-select .field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .pair-select label { font-size: 13px; color: var(--dim); }
 .pair-select select { height: 46px; font-size: 15px; width: 100%; }

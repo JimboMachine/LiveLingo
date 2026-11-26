@@ -1,4 +1,97 @@
 {
+  "2.12.0": {
+    "zh-TW": [
+      "「翻譯品質」拆成兩頁：引擎、語氣、參考上下文留在「翻譯品質」；遊戲和聊天用語、詞彙表、教過的句子、翻過的句子、備份和分享搬到新的「詞彙與記憶」，不用再捲過整個引擎設定才找得到詞彙表。",
+      "左邊多了一頁，Ctrl+數字 跟著挪：Ctrl+7 是「詞彙與記憶」、Ctrl+8 是「螢幕讀取」、Ctrl+9 是「語言與一般」；「儲存空間」用滑鼠點。",
+      "自動偵測對方的語言不再亂跳：以前只要聽錯一句就換。現在對方連續說三句別的語言才換，剛換過的三十秒內不再換，太短的句子不算。",
+      "換語言時，讀螢幕和麥克風不再停下來重開，畫面上最後幾行也不會再翻一次。",
+      "新增「自動偵測的候選語言」（在「語言與一般」，開著自動偵測才會出現）：可以只選對方會說的語言，不會說的取消選取，誤判更少。"
+    ],
+    "zh-CN": [
+      "“翻译质量”拆成两页：引擎、语气、参考上下文留在“翻译质量”；游戏和聊天用语、词汇表、教过的句子、翻过的句子、备份和分享搬到新的“词汇与记忆”，不用再滚过整个引擎设置才找得到词汇表。",
+      "左边多了一页，Ctrl+数字 跟着挪：Ctrl+7 是“词汇与记忆”、Ctrl+8 是“屏幕读取”、Ctrl+9 是“语言与常规”；“存储空间”用鼠标点。",
+      "自动检测对方的语言不再乱跳：以前只要听错一句就换。现在对方连续说三句别的语言才换，刚换过的三十秒内不再换，太短的句子不算。",
+      "换语言时，读屏幕和麦克风不再停下来重开，屏幕上最后几行也不会再翻一次。",
+      "新增“自动检测的候选语言”（在“语言与常规”，开着自动检测才会出现）：可以只选对方会说的语言，不会说的取消选中，误判更少。"
+    ],
+    "en": [
+      "\"Translation quality\" is split in two: engine, tone and context stay there; game and chat terms, the word list, taught and translated sentences, and backup/sharing moved to the new \"Words & memory\" page.",
+      "One more page on the left, so Ctrl+number shifted: Ctrl+7 is \"Words & memory\", Ctrl+8 \"Screen reading\", Ctrl+9 \"Language & general\". Use the mouse for \"Storage\".",
+      "Auto-detect no longer jumps around. It used to switch after one misheard sentence; now the other person must speak another language for three sentences in a row. No switching again for 30 seconds; very short sentences don't count.",
+      "Switching language no longer restarts screen reading and the microphone, and the last lines on screen aren't translated twice.",
+      "New \"Languages auto-detect can pick\" (in \"Language & general\", shown while auto-detect is on): select only the languages the other person speaks and deselect the rest for fewer mistakes."
+    ],
+    "ko": [
+      "\"번역 품질\"이 두 페이지로 나뉘었습니다. 엔진, 말투, 문맥 참고는 \"번역 품질\"에 남고, 게임·채팅 용어, 단어장, 가르친 문장, 번역한 문장, 백업과 공유는 새로 생긴 \"단어와 기억\"으로 옮겼습니다.",
+      "왼쪽에 페이지가 하나 늘어서 Ctrl+숫자가 바뀌었습니다. Ctrl+7은 \"단어와 기억\", Ctrl+8은 \"화면 읽기\", Ctrl+9는 \"언어 및 일반\"입니다. \"저장 공간\"은 마우스로 누르세요.",
+      "상대 언어 자동 감지가 더 이상 오락가락하지 않습니다. 예전에는 한 문장만 잘못 들어도 바뀌었지만, 이제는 상대가 다른 언어로 세 문장 연속 말해야 바뀌고, 바뀐 뒤 30초 동안은 다시 바뀌지 않으며 아주 짧은 문장은 세지 않습니다.",
+      "언어가 바뀔 때 화면 읽기와 마이크가 멈췄다가 다시 시작되지 않고, 화면의 마지막 몇 줄이 다시 번역되지도 않습니다.",
+      "새로 \"자동 감지 후보 언어\"가 생겼습니다(\"언어 및 일반\", 자동 감지를 켰을 때 표시). 상대가 쓰는 언어만 선택하고 나머지는 해제하면 오판이 줄어듭니다."
+    ],
+    "ja": [
+      "「翻訳の品質」を2つのページに分けました。エンジン・口調・文脈は「翻訳の品質」に残り、ゲームやチャットの用語、単語リスト、教えた文、翻訳した文、バックアップと共有は新しい「用語と記憶」に移りました。",
+      "左側のページが1つ増えたため、Ctrl+数字の割り当てが変わりました。Ctrl+7は「用語と記憶」、Ctrl+8は「画面の読み取り」、Ctrl+9は「言語と一般」です。「ストレージ」はマウスで開いてください。",
+      "相手の言語の自動検出が勝手に切り替わらなくなりました。以前は1文聞き間違えただけで切り替わっていましたが、今は相手が別の言語で3文続けて話したときだけ切り替わり、切り替えた後30秒は再び切り替わらず、ごく短い文は数えません。",
+      "言語が切り替わっても画面の読み取りとマイクを止めて再起動しなくなり、画面の最後の数行が再翻訳されることもなくなりました。",
+      "新しく「自動検出の候補言語」を追加しました（「言語と一般」で、自動検出がオンのときに表示）。相手が話す言語だけを選び、それ以外を外すと誤判定が減ります。"
+    ],
+    "vi": [
+      "\"Chất lượng dịch\" được tách thành hai trang: động cơ, giọng điệu và ngữ cảnh ở lại đó; thuật ngữ game và chat, danh sách từ, câu đã dạy, câu đã dịch, sao lưu và chia sẻ chuyển sang trang mới \"Từ vựng & bộ nhớ\".",
+      "Thanh bên trái có thêm một trang nên Ctrl+số đã dịch chuyển: Ctrl+7 là \"Từ vựng & bộ nhớ\", Ctrl+8 là \"Đọc màn hình\", Ctrl+9 là \"Ngôn ngữ và chung\". \"Dung lượng\" hãy bấm bằng chuột.",
+      "Tự nhận diện ngôn ngữ của người kia không còn nhảy lung tung: trước đây nghe nhầm một câu là đổi. Giờ họ phải nói ngôn ngữ khác ba câu liên tiếp mới đổi, sau khi đổi 30 giây sẽ không đổi nữa, câu quá ngắn không tính.",
+      "Khi đổi ngôn ngữ, việc đọc màn hình và micro không còn dừng rồi khởi động lại, và mấy dòng cuối trên màn hình không bị dịch lại.",
+      "Mới có \"Ngôn ngữ để tự nhận diện\" (trong \"Ngôn ngữ và chung\", hiện khi bật tự nhận diện): chỉ chọn những ngôn ngữ người kia nói, bỏ chọn phần còn lại để ít nhận nhầm hơn."
+    ],
+    "th": [
+      "แยก \"คุณภาพการแปล\" เป็นสองหน้า: เอนจิน น้ำเสียง และบริบทอยู่ที่เดิม ส่วนคำศัพท์เกมและแชต รายการคำ ประโยคที่สอน ประโยคที่แปลแล้ว และการสำรอง/แชร์ ย้ายไปหน้าใหม่ \"คำศัพท์และความจำ\"",
+      "แถบซ้ายมีเพิ่มหนึ่งหน้า Ctrl+ตัวเลข จึงขยับ: Ctrl+7 คือ \"คำศัพท์และความจำ\" Ctrl+8 คือ \"การอ่านหน้าจอ\" Ctrl+9 คือ \"ภาษาและทั่วไป\" ส่วน \"พื้นที่เก็บข้อมูล\" ให้คลิกด้วยเมาส์",
+      "การตรวจจับภาษาของอีกฝ่ายอัตโนมัติไม่สลับไปมาอีก: เมื่อก่อนฟังผิดประโยคเดียวก็เปลี่ยน ตอนนี้ต้องพูดภาษาอื่นติดกันสามประโยคจึงจะเปลี่ยน หลังเปลี่ยนแล้ว 30 วินาทีจะไม่เปลี่ยนอีก และประโยคสั้นมากไม่นับ",
+      "เมื่อเปลี่ยนภาษา การอ่านหน้าจอและไมโครโฟนไม่หยุดแล้วเริ่มใหม่อีก และบรรทัดสุดท้ายบนหน้าจอจะไม่ถูกแปลซ้ำ",
+      "เพิ่ม \"ภาษาที่ให้ตรวจจับอัตโนมัติเลือก\" (ใน \"ภาษาและทั่วไป\" แสดงเมื่อเปิดตรวจจับอัตโนมัติ): เลือกเฉพาะภาษาที่อีกฝ่ายพูด แล้วยกเลิกภาษาที่เหลือ จะพลาดน้อยลง"
+    ],
+    "id": [
+      "\"Kualitas terjemahan\" dibagi dua: mesin, nada, dan konteks tetap di sana; istilah game dan obrolan, daftar kata, kalimat yang diajarkan dan diterjemahkan, serta cadangan/berbagi pindah ke halaman baru \"Kosakata & memori\".",
+      "Ada satu halaman baru di kiri, jadi Ctrl+angka bergeser: Ctrl+7 adalah \"Kosakata & memori\", Ctrl+8 \"Pembacaan layar\", Ctrl+9 \"Bahasa & umum\". Untuk \"Penyimpanan\" klik dengan mouse.",
+      "Deteksi otomatis tidak lagi berganti-ganti: dulu satu kalimat salah dengar cukup. Kini lawan bicara harus memakai bahasa lain tiga kalimat berturut-turut; setelah berganti, 30 detik tanpa pergantian; kalimat sangat pendek diabaikan.",
+      "Saat bahasa berganti, pembacaan layar dan mikrofon tidak lagi berhenti lalu dimulai ulang, dan beberapa baris terakhir di layar tidak diterjemahkan dua kali.",
+      "Baru: \"Bahasa untuk deteksi otomatis\" (di \"Bahasa & umum\", tampil saat deteksi otomatis aktif): pilih hanya bahasa yang dipakai lawan bicara dan batalkan sisanya agar lebih sedikit salah tebak."
+    ],
+    "es": [
+      "\"Calidad de traducción\" se divide en dos: motor, tono y contexto se quedan ahí; términos de juegos y chat, lista de palabras, frases enseñadas y traducidas, y copia de seguridad/compartir pasan a la nueva \"Palabras y memoria\".",
+      "Hay una página más a la izquierda, así que Ctrl+número se desplazó: Ctrl+7 es \"Palabras y memoria\", Ctrl+8 \"Lectura de pantalla\", Ctrl+9 \"Idioma y general\". Para \"Almacenamiento\" usa el ratón.",
+      "La detección automática ya no salta: antes cambiaba por una sola frase mal entendida. Ahora la otra persona debe hablar otro idioma tres frases seguidas; tras cambiar, 30 s sin volver a cambiar; las frases muy cortas no cuentan.",
+      "Al cambiar de idioma, la lectura de pantalla y el micrófono ya no se detienen y reinician, y las últimas líneas de la pantalla no se traducen otra vez.",
+      "Nuevo \"Idiomas para la detección automática\" (en \"Idioma y general\", visible con la detección automática activada): elige solo los idiomas que habla la otra persona y desmarca el resto para equivocarte menos."
+    ],
+    "pt": [
+      "\"Qualidade da tradução\" foi dividida em duas páginas: motor, tom e contexto ficam nela; termos de jogos e chat, lista de palavras, frases ensinadas e traduzidas e backup/compartilhamento foram para a nova \"Palavras e memória\".",
+      "Há uma página a mais à esquerda, então Ctrl+número mudou: Ctrl+7 é \"Palavras e memória\", Ctrl+8 \"Leitura de tela\", Ctrl+9 \"Idioma e geral\". Para \"Armazenamento\" use o mouse.",
+      "A detecção automática não fica mais pulando: antes bastava uma frase ouvida errado. Agora a outra pessoa precisa falar outro idioma por três frases seguidas; depois de trocar, 30 segundos sem trocar de novo; frases muito curtas não contam.",
+      "Ao trocar de idioma, a leitura de tela e o microfone não são mais parados e reiniciados, e as últimas linhas da tela não são traduzidas de novo.",
+      "Novo \"Idiomas da detecção automática\" (em \"Idioma e geral\", aparece com a detecção automática ligada): selecione só os idiomas que a outra pessoa fala e desmarque o resto para errar menos."
+    ],
+    "ru": [
+      "«Качество перевода» разделено на две страницы: движок, тон и контекст остались там, а игровые и чатовые термины, список слов, выученные и переведённые фразы и резервная копия/обмен перенесены на новую страницу «Слова и память».",
+      "Слева появилась ещё одна страница, поэтому Ctrl+цифра сместилась: Ctrl+7 — «Слова и память», Ctrl+8 — «Чтение экрана», Ctrl+9 — «Язык и общие». «Хранилище» открывайте мышью.",
+      "Автоопределение больше не прыгает: раньше хватало одной неверно расслышанной фразы. Теперь собеседник должен говорить на другом языке три фразы подряд; после переключения 30 секунд без смены; совсем короткие фразы не считаются.",
+      "При смене языка чтение экрана и микрофон больше не останавливаются и не перезапускаются, а последние строки на экране не переводятся повторно.",
+      "Новое: «Языки для автоопределения» (в «Язык и общие», видно при включённом автоопределении): выберите только языки, на которых говорит собеседник, и снимите выбор с остальных — ошибок будет меньше."
+    ],
+    "de": [
+      "„Übersetzungsqualität“ ist in zwei Seiten geteilt: Engine, Ton und Kontext bleiben dort; Spiel- und Chat-Begriffe, Wortliste, gelehrte und übersetzte Sätze sowie Sicherung/Teilen sind auf die neue Seite „Wörter & Gedächtnis“ umgezogen.",
+      "Links gibt es eine Seite mehr, deshalb haben sich die Ctrl+Zahl-Kürzel verschoben: Ctrl+7 ist „Wörter & Gedächtnis“, Ctrl+8 „Bildschirm lesen“, Ctrl+9 „Sprache und Allgemeines“. „Speicher“ öffnest du mit der Maus.",
+      "Die automatische Erkennung springt nicht mehr: Früher reichte ein falsch verstandener Satz. Jetzt muss die andere Person drei Sätze hintereinander in einer anderen Sprache sprechen; danach 30 s kein Wechsel; sehr kurze Sätze zählen nicht.",
+      "Beim Sprachwechsel werden Bildschirmlesen und Mikrofon nicht mehr angehalten und neu gestartet, und die letzten Zeilen auf dem Bildschirm werden nicht noch einmal übersetzt.",
+      "Neu: „Sprachen für die automatische Erkennung“ (unter „Sprache und Allgemeines“, sichtbar bei eingeschalteter automatischer Erkennung): Wähle nur die Sprachen, die die andere Person spricht, und wähle den Rest ab – das gibt weniger Fehler."
+    ],
+    "fr": [
+      "« Qualité de traduction » est scindée en deux : moteur, ton et contexte y restent ; termes de jeux et de chat, liste de mots, phrases enseignées et traduites, sauvegarde/partage passent dans la nouvelle page « Mots et mémoire ».",
+      "Une page de plus à gauche, donc les raccourcis Ctrl+chiffre se décalent : Ctrl+7 = « Mots et mémoire », Ctrl+8 = « Lecture de l'écran », Ctrl+9 = « Langue et général ». Pour « Stockage », utilisez la souris.",
+      "La détection automatique ne saute plus : avant, une phrase mal comprise suffisait. Il faut maintenant trois phrases de suite dans une autre langue, puis 30 s sans nouveau changement ; les phrases très courtes ne comptent pas.",
+      "Au changement de langue, la lecture de l'écran et le micro ne s'arrêtent plus pour redémarrer, et les dernières lignes à l'écran ne sont plus traduites une seconde fois.",
+      "Nouveau : « Langues de la détection automatique » (dans « Langue et général », visible avec la détection automatique) : ne sélectionnez que les langues parlées par l'autre personne, désélectionnez le reste pour moins d'erreurs."
+    ]
+  },
   "2.10.1": {
     "zh-TW": [
       "麥克風提醒：有些麥克風沒人說話時送來的是一串 0，以前說完話安靜幾秒就會跳出「麥克風完全沒有聲音」。現在只有開起來之後一直沒聲音才會提醒。",

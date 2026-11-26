@@ -370,9 +370,10 @@
 
 1. `guide.py`：data/help.json 每種介面語言一起改；引號裡的頁面和按鈕名字要和介面上的一模一樣
 2. `i18n.js`：介面上的名字改了（nav_、src_ 開頭的），回去改說明裡引用它的句子
-3. `app.js`：視窗裡的鍵盤操作改了（Ctrl+數字、F1、Esc），說明的「快速鍵和鍵盤」那一段要跟著改
-4. `guide.py`：安裝方式或系統需求變了：給朋友那一頁的安裝步驟（friend.install）要改
-5. `test_basics.py`：test_help_page_and_the_page_for_a_friend
+3. `app.js`、`i18n.js`、`guide.py`：把功能搬到另一頁（例如「翻譯品質」拆出「詞彙與記憶」）：在介面的提示和說明（i18n 的 _hint、_desc，data/help.json）、README 搜舊的頁面名字，都改成新的名字；左邊導覽的順序變了，Ctrl+數字 對到的頁面也跟著變
+4. `app.js`：視窗裡的鍵盤操作改了（Ctrl+數字、F1、Esc），說明的「快速鍵和鍵盤」那一段要跟著改
+5. `guide.py`：安裝方式或系統需求變了：給朋友那一頁的安裝步驟（friend.install）要改
+6. `test_basics.py`：test_help_page_and_the_page_for_a_friend
 
 自動把關：測試會擋：每種介面語言的說明結構不一樣、提到的按鍵不一樣、說明裡寫的視窗內按鍵程式裡沒有、給朋友的那一頁載入外部的東西。說明裡寫的頁面名字和做法還對不對，要自己讀一次。
 
@@ -421,6 +422,16 @@
 4. `config.py`、`app.js`、`i18n.js`：share_visible 的開關、名稱和說明五種語言
 
 自動把關：測試會擋：預設拍得到、設定改了開著的視窗馬上換、拍得到的時候讀螢幕會把字幕蓋住的地方塗黑、沒有字幕就不塗。Discord、OBS 真的拍不拍得到，要在 Windows 上實際分享一次才知道。
+
+### 改自動偵測對方的語言：連續幾句才換、候選語言、換了之後哪些要跟著換
+
+1. `service.py`：判斷的規則（SWITCH_RUN、SWITCH_RUN_GAP、SWITCH_COOLDOWN、EVIDENCE_MIN）：只算連續的句子，太短的不算也不打斷；設過語言的人說的（speaker_langs）不算也不打斷；紀錄只寫語言代碼和句數，不寫說了什麼
+2. `service.py`、`speech.py`、`watcher.py`、`ocr.py`：換了之後只能就地更新：收音的語言清單（pipe.langs，聽對方和麥克風各一份）、讀螢幕的語言和文字辨識模型（watcher.source_langs、watcher.ocr）。不能停掉讀螢幕或重開收音（重開之後畫面上最後幾行會再翻一次）；只有使用者自己換語言才重開（_languages_changed）
+3. `config.py`、`service.py`：候選語言 auto_langs：空的 = 全部；目前的語言和我的語言一定算在裡面（_auto_families）；update_config 去掉不認得的、全選回來就存成空的；也影響讀螢幕（_screen_langs）
+4. `app.js`、`style.css`、`i18n.js`：設定頁的候選語言按鈕（只有開著自動偵測才出現、至少留一種）；auto_langs_ 開頭的文字和換語言的通知（n_their_switched），每種介面語言
+5. `test_basics.py`：test_auto_detect_their_language、test_auto_detect_follows_without_restarting_capture
+
+自動把關：測試會擋：一句話就換、換語言時停掉讀螢幕或重開收音、候選語言整理錯、介面少了候選語言的按鈕或少一種語言的文字。真的聲音和畫面要在你的電腦上聽看看。
 
 ## 每個部分牽動誰
 
