@@ -63,7 +63,9 @@ HINT_INTRO_CHAT = "They are chatting while playing an online game. Use these mea
 # 實測：少了這段，模型常常自己加「嗯、啊、哇」或表情符號，還會把「我來」翻成「幫我」之類的
 FAITHFUL = ("Translate faithfully: keep the meaning, who is doing what, and the sentence type exactly as in the original. "
             "A statement stays a statement and a question stays a question. "
-            "Do not add greetings, interjections or anything that is not in the original.\n")
+            "Do not add greetings, interjections or anything that is not in the original.\n"
+            "Keep every name, place, number and fact exactly as in the original; never swap them for ones from "
+            "the reader's country. Do not explain, comment, guess the reason or add words of your own.\n")
 # 模型常把這幾個時間副詞翻錯（「剛剛」翻成「現在」、「等一下」翻成「現在」），遇到時把意思告訴它
 COMMON_WORDS = {
     ("zh", "ko"): [("剛剛", "방금 (a moment ago)"), ("剛才", "방금 (a moment ago)"),
@@ -80,6 +82,47 @@ BUILTIN_EXAMPLES = {
         (re.compile(r"剛剛|剛才"), "polite", "我剛剛吃飽了", "저 방금 밥 다 먹었어요."),
     ],
 }
+# 台灣的地名：前面幾句在講台灣、對方是韓國人時，實測 12B 會把「我是台北人」翻成「나는 서울 사람」（首爾人），
+# 規定寫在提示裡也擋不住；把地名是哪裡告訴它就不會換掉。用英文寫，翻成哪種語言都適用。
+# 不放「台灣」：模型本來就翻得對，放了 4B 反而會把「臺灣」兩個字照抄進韓文
+PLACES = {"台北": "Taipei (a city in Taiwan)", "新北": "New Taipei (a city in Taiwan)",
+          "桃園": "Taoyuan (a city in Taiwan)", "新竹": "Hsinchu (a city in Taiwan)", "台中": "Taichung (a city in Taiwan)",
+          "台南": "Tainan (a city in Taiwan)", "高雄": "Kaohsiung (a city in Taiwan)", "基隆": "Keelung (a city in Taiwan)",
+          "宜蘭": "Yilan (in Taiwan)", "花蓮": "Hualien (in Taiwan)", "台東": "Taitung (in Taiwan)",
+          "屏東": "Pingtung (in Taiwan)", "嘉義": "Chiayi (a city in Taiwan)", "彰化": "Changhua (in Taiwan)",
+          "墾丁": "Kenting (in Taiwan)", "澎湖": "Penghu (islands of Taiwan)", "金門": "Kinmen (islands of Taiwan)"}
+PLACES_INTRO = "Place names (keep them as these places): "
+# 台灣口語裡模型常翻錯意思的詞（使用者紀錄裡真的翻錯的）：「我很色」翻成「我很害羞」「很華麗」
+# 意思用目標語言的說法給（只給英文說明時，12B 還是翻成「수작이 심하다」「색하다」）；沒列的語言用英文
+ZH_SLANG = [(re.compile(r"[很好超太蠻滿有點比較]色(?!彩|調|系|號)|色色|色情"), "色",
+             {"ko": "야하다, 밝히다 (pervy, horny)", "ja": "エロい、スケベ (pervy)", "en": "pervy, horny",
+              "": "pervy, horny (sexual meaning; not shy, not colorful)"})]
+
+
+# 模型看到拉丁字母會照抄（提示裡說了名字和英文字不要翻）：「A片」會原樣留在韓文裡，再被當成沒翻好重翻成很正式的句子。
+# 送進模型前先換成一般的說法（只換給模型看的那份，記住的翻法還是用原文當索引）
+ZH_PLAIN = [(re.compile(r"[Aa]片"), "成人影片")]
+
+
+def plain_zh(text: str) -> str:
+    for pattern, word in ZH_PLAIN:
+        text = pattern.sub(word, text)
+    return text
+
+
+def slang_in(text: str, target: str = "") -> list[tuple[str, str]]:
+    """原文（中文）裡模型常翻錯的口語：[(詞, 用目標語言說的意思)]。"""
+    plain = _to_traditional.convert(text)
+    family = LANGS[target]["family"] if target in LANGS else ""
+    return [(label, meaning.get(family, meaning[""])) for pattern, label, meaning in ZH_SLANG if pattern.search(plain)]
+
+
+def places_in(text: str) -> list[tuple[str, str]]:
+    """原文（中文）裡提到的台灣地名：[(原文寫法, 英文和是哪裡)]。臺／台、簡體都認得。"""
+    plain = _to_traditional.convert(text).replace("臺", "台")
+    return [(name, where) for name, where in PLACES.items() if name in plain]
+
+
 EXAMPLES_INTRO = "The user wants messages like these translated this way (source => translation):\n"
 # 每個語言「朋友之間」和「有禮貌」各是哪一種說法（韓文、日文有明確的敬語體系，中文用「您、請」）
 REGISTER = {
@@ -98,9 +141,10 @@ REGISTER = {
 }
 SHORT_REGISTER = {"ko": ", so use informal Korean (반말)", "ja": ", so use casual plain Japanese (タメ口)",
                   "es": ", so use tú", "fr": ", so use tu", "de": ", so use du", "ru": ", so use ты"}
-# 前面幾句對話（原文）。只給模型參考代名詞、省略的主詞在說誰，不翻它們
-CONTEXT_INTRO = ("For context only, these are the previous messages of the conversation. Do not translate them "
-                 "and do not repeat them; use them only to understand what the new message refers to:\n")
+# 前面幾句對話（原文）。只給模型參考代名詞、省略的主詞在說誰，不翻它們。
+# 2.10.1 換了寫法：舊的「For context only… Do not translate them」實測 12B 還是會把前一句的意思接在譯文後面
+# （前一句「…我雖然溫柔，但比較色」、這一句「…我雖然溫柔」→ 後面多了「我很害羞」）。這個寫法加上空一行，同樣的句子就不會了
+CONTEXT_INTRO = "Earlier messages in this chat (context only, never translate or repeat them):\n"
 
 _END_MARKS = "。．.!！?？~～…"
 _ZH_QUESTION = re.compile(
@@ -320,12 +364,17 @@ def build_prompt(text: str, source: str, target: str, glossary: dict[str, str], 
         extra += (hint_intro or HINT_INTRO) + "; ".join(f"{a} = {b}" for a, b in hints) + "\n"
     words = [(a, b) for a, b in COMMON_WORDS.get((source, target), [])
              if a in text and not text.rstrip("。．.!！~～… ").endswith(a)]      # 單獨一句「等一下」是「等等我」，不算
+    if source == "zh":
+        words += slang_in(text, target)
     if words and style != "plain":
         extra += "Word meanings: " + "; ".join(f"{a} = {b}" for a, b in words) + "\n"
+    places = places_in(text) if source == "zh" else []
+    if places and style != "plain":
+        extra += PLACES_INTRO + "; ".join(f"{a} = {b}" for a, b in places) + "\n"
     if examples and style != "plain":
         extra += EXAMPLES_INTRO + "".join(f"{a} => {b}\n" for a, b in examples)
     if context and style == "full":
-        extra += CONTEXT_INTRO + "".join(f"- {line}\n" for line in context)
+        extra += CONTEXT_INTRO + "".join(f"- {line}\n" for line in context) + "\n"
     if unfinished:
         extra += UNFINISHED
     body = (
@@ -403,6 +452,80 @@ def tidy(out: str, target: str) -> str:
         for pattern, words in _KO_LAUGH:
             out = pattern.sub(words.get(target, ""), out)
     return out.strip()
+
+
+# ---- 超譯檢查：模型多寫了原文沒有的東西
+
+# 模型沒在翻譯、而是跟使用者說話（螢幕上讀到幾個亂碼字時最常見）：「好的，請提供您要翻譯的韓文文字。」
+# 「這句話無法理解，無法翻譯。」「Please provide the text」。這些不是譯文，不能給人看
+_META = re.compile(
+    r"請提供|请提供|無法(理解|翻譯|辨識)|无法(理解|翻译|识别)|要翻譯的|要翻译的|翻譯的(文字|內容|句子)|翻译的(文字|内容|句子)|"
+    r"原文|上下文|"
+    r"please provide|provide the text|cannot (be )?translate|unable to translate|can't translate|the text you provided|"
+    r"번역할|번역해 ?드|제공해 ?주|원문|"
+    r"翻訳する|翻訳して|提供してください|原文",
+    re.IGNORECASE)
+
+
+def meta_reply(out: str, text: str) -> bool:
+    """譯文其實是模型在跟人說話（要人提供文字、說翻不了），不是翻譯。原文自己有這些字的話不算。"""
+    found = _META.search(out)
+    return bool(found) and found.group(0).lower() not in text.lower()
+
+
+_NOTE = re.compile(r"\s*[（(][^（()）]*[)）]")
+
+
+def drop_notes(out: str, text: str) -> str:
+    """原文沒有括號、譯文卻有：那是模型自己加的註解（「（然後省略了後面的內容）」「(Hòu miàn de!)」），拿掉。"""
+    if re.search(r"[（(]", text):
+        return out
+    cut = _NOTE.sub("", out).strip()
+    return cut if len(cut) >= 1 else out
+
+
+def extra_lines(out: str, text: str, source: str, target: str) -> str:
+    """原文只有一行、譯文卻有好幾行：第一行是模型的答案，後面是它自己接下去編的
+    （「Savi」→「Savi:\n你現在在幹嘛？」、「보이오이」→「好的。\n裝飾。\n好的。」），只留第一行。
+    第一行還留著原文的字（模型先抄一遍原文、下一行才是譯文）就不動，交給 salvage。"""
+    if "\n" in text.strip():
+        return out
+    lines = [ln.strip() for ln in out.strip().splitlines() if ln.strip()]
+    if len(lines) <= 1 or _leftover(lines[0], source, target):
+        return out
+    first = lines[0]
+    return first[:-1].rstrip() if first.endswith((":", "：")) and not text.rstrip().endswith((":", "：")) else first
+
+
+def trim_extra(out: str, text: str, source: str, target: str) -> str:
+    """把模型多寫的東西拿掉：自己接下去編的行、自己加的括號註解。"""
+    return drop_notes(extra_lines(out, text, source, target), text)
+
+
+def over_translated(text: str, out: str, source: str, target: str) -> bool:
+    """以前記下來的機器翻譯有沒有超譯的樣子（多出來的行、自己加的註解、跟人說話、長得不合理）：有就不用，重翻。"""
+    return trim_extra(out, text, source, target) != out.strip() or meta_reply(out, text) or too_long(text, out, source, target)
+
+
+# 一個原文單位翻成目標語言大約幾個單位（中日韓泰：一個字；其他：一個詞）。用使用者的翻譯紀錄量的中位數
+_RATE = {("cjk", "hangul"): 1.5, ("hangul", "cjk"): 1.0, ("latin", "cjk"): 1.6, ("cjk", "latin"): 0.7,
+         ("hangul", "latin"): 0.6, ("latin", "hangul"): 1.8}
+
+
+def _units(text: str, script: str) -> int:
+    """長度：中日韓泰的字一個算一個，拉丁字母和數字一個詞算一個（名字、遊戲用語在哪一種語言都是一個詞）。"""
+    words = len(re.findall(r"[A-Za-z0-9\u00C0-\u024F\u0400-\u04FF]+", text))
+    if script in ("cjk", "hangul", "thai"):
+        return sum(1 for ch in text if _in_script(ch, "cjk") or _in_script(ch, "hangul") or _in_script(ch, "thai")) + words
+    return words
+
+
+def too_long(text: str, out: str, source: str, target: str) -> bool:
+    """譯文長得不合理（比平常的翻譯長四成以上，再加兩個字的空間）：多半是多加了一句原文沒有的話。"""
+    have, want = _script(source), _script(LANGS[target]["family"])
+    rate = _RATE.get((have, want), 1.0 if have == want else 1.3)
+    n = _units(text, have)
+    return n >= 3 and _units(out, want) > rate * n * 1.4 + 2
 
 
 MAX_TEXT = 2000      # 一則訊息最長幾個字（介面的輸入框也是這個數）
@@ -804,6 +927,8 @@ class Translator:
         for style, h, ex in attempts:
             other = self._ask(text, source, target, h, ex, style)
             other = salvage(other, source, target) or other if _leftover(other, source, target) else other
+            if meta_reply(other, text):      # 跟人說話的那種不算譯文，留著原文的字都比它好
+                continue
             if _leftover(other, source, target) < _leftover(best, source, target):
                 best = other
             if not _leftover(best, source, target):
@@ -850,12 +975,14 @@ class Translator:
 
             words = self.glossary()
             terms = terms_print([(k, v) for k, v in words.items() if k and k in text] + [tuple(h) for h in hints])
-            found = self.memory.find(text, source, target, self.memory_tone(), self.model, terms, work)
+            found = self.memory.find(text, source, target, self.memory_tone(), self.model, terms, work,
+                                     ok=lambda dst: not over_translated(text, dst, source, target))
             if found:
                 self._came.value = {"from": found[1], "near": found[2]}
                 return found[0]      # 不放進暫存：暫存不知道是哪來的，下次也要能說出來
         kind = sentence_kind(text, source)
-        sent = text if unfinished else with_end_mark(text, source, kind)
+        sent = plain_zh(text) if source == "zh" else text
+        sent = sent if unfinished else with_end_mark(sent, source, kind)
         show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
         with self._lock, self._my_turn():
             if stop is not None and stop.asked:      # 排隊等引擎的時候就被叫停了
@@ -863,12 +990,29 @@ class Translator:
             out = self._ask(sent, source, target, hints, examples, context=context, **({"on_part": show} if show else {}),
                             **({"unfinished": True} if unfinished else {}), **({"stop": stop} if stop else {}))
             if unfinished:
-                out = tidy(to_script(out, target), target)
+                out = tidy(to_script(trim_extra(out, sent, source, target), target), target)
                 self._cache[key] = out
                 return out
-            if context and len(out) > 3 * len(sent) + 30:
-                # 模型把前面幾句也翻進來了（譯文長得不合理）：不給前文再翻一次
-                out = self._ask(sent, source, target, hints, examples)
+            out = trim_extra(out, sent, source, target)
+            if meta_reply(out, sent):
+                # 模型沒翻，在跟人說話（「請提供要翻譯的文字」）：只用官方提示再翻一次，還是這樣就不翻，原文照舊
+                again = trim_extra(self._ask(sent, source, target, [], [], "plain"), sent, source, target)
+                if meta_reply(again, sent):
+                    self._cache[key] = text
+                    return text
+                out = again
+            if too_long(sent, out, source, target):
+                # 超譯：譯文比平常長很多，多半是把前面幾句也翻進來，或自己多加了一句原文沒有的話。
+                # 先不給前文再翻；還是太長就換短的寫法。用第一個長度正常的，都不正常就用最短的
+                tries = [out]
+                for style in (["full"] if context else []) + ["short"]:
+                    again = trim_extra(self._ask(sent, source, target, hints, examples, style), sent, source, target)
+                    if meta_reply(again, sent) or _leftover(again, source, target) > _leftover(out, source, target):
+                        continue
+                    tries.append(again)
+                    if not too_long(sent, again, source, target):
+                        break
+                out = next((t for t in tries if not too_long(sent, t, source, target)), min(tries, key=len))
             out = self._clean(out, sent, source, target, hints, examples)
             if kind == "statement" and ("?" in out or "？" in out):
                 # 直述句被翻成問句：換一種寫法再翻一次，那次不是問句就用那次的
@@ -883,6 +1027,9 @@ class Translator:
                     if not numbers_lost(sent, again, target, source) and not _leftover(again, source, target):
                         out = again
                         break
+            if meta_reply(out, sent):      # 重翻（問句、數字、留著原文）的那幾次又變成跟人說話：不翻
+                self._cache[key] = text
+                return text
         out = to_script(out, target)
         out = tidy(out, target)
         if len(self._cache) > 500:
