@@ -719,3 +719,16 @@ pre.raw { margin: 4px 0 0; max-height: 140px; overflow: auto; padding: 8px 10px;
 .notes .note-item b { font-weight: 600; margin-right: 4px; }
 .lv-undo { white-space: nowrap; }
 #abbr-row .hist-q { min-width: 140px; flex: 1 1 140px; }
+
+/* 2.16.0：遊戲和畫面 */
+.players { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--accent); }
+.players .player-item b { font-weight: 600; margin-right: 4px; }
+.msg.tinted .bubble { border-left: 3px solid var(--tint); }
+.album { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.album-item { margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.album-item img { display: block; width: 100%; max-height: 160px; object-fit: cover; }
+.album-item figcaption { position: relative; padding: 8px 40px 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+.album-item figcaption .icon-btn { position: absolute; top: 4px; right: 4px; }
+.story-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.story-line { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+#story-game { max-width: 260px; }

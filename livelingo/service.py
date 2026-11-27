@@ -33,6 +33,9 @@ from .names import NameWatch
 from .qualitycheck import QualityCheck
 from . import textfix
 from .corrections import Corrections
+from . import gametools
+from .album import Album
+from .storybook import StoryBook
 from .history import History
 from .learn import Wordbook, family_of
 from .recap import GAP as RECAP_GAP
@@ -75,7 +78,7 @@ SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveL
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
 SETTINGS_SKIP = ("window", "layout", "hotkeys_v", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
-RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip", "abbr_skip")
+RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip", "abbr_skip", "game_profiles", "player_notes")
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64),
                   "stream_port": (1024, 65000)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
@@ -219,6 +222,10 @@ class Service:
         self.name_watch = NameWatch()          # 名字建議（2.14.0）：數對方一直提到的遊戲 ID
         self.abbr_watch = textfix.abbr_watch()     # 看不懂的縮寫提醒（2.15.0）
         self.corrections = Corrections(self.data)  # 改正紀錄，每週錯誤報告用（2.15.0）
+        self.storybook = StoryBook(self.data)       # 劇情書（2.16.0）
+        self.album = Album(self.data)               # 框選翻譯相簿（2.16.0）
+        self._profile_game = ""                     # 遊戲專屬版面：上一次套用的是哪個遊戲
+        self._fullscreen_told = False               # 獨佔全螢幕提醒：這次開遊戲說過了
         self.quality = QualityCheck(self.data, on_change=lambda st: self.hub.publish("quality", st), log=self.log)
         self.private = False              # 隱私暫停（2.14.0）：開著的時候翻譯照常，但什麼紀錄都不留（不存設定檔，重開就回到平常）
         self._auto_started: list[str] = []    # 開遊戲就開始翻：是我（不是使用者）打開的來源，遊戲關掉時只關這些
@@ -396,6 +403,8 @@ class Service:
             "private": self.private,
             "quality": self.quality.state(),
             "corrections": self.corrections.report(),
+            "album": self.album.list()[:60],
+            "templates": sorted(gametools.templates()),
             "scenarios": self.scenarios_state(),
             "replies": dict(self._replies),
             "words": {str(k): v for k, v in self._words.items()},
@@ -981,6 +990,9 @@ class Service:
             try:
                 self.check_game()
                 self.check_auto_start()
+                windows = apps.windows() if (self.cfg["game_profiles"] or self.cfg["fullscreen_warn"]) else []
+                self.check_profile(windows)
+                self.check_fullscreen(windows)
                 if time.time() - self._recap_checked >= RECAP_EVERY:
                     self._recap_checked = time.time()
                     self.recap_check()
@@ -1117,7 +1129,8 @@ class Service:
                 "translate": round(sum(r[1] for r in rows) / len(rows), 1), "count": len(rows)}
 
     def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
-               place: str = "", live: dict | None = None, speaker: int | None = None, shown: str = "", asked: bool = False) -> int | None:
+               place: str = "", live: dict | None = None, speaker: int | None = None, shown: str = "", asked: bool = False,
+               tint: str = "", story: bool = False) -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
         hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。
@@ -1139,6 +1152,10 @@ class Service:
                "hear": round(float(hear), 1), "took": 0.0, "place": str(place)[:30], "work": work}
         if shown and via == "screen":
             msg["shown"] = str(shown).strip()[:MAX_TEXT * 2]
+        if tint and via == "screen":
+            msg["tint"] = tint      # 聊天頻道的顏色（2.16.0）
+        if story and via == "screen":
+            msg["story"] = True     # 劇情對話框讀到的：翻好記進劇情書
         if speaker:
             msg.update(speaker=int(speaker), speaker_run=self._speaker_run, voice=self._speaker_names.get(int(speaker), ""))
         if live:      # 同一則、同一個時間，先翻出來的半句留在畫面上，等整句翻好再換掉
@@ -1251,6 +1268,7 @@ class Service:
                 msg = dict(msg, unsure=self._still_unsure(msg, target, out))
             msg = dict(msg, translated=out, target=target, pending=False, error="", why="", back="",
                        notes=self._slang_notes(msg, target),      # 網路用語、縮寫的意思：譯文下面的小字（2.15.0）
+                       players=gametools.players_in(msg["original"], self.cfg["player_notes"]) if msg["who"] == "them" else [],
                        mention=self._mention_of(msg, out),      # 對方的話裡有我的名字或關鍵字
                        lost=numbers_lost(msg["original"], out, target, msg["lang"]),      # 原文有、譯文找不到的數字：畫面會提醒核對
                        pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
@@ -1265,6 +1283,8 @@ class Service:
             self._read_heard(msg, target, out)
             self._watch_names(msg)
             self._watch_abbr(msg)
+            if msg.get("story") and self.cfg["story_book"] and not self.private:
+                self.storybook.add(self.game or self._screen_app(), msg["original"], out)
             self._learn(msg)
             self._want_back(msg)
         except Exception as ex:  # noqa: BLE001
@@ -2736,6 +2756,7 @@ class Service:
                     shown.append((mid, text[:MAX_TEXT]))
             if shown:
                 self._card_show(shown)
+        self._album_keep(bgr, shown)
 
     # ------------------------------------------------------------------ 影片、音訊檔產生雙語字幕（2.13.0）
 
@@ -2994,6 +3015,11 @@ class Service:
             changes["speak_name"] = str(changes["speak_name"] or "")[:120]
         if "alert_words" in changes:
             changes["alert_words"] = mention.clean_words(changes["alert_words"])
+        if "player_notes" in changes:
+            changes["player_notes"] = gametools.clean_players(changes["player_notes"])
+        if "wall_monitor" in changes and not (isinstance(changes["wall_monitor"], int) and not isinstance(changes["wall_monitor"], bool)
+                                              and 0 <= changes["wall_monitor"] < 8):
+            changes.pop("wall_monitor")
         if changes.get("unsure_view") not in (None, "mark", "dim", "hide"):
             changes.pop("unsure_view")
         for key in ("keep_words", "name_skip", "abbr_skip"):
@@ -3117,6 +3143,8 @@ class Service:
             self._terms_changed()
         if changed("keep_words"):
             self.translator.clear_cache()      # 譯文裡的字要照原樣留著了：之前翻好的不能再用
+        if changed("channel_colors", "combat_slow") and self.watcher:
+            self.watcher.colors, self.watcher.slow_busy = bool(after["channel_colors"]), bool(after["combat_slow"])
         if changed("stream", "stream_original", "stream_mine", "overlay_seconds", "overlay_font"):
             self.stream.apply()
             self.hub.publish("stream", self.stream.state())
@@ -3218,8 +3246,10 @@ class Service:
         """開著的聊天區。"""
         return [dict(r) for r in self.cfg["regions"] if r.get("on")]
 
-    def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None, shown: str = "") -> None:
-        """shown：雙語字幕裡緊鄰這一行、我的語言的那一行（開著「用畫面上現成的翻譯」才有）。"""
+    def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None, shown: str = "",
+                        color: str = "") -> None:
+        """shown：雙語字幕裡緊鄰這一行、我的語言的那一行（開著「用畫面上現成的翻譯」才有）。
+        color：這一行字在畫面上的顏色（開著「聊天頻道分色」才有）。"""
         many = len(self._regions_on()) > 1      # 只有一個區域時不用標是哪裡讀到的
         if self.cfg["ocr_fix"]:
             fixed = textfix.fix_ocr(text)      # 數字裡的 O、l，韓文子音縮寫裡的 0、7（2.15.0）
@@ -3227,7 +3257,7 @@ class Service:
                 self.log(f"screen text fixed before translating: {text!r} -> {fixed!r}")
                 text = fixed
         self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "",
-                    **({"shown": shown} if shown else {}))
+                    **({"shown": shown} if shown else {}), **self._screen_extra(color, region))
 
     # ------------------------------------------------------------------ 原地覆蓋翻譯（2.13.0）
 
@@ -3351,6 +3381,8 @@ class Service:
                     mask=self.capture_mask)
                 self.watcher.pair_lang = self._shown_pair_lang()
                 self.watcher.on_frame = self._on_frame
+                self.watcher.colors = bool(self.cfg["channel_colors"])
+                self.watcher.slow_busy = bool(self.cfg["combat_slow"])
                 self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
             self.watcher.paused = False
@@ -4203,6 +4235,221 @@ class Service:
             if word.lower() not in have:
                 out[word] = word
         return out
+
+    # ------------------------------------------------------------------ 2.16.0：遊戲和畫面
+
+    def _screen_extra(self, color: str, region: dict | None) -> dict:
+        """讀畫面那一則多帶的：頻道顏色、是不是劇情對話框。沒有就不帶（submit 的舊呼叫方式不變）。"""
+        extra = {}
+        tint = gametools.channel_of(color) if color and self.cfg["channel_colors"] else ""
+        if tint:
+            extra["tint"] = tint
+        if (region or {}).get("story"):
+            extra["story"] = True
+        return extra
+
+    def _screen_app(self) -> str:
+        """讀畫面的區域跟著哪個程式（劇情書沒認出遊戲時，用它分本）。"""
+        return next((str(r.get("app") or "") for r in self._regions_on() if r.get("app")), "")
+
+    def _foreground_game(self, windows: list[dict], extra=()) -> str:
+        return find_game(windows, self.glossary.games() | {str(e).lower() for e in extra})
+
+    def check_profile(self, windows: list[dict] | None = None) -> str:
+        """遊戲專屬版面：切到有存版面的遊戲時，套用它的浮動字幕版面、對方的語言、開著的讀取區域。回傳套用的遊戲。"""
+        profiles = self.cfg["game_profiles"]
+        if not profiles or not self.cfg["game_profile_auto"]:
+            return ""
+        windows = apps.windows() if windows is None else windows
+        found = self._foreground_game(windows, profiles)
+        if found == self._profile_game:
+            return ""
+        self._profile_game = found
+        profile = profiles.get(found)
+        if not profile:
+            return ""
+        self._apply_profile(profile)
+        self.log(f"game profile applied: {found}")
+        self.notice("profile_applied", game=game_name(found))
+        return found
+
+    def _apply_profile(self, profile: dict) -> None:
+        if isinstance(profile.get("layout"), dict):
+            self.overlay.apply_entry(profile["layout"])
+        if profile.get("their_lang") in LANGS and profile["their_lang"] != self.cfg["their_lang"]:
+            self.update_config({"their_lang": profile["their_lang"], "their_auto": False})
+        ids = profile.get("regions")
+        if isinstance(ids, list) and ids:
+            regions = [dict(r, on=r["id"] in ids) for r in self.cfg["regions"]]
+            if regions != self.cfg["regions"] and any(r["on"] for r in regions):
+                self.cfg.set(regions=regions)
+                self._regions_changed()
+
+    def profile_action(self, action: str, exe: str = "") -> dict:
+        """save：把現在的版面、語言、開著的區域存給 exe（沒給就用現在認出的遊戲）；remove：刪掉；apply：現在套用。"""
+        exe = (exe or self.game or self._foreground_game(apps.windows())).lower()[:120]
+        if not exe:
+            return {"ok": False, "error": "no_game"}
+        profiles = dict(self.cfg["game_profiles"])
+        if action == "save":
+            if len(profiles) >= 30 and exe not in profiles:
+                return {"ok": False, "error": "full"}
+            profiles[exe] = {"layout": self.overlay.current_entry(), "their_lang": self.cfg["their_lang"],
+                             "regions": [r["id"] for r in self.cfg["regions"] if r.get("on")]}
+            self._profile_game = exe
+        elif action == "remove":
+            profiles.pop(exe, None)
+        elif action == "apply" and exe in profiles:
+            self._apply_profile(profiles[exe])
+            return {"ok": True, "exe": exe}
+        else:
+            return {"ok": False, "error": "unknown"}
+        self.cfg.set(game_profiles=profiles)
+        self.hub.publish("config", self.cfg.snapshot())
+        return {"ok": True, "exe": exe, "name": game_name(exe)}
+
+    def check_fullscreen(self, windows: list[dict] | None = None) -> bool:
+        """遊戲用獨佔全螢幕：浮動字幕蓋不上去、讀畫面抓到黑的。開著浮動字幕或讀畫面時提醒一次（這次開遊戲）。"""
+        if not self.cfg["fullscreen_warn"]:
+            return False
+        playing = bool(self.game or self._foreground_game(windows if windows is not None else []))
+        if not playing:
+            self._fullscreen_told = False
+            return False
+        if self._fullscreen_told or not (self.cfg["overlay"] or self.sources["screen"]["on"]) or not oswin.exclusive_fullscreen():
+            return False
+        self._fullscreen_told = True
+        self.log("the game is in exclusive fullscreen; told the user to use borderless")
+        self.notice("fullscreen_exclusive")
+        return True
+
+    def template_apply(self) -> dict:
+        """常見遊戲範本：照現在開著的遊戲視窗，加一個框好的聊天區（跟著那個遊戲的視窗走）。"""
+        windows = apps.windows()
+        have = gametools.templates()
+        win = next((w for w in windows if str(w.get("exe") or "").lower() in have and not w.get("minimized")), None)
+        if not win:
+            return {"ok": False, "error": "no_game", "games": sorted({game_name(e) for e in have})}
+        exe = str(win["exe"]).lower()
+        if len(self.cfg["regions"]) >= MAX_REGIONS:
+            return {"ok": False, "error": "full"}
+        rid = "t" + str(int(time.time() * 10) % 1000000)
+        region = gametools.template_region(exe, win["rect"], rid, game_name(exe))
+        if not region:
+            return {"ok": False, "error": "no_game"}
+        self.cfg.set(regions=[*self.cfg["regions"], region])
+        self._regions_changed()
+        self.hub.publish("config", self.cfg.snapshot())
+        self.log(f"template region for {exe}: {region}")
+        return {"ok": True, "game": game_name(exe), "id": rid, "story": bool(region.get("story"))}
+
+    def find_chat(self) -> dict:
+        """自動找聊天框：整個主螢幕讀一次字，找最像聊天框的一塊，加成一個新的聊天區（先關著，給使用者看過再開）。"""
+        import numpy as np
+
+        from .core.watcher import blank_covers
+
+        if self.phase != "ready":
+            return {"ok": False, "error": "not_ready"}
+        mon = (oswin.monitors() or [{"left": 0, "top": 0, "width": 1920, "height": 1080}])[0]
+        place = {k: int(mon[k]) for k in ("left", "top", "width", "height")}
+        try:
+            grab = getattr(self, "grab", None)
+            if grab is None:
+                import mss
+
+                with (getattr(mss, "MSS", None) or mss.mss)() as sct:
+                    bgr = np.ascontiguousarray(np.asarray(sct.grab(place))[:, :, :3])
+            else:
+                bgr = np.ascontiguousarray(grab(place))
+            covers = self.capture_mask()
+            if covers:
+                bgr = blank_covers(bgr, place, covers)
+            box = gametools.find_chat_box(self._load_ocr().read(bgr), place["width"], place["height"])
+        except Exception as ex:  # noqa: BLE001
+            self.log(f"find chat box failed: {ex!r}")
+            return {"ok": False, "error": "failed"}
+        if not box:
+            return {"ok": False, "error": "not_found"}
+        if len(self.cfg["regions"]) >= MAX_REGIONS:
+            return {"ok": False, "error": "full"}
+        rid = "f" + str(int(time.time() * 10) % 1000000)
+        region = {"id": rid, "name": "", "left": place["left"] + box[0], "top": place["top"] + box[1], "width": box[2],
+                  "height": box[3], "on": False, "app": "", "anchor": None}
+        self.cfg.set(regions=[*self.cfg["regions"], region])
+        self._regions_changed()
+        self.hub.publish("config", self.cfg.snapshot())
+        return {"ok": True, "id": rid, "box": [region["left"], region["top"], box[2], box[3]]}
+
+    def wall_action(self, action: str) -> dict:
+        """副螢幕字幕牆：open 在 wall_monitor 那個螢幕開一個全螢幕的字幕視窗（用直播字幕頁），close 關掉。"""
+        if action == "close":
+            self.stream.wall_on = False
+            if self.window and hasattr(self.window, "close_wall"):
+                self.window.close_wall()
+            self.stream.apply()
+            return {"ok": True}
+        if action != "open":
+            return {"ok": False, "error": "unknown"}
+        monitors = oswin.monitors() or []
+        if len(monitors) < 2:
+            return {"ok": False, "error": "one_screen"}
+        mon = monitors[min(max(1, int(self.cfg["wall_monitor"])), len(monitors) - 1)]
+        self.stream.wall_on = True
+        self.stream.apply()
+        url = self.stream.url(wall=True)
+        if not url:
+            self.stream.wall_on = False
+            return {"ok": False, "error": "no_port"}
+        rect = [mon["left"], mon["top"], mon["width"], mon["height"]]
+        if self.window and hasattr(self.window, "open_wall") and self.window.open_wall(url, rect):
+            return {"ok": True}
+        return {"ok": bool(oswin.open_path(url)), "browser": True}      # 介面是用瀏覽器開的：字幕牆也用瀏覽器開
+
+    def story_state(self, game: str = "", offset: int = 0) -> dict:
+        games = [dict(g, name=game_name(g["game"]) if g["game"] else "") for g in self.storybook.games()]
+        pick = game or (games[0]["game"] if games else "")
+        return {"games": games, **self.storybook.read(pick, offset)}
+
+    def story_action(self, action: str, game: str = "") -> dict:
+        if action == "export":
+            path = self.storybook.export(game, game_name(game) if game else "LiveLingo", self.transcript_dir())
+            if not path:
+                return {"ok": False, "error": "empty"}
+            oswin.open_path(str(path.parent))
+            return {"ok": True, "name": path.name}
+        if action == "clear":
+            return {"ok": True, "removed": self.storybook.clear(game)}
+        return {"ok": False, "error": "unknown"}
+
+    def album_action(self, action: str, aid: str = "") -> dict:
+        if action == "remove":
+            ok = self.album.remove(aid)
+            self.hub.publish("album", {"items": self.album.list()})
+            return {"ok": ok}
+        return {"ok": True, "items": self.album.list()}
+
+    def _album_keep(self, bgr, shown: list[tuple[int, str]]) -> None:
+        """框選翻譯：等那幾段都翻好（最多 60 秒），連截圖一起存進相簿。"""
+        if not self.cfg["snap_album"] or self.private or not shown:
+            return
+        ids = {mid for mid, _ in shown}
+
+        def work():
+            end = time.time() + 60
+            while time.time() < end and not self.closing.is_set():
+                with self._lock:
+                    msgs = {m["id"]: m for m in self.messages if m["id"] in ids}
+                if all(mid in msgs and not msgs[mid].get("pending") for mid in ids):
+                    break
+                time.sleep(0.3)
+            with self._lock:
+                msgs = {m["id"]: m for m in self.messages if m["id"] in ids}
+            pairs = [(text, (msgs.get(mid) or {}).get("translated") or "") for mid, text in shown]
+            if self.album.add(bgr, pairs, self.game):
+                self.hub.publish("album", {"items": self.album.list()})
+
+        threading.Thread(target=work, daemon=True, name="album").start()
 
     # ------------------------------------------------------------------ 2.15.0：沒把握的句子、網路用語註解、縮寫提醒
 

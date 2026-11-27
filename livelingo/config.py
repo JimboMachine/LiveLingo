@@ -77,6 +77,16 @@ DEFAULTS = {
     "abbr_skip": [],             # 問過、說「不用」的縮寫：不再問
     "cantonese": False,          # 對方說的中文照粵語聽（Whisper 的 yue）
     "slang_notes": True,         # 對方的話裡有用語包認得的網路用語、縮寫：譯文下面加一行小字說意思
+    # 遊戲和畫面（2.16.0）
+    "game_profiles": {},         # 遊戲專屬版面：{程式檔名: {"layout": 版面, "their_lang": 對方的語言, "regions": [開著的區域 id]}}
+    "game_profile_auto": True,   # 切到有專屬版面的遊戲時自動套用
+    "story_book": True,          # 劇情對話框讀到的翻好後記進劇情書
+    "snap_album": True,          # 框選翻譯連截圖一起存進相簿
+    "channel_colors": True,      # 讀螢幕時記下每一則字的顏色，對話裡照顏色標出頻道（公會、隊伍、全體）
+    "player_notes": {},          # 玩家備註：{"遊戲 ID": "備註"}
+    "combat_slow": True,         # 畫面一直大幅變動（戰鬥中）時少讀幾次
+    "fullscreen_warn": True,     # 遊戲用獨佔全螢幕時提醒改成無邊框視窗
+    "wall_monitor": 1,           # 副螢幕字幕牆開在第幾個螢幕（oswin.monitors() 的順序）
     "alert_words": [],           # 喊我名字提醒：對方的話裡出現這些字就標出來、響一聲（mention.py），空的 = 不提醒
     "alert_sound": True,         # 提醒的時候響一聲
     "recap_auto": True,          # 一段對話結束（安靜 10 分鐘）自動整理重點（recap.py）
@@ -141,7 +151,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "game_profile_auto", "story_book", "snap_album", "channel_colors", "player_notes", "combat_slow", "fullscreen_warn", "wall_monitor", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

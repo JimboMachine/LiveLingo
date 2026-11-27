@@ -752,6 +752,18 @@ class Overlay:
             entry = layouts[int(index)]
         except (TypeError, ValueError, IndexError):
             return {"ok": False}
+        return self.apply_entry(entry)
+
+    def current_entry(self) -> dict:
+        """現在的外觀、位置、顯示方式（跟存版面存的一樣），遊戲專屬版面（2.16.0）用。"""
+        cfg = self.service.cfg.snapshot()
+        return {"look": {k: cfg[k] for k in OVERLAY_LOOK}, "rect": list(self.rect or self._home()),
+                "form": cfg["overlay_form"], "monitor": cfg["overlay_monitor"]}
+
+    def apply_entry(self, entry: dict) -> dict:
+        """套用一組版面（存的版面、或遊戲專屬版面裡的那一組）。"""
+        if not isinstance(entry, dict):
+            return {"ok": False}
         look = {k: v for k, v in (entry.get("look") or {}).items() if k in OVERLAY_LOOK}
         form = entry.get("form") if entry.get("form") in OVERLAY_FORMS else "float"
         rect = entry.get("rect")

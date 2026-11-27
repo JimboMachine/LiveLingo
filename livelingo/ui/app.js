@@ -435,6 +435,7 @@
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
       body += unsure + `<div class="text">${esc(m.translated)}</div>`;
       if (m.notes && m.notes.length && S.cfg.slang_notes) body += `<div class="notes">${m.notes.map(([w, meaning]) => `<span class="note-item"><b>${esc(w)}</b> ${esc(meaning)}</span>`).join("")}</div>`;
+      if (m.players && m.players.length) body += `<div class="players">${m.players.map(([pid, note]) => `<span class="player-item"><b>${esc(pid)}</b> ${esc(note)}</span>`).join("")}</div>`;      // 玩家備註（2.16.0）
       if (m.lost && m.lost.length) body += `<div class="lost">${ICON.info}<span>${esc(t("numbers_lost", { numbers: m.lost.join(" · ") }))}</span></div>`;
       if (m.back && S.cfg.back_translate) body += `<div class="back">${ICON.back}<span>${esc(t("back", { text: m.back }))}</span></div>`;
       if (m.pron && S.cfg.show_pronunciation) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
@@ -555,7 +556,9 @@
     }
     // 沒把握的句子（2.15.0）：照設定灰掉，或收成一行「按一下看」
     const shy = m.unsure && !m.pending && m.who === "them" && !(S.ui.unsureShown || {})[m.id] ? (S.cfg.unsure_view || "mark") : "mark";
-    el.className = "msg " + (m.who === "me" ? "me" : "them") + (shy === "dim" ? " unsure-dim" : shy === "hide" ? " unsure-hidden" : "");
+    const tint = m.tint && S.cfg.channel_colors && /^#[0-9A-F]{6}$/.test(m.tint) ? m.tint : "";      // 聊天頻道分色（2.16.0）
+    el.className = "msg " + (m.who === "me" ? "me" : "them") + (shy === "dim" ? " unsure-dim" : shy === "hide" ? " unsure-hidden" : "") + (tint ? " tinted" : "");
+    if (tint) el.style.setProperty("--tint", tint); else el.style.removeProperty("--tint");
     el.querySelector(".meta").innerHTML = metaHTML(m);
     el.querySelector(".bm").innerHTML = shy === "hide"
       ? `<button class="ghost small unsure-show" data-act="unsure-show" data-id="${m.id}">${ICON.info}<span>${esc(t("uv_hidden_line"))}</span></button>` : bubbleHTML(m);
@@ -789,7 +792,7 @@
     if (S.ui.tab === "audio") openDevices();
     if (S.ui.tab === "screen" || S.ui.tab === "vocab") loadApps();      // 詞彙表的「用在」要列出現在開著的程式
     if (S.ui.tab === "overlay") loadScreens();
-    if (S.ui.tab === "history") { S.ui.hist = null; S.ui.recapList = null; loadHistory(); loadRecaps(); }
+    if (S.ui.tab === "history") { S.ui.hist = null; S.ui.recapList = null; loadHistory(); loadRecaps(); loadStory((S.ui.story || {}).game || "", 0); }
     if (S.ui.tab === "learn") { S.ui.review = null; loadWords(); }
     if (S.ui.tab === "health") { S.ui.useAsk = false; loadHealth(); loadUsage(); }
     if (S.ui.tab === "storage") { S.ui.storeAsk = ""; loadStorage(); }
@@ -943,6 +946,19 @@
 
   // 詞彙與記憶（2.12.0 從「翻譯品質」拆出來）：遊戲和聊天用語、我的詞彙表、教過的句子、翻過的句子、備份和分享。
   // 「翻譯品質」只留引擎、語氣、前後文；要找詞彙表不用再捲過整個引擎設定。
+  // 玩家備註（2.16.0）：對方的句子提到這個 ID，譯文下面標出我寫的備註
+  function playersHTML() {
+    const notes = S.cfg.player_notes || {}, ids = Object.keys(notes);
+    const rows = ids.length
+      ? ids.map((pid) => `<div class="grow-row"><span>${esc(pid)}</span><span>${esc(notes[pid])}</span>
+          <button data-act="player-remove" data-id="${esc(pid)}" aria-label="${esc(t("remove", { word: pid }))}">${ICON.x}</button></div>`).join("")
+      : `<div class="none">${esc(t("pn_empty"))}</div>`;
+    return `<section id="players-section"><div><h2>${esc(t("pn_title"))}</h2><div class="sub">${esc(t("pn_hint"))}</div></div>
+        <div class="phrase-add"><input type="text" id="pn-id" maxlength="30" placeholder="${esc(t("pn_id"))}" aria-label="${esc(t("pn_id"))}">
+          <input type="text" id="pn-note" maxlength="60" placeholder="${esc(t("pn_note"))}" aria-label="${esc(t("pn_note"))}">
+          <button class="ghost" data-act="player-add">${esc(t("pn_add"))}</button></div>
+        <div class="gloss">${rows}</div></section>`;
+  }
   function vocabPage() {
     const game = S.game || {};
     const gameNames = {};
@@ -966,7 +982,7 @@
           ${(l.old || []).length ? `<button class="ghost small lv-undo" data-act="lesson-undo" data-src="${esc(l.src)}" data-target="${esc(l.target)}" title="${esc(t("lv_undo_desc", { text: l.old[l.old.length - 1] }))}">${esc(t("lv_undo", { n: l.old.length }))}</button>` : ""}
           <button data-act="lesson-remove" data-src="${esc(l.src)}" data-target="${esc(l.target)}" aria-label="${esc(t("remove", { word: l.src }))}">${ICON.x}</button></div>`).join("")
       : `<div class="none">${esc(t("lessons_empty"))}</div>`;
-    return keepWordsHTML() + `
+    return keepWordsHTML() + playersHTML() + `
       <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}
         ${S.cfg.game_terms ? `<div class="packs">${["lol", "chat"].map((p) => `<button class="pack" id="pack-${p}" data-act="pack" data-pack="${p}" aria-pressed="${(S.cfg.term_packs || []).indexOf(p) >= 0}">
           <span class="name">${ICON.check}${esc(t("pack_" + p))}</span><span class="desc">${esc(t("pack_" + p + "_desc"))}</span></button>`).join("")}</div>
@@ -1196,7 +1212,46 @@
         <div class="dnote">${esc(t("inplace_note"))}</div></section>
       <section>${switchRow("also_english", t("also_english"))}</section>
       <section id="game-start-section">${switchRow("game_start", t("gs_title"), t("gs_desc"))}</section>
-      <section id="ocr-fix-section">${switchRow("ocr_fix", t("ocrfix_title"), t("ocrfix_desc"))}</section>`;
+      <section id="ocr-fix-section">${switchRow("ocr_fix", t("ocrfix_title"), t("ocrfix_desc"))}</section>` + gameToolsHTML() + profileHTML() + albumHTML();
+  }
+
+  // 2.16.0：自動找聊天框、常見遊戲範本、頻道分色、打架時讀慢一點、全螢幕提醒
+  function gameToolsHTML() {
+    const names = (S.templates || []).length;
+    return `<section id="game-tools-section"><div><h2>${esc(t("gt_title"))}</h2><div class="sub">${esc(t("gt_hint"))}</div></div>
+        <div class="btn-row"><button class="ghost" data-act="find-chat">${ICON.frame}${esc(t("gt_find"))}</button>
+          <button class="ghost" data-act="template-apply" ${names ? "" : "disabled"}>${esc(t("gt_template"))}</button></div>
+        <div class="dnote">${esc(t("gt_template_note", { n: names }))}</div>
+        ${switchRow("channel_colors", t("cc_title"), t("cc_desc"))}
+        ${switchRow("combat_slow", t("cs_title"), t("cs_desc"))}
+        ${switchRow("fullscreen_warn", t("fw_title"), t("fw_desc"))}</section>`;
+  }
+  // 遊戲專屬版面：每個遊戲記住自己的浮動字幕版面、對方的語言、開著的讀取區域
+  function profileHTML() {
+    const game = S.game || {}, saved = S.cfg.game_profiles || {}, keys = Object.keys(saved).sort();
+    const mine = game.exe && saved[game.exe];
+    const rows = keys.length
+      ? keys.map((exe) => `<div class="grow-row"><span>${esc(exe)}</span><span class="dim small">${esc(langName(saved[exe].their_lang || ""))}</span>
+          <button data-act="profile-remove" data-exe="${esc(exe)}" aria-label="${esc(t("remove", { word: exe }))}">${ICON.x}</button></div>`).join("")
+      : `<div class="none">${esc(t("gp_empty"))}</div>`;
+    return `<section id="profile-section"><div><h2>${esc(t("gp_title"))}</h2><div class="sub">${esc(t("gp_hint"))}</div></div>
+        ${switchRow("game_profile_auto", t("gp_auto"), t("gp_auto_desc"))}
+        <div class="note">${ICON.info}<span>${esc(game.exe ? t("gp_now", { name: game.name || game.exe }) : t("gp_no_game"))}</span></div>
+        <div class="btn-row"><button class="ghost" data-act="profile-save" ${game.exe ? "" : "disabled"}>${esc(t(mine ? "gp_update" : "gp_save"))}</button>
+          ${mine ? `<button class="ghost" data-act="profile-apply" data-exe="${esc(game.exe)}">${esc(t("gp_apply"))}</button>` : ""}</div>
+        <div class="gloss">${rows}</div></section>`;
+  }
+  // 框選翻譯相簿：截圖和翻好的句子一起留著
+  function albumHTML() {
+    const items = S.album || [];
+    const list = items.length
+      ? `<div class="album">${items.map((a) => `<figure class="album-item">
+          <img src="/api/album_image?id=${encodeURIComponent(a.id)}&t=${encodeURIComponent(TOKEN)}" alt="${esc(t("ab_shot"))}" loading="lazy">
+          <figcaption>${(a.items || []).slice(0, 4).map((p) => `<div><span class="dim">${esc(p.src)}</span><br>${esc(p.dst)}</div>`).join("")}
+            <button class="icon-btn" data-act="album-remove" data-id="${esc(a.id)}" aria-label="${esc(t("ab_remove"))}" title="${esc(t("ab_remove"))}">${ICON.x}</button></figcaption></figure>`).join("")}</div>`
+      : `<div class="none">${esc(t("ab_empty"))}</div>`;
+    return `<section id="album-section"><div><h2>${esc(t("ab_title"))}</h2><div class="sub">${esc(t("ab_hint"))}</div></div>
+        ${switchRow("snap_album", t("ab_keep"), t("ab_keep_desc"))}${list}</section>`;
   }
 
   // 區域的名字、開關、跟著哪個程式、刪除：都是把整份清單送回去存（位置和大小只有框選畫面能改）
@@ -1312,6 +1367,17 @@
       </section>`;
   }
 
+  // 副螢幕字幕牆（2.16.0）：在另一個螢幕開一個全螢幕的大字幕
+  function wallHTML() {
+    const count = ((S.ui.screens || {}).monitors || []).length;
+    const now = Number(S.cfg.wall_monitor) || 1;
+    const pills = count > 1 ? `<div class="setting-row choice"><div>${esc(t("wall_screen"))}</div><div class="pills">${Array.from({ length: count - 1 }, (_, i) => i + 1).map((n) =>
+      `<button class="pill" data-act="wall-monitor" data-value="${n}" aria-pressed="${now === n}">${esc(t("wall_screen_n", { n: n + 1 }))}</button>`).join("")}</div></div>` : "";
+    return `<section id="wall-section"><div><h2>${esc(t("wall_title"))}</h2><div class="sub">${esc(t("wall_hint"))}</div></div>
+        ${count === 1 ? `<div class="note">${ICON.info}<span>${esc(t("wall_one"))}</span></div>` : pills}
+        <div class="btn-row"><button class="ghost" data-act="wall" data-value="open" ${count === 1 ? "disabled" : ""}>${esc(t("wall_open"))}</button>
+          <button class="ghost" data-act="wall" data-value="close">${esc(t("wall_close"))}</button></div></section>`;
+  }
   function overlayPage() {
     const mode = displayMode(), on = mode !== "window", bar = mode === "bar";
     return `
@@ -1324,6 +1390,7 @@
         ${switchRow("share_visible", t("share_visible"), t("share_visible_desc"))}
       </section>
       ${streamHTML()}
+      ${wallHTML()}
       ${mapHTML()}
       <section><div><h2>${esc(t("ov_presets"))}</h2><div class="sub">${esc(t("ov_presets_hint"))}</div></div>
         <div class="quality presets">${["chat", "subtitle", "quiet"].map((id) => `<button class="qcard" data-act="overlay-preset" data-code="${id}">
@@ -1653,6 +1720,7 @@
         ${switchRow("history_keep", t("hist_keep"), t("hist_keep_desc"))}
         ${S.cfg.history_keep ? choiceRow("history_days", t("hist_days"), [["7", t("hist_d7")], ["30", t("hist_d30")], ["90", t("hist_d90")], ["0", t("hist_d0")]]) : ""}
       </section>
+      ${storyHTML()}
       <section id="recap-section"><div><h2>${esc(t("recap_title"))}</h2><div class="sub">${esc(t("recap_hint"))}</div></div>
         ${switchRow("recap_auto", t("recap_auto"), t("recap_auto_desc"))}
         <div id="recap-list">${recapListHTML()}</div>
@@ -1686,6 +1754,32 @@
     return tools + list.map((r) => `<div class="recap"><div class="recap-head"><span>${esc(when(r))} · ${esc(t("recap_lines", { n: r.lines }))}</span>
       <button class="icon-btn" data-act="recap-remove" data-id="${esc(r.id)}" aria-label="${esc(t("recap_remove"))}" title="${esc(t("recap_remove"))}">${ICON.x}</button></div>
       <ul>${r.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>`).join("");
+  }
+  // 劇情書（2.16.0）：劇情對話框讀到的句子，照遊戲分本、照時間排
+  function storyHTML() {
+    return `<section id="story-section"><div><h2>${esc(t("sb_title"))}</h2><div class="sub">${esc(t("sb_hint"))}</div></div>
+        ${switchRow("story_book", t("sb_keep"), t("sb_keep_desc"))}<div id="story-body">${storyBodyHTML()}</div></section>`;
+  }
+  function storyBodyHTML() {
+    const st = S.ui.story;
+    if (!st) return "";
+    if (!st.games.length) return `<div class="hist-none">${esc(t("sb_empty"))}</div>`;
+    const pick = `<select id="story-game" aria-label="${esc(t("sb_game"))}">${st.games.map((g) =>
+      `<option value="${esc(g.game)}" ${g.game === st.game ? "selected" : ""}>${esc(g.name || g.game || t("sb_unknown"))} (${g.count})</option>`).join("")}</select>`;
+    const more = st.total > st.offset + st.items.length;
+    return `<div class="btn-row">${pick}<button class="ghost" data-act="story-export">${esc(t("sb_export"))}</button>
+        <button class="ghost" data-act="story-clear">${esc(t("sb_clear"))}</button></div>
+      <div class="story-list">${st.items.map((i) => `<div class="story-line"><div class="dim small">${esc(i.src)}</div><div>${esc(i.dst)}</div></div>`).join("")}</div>
+      <div class="btn-row">${st.offset > 0 ? `<button class="ghost" data-act="story-page" data-value="-1">${esc(t("sb_prev"))}</button>` : ""}
+        ${more ? `<button class="ghost" data-act="story-page" data-value="1">${esc(t("sb_next"))}</button>` : ""}
+        <span class="dim small">${esc(t("sb_count", { n: st.total }))}</span></div>`;
+  }
+  async function loadStory(game, offset) {
+    const r = await get(`/api/story?game=${encodeURIComponent(game || "")}&offset=${offset || 0}`);
+    if (!r || r.error) return;
+    S.ui.story = { games: r.games || [], game: r.game || "", total: r.total || 0, offset: offset || 0, items: r.items || [] };
+    const box = $("story-body");
+    if (box && S.view === "settings" && S.ui.tab === "history") box.innerHTML = storyBodyHTML();
   }
   let recapSeq = 0;
   async function loadRecaps() {
@@ -2702,6 +2796,39 @@
     "abbr-skip-clear": () => saveCfg({ abbr_skip: [] }, "#keep-section"),
     "lesson-undo": async (el) => { const r = await post("/api/lessons/undo", { src: el.dataset.src, target: el.dataset.target }); if (r && r.ok) toast(t("lv_undone", { text: r.dst }), 5000); },
     "wr-clear": () => post("/api/corrections", { action: "clear" }),
+    "find-chat": async () => {
+      toast(t("gt_finding"), 4000);
+      const r = await post("/api/find_chat");
+      if (r && r.ok) { toast(t("gt_found"), 8000); if (S.view === "settings") renderSettingsPage(); }
+      else toast(t("gt_err_" + ((r && r.error) || "failed")), 8000, "warn");
+    },
+    "template-apply": async () => {
+      const r = await post("/api/template");
+      if (r && r.ok) { toast(t("gt_template_done", { name: r.game }), 7000); if (S.view === "settings") renderSettingsPage(); }
+      else toast(r && r.error === "no_game" ? t("gt_template_none", { games: (r.games || []).join(", ") }) : t("gt_err_" + ((r && r.error) || "failed")), 9000, "warn");
+    },
+    "profile-save": async () => { const r = await post("/api/profile", { action: "save" }); if (r && r.ok) toast(t("gp_saved", { name: r.name }), 5000); else toast(t(r && (r.error === "no_game" || r.error === "full") ? "gp_err_" + r.error : "gp_failed"), 6000, "warn"); },
+    "profile-apply": async (el) => { const r = await post("/api/profile", { action: "apply", exe: el.dataset.exe }); if (r && r.ok) toast(t("gp_applied"), 4000); },
+    "profile-remove": (el) => post("/api/profile", { action: "remove", exe: el.dataset.exe }),
+    "album-remove": (el) => post("/api/album", { action: "remove", id: el.dataset.id }),
+    "story-page": (el) => { const st = S.ui.story; if (st) loadStory(st.game, Math.max(0, st.offset + Number(el.dataset.value) * 100)); },
+    "story-export": async () => {
+      const st = S.ui.story; if (!st) return;
+      const r = await post("/api/story", { action: "export", game: st.game });
+      toast(r && r.ok ? t("sb_exported", { name: r.name }) : t("sb_export_empty"), 6000, r && r.ok ? "info" : "warn");
+    },
+    "story-clear": async () => { const st = S.ui.story; if (!st) return; await post("/api/story", { action: "clear", game: st.game }); loadStory("", 0); },
+    "wall": async (el) => {
+      const r = await post("/api/wall", { action: el.dataset.value });
+      if (r && r.ok === false) toast(t(r.error === "one_screen" || r.error === "no_port" ? "wall_err_" + r.error : "wall_failed"), 7000, "warn");
+    },
+    "wall-monitor": (el) => saveCfg({ wall_monitor: Number(el.dataset.value) }, "wall_monitor"),
+    "player-add": () => {
+      const id = (($("pn-id") || {}).value || "").trim(), note = (($("pn-note") || {}).value || "").trim();
+      if (!id || !note) { const box = $(id ? "pn-note" : "pn-id"); if (box) box.focus(); return; }
+      saveCfg({ player_notes: { ...(S.cfg.player_notes || {}), [id]: note } }, "players-section");
+    },
+    "player-remove": (el) => { const notes = { ...(S.cfg.player_notes || {}) }; delete notes[el.dataset.id]; saveCfg({ player_notes: notes }, "players-section"); },
     "unsure-show": (el) => { S.ui.unsureShown = Object.assign(S.ui.unsureShown || {}, { [el.dataset.id]: true }); const m = S.messages.find((x) => String(x.id) === el.dataset.id); if (m) upsertMessage(m); },
     "name-skip-clear": () => saveCfg({ name_skip: [] }, "#keep-section"),
     "private": () => post("/api/private", { on: !S.private }),
@@ -2915,6 +3042,7 @@
       });
       return;
     }
+    if (e.target.id === "story-game") { loadStory(e.target.value, 0); return; }      // 劇情書：換一本
     if (e.target.dataset && e.target.dataset.fs) { fsForm()[e.target.dataset.fs] = e.target.value; return; }      // 影片字幕的欄位：記在畫面上，換頁回來還在
     if (e.target.id === "set-file") {      // 匯入設定檔：在這裡讀檔，內容交給程式檢查
       const file = e.target.files && e.target.files[0];
@@ -3188,6 +3316,7 @@
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
     name_suggest: (d) => { S.ui.nameAsk = d.name; renderNameRow(); },
     abbr_suggest: (d) => { S.ui.abbrAsk = d.word; renderAbbrRow(); },
+    album: (d) => { S.album = d.items || []; if (S.view === "settings" && S.ui.tab === "screen") { const el = $("album-section"); if (el) el.outerHTML = albumHTML(); } },
     corrections: (d) => { S.corrections = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("wr-section"); if (el) el.outerHTML = correctionsHTML(); } },
     private: (d) => { S.private = !!d.on; renderPrivate(); },
     quality: (d) => { S.quality = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("qc-section"); if (el) el.outerHTML = qualityCheckHTML(); } },
@@ -3205,7 +3334,7 @@
     wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") loadWords(); },
     recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
-    game: (g) => { S.game = g; if (S.view === "settings" && S.ui.tab === "vocab") renderSettingsPage(); },
+    game: (g) => { S.game = g; if (S.view === "settings" && (S.ui.tab === "vocab" || S.ui.tab === "screen")) renderSettingsPage(); },
     lessons: (items) => { S.lessons = items; if (S.view === "settings" && S.ui.tab === "vocab") renderSettingsPage(); },
     memory: (m) => { S.memory = m; if (S.view === "settings" && S.ui.tab === "vocab" && !document.activeElement.closest("form")) renderSettingsPage(); },
     levels: (levels) => { S.ui.levels = levels; paintLevels(); },
@@ -3297,7 +3426,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.filesubs = st.filesubs || S.filesubs; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
-    S.private = !!st.private; S.quality = st.quality || {}; S.corrections = st.corrections || {}; S.scenarios = st.scenarios || {};
+    S.private = !!st.private; S.quality = st.quality || {}; S.corrections = st.corrections || {}; S.album = st.album || []; S.templates = st.templates || []; S.scenarios = st.scenarios || {};
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];
