@@ -93,7 +93,9 @@
      "先看「健康檢查」：翻譯引擎、顯示卡、麥克風、耳機、聊天區、快速鍵各有一個燈，有問題的那一項旁邊有按鈕帶你去處理。",
      "還是不行：在健康檢查頁最下面的「回報問題」會做出一個文字檔，你先看過內容，再自己決定要不要傳給幫你看問題的人。",
      "更新之後變得不好用：更新過一次之後，「關於」頁會有回到上一版的按鈕。",
-     "硬碟空間不夠：到「儲存空間」可以把大檔案搬到別的磁碟，或刪掉沒在用的模型。"
+     "硬碟空間不夠：到「儲存空間」可以把大檔案搬到別的磁碟，或刪掉沒在用的模型。",
+     "找不到某個設定：設定的每一頁最上面都有搜尋框，打「快速鍵」「備份」「麥克風」這類字，會列出放在哪一頁，按一下就跳過去。",
+     "出現錯誤提醒：上面一句話說發生了什麼、可以怎麼做；電腦回報的原文收在「詳細」裡，需要請人幫忙看問題時再展開給對方看。"
     ]
    }
   ],
@@ -204,7 +206,9 @@
      "先看“健康检查”：翻译引擎、显卡、麦克风、耳机、聊天区、快捷键各有一个灯，有问题的那一项旁边有按钮带你去处理。",
      "还是不行：在健康检查页最下面的“反馈问题”会生成一个文本文件，你先看过内容，再自己决定要不要发给帮你看问题的人。",
      "更新之后变得不好用：更新过一次之后，“关于”页会有回到上一版的按钮。",
-     "硬盘空间不够：到“存储空间”可以把大文件移到别的磁盘，或删掉没在用的模型。"
+     "硬盘空间不够：到“存储空间”可以把大文件移到别的磁盘，或删掉没在用的模型。",
+     "找不到某个设置：设置的每一页最上面都有搜索框，输入“快捷键”“备份”“麦克风”这类词，会列出放在哪一页，点一下就跳过去。",
+     "出现错误提醒：上面一句话说明发生了什么、可以怎么做；电脑返回的原文收在“详细”里，需要请人帮忙看问题时再展开给对方看。"
     ]
    }
   ],
@@ -315,7 +319,9 @@
      "Look at “Health check” first: the translation engine, graphics card, microphone, headset, chat areas and hotkeys each have a light, and a button next to a problem takes you to the fix.",
      "Still stuck: “Report a problem” at the bottom of the Health check page makes one text file. You read it first, then decide whether to send it to whoever is helping you.",
      "An update made things worse: after you have updated once, the “About” page has a button to go back to the previous version.",
-     "Low on disk space: in “Storage” you can move the large files to another drive or delete models that are not in use."
+     "Low on disk space: in “Storage” you can move the large files to another drive or delete models that are not in use.",
+     "Can't find a setting: every settings page has a search box at the top. Type a word such as “hotkeys”, “backup” or “microphone” and it lists where that setting is; click a result to jump there.",
+     "An error notice: the sentence tells you what happened and what to do; the raw text from the computer is kept under “Details”, which you can open and show to whoever is helping you."
     ]
    }
   ],
@@ -426,7 +432,9 @@
      "먼저 ‘상태 점검’을 보세요. 번역 엔진, 그래픽 카드, 마이크, 헤드셋, 채팅 영역, 단축키마다 표시등이 있고, 문제가 있는 항목 옆의 버튼을 누르면 해결하는 곳으로 이동합니다.",
      "그래도 안 될 때: 상태 점검 페이지 맨 아래의 ‘문제 알리기’가 텍스트 파일 하나를 만듭니다. 먼저 내용을 확인한 다음, 도와주는 사람에게 보낼지 직접 정합니다.",
      "업데이트 후 더 불편해졌을 때: 한 번 업데이트한 뒤에는 ‘정보’ 페이지에 이전 버전으로 되돌리는 버튼이 생깁니다.",
-     "디스크 공간이 부족할 때: ‘저장 공간’에서 큰 파일을 다른 드라이브로 옮기거나 쓰지 않는 모델을 지울 수 있습니다."
+     "디스크 공간이 부족할 때: ‘저장 공간’에서 큰 파일을 다른 드라이브로 옮기거나 쓰지 않는 모델을 지울 수 있습니다.",
+     "설정을 찾지 못할 때: 설정 페이지마다 맨 위에 검색창이 있습니다. ‘단축키’, ‘백업’, ‘마이크’ 같은 말을 입력하면 어디에 있는지 보여 주고, 누르면 바로 이동합니다.",
+     "오류 알림이 뜰 때: 문장은 무슨 일이 있었고 어떻게 하면 되는지 알려 주고, 컴퓨터가 보고한 원문은 ‘자세히’에 들어 있습니다. 도움을 받을 때 펼쳐서 보여 주세요."
     ]
    }
   ],
@@ -537,7 +545,9 @@
      "まず「状態チェック」を見てください。翻訳エンジン、グラフィックカード、マイク、ヘッドセット、チャット領域、ホットキーにそれぞれランプがあり、問題のある項目の横のボタンから対処する場所に移動できます。",
      "それでも直らないとき：状態チェックページのいちばん下の「問題を報告」がテキストファイルを 1 つ作ります。先に内容を確認してから、手伝ってくれる人に送るかどうかを自分で決めます。",
      "アップデート後に使いにくくなったとき：一度アップデートした後は、「このアプリについて」ページに前のバージョンに戻すボタンが表示されます。",
-     "ディスクの空きが足りないとき：「ストレージ」で大きなファイルを別のドライブに移すか、使っていないモデルを削除できます。"
+     "ディスクの空きが足りないとき：「ストレージ」で大きなファイルを別のドライブに移すか、使っていないモデルを削除できます。",
+     "設定が見つからないとき：設定の各ページの一番上に検索ボックスがあります。「ショートカット」「バックアップ」「マイク」などと入力すると場所が一覧に出て、クリックすればそこへ移動します。",
+     "エラーの通知が出たとき：文章で何が起きたか・どうすればよいかを伝え、コンピューターが返した原文は「詳細」にしまってあります。助けてもらうときは開いて見せてください。"
     ]
    }
   ],
@@ -648,7 +658,9 @@
      "Xem “Kiểm tra” trước: bộ máy dịch, card đồ họa, micro, tai nghe, vùng chat và phím tắt đều có đèn riêng, và nút bên cạnh mỗi vấn đề sẽ đưa bạn đến chỗ sửa.",
      "Vẫn chưa được: “Báo cáo sự cố” ở cuối trang Kiểm tra tạo ra một tệp văn bản. Bạn đọc trước, rồi quyết định có gửi cho người đang giúp bạn hay không.",
      "Bản cập nhật làm mọi thứ tệ hơn: sau khi đã cập nhật một lần, trang “Giới thiệu” có nút để quay lại phiên bản trước.",
-     "Sắp hết dung lượng ổ đĩa: trong “Dung lượng” bạn có thể chuyển các tệp lớn sang ổ khác hoặc xóa mô hình không dùng."
+     "Sắp hết dung lượng ổ đĩa: trong “Dung lượng” bạn có thể chuyển các tệp lớn sang ổ khác hoặc xóa mô hình không dùng.",
+     "Không tìm thấy một cài đặt: mỗi trang Cài đặt đều có ô tìm kiếm ở trên cùng. Gõ từ như “phím tắt”, “sao lưu” hoặc “micro” để xem nó nằm ở đâu, bấm vào kết quả để nhảy tới đó.",
+     "Khi có thông báo lỗi: câu trên cùng nói chuyện gì đã xảy ra và nên làm gì; nội dung gốc do máy tính báo nằm trong “Chi tiết”, bạn có thể mở ra cho người đang giúp bạn xem."
     ]
    }
   ],
@@ -759,7 +771,9 @@
      "ดู “ตรวจสอบ” ก่อน: เครื่องมือแปล การ์ดจอ ไมโครโฟน หูฟัง พื้นที่แชท และคีย์ลัด แต่ละส่วนมีไฟของตัวเอง และปุ่มข้างปัญหาจะพาคุณไปที่ที่แก้ได้",
      "ยังแก้ไม่ได้: “รายงานปัญหา” ที่ด้านล่างของหน้า ตรวจสอบ จะสร้างไฟล์ข้อความหนึ่งไฟล์ คุณอ่านก่อน แล้วค่อยตัดสินใจว่าจะส่งให้คนที่ช่วยคุณหรือไม่",
      "อัปเดตแล้วแย่ลง: หลังจากอัปเดตไปแล้วหนึ่งครั้ง หน้า “เกี่ยวกับ” จะมีปุ่มย้อนกลับไปเวอร์ชันก่อน",
-     "พื้นที่ดิสก์เหลือน้อย: ใน “พื้นที่เก็บข้อมูล” คุณย้ายไฟล์ขนาดใหญ่ไปไดรฟ์อื่น หรือลบโมเดลที่ไม่ได้ใช้ได้"
+     "พื้นที่ดิสก์เหลือน้อย: ใน “พื้นที่เก็บข้อมูล” คุณย้ายไฟล์ขนาดใหญ่ไปไดรฟ์อื่น หรือลบโมเดลที่ไม่ได้ใช้ได้",
+     "หาการตั้งค่าไม่เจอ: ทุกหน้าตั้งค่ามีช่องค้นหาอยู่ด้านบนสุด พิมพ์คำเช่น “คีย์ลัด” “สำรอง” หรือ “ไมโครโฟน” แล้วจะแสดงว่าอยู่ตรงไหน กดที่ผลลัพธ์เพื่อไปที่นั่น",
+     "เมื่อมีการแจ้งข้อผิดพลาด: ประโยคด้านบนบอกว่าเกิดอะไรขึ้นและควรทำอย่างไร ส่วนข้อความต้นฉบับที่คอมพิวเตอร์รายงานอยู่ใน “รายละเอียด” เปิดให้คนที่ช่วยดูปัญหาได้"
     ]
    }
   ],
@@ -870,7 +884,9 @@
      "Lihat “Pemeriksaan” dulu: mesin terjemahan, kartu grafis, mikrofon, headset, area chat, dan tombol pintas masing-masing punya lampu, dan tombol di samping masalah membawamu ke tempat memperbaikinya.",
      "Masih buntu: “Laporkan masalah” di bagian bawah halaman Pemeriksaan membuat satu file teks. Kamu membacanya dulu, lalu memutuskan apakah akan mengirimnya ke orang yang membantumu.",
      "Pembaruan membuat keadaan lebih buruk: setelah kamu memperbarui sekali, halaman “Tentang” punya tombol untuk kembali ke versi sebelumnya.",
-     "Ruang disk hampir habis: di “Penyimpanan” kamu bisa memindahkan file besar ke drive lain atau menghapus model yang tidak dipakai."
+     "Ruang disk hampir habis: di “Penyimpanan” kamu bisa memindahkan file besar ke drive lain atau menghapus model yang tidak dipakai.",
+     "Tidak menemukan suatu pengaturan: setiap halaman pengaturan punya kotak pencarian di atas. Ketik kata seperti “tombol pintas”, “cadangan” atau “mikrofon” untuk melihat letaknya, lalu klik hasilnya untuk melompat ke sana.",
+     "Saat ada pemberitahuan error: kalimat di atas menjelaskan apa yang terjadi dan apa yang bisa dilakukan; teks asli dari komputer disimpan di “Detail”, yang bisa dibuka dan ditunjukkan kepada orang yang membantu."
     ]
    }
   ],
@@ -981,7 +997,9 @@
      "Mira primero “Revisión”: el motor de traducción, la tarjeta gráfica, el micrófono, los auriculares, las zonas de chat y los atajos tienen cada uno su luz, y un botón junto a cada problema te lleva a la solución.",
      "Si sigues atascado: “Informar de un problema”, abajo en la página Revisión, crea un archivo de texto. Lo lees primero y luego decides si enviarlo a quien te esté ayudando.",
      "Una actualización empeoró las cosas: después de actualizar una vez, la página “Acerca de” tiene un botón para volver a la versión anterior.",
-     "Poco espacio en disco: en “Almacenamiento” puedes mover los archivos grandes a otra unidad o borrar modelos que no uses."
+     "Poco espacio en disco: en “Almacenamiento” puedes mover los archivos grandes a otra unidad o borrar modelos que no uses.",
+     "No encuentras un ajuste: cada página de ajustes tiene un cuadro de búsqueda arriba. Escribe una palabra como «atajos», «copia de seguridad» o «micrófono» y te muestra dónde está; pulsa un resultado para ir allí.",
+     "Un aviso de error: la frase dice qué pasó y qué hacer; el texto original que informa el equipo queda en «Detalles», que puedes abrir y enseñar a quien te ayude."
     ]
    }
   ],
@@ -1092,7 +1110,9 @@
      "Olhe primeiro o “Diagnóstico”: motor de tradução, placa de vídeo, microfone, headset, áreas de chat e atalhos têm cada um uma luz, e um botão ao lado de cada problema leva você à solução.",
      "Ainda travado: “Relatar um problema”, embaixo na página Diagnóstico, cria um arquivo de texto. Você lê primeiro e depois decide se manda para quem está ajudando você.",
      "Uma atualização piorou as coisas: depois de atualizar uma vez, a página “Sobre” tem um botão para voltar à versão anterior.",
-     "Pouco espaço em disco: em “Armazenamento” você pode mover os arquivos grandes para outro disco ou apagar modelos que não usa."
+     "Pouco espaço em disco: em “Armazenamento” você pode mover os arquivos grandes para outro disco ou apagar modelos que não usa.",
+     "Não acha uma configuração: cada página de configurações tem uma caixa de busca no topo. Digite uma palavra como “atalhos”, “backup” ou “microfone” e ela mostra onde está; clique num resultado para ir até lá.",
+     "Um aviso de erro: a frase diz o que aconteceu e o que fazer; o texto original do computador fica em “Detalhes”, que você pode abrir e mostrar a quem estiver ajudando."
     ]
    }
   ],
@@ -1203,7 +1223,9 @@
      "Сначала откройте «Проверку»: у движка перевода, видеокарты, микрофона, гарнитуры, областей чата и горячих клавиш свой индикатор, а кнопка рядом с проблемой ведёт туда, где её исправить.",
      "Всё ещё не получается: «Сообщить о проблеме» внизу страницы «Проверка» создаёт один текстовый файл. Сначала вы его читаете, потом решаете, отправлять ли тому, кто вам помогает.",
      "После обновления стало хуже: после первого обновления на странице «О программе» есть кнопка возврата к предыдущей версии.",
-     "Мало места на диске: в «Хранилище» можно перенести большие файлы на другой диск или удалить неиспользуемые модели."
+     "Мало места на диске: в «Хранилище» можно перенести большие файлы на другой диск или удалить неиспользуемые модели.",
+     "Не находите настройку: на каждой странице настроек вверху есть строка поиска. Введите слово вроде «горячие клавиши», «резервная копия» или «микрофон» — появится, где это находится; нажмите на результат, чтобы перейти.",
+     "Если появилось уведомление об ошибке: фраза говорит, что случилось и что делать; исходный текст от компьютера лежит в «Подробности» — его можно раскрыть и показать тому, кто помогает."
     ]
    }
   ],
@@ -1314,7 +1336,9 @@
      "Schau zuerst in den „Systemcheck“: Übersetzungs-Engine, Grafikkarte, Mikrofon, Headset, Chat-Bereiche und Tastenkürzel haben jeweils eine Lampe, und ein Knopf neben einem Problem bringt dich zur Lösung.",
      "Immer noch nicht gelöst: „Problem melden“ unten auf der Systemcheck-Seite erstellt eine Textdatei. Du liest sie zuerst und entscheidest dann, ob du sie an die Person schickst, die dir hilft.",
      "Ein Update hat etwas verschlechtert: Nach dem ersten Update gibt es auf der Seite „Info“ einen Knopf, um zur vorherigen Version zurückzugehen.",
-     "Wenig Speicherplatz: Unter „Speicher“ kannst du die großen Dateien auf ein anderes Laufwerk verschieben oder ungenutzte Modelle löschen."
+     "Wenig Speicherplatz: Unter „Speicher“ kannst du die großen Dateien auf ein anderes Laufwerk verschieben oder ungenutzte Modelle löschen.",
+     "Eine Einstellung nicht gefunden: Jede Einstellungsseite hat oben ein Suchfeld. Gib ein Wort wie „Tastenkürzel“, „sichern“ oder „Mikrofon“ ein, dann steht dort, wo es ist; ein Klick auf einen Treffer springt dorthin.",
+     "Eine Fehlermeldung: Der Satz sagt, was passiert ist und was zu tun ist; der Originaltext des Computers steht unter „Details“ – du kannst ihn aufklappen und der Person zeigen, die dir hilft."
     ]
    }
   ],
@@ -1425,7 +1449,9 @@
      "Regardez d'abord « Diagnostic » : le moteur de traduction, la carte graphique, le micro, le casque, les zones de chat et les raccourcis ont chacun un voyant, et un bouton à côté d'un problème vous mène à la solution.",
      "Toujours bloqué : « Signaler un problème », en bas de la page Diagnostic, crée un fichier texte. Vous le lisez d'abord, puis décidez de l'envoyer ou non à la personne qui vous aide.",
      "Une mise à jour a empiré les choses : après une première mise à jour, la page « À propos » propose un bouton pour revenir à la version précédente.",
-     "Peu d'espace disque : dans « Stockage », vous pouvez déplacer les gros fichiers vers un autre disque ou supprimer les modèles inutilisés."
+     "Peu d'espace disque : dans « Stockage », vous pouvez déplacer les gros fichiers vers un autre disque ou supprimer les modèles inutilisés.",
+     "Un réglage introuvable : chaque page de réglages a une zone de recherche en haut. Tapez un mot comme « raccourcis », « sauvegarde » ou « micro » pour voir où il se trouve, puis cliquez sur un résultat pour y aller.",
+     "Un message d'erreur : la phrase dit ce qui s'est passé et quoi faire ; le texte d'origine renvoyé par l'ordinateur est sous « Détails », que vous pouvez ouvrir et montrer à la personne qui vous aide."
     ]
    }
   ],

@@ -17,8 +17,8 @@ from collections import deque
 from pathlib import Path
 
 from . import __version__, apps, assets, changes, chatpaint, filesubs, gpu, guide, mention, oswin, paths, report, snap, storage, subtitles, updater, voicebook, works
-from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
-                     Glossary, Lessons)
+from .config import (ACCENTS, DEFAULTS, EDITABLE, HOTKEYS_V, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS,
+                     Config, Glossary, Lessons, migrate_hotkeys)
 from .core.engine import Engine
 from .core.romanize import romanize
 from .core.speak import Speaker
@@ -68,7 +68,7 @@ RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔�
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
-SETTINGS_SKIP = ("window", "layout", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
+SETTINGS_SKIP = ("window", "layout", "hotkeys_v", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
 RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir")
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64),
@@ -123,7 +123,10 @@ class EventHub:
 
 
 class RealAudio:
-    """真的音訊裝置。測試時會換成假的。"""
+    """真的音訊裝置。測試時會換成假的。ways：記住哪支麥克風要直接用第二種收音方式（core/audio.py 的 Ways）。"""
+
+    def __init__(self, ways=None):
+        self.ways = ways
 
     def devices(self) -> dict:
         from .core.audio import _soundcard
@@ -147,7 +150,7 @@ class RealAudio:
     def capture(self, kind: str, device, on_error=None, on_open=None):
         from .core.audio import Capture
 
-        return Capture(kind, on_error=on_error, device=device, on_open=on_open)
+        return Capture(kind, on_error=on_error, device=device, on_open=on_open, ways=self.ways)
 
     def apps_available(self) -> bool:
         from .core import procaudio
@@ -188,9 +191,9 @@ class Service:
         self._work_seen = (0.0, "", "", "")      # (什麼時候看的, via, place, work key)：視窗標題最多兩秒看一次
         self._work_told: set[str] = set()        # 這次開程式已經提示過「這部翻過了」的作品
         self.terms = TermPack(packs_for(self.cfg["term_packs"], self.game, bool(self.cfg["game_auto"])))
-        self.audio = audio or RealAudio()
         from .core import audio as audio_core
 
+        self.audio = audio or RealAudio(audio_core.Ways(self.data / "mic_ways.json", __version__))      # 哪支麥克風要直接用第二種收音方式
         audio_core.log = self.log      # 收音出錯的細節寫進紀錄檔
         self.gpu = {"name": None, "vram_mb": 0, "tier": "cpu"}
         self.mode = {"model": "4b", "engine": "cpu", "quality": "standard"}
@@ -1709,7 +1712,7 @@ class Service:
         try:
             folder.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps({"app": "LiveLingo", "kind": SETTINGS_KIND, "version": 1, "app_version": __version__,
-                                        "config": self._settings_now()}, ensure_ascii=False, indent=2), encoding="utf-8")
+                                        "hotkeys_v": HOTKEYS_V, "config": self._settings_now()}, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError as ex:
             self.log(f"settings export failed: {ex!r}")
             return {"ok": False, "error": str(ex)}
@@ -1820,7 +1823,11 @@ class Service:
         if not isinstance(data, dict) or data.get("kind") != SETTINGS_KIND or not isinstance(data.get("config"), dict):
             return {"ok": False, "error": "not_settings"}
         self._keep_backup("import")
-        changed = self._apply_settings({k: v for k, v in data["config"].items() if k in DEFAULTS and k not in SETTINGS_SKIP})
+        values = {k: v for k, v in data["config"].items() if k in DEFAULTS and k not in SETTINGS_SKIP}
+        version = data.get("hotkeys_v", 1)
+        if (not isinstance(version, int) or version < HOTKEYS_V) and isinstance(values.get("hotkeys"), dict):
+            values["hotkeys"] = migrate_hotkeys(values["hotkeys"])      # 舊版匯出的檔：還是舊預設的快速鍵換成新預設，自己設過的不動
+        changed = self._apply_settings(values)
         return {"ok": True, "changed": changed, "count": len(changed), "saved": not self.cfg.error, "backup": self.settings_backup()}
 
     def settings_reset(self) -> dict:
