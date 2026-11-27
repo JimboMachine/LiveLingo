@@ -1,4 +1,136 @@
 {
+  "2.15.0": {
+    "zh-TW": [
+      "對方說到一半停一下、句子被切成兩則時，會接回一句再翻。整句只有「嗯」「啊」或笑聲的不出字幕。這兩項在「聲音裝置」頁可以關掉。",
+      "讀螢幕時先修常見的讀錯：數字裡的 O、l（1O:3O → 10:30），韓文子音縮寫裡的 0、7（0ㅋ → ㅇㅋ）。",
+      "標成「可能聽錯／看錯」的句子會換一種寫法再翻一次，兩次意思差不多就不標，少一點誤報。",
+      "還是沒把握的句子可以選標出來、灰掉或收起來（翻譯品質頁）。收起來的不會出現在浮動字幕上。",
+      "對方一直用、詞彙表裡沒有的縮寫，出現第 5 次時首頁會問你要不要補意思，補了就加進詞彙表。",
+      "教過的句子再教一次時，舊的翻法會留著（最多 5 個），在「詞彙與記憶」可以退回上一版。",
+      "新增「對方說粵語」（聲音裝置頁，有選中文時才出現）：對方的中文照粵語聽。翻譯品質頁新增「這週改最多的」：最近 7 天你最常改正的十個。",
+      "對方用了用語包認得的網路用語、縮寫（ㄱㄱ、ㅈㅅ），譯文下面會加一行小字說意思。目前支援韓文和中文之間。"
+    ],
+    "zh-CN": [
+      "对方说到一半停一下、句子被切成两条时，会接回一句再翻。整句只有“嗯”“啊”或笑声的不出字幕。这两项在“声音设备”页可以关掉。",
+      "读屏幕时先修常见的读错：数字里的 O、l（1O:3O → 10:30），韩文辅音缩写里的 0、7（0ㅋ → ㅇㅋ）。",
+      "标成“可能听错／看错”的句子会换一种写法再翻一次，两次意思差不多就不标，少一点误报。",
+      "还是没把握的句子可以选标出来、变灰或收起来（翻译质量页）。收起来的不会出现在浮动字幕上。",
+      "对方一直用、词汇表里没有的缩写，出现第 5 次时首页会问你要不要补意思，补了就加进词汇表。",
+      "教过的句子再教一次时，旧的翻法会留着（最多 5 个），在“词汇与记忆”可以退回上一版。",
+      "新增“对方说粤语”（声音设备页，有选中文时才出现）：对方的中文按粤语听。翻译质量页新增“这周改最多的”：最近 7 天你最常改正的十个。",
+      "对方用了用语包认得的网络用语、缩写（ㄱㄱ、ㅈㅅ），译文下面会加一行小字说意思。目前支持韩文和中文之间。"
+    ],
+    "en": [
+      "When someone pauses mid-sentence and it splits into two lines, they are joined and translated as one. Lines that are only um, uh or laughter get no subtitle. Both can be turned off on the Audio page.",
+      "Screen reading fixes common misreads first: O and l inside numbers (1O:3O → 10:30), 0 and 7 in Korean consonant abbreviations (0ㅋ → ㅇㅋ).",
+      "Sentences marked \"may be misheard/misread\" are translated a second way; if both mean about the same, the mark goes away. Fewer false alarms.",
+      "Sentences that stay unsure can be marked, dimmed or collapsed (Quality page). Collapsed ones are not shown on the floating subtitles.",
+      "An abbreviation they keep using that isn't in your glossary is asked about on the home page the 5th time; add its meaning and it goes into the glossary.",
+      "When you teach a sentence again, the old versions are kept (up to 5) and you can go back one on the Words and memory page.",
+      "New \"They speak Cantonese\" (Audio page, shown when Chinese is chosen). New \"Your top fixes this week\" on the Quality page: the ten things you corrected most in 7 days.",
+      "When they use slang or an abbreviation a term pack knows (ㄱㄱ, ㅈㅅ), a small line under the translation says what it means. Korean and Chinese for now."
+    ],
+    "ko": [
+      "말하다가 잠깐 멈춰 문장이 두 줄로 나뉘면 하나로 이어서 번역합니다. 음, 어, 웃음만 있는 문장은 자막이 나오지 않습니다. 둘 다 오디오 페이지에서 끌 수 있습니다.",
+      "화면 읽기에서 흔한 실수를 먼저 고칩니다: 숫자 속 O, l(1O:3O → 10:30), 한글 자음 줄임말 속 0, 7(0ㅋ → ㅇㅋ).",
+      "\"잘못 들었을 수 있음/잘못 읽었을 수 있음\" 문장은 다른 방식으로 한 번 더 번역해서 뜻이 거의 같으면 표시를 없앱니다.",
+      "그래도 확실하지 않은 문장은 표시, 흐리게, 접기 중에서 고를 수 있습니다(번역 품질 페이지). 접은 문장은 떠 있는 자막에 나오지 않습니다.",
+      "상대가 계속 쓰는데 단어장에 없는 줄임말은 다섯 번째에 홈에서 뜻을 물어보고, 적으면 단어장에 들어갑니다.",
+      "가르친 문장을 다시 가르치면 예전 번역이 남고(최대 5개), 단어와 기억 페이지에서 이전 버전으로 되돌릴 수 있습니다.",
+      "\"상대가 광둥어를 씀\" 추가(오디오 페이지, 중국어를 골랐을 때). 번역 품질 페이지에 \"이번 주 가장 많이 고친 것\" 추가: 최근 7일 동안 가장 많이 고친 10개.",
+      "상대가 용어 팩에 있는 인터넷 용어나 줄임말(ㄱㄱ, ㅈㅅ)을 쓰면 번역 아래에 작은 글씨로 뜻을 붙입니다. 지금은 한국어와 중국어 사이만 됩니다."
+    ],
+    "ja": [
+      "話の途中で間が空いて文が二つに分かれたら、つなげて訳します。えー、あの、笑い声だけの文は字幕にしません。どちらも音声ページでオフにできます。",
+      "画面読み取りのよくある間違いを先に直します：数字の中の O・l（1O:3O → 10:30）、韓国語の子音略語の 0・7（0ㅋ → ㅇㅋ）。",
+      "「聞き間違い／読み間違いかも」の文は別の言い方でもう一度訳し、意味がほぼ同じなら印を消します。誤報が減ります。",
+      "それでも自信のない文は、印を付ける・薄く表示・折りたたむから選べます（翻訳品質ページ）。折りたたんだ文は浮動字幕に出ません。",
+      "相手が何度も使う、単語帳にない略語は 5 回目にホームで意味を聞きます。書くと単語帳に入ります。",
+      "教えた文をもう一度教えると前の訳が残り（最大 5 つ）、単語と記憶ページで前の版に戻せます。",
+      "「相手は広東語」を追加（音声ページ、中国語を選んだとき）。翻訳品質ページに「今週いちばん直したもの」を追加：この 7 日で最も多く直した 10 件。",
+      "用語パックにあるスラングや略語（ㄱㄱ、ㅈㅅ）が出たら、訳文の下に小さく意味を書きます。今は韓国語と中国語の間だけです。"
+    ],
+    "vi": [
+      "Khi ai đó ngừng giữa câu và câu bị tách làm hai dòng, LiveLingo nối lại và dịch một lần. Câu chỉ có ừm, à hay tiếng cười không có phụ đề. Cả hai tắt được ở trang Âm thanh.",
+      "Đọc màn hình sửa lỗi đọc thường gặp trước: O và l trong số (1O:3O → 10:30), 0 và 7 trong chữ viết tắt phụ âm tiếng Hàn (0ㅋ → ㅇㅋ).",
+      "Câu đánh dấu \"có thể nghe/đọc nhầm\" được dịch thêm một cách khác; nếu hai bản gần giống nghĩa thì bỏ dấu. Ít báo nhầm hơn.",
+      "Câu vẫn không chắc có thể chọn đánh dấu, làm mờ hoặc thu gọn (trang Chất lượng). Câu thu gọn không hiện trên phụ đề nổi.",
+      "Từ viết tắt họ dùng mãi mà không có trong từ điển sẽ được hỏi ở trang chủ lần thứ 5; thêm nghĩa thì nó vào từ điển.",
+      "Khi dạy lại một câu, các bản cũ được giữ (tối đa 5) và có thể quay lại bản trước ở trang Từ vựng và ghi nhớ.",
+      "Thêm \"Họ nói tiếng Quảng Đông\" (trang Âm thanh, khi chọn tiếng Trung). Trang Chất lượng có \"Sửa nhiều nhất tuần này\": mười thứ bạn sửa nhiều nhất trong 7 ngày.",
+      "Khi họ dùng tiếng lóng hay từ viết tắt có trong gói thuật ngữ (ㄱㄱ, ㅈㅅ), một dòng nhỏ dưới bản dịch giải thích nghĩa. Hiện chỉ giữa tiếng Hàn và tiếng Trung."
+    ],
+    "th": [
+      "เมื่อมีคนหยุดกลางประโยคจนแยกเป็นสองบรรทัด จะต่อกลับแล้วแปลครั้งเดียว ประโยคที่มีแค่ อืม อ่า หรือเสียงหัวเราะจะไม่มีซับ ปิดทั้งสองอย่างได้ที่หน้าเสียง",
+      "การอ่านหน้าจอแก้ข้อผิดพลาดที่พบบ่อยก่อน: O และ l ในตัวเลข (1O:3O → 10:30) 0 และ 7 ในคำย่อพยัญชนะเกาหลี (0ㅋ → ㅇㅋ)",
+      "ประโยคที่ขึ้นว่า \"อาจฟังผิด/อ่านผิด\" จะแปลอีกแบบหนึ่ง ถ้าความหมายใกล้กันจะเอาเครื่องหมายออก เตือนผิดน้อยลง",
+      "ประโยคที่ยังไม่แน่ใจเลือกได้ว่าจะทำเครื่องหมาย ทำให้จาง หรือยุบไว้ (หน้าคุณภาพ) ประโยคที่ยุบจะไม่ขึ้นบนซับลอย",
+      "คำย่อที่อีกฝ่ายใช้บ่อยแต่ไม่มีในอภิธานศัพท์ จะถามความหมายที่หน้าแรกในครั้งที่ 5 ใส่ความหมายแล้วจะเข้าอภิธานศัพท์",
+      "เมื่อสอนประโยคเดิมอีกครั้ง คำแปลเก่าจะเก็บไว้ (สูงสุด 5) และย้อนกลับฉบับก่อนได้ในหน้าคำศัพท์และความจำ",
+      "เพิ่ม \"อีกฝ่ายพูดกวางตุ้ง\" (หน้าเสียง เมื่อเลือกภาษาจีน) หน้าคุณภาพมี \"แก้มากที่สุดสัปดาห์นี้\": สิบอย่างที่คุณแก้บ่อยที่สุดใน 7 วัน",
+      "เมื่ออีกฝ่ายใช้ศัพท์เน็ตหรือคำย่อที่ชุดคำรู้จัก (ㄱㄱ, ㅈㅅ) จะมีบรรทัดเล็กใต้คำแปลบอกความหมาย ตอนนี้รองรับเกาหลีกับจีน"
+    ],
+    "id": [
+      "Saat seseorang berhenti di tengah kalimat dan terbelah jadi dua baris, keduanya digabung dan diterjemahkan sekali. Kalimat yang hanya em, eh, atau tawa tidak diberi subtitle. Keduanya bisa dimatikan di halaman Audio.",
+      "Baca layar memperbaiki salah baca yang umum dulu: O dan l di dalam angka (1O:3O → 10:30), 0 dan 7 di singkatan konsonan Korea (0ㅋ → ㅇㅋ).",
+      "Kalimat bertanda \"mungkin salah dengar/baca\" diterjemahkan dengan cara lain; jika artinya hampir sama, tandanya dihapus. Lebih sedikit peringatan palsu.",
+      "Kalimat yang tetap kurang yakin bisa ditandai, diredupkan, atau dilipat (halaman Kualitas). Yang dilipat tidak tampil di subtitle melayang.",
+      "Singkatan yang terus mereka pakai dan tidak ada di glosarium ditanyakan di beranda pada kali ke-5; isi artinya dan masuk ke glosarium.",
+      "Saat Anda mengajarkan kalimat lagi, versi lama disimpan (hingga 5) dan bisa kembali ke sebelumnya di halaman Kata dan memori.",
+      "Baru \"Mereka berbahasa Kanton\" (halaman Audio, saat Mandarin dipilih). Baru \"Paling sering diperbaiki minggu ini\" di halaman Kualitas: sepuluh hal yang paling sering Anda perbaiki dalam 7 hari.",
+      "Saat mereka memakai bahasa gaul atau singkatan yang dikenal paket istilah (ㄱㄱ, ㅈㅅ), baris kecil di bawah terjemahan menjelaskan artinya. Untuk saat ini Korea dan Mandarin."
+    ],
+    "es": [
+      "Si alguien hace una pausa a media frase y se divide en dos líneas, se unen y se traducen como una. Las líneas que solo son eh, mmm o risas no llevan subtítulo. Ambas cosas se desactivan en la página Audio.",
+      "La lectura de pantalla corrige antes los errores típicos: O y l dentro de números (1O:3O → 10:30), 0 y 7 en abreviaturas de consonantes coreanas (0ㅋ → ㅇㅋ).",
+      "Las frases marcadas \"quizá mal oído/leído\" se traducen de otra forma; si ambas dicen casi lo mismo, se quita la marca. Menos falsas alarmas.",
+      "Las frases que siguen dudosas se pueden marcar, atenuar o contraer (página Calidad). Las contraídas no salen en los subtítulos flotantes.",
+      "Una abreviatura que repiten y no está en tu glosario se pregunta en el inicio a la 5.ª vez; si escribes su significado, va al glosario.",
+      "Si enseñas de nuevo una frase, se guardan las versiones anteriores (hasta 5) y puedes volver a la anterior en la página Palabras y memoria.",
+      "Nuevo \"Hablan cantonés\" (página Audio, si eliges chino). Nuevo \"Lo que más corregiste esta semana\" en la página Calidad: las diez cosas que más corregiste en 7 días.",
+      "Si usan jerga o abreviaturas que conoce un paquete de términos (ㄱㄱ, ㅈㅅ), una línea pequeña bajo la traducción dice qué significa. Por ahora entre coreano y chino."
+    ],
+    "pt": [
+      "Se alguém pausa no meio da frase e ela se divide em duas linhas, as partes são juntadas e traduzidas como uma. Linhas que são só hum, é ou risadas não ganham legenda. As duas coisas podem ser desligadas na página Áudio.",
+      "A leitura de tela corrige antes os erros comuns: O e l dentro de números (1O:3O → 10:30), 0 e 7 em abreviações de consoantes coreanas (0ㅋ → ㅇㅋ).",
+      "Frases marcadas \"talvez mal ouvida/lida\" são traduzidas de outro jeito; se as duas dizem quase o mesmo, a marca some. Menos alarmes falsos.",
+      "Frases que continuam incertas podem ser marcadas, esmaecidas ou recolhidas (página Qualidade). As recolhidas não aparecem na legenda flutuante.",
+      "Uma abreviação que eles repetem e não está no glossário é perguntada na tela inicial na 5.ª vez; escreva o significado e ela vai para o glossário.",
+      "Ao ensinar uma frase de novo, as versões antigas ficam guardadas (até 5) e você pode voltar à anterior na página Palavras e memória.",
+      "Novo \"Eles falam cantonês\" (página Áudio, quando o chinês está escolhido). Novo \"O que você mais corrigiu nesta semana\" na página Qualidade: as dez coisas que você mais corrigiu em 7 dias.",
+      "Quando usam gíria ou abreviação que um pacote de termos conhece (ㄱㄱ, ㅈㅅ), uma linha pequena sob a tradução diz o significado. Por enquanto entre coreano e chinês."
+    ],
+    "ru": [
+      "Если человек делает паузу посреди фразы и она делится на две строки, части склеиваются и переводятся вместе. Строки только из «э», «м» или смеха остаются без субтитров. Обе функции выключаются на странице «Звук».",
+      "Чтение экрана сначала исправляет типичные ошибки: O и l внутри чисел (1O:3O → 10:30), 0 и 7 в корейских согласных сокращениях (0ㅋ → ㅇㅋ).",
+      "Фразы с отметкой «возможно, не так услышано/прочитано» переводятся ещё раз по-другому; если смысл почти совпадает, отметка снимается. Меньше ложных тревог.",
+      "Фразы, которые остаются неуверенными, можно отмечать, затемнять или сворачивать (страница «Качество»). Свёрнутые не показываются в плавающих субтитрах.",
+      "Сокращение, которое собеседник часто использует и которого нет в словаре, на 5-й раз спрашивается на главной; впишите значение, и оно попадёт в словарь.",
+      "Если научить фразе заново, прежние варианты сохраняются (до 5) и можно вернуть предыдущий на странице «Слова и память».",
+      "Новое: «Собеседник говорит на кантонском» (страница «Звук», если выбран китайский). Новое на странице «Качество»: «Чаще всего исправляли на этой неделе» — десять самых частых исправлений за 7 дней.",
+      "Если собеседник использует сленг или сокращение из набора терминов (ㄱㄱ, ㅈㅅ), под переводом мелко пишется значение. Пока между корейским и китайским."
+    ],
+    "de": [
+      "Macht jemand mitten im Satz eine Pause und er zerfällt in zwei Zeilen, werden sie verbunden und zusammen übersetzt. Zeilen nur aus äh, ähm oder Lachen bekommen keinen Untertitel. Beides lässt sich auf der Seite Audio abschalten.",
+      "Das Bildschirmlesen korrigiert zuerst typische Lesefehler: O und l in Zahlen (1O:3O → 10:30), 0 und 7 in koreanischen Konsonantenkürzeln (0ㅋ → ㅇㅋ).",
+      "Sätze mit „vielleicht verhört/verlesen“ werden ein zweites Mal anders übersetzt; bedeuten beide fast dasselbe, verschwindet die Markierung. Weniger Fehlalarme.",
+      "Sätze, die unsicher bleiben, lassen sich markieren, abblenden oder einklappen (Seite Qualität). Eingeklappte erscheinen nicht in den schwebenden Untertiteln.",
+      "Eine Abkürzung, die immer wieder vorkommt und nicht im Glossar steht, wird beim 5. Mal auf der Startseite erfragt; mit Bedeutung landet sie im Glossar.",
+      "Bringst du einen Satz erneut bei, bleiben die alten Versionen (bis zu 5) erhalten, und auf der Seite Wörter und Gedächtnis kannst du eine zurückgehen.",
+      "Neu: „Sie sprechen Kantonesisch“ (Seite Audio, wenn Chinesisch gewählt ist). Neu auf der Seite Qualität: „Diese Woche am häufigsten korrigiert“ – deine zehn häufigsten Korrekturen der letzten 7 Tage.",
+      "Benutzt jemand Slang oder eine Abkürzung aus einem Begriffspaket (ㄱㄱ, ㅈㅅ), steht unter der Übersetzung klein, was es heißt. Vorerst zwischen Koreanisch und Chinesisch."
+    ],
+    "fr": [
+      "Si quelqu'un fait une pause en pleine phrase et qu'elle se coupe en deux lignes, elles sont recollées et traduites ensemble. Les lignes faites seulement de euh, hum ou de rires n'ont pas de sous-titre. Désactivable sur la page Audio.",
+      "La lecture d'écran corrige d'abord les erreurs courantes : O et l dans les nombres (1O:3O → 10:30), 0 et 7 dans les abréviations de consonnes coréennes (0ㅋ → ㅇㅋ).",
+      "Les phrases marquées « peut-être mal entendu/lu » sont traduites une seconde fois autrement ; si les deux disent presque la même chose, la marque disparaît. Moins de fausses alertes.",
+      "Les phrases qui restent incertaines peuvent être marquées, atténuées ou repliées (page Qualité). Les phrases repliées n'apparaissent pas dans les sous-titres flottants.",
+      "Une abréviation qu'ils répètent et qui n'est pas dans votre glossaire est demandée sur l'accueil à la 5e fois ; écrivez son sens et elle va dans le glossaire.",
+      "Si vous réapprenez une phrase, les anciennes versions sont gardées (jusqu'à 5) et vous pouvez revenir à la précédente sur la page Mots et mémoire.",
+      "Nouveau « Ils parlent cantonais » (page Audio, si le chinois est choisi). Nouveau « Vos corrections les plus fréquentes » sur la page Qualité : les dix choses les plus corrigées en 7 jours.",
+      "S'ils utilisent un argot ou une abréviation connue d'un pack de termes (ㄱㄱ, ㅈㅅ), une petite ligne sous la traduction en donne le sens. Pour l'instant entre coréen et chinois."
+    ]
+  },
   "2.14.0": {
     "zh-TW": [
       "新增「不翻的字」（詞彙與記憶頁）：gg、ㅋㅋ、朋友的遊戲 ID 照原樣留著。對方的話裡一直出現、像遊戲 ID 的字，出現第 3 次會問你一次要不要固定不翻；說「不是名字」就不再問。",

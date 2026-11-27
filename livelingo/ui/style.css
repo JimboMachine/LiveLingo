@@ -709,3 +709,13 @@ pre.raw { margin: 4px 0 0; max-height: 140px; overflow: auto; padding: 8px 10px;
 .region-card .rstory > span { display: flex; flex-direction: column; gap: 2px; }
 .qc-list { display: flex; flex-direction: column; gap: 6px; }
 #btn-private[aria-pressed="true"] { color: var(--accent); }
+
+/* 2.15.0：沒把握的句子灰掉或收起來、網路用語的小字註解、教過的句子退回上一版、縮寫提醒的輸入框 */
+.msg.unsure-dim .bubble { opacity: .5; }
+.msg.unsure-dim .bubble:hover, .msg.unsure-dim .bubble:focus-within { opacity: 1; }
+.msg.unsure-hidden .bubble { background: transparent; border-style: dashed; padding: 4px 8px; }
+.unsure-show { display: inline-flex; align-items: center; gap: 6px; }
+.notes { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--dim); }
+.notes .note-item b { font-weight: 600; margin-right: 4px; }
+.lv-undo { white-space: nowrap; }
+#abbr-row .hist-q { min-width: 140px; flex: 1 1 140px; }

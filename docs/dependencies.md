@@ -515,6 +515,17 @@
 
 自動把關：測試會擋：數字修正、tidy 留下不翻的字、名字候選和第三次才問、熱詞、健檢的打分、自動開關只關自己開的、隱私暫停不寫紀錄、念出來的聲音不被當成對方、劇情框等字停、情境卡、各個 /api。真的遊戲畫面、語音熱詞效果、Windows 念出來的聲音要在你的電腦上試。
 
+### 斷句修補、讀錯字修正、沒把握的句子、縮寫提醒、教過的句子留版本、粵語、每週錯誤報告、語助詞、網路用語註解（2.15.0）
+
+1. `textfix.py`、`names.py`：JOIN_GAP、JOIN_SHORT、_FILLERS（不要放進「是」的意思：응、うん）、ABBR_NEED
+2. `service.py`、`server.py`、`config.py`：join_split/ocr_fix/drop_fillers/unsure_recheck/unsure_view/abbr_suggest/abbr_skip/cantonese/slang_notes 在 DEFAULTS 和 EDITABLE；abbr_skip 在 RESET_KEEP；_join_split 用 _recent_voice 的 end；_hidden 在 _post
+3. `translate.py`：second_opinion 不用暫存也不記
+4. `speech.py`：cantonese()：zh 的時候 transcribe 用 yue，偵測語言時 yue 的機率算進 zh
+5. `corrections.py`、`config.py`：Lessons.add(before=) 留 old（最多 KEEP_OLD）；list() 只有改過的才帶 old；undo
+6. `app.js`、`i18n.js`、`style.css`、`index.html`：#abbr-row、unsure-dim/unsure-hidden、.notes、lesson-undo、wr- 開頭的報告（rep_ 是問題回報頁的，不要撞名）
+
+自動把關：測試會擋：接句子的條件、讀錯字只改數字和韓文子音、語助詞判斷、縮寫第 5 次才問、Lessons 的 old 和 undo、改正紀錄的報告、再翻一次比對、hide 時浮動字幕不出、粵語把 zh 換成 yue、各個 /api。真的語音斷句和粵語辨識要在你的電腦上試。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -560,8 +571,10 @@
 | 對話摘要：切出一段段對話、存摘要、搜尋 | `livelingo/recap.py` | `service.py`：切出對話（sessions、worth、GAP）、存摘要、搜尋（改壞會報錯） |
 | 框選翻譯：把辨識出的一列列字接成一段段 | `livelingo/snap.py` | `service.py`：框選翻譯把辨識出的字接成段（paragraphs）（改壞會報錯）<br>`inplace.py`：一段一段的方框（blocks）（改壞會報錯） |
 | 喊我名字提醒：名字和關鍵字的整理、比對 | `livelingo/mention.py` | `service.py`：名字、關鍵字的整理（clean_words）和比對（find）；訊息的 mention 欄位（改壞會報錯） |
-| 不翻的字和名字建議：整理、像不像遊戲 ID、出現三次就問；語音辨識的熱詞 | `livelingo/names.py` | `service.py`：keep_words 和 name_skip 的整理（clean_words）、NameWatch 名字建議、hotwords 給語音辨識（改壞會報錯） |
+| 不翻的字和名字建議：整理、像不像遊戲 ID、出現三次就問；語音辨識的熱詞 | `livelingo/names.py` | `service.py`：keep_words 和 name_skip 的整理（clean_words）、NameWatch 名字建議、hotwords 給語音辨識（改壞會報錯）<br>`textfix.py`：NameWatch(find=abbreviations) 數縮寫；_COMMON 排除常見英文字（改壞會報錯） |
 | 翻譯健檢：拿固定的真實句子重翻、打分、跟上一次比 | `livelingo/qualitycheck.py`<br>`livelingo/data/quality_cases.json` | `service.py`：QualityCheck：/api/quality 開始、停止；用 translator.translate(fresh=True)（改壞會報錯） |
+| 翻譯前的小修補：切成兩半的句子接回去、讀錯字修正、只有語助詞不翻、縮寫提醒 | `livelingo/textfix.py` | `service.py`：fix_ocr（讀螢幕）、only_filler、should_join/join（語音）、abbr_watch（縮寫提醒）（改壞會報錯） |
+| 改正紀錄（聽錯、看錯、整句、詞彙）和每週錯誤報告 | `livelingo/corrections.py` | `service.py`：Corrections：edit、teach、glossary_add 記一筆；/api/corrections 的報告（改壞會報錯） |
 | 常用句庫：存句子和各語言的譯文（phrases.json） | `livelingo/phrases.py` | `service.py`：常用句庫（Phrasebook：add、remove、set_translation、missing、listing、state）（改壞會報錯） |
 | 原地覆蓋翻譯：把譯文畫在畫面上原文的位置 | `livelingo/inplace.py` | `service.py`：原地覆蓋翻譯（InPlace：set_on、update、reset、keep_only、clear_cache、close）（改壞會報錯）<br>`watcher.py`：每辨識一次畫面就交過去（on_frame）；接手的區域不再送去浮動留言（改壞不會報錯） |
 | 影片、音訊檔做雙語字幕：解聲音、切句、寫 .srt | `livelingo/filesubs.py` | `service.py`：影片字幕的工作（Job、decode、EXTS、MODES、MAX_SECONDS、is_media）（改壞會報錯） |

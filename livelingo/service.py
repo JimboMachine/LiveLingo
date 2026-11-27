@@ -31,6 +31,8 @@ from .memory import Memory
 from . import names as keepwords
 from .names import NameWatch
 from .qualitycheck import QualityCheck
+from . import textfix
+from .corrections import Corrections
 from .history import History
 from .learn import Wordbook, family_of
 from .recap import GAP as RECAP_GAP
@@ -73,7 +75,7 @@ SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveL
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
 SETTINGS_SKIP = ("window", "layout", "hotkeys_v", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
-RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip")
+RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip", "abbr_skip")
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64),
                   "stream_port": (1024, 65000)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
@@ -215,6 +217,8 @@ class Service:
         self.translator.keep_tone = bool(self.cfg["tone_keep"])
         self.translator.keep = lambda: list(self.cfg["keep_words"])
         self.name_watch = NameWatch()          # 名字建議（2.14.0）：數對方一直提到的遊戲 ID
+        self.abbr_watch = textfix.abbr_watch()     # 看不懂的縮寫提醒（2.15.0）
+        self.corrections = Corrections(self.data)  # 改正紀錄，每週錯誤報告用（2.15.0）
         self.quality = QualityCheck(self.data, on_change=lambda st: self.hub.publish("quality", st), log=self.log)
         self.private = False              # 隱私暫停（2.14.0）：開著的時候翻譯照常，但什麼紀錄都不留（不存設定檔，重開就回到平常）
         self._auto_started: list[str] = []    # 開遊戲就開始翻：是我（不是使用者）打開的來源，遊戲關掉時只關這些
@@ -391,6 +395,7 @@ class Service:
             "speak": self.speak_state(),
             "private": self.private,
             "quality": self.quality.state(),
+            "corrections": self.corrections.report(),
             "scenarios": self.scenarios_state(),
             "replies": dict(self._replies),
             "words": {str(k): v for k, v in self._words.items()},
@@ -1011,8 +1016,12 @@ class Service:
             else:
                 self.messages.append(msg)
         self.hub.publish("message", msg)
-        self.overlay.on_message(msg)
-        self.stream.on_message(msg)
+        if self._hidden(msg):      # 沒把握的句子設成不顯示（2.15.0）：浮動字幕、直播字幕都不出（主視窗由介面決定）
+            self.overlay.on_removed(msg["id"])
+            self.stream.on_removed(msg["id"])
+        else:
+            self.overlay.on_message(msg)
+            self.stream.on_message(msg)
         if not self.private and self.history.add(msg):      # 隱私暫停的時候不記
             self.hub.publish("history", self.history.state())
         if self.transcript.on and not self.private:
@@ -1238,7 +1247,10 @@ class Service:
             if msg["via"] == "screen" and (not out or out.strip() == msg["original"].strip()):
                 self._card_done(msg, out or msg["original"])      # 本來就是我的語言：小卡上照原樣顯示
                 return
+            if msg.get("unsure") and self.cfg["unsure_recheck"] and msg["via"] in ("heard", "screen") and out.strip():
+                msg = dict(msg, unsure=self._still_unsure(msg, target, out))
             msg = dict(msg, translated=out, target=target, pending=False, error="", why="", back="",
+                       notes=self._slang_notes(msg, target),      # 網路用語、縮寫的意思：譯文下面的小字（2.15.0）
                        mention=self._mention_of(msg, out),      # 對方的話裡有我的名字或關鍵字
                        lost=numbers_lost(msg["original"], out, target, msg["lang"]),      # 原文有、譯文找不到的數字：畫面會提醒核對
                        pron=self._pronunciation(out, target) if msg["who"] == "me" else "")
@@ -1252,6 +1264,7 @@ class Service:
             self._speak_mine(msg, target, out)
             self._read_heard(msg, target, out)
             self._watch_names(msg)
+            self._watch_abbr(msg)
             self._learn(msg)
             self._want_back(msg)
         except Exception as ex:  # noqa: BLE001
@@ -1502,6 +1515,8 @@ class Service:
             msg = next((m for m in self.messages if m["id"] == msg_id), None)
         if not msg or not text or msg.get("pending") or text == msg["original"]:
             return False
+        if not self.private and msg.get("via") in ("heard", "screen", "spoken"):
+            self._correct("seen" if msg["via"] == "screen" else "heard", msg["original"], text, msg.get("lang") or "")
         msg = dict(msg, original=text, lang=detect_language(text) or msg["lang"], unsure=False, edited=True,
                    pending=True, copied=False, taught=False, back="", error="")
         self._post(msg)
@@ -1527,8 +1542,10 @@ class Service:
         dst = dst.strip()
         if not msg or not dst or msg.get("pending") or not msg.get("target"):
             return False
-        if not self.lessons.add(msg["original"], dst, msg["lang"], msg["target"]):
+        if not self.lessons.add(msg["original"], dst, msg["lang"], msg["target"], before=msg.get("translated") or ""):
             return False
+        if not self.private:
+            self._correct("sentence", msg["original"], dst, msg.get("lang") or "", msg["target"])
         if msg.get("lang"):
             self.memory.fix(msg["original"], msg["lang"], msg["target"], getattr(self.translator, "memory_tone", lambda: self.cfg["tone"])(), dst, self.mode.get("model", ""),
                             msg.get("work") or "")
@@ -1542,6 +1559,32 @@ class Service:
         self._post(msg)
         self._want_back(msg)
         return True
+
+    def lesson_undo(self, src: str, target: str) -> dict:
+        """教過的句子退回上一版（2.15.0）。退回後的翻法照樣是「這一句就這樣翻」。"""
+        dst = self.lessons.undo(src, target)
+        if not dst:
+            return {"ok": False}
+        item = next((i for i in self.lessons.list() if i["src"] == src and i["target"] == target), None)
+        if item and item.get("lang"):
+            self.memory.fix(src, item["lang"], target, getattr(self.translator, "memory_tone", lambda: self.cfg["tone"])(), dst,
+                            self.mode.get("model", ""), "")
+            self.hub.publish("memory", self.memory.state())
+        self.translator.clear_cache()
+        self.hub.publish("lessons", self.lessons.list())
+        return {"ok": True, "dst": dst}
+
+    def _correct(self, kind: str, wrong: str, right: str, lang: str = "", target: str = "") -> None:
+        if self.corrections.add(kind, wrong, right, lang, target):
+            self.hub.publish("corrections", self.corrections.report())
+
+    def corrections_report(self) -> dict:
+        return self.corrections.report()
+
+    def corrections_clear(self) -> dict:
+        self.corrections.clear()
+        self.hub.publish("corrections", self.corrections.report())
+        return {"ok": True}
 
     def lesson_remove(self, src: str, target: str) -> None:
         self.lessons.remove(src, target)
@@ -1560,6 +1603,8 @@ class Service:
             self.translator.clear_cache()
             self.hub.publish("glossary", self.glossary.list())
             self.hub.publish("game", self.game_state())
+            if not self.private:
+                self._correct("word", src, dst)
         return ok
 
     def glossary_remove(self, src: str, game: str = "") -> None:
@@ -2949,7 +2994,9 @@ class Service:
             changes["speak_name"] = str(changes["speak_name"] or "")[:120]
         if "alert_words" in changes:
             changes["alert_words"] = mention.clean_words(changes["alert_words"])
-        for key in ("keep_words", "name_skip"):
+        if changes.get("unsure_view") not in (None, "mark", "dim", "hide"):
+            changes.pop("unsure_view")
+        for key in ("keep_words", "name_skip", "abbr_skip"):
             if key in changes:
                 changes[key] = keepwords.clean_words(changes[key])
         if "speak_heard_device" in changes and not (changes["speak_heard_device"] is None or isinstance(changes["speak_heard_device"], str)):
@@ -3174,6 +3221,11 @@ class Service:
     def _on_screen_line(self, text: str, lang: str, score: float = 1.0, region: dict | None = None, shown: str = "") -> None:
         """shown：雙語字幕裡緊鄰這一行、我的語言的那一行（開著「用畫面上現成的翻譯」才有）。"""
         many = len(self._regions_on()) > 1      # 只有一個區域時不用標是哪裡讀到的
+        if self.cfg["ocr_fix"]:
+            fixed = textfix.fix_ocr(text)      # 數字裡的 O、l，韓文子音縮寫裡的 0、7（2.15.0）
+            if fixed != text:
+                self.log(f"screen text fixed before translating: {text!r} -> {fixed!r}")
+                text = fixed
         self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "",
                     **({"shown": shown} if shown else {}))
 
@@ -3530,6 +3582,7 @@ class Service:
                                              compute_type=compute, on_fallback=self._speech_gpu_failed)
                 self.recognizer.turn = self._cpu_turn
                 self.recognizer.hotwords = lambda lang: keepwords.hotwords(lang, self._words_now())
+                self.recognizer.cantonese = lambda: bool(self.cfg["cantonese"])
             return self.recognizer
 
     def _start_voice(self, key: str, again: bool = False) -> None:
@@ -3909,7 +3962,8 @@ class Service:
         return False
 
     def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0, unsure: bool = False,
-                   speaker: int | None = None) -> None:
+                   speaker: int | None = None, length: float = 0.0) -> None:
+        """seconds：辨識花了幾秒；length：這句話本身說了幾秒。"""
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
             self._end_live(kind)
@@ -3920,6 +3974,11 @@ class Service:
         if self._is_own_voice(text):
             self.log(f"{kind} sentence dropped: it is LiveLingo reading my translation aloud")
             self._end_live(kind)
+            return
+        if self.cfg["drop_fillers"] and textfix.only_filler(text):      # 只有「嗯」「啊」、笑聲（2.15.0）
+            self._end_live(kind)
+            return
+        if self.cfg["join_split"] and self._join_split(kind, text, lang, seconds, unsure, speaker, length):
             return
         own = self._speaker_langs.get(int(speaker)) if speaker and kind == "loopback" else None
         if kind == "loopback" and self.cfg["their_auto"] and not own:
@@ -3933,7 +3992,32 @@ class Service:
             self.hub.publish("speakers", self.speakers_state())      # 多了一個人，或某個人又多說一句
             if self._speaker_names.get(int(speaker)) and time.time() - self._voices_saved > VOICES_SAVE_EVERY:
                 self._voices_save()      # 記住的人：聲紋跟著今天的聲音調整過了，隔一陣子存一次
-        self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
+        self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(),
+                                   "end": time.time() - float(seconds or 0.0), "id": msg_id})
+
+    def _join_split(self, kind: str, text: str, lang: str, seconds: float, unsure: bool, speaker, length: float = 0.0) -> bool:
+        """斷句修補（2.15.0）：上一句同一個人、同一個語言，沒說完（沒有句號、很短），這一句緊接著就開始說：
+        接回上一句，整句重翻，不另外開一則。上一句還在翻的話不接（不能動正在翻的那一則）。"""
+        with self._lock:
+            last = next((v for v in reversed(self._recent_voice) if v["kind"] == kind), None)
+            msg = next((m for m in self.messages if last and m["id"] == last.get("id")), None) if last else None
+        if not last or not msg or msg.get("pending") or msg.get("error") or last["lang"] != lang:
+            return False
+        if (msg.get("speaker") or None) != (speaker if kind == "loopback" else None) and kind == "loopback":
+            return False
+        # 這句開始說的時間 = 現在 − 辨識花的時間 − 這句話的長度；上一句結束 ≈ 上一句辨識好的時間 − 它辨識花的時間
+        gap = max(0.0, time.time() - float(seconds or 0.0) - float(length or 0.0) - float(last.get("end") or last["at"]))
+        if not textfix.should_join(msg["original"], text, gap, family_of(lang) or lang):
+            return False
+        joined = textfix.join(msg["original"], self._voice_script(kind, text, lang, None), family_of(lang) or lang)
+        self._end_live(kind)
+        self.log(f"{kind}: joined a sentence that was cut in two ({gap:.1f} s apart)")
+        msg = dict(msg, original=joined, pending=True, copied=False, back="", error="", why="", joined=True,
+                   unsure=bool(msg.get("unsure") or unsure), hear=float(msg.get("hear") or 0.0) + float(seconds or 0.0))
+        self._post(msg)
+        self.jobs.put(msg, asked=True)
+        last.update(text=joined, at=time.time(), end=time.time() - float(seconds or 0.0))
+        return True
 
     def _is_own_voice(self, text: str) -> bool:
         """收到的是 LiveLingo 自己念出來的譯文（念到喇叭、被「聽對方」或麥克風收到）：不要再翻一次。
@@ -4119,6 +4203,55 @@ class Service:
             if word.lower() not in have:
                 out[word] = word
         return out
+
+    # ------------------------------------------------------------------ 2.15.0：沒把握的句子、網路用語註解、縮寫提醒
+
+    def _hidden(self, msg: dict) -> bool:
+        return bool(msg.get("unsure") and not msg.get("pending") and msg.get("who") == "them" and self.cfg["unsure_view"] == "hide")
+
+    def _still_unsure(self, msg: dict, target: str, out: str) -> bool:
+        """不確定時再翻一次比對：換一種寫法再翻，兩次意思差不多（字有一半以上一樣）就不標沒把握。"""
+        try:
+            again = self.translator.second_opinion(msg["original"], target, msg.get("lang"))
+        except Exception as ex:  # noqa: BLE001
+            self.log(f"second translation for an unsure sentence failed: {ex!r}")
+            return True
+        same = bool(again) and similarity(again, out) >= 0.5
+        self.log(f"unsure sentence checked twice: {'same meaning, mark removed' if same else 'different, still marked'}")
+        return not same
+
+    def _slang_notes(self, msg: dict, target: str) -> list[list[str]]:
+        if not self.cfg["slang_notes"] or msg.get("who") == "me" or not msg.get("lang"):
+            return []
+        try:
+            found = self.terms.find(msg["original"], family_of(msg["lang"]) or msg["lang"], target)
+        except Exception:  # noqa: BLE001
+            return []
+        out: list[list[str]] = []
+        for term, meaning in found:
+            if term in msg["original"] and term not in msg.get("translated", "") and [term, meaning] not in out:
+                out.append([term, meaning])
+        return out[:3]
+
+    def _watch_abbr(self, msg: dict) -> None:
+        if not self.cfg["abbr_suggest"] or self.private or msg.get("who") == "me" or msg.get("via") not in ("screen", "heard"):
+            return
+        known = [*self.cfg["abbr_skip"], *self.cfg["keep_words"], *self._words_now()]
+        known += [t for t, _ in (self.terms.ko_zh if hasattr(self.terms, "ko_zh") else [])]
+        word = self.abbr_watch.add(msg.get("original", ""), known)
+        if word:
+            self.hub.publish("abbr_suggest", {"word": word, "lang": msg.get("lang") or ""})
+
+    def abbr_answer(self, word: str, meaning: str = "") -> dict:
+        """縮寫提醒的回答：有寫意思就加進詞彙表（縮寫 → 意思）；沒寫 = 不用，記下來不再問。"""
+        word = " ".join(str(word or "").split())[:keepwords.MAX_LEN]
+        meaning = " ".join(str(meaning or "").split())[:80]
+        if not word:
+            return {"ok": False}
+        if meaning:
+            return {"ok": self.glossary_add(word, meaning)}
+        self.update_config({"abbr_skip": [*self.cfg["abbr_skip"], word]})
+        return {"ok": True}
 
     def _watch_names(self, msg: dict) -> None:
         """名字建議：對方的話（畫面上的、聽到的）裡一直出現、像遊戲 ID 的字，第 3 次出現時問一次要不要固定不翻。"""

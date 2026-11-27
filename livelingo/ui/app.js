@@ -283,6 +283,7 @@
     renderMicRow();
     renderScenarios();
     renderNameRow();
+    renderAbbrRow();
     renderPrivate();
     const row = $("region-row");
     const live = regions().filter((x) => x.on);
@@ -433,6 +434,7 @@
     } else {
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
       body += unsure + `<div class="text">${esc(m.translated)}</div>`;
+      if (m.notes && m.notes.length && S.cfg.slang_notes) body += `<div class="notes">${m.notes.map(([w, meaning]) => `<span class="note-item"><b>${esc(w)}</b> ${esc(meaning)}</span>`).join("")}</div>`;
       if (m.lost && m.lost.length) body += `<div class="lost">${ICON.info}<span>${esc(t("numbers_lost", { numbers: m.lost.join(" · ") }))}</span></div>`;
       if (m.back && S.cfg.back_translate) body += `<div class="back">${ICON.back}<span>${esc(t("back", { text: m.back }))}</span></div>`;
       if (m.pron && S.cfg.show_pronunciation) body += `<div class="pron">${esc(t("pron", { text: m.pron }))}</div>`;
@@ -551,9 +553,12 @@
       el.innerHTML = '<div class="meta"></div><div class="bubble"><div class="bm"></div><div class="fixslot"></div></div>';
       box.appendChild(el);
     }
-    el.className = "msg " + (m.who === "me" ? "me" : "them");
+    // 沒把握的句子（2.15.0）：照設定灰掉，或收成一行「按一下看」
+    const shy = m.unsure && !m.pending && m.who === "them" && !(S.ui.unsureShown || {})[m.id] ? (S.cfg.unsure_view || "mark") : "mark";
+    el.className = "msg " + (m.who === "me" ? "me" : "them") + (shy === "dim" ? " unsure-dim" : shy === "hide" ? " unsure-hidden" : "");
     el.querySelector(".meta").innerHTML = metaHTML(m);
-    el.querySelector(".bm").innerHTML = bubbleHTML(m);
+    el.querySelector(".bm").innerHTML = shy === "hide"
+      ? `<button class="ghost small unsure-show" data-act="unsure-show" data-id="${m.id}">${ICON.info}<span>${esc(t("uv_hidden_line"))}</span></button>` : bubbleHTML(m);
     if (stick) box.scrollTop = box.scrollHeight;
   }
 
@@ -653,6 +658,8 @@
           placeholder="${esc(t("keep_placeholder"))}" aria-label="${esc(t("keep_title"))}"></div>
         ${switchRow("name_suggest", t("name_suggest"), t("name_suggest_desc"))}
         ${(S.cfg.name_skip || []).length ? `<div class="dnote">${esc(t("name_skipped", { words: S.cfg.name_skip.join(", ") }))} <button class="ghost small" data-act="name-skip-clear">${esc(t("name_skip_clear"))}</button></div>` : ""}
+        ${switchRow("abbr_suggest", t("abbr_title"), t("abbr_desc"))}
+        ${(S.cfg.abbr_skip || []).length ? `<div class="dnote">${esc(t("abbr_skipped", { words: S.cfg.abbr_skip.join(", ") }))} <button class="ghost small" data-act="abbr-skip-clear">${esc(t("name_skip_clear"))}</button></div>` : ""}
       </section>`;
   }
 
@@ -724,6 +731,15 @@
   }
 
   // 聲音設定頁下半：辨識要快還是準、多小聲算說話、停多久算說完、回音、按住才說話（第一次設定的精靈不放這些）
+  // 聽到的句子先整理（2.15.0）：切成兩半的接回去、只有語助詞的不出、粵語
+  function voiceFixHTML() {
+    const zh = [S.cfg.their_lang, S.cfg.my_lang].some((l) => String(l || "").startsWith("zh"));
+    return `<section id="voice-fix-section"><div><h2>${esc(t("vf_title"))}</h2><div class="sub">${esc(t("vf_hint"))}</div></div>
+      ${switchRow("join_split", t("js_title"), t("js_desc"))}
+      ${switchRow("drop_fillers", t("fil_title"), t("fil_desc"))}
+      ${zh || S.cfg.cantonese ? switchRow("cantonese", t("yue_title"), t("yue_desc")) : ""}</section>`;
+  }
+
   function voiceTuningHTML() {
     if (!S.ui.devices || !S.ui.devices.ok) return "";
     return `${appsHTML()}
@@ -838,6 +854,19 @@
         <button class="ghost" data-act="name-later">${esc(t("name_later"))}</button>` }, ICON.vocab) : "";
   }
 
+  // 縮寫提醒（2.15.0）：對方一直用、又不在詞彙表裡的縮寫，問要不要補意思（補了就加進詞彙表）
+  function renderAbbrRow() {
+    const row = $("abbr-row");
+    if (!row) return;
+    const word = S.ui.abbrAsk;
+    row.hidden = !word;
+    row.innerHTML = word ? noticeHTML({ level: "info", text: t("abbr_ask", { w: word }), detail: t("abbr_ask_desc"),
+      buttons: `<input type="text" id="abbr-meaning" class="hist-q" maxlength="80" placeholder="${esc(t("abbr_placeholder"))}" aria-label="${esc(t("abbr_placeholder"))}">
+        <button class="primary" data-act="abbr-save" data-value="${esc(word)}">${esc(t("abbr_save"))}</button>
+        <button class="ghost" data-act="abbr-no" data-value="${esc(word)}">${esc(t("abbr_no"))}</button>
+        <button class="ghost" data-act="abbr-later">${esc(t("name_later"))}</button>` }, ICON.vocab) : "";
+  }
+
   // 隱私暫停：右上角的按鈕，開著的時候來源下面一直顯示一行說明
   function renderPrivate() {
     const btn = $("btn-private"), row = $("priv-row");
@@ -893,7 +922,23 @@
         <div class="dnote">${esc(t(S.cfg.tone_keep ? "tone_keep_on_desc" : "tone_keep_off_desc"))}</div>
       </section>
       <section>${switchRow("use_context", t("use_context"), t("use_context_desc"))}
-        ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>` + qualityCheckHTML();
+        ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>
+      <section id="unsure-section"><div><h2>${esc(t("uv_title"))}</h2><div class="sub">${esc(t("uv_hint"))}</div></div>
+        ${switchRow("unsure_recheck", t("ur_title"), t("ur_desc"))}
+        ${choiceRow("unsure_view", t("uv_choice"), [["mark", t("uv_mark")], ["dim", t("uv_dim")], ["hide", t("uv_hide")]])}
+        ${switchRow("slang_notes", t("sn_title"), t("sn_desc"))}</section>` + qualityCheckHTML() + correctionsHTML();
+  }
+
+  // 每週錯誤報告（2.15.0）：最近 7 天最常改正的十個，知道哪裡最值得教
+  function correctionsHTML() {
+    const r = S.corrections || {}, top = r.top || [];
+    const kinds = r.kinds || {};
+    const counts = ["heard", "seen", "sentence", "word"].filter((k) => kinds[k]).map((k) => t("wr_kind_" + k) + " " + kinds[k]).join(" · ");
+    return `<section id="wr-section"><div><h2>${esc(t("wr_title"))}</h2><div class="sub">${esc(t("wr_hint"))}</div></div>
+      ${top.length ? `${counts ? `<div class="dnote">${esc(counts)}</div>` : ""}<div class="qc-list">${top.map((i) => `<div class="qc-row"><span class="tag plain">${esc(t("wr_kind_" + i.kind))}</span>
+        <span>${esc(i.wrong)} → ${esc(i.right)}</span><span class="dim small">${esc(t("wr_times", { n: i.n }))}</span></div>`).join("")}</div>
+        <div class="btn-row"><button class="ghost" data-act="wr-clear">${esc(t("wr_clear"))}</button></div>`
+        : `<div class="none">${esc(t("wr_empty"))}</div>`}</section>`;
   }
 
   // 詞彙與記憶（2.12.0 從「翻譯品質」拆出來）：遊戲和聊天用語、我的詞彙表、教過的句子、翻過的句子、備份和分享。
@@ -918,6 +963,7 @@
     const pick = S.ui.glossGame !== undefined && seenOpt.has(S.ui.glossGame) ? S.ui.glossGame : (game.exe || "");
     const taught = S.lessons.length
       ? S.lessons.slice().reverse().map((l) => `<div class="grow-row"><span>${esc(l.src)}</span><span>${esc(l.dst)}</span>
+          ${(l.old || []).length ? `<button class="ghost small lv-undo" data-act="lesson-undo" data-src="${esc(l.src)}" data-target="${esc(l.target)}" title="${esc(t("lv_undo_desc", { text: l.old[l.old.length - 1] }))}">${esc(t("lv_undo", { n: l.old.length }))}</button>` : ""}
           <button data-act="lesson-remove" data-src="${esc(l.src)}" data-target="${esc(l.target)}" aria-label="${esc(t("remove", { word: l.src }))}">${ICON.x}</button></div>`).join("")
       : `<div class="none">${esc(t("lessons_empty"))}</div>`;
     return keepWordsHTML() + `
@@ -1149,7 +1195,8 @@
       <section id="inplace-section">${switchRow("inplace", t("inplace_title"), t("inplace_desc"))}
         <div class="dnote">${esc(t("inplace_note"))}</div></section>
       <section>${switchRow("also_english", t("also_english"))}</section>
-      <section id="game-start-section">${switchRow("game_start", t("gs_title"), t("gs_desc"))}</section>`;
+      <section id="game-start-section">${switchRow("game_start", t("gs_title"), t("gs_desc"))}</section>
+      <section id="ocr-fix-section">${switchRow("ocr_fix", t("ocrfix_title"), t("ocrfix_desc"))}</section>`;
   }
 
   // 區域的名字、開關、跟著哪個程式、刪除：都是把整份清單送回去存（位置和大小只有框選畫面能改）
@@ -1867,7 +1914,7 @@
     if (tab === "learn") return learnPage();
     if (tab === "health") return healthPage();
     if (tab === "storage") return storagePage();
-    if (tab === "audio") return devicesHTML() + speakHTML() + voiceTuningHTML();
+    if (tab === "audio") return devicesHTML() + speakHTML() + voiceTuningHTML() + voiceFixHTML();
     if (tab === "quality") return qualityPage();
     if (tab === "vocab") return vocabPage();
     if (tab === "screen") return screenPage();
@@ -2645,6 +2692,17 @@
     "name-keep": async (el) => { await post("/api/names", { name: el.dataset.value, keep: true }); S.ui.nameAsk = null; renderNameRow(); toast(t("name_kept", { name: el.dataset.value }), 5000); },
     "name-no": async (el) => { await post("/api/names", { name: el.dataset.value, keep: false }); S.ui.nameAsk = null; renderNameRow(); },
     "name-later": () => { S.ui.nameAsk = null; renderNameRow(); },
+    "abbr-save": async (el) => {
+      const meaning = (($("abbr-meaning") || {}).value || "").trim();
+      if (!meaning) { const box = $("abbr-meaning"); if (box) box.focus(); return; }
+      await post("/api/abbr", { word: el.dataset.value, meaning }); S.ui.abbrAsk = null; renderAbbrRow(); toast(t("abbr_saved", { w: el.dataset.value }), 5000);
+    },
+    "abbr-no": async (el) => { await post("/api/abbr", { word: el.dataset.value }); S.ui.abbrAsk = null; renderAbbrRow(); },
+    "abbr-later": () => { S.ui.abbrAsk = null; renderAbbrRow(); },
+    "abbr-skip-clear": () => saveCfg({ abbr_skip: [] }, "#keep-section"),
+    "lesson-undo": async (el) => { const r = await post("/api/lessons/undo", { src: el.dataset.src, target: el.dataset.target }); if (r && r.ok) toast(t("lv_undone", { text: r.dst }), 5000); },
+    "wr-clear": () => post("/api/corrections", { action: "clear" }),
+    "unsure-show": (el) => { S.ui.unsureShown = Object.assign(S.ui.unsureShown || {}, { [el.dataset.id]: true }); const m = S.messages.find((x) => String(x.id) === el.dataset.id); if (m) upsertMessage(m); },
     "name-skip-clear": () => saveCfg({ name_skip: [] }, "#keep-section"),
     "private": () => post("/api/private", { on: !S.private }),
     "scenario": async (el) => {
@@ -3129,6 +3187,8 @@
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "vocab") renderSettingsPage(); },
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
     name_suggest: (d) => { S.ui.nameAsk = d.name; renderNameRow(); },
+    abbr_suggest: (d) => { S.ui.abbrAsk = d.word; renderAbbrRow(); },
+    corrections: (d) => { S.corrections = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("wr-section"); if (el) el.outerHTML = correctionsHTML(); } },
     private: (d) => { S.private = !!d.on; renderPrivate(); },
     quality: (d) => { S.quality = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("qc-section"); if (el) el.outerHTML = qualityCheckHTML(); } },
     replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
@@ -3237,7 +3297,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.filesubs = st.filesubs || S.filesubs; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
-    S.private = !!st.private; S.quality = st.quality || {}; S.scenarios = st.scenarios || {};
+    S.private = !!st.private; S.quality = st.quality || {}; S.corrections = st.corrections || {}; S.scenarios = st.scenarios || {};
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];
