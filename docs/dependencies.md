@@ -463,6 +463,26 @@
 
 自動把關：測試會擋：一句話就換、換語言時停掉讀螢幕或重開收音、候選語言整理錯、介面少了候選語言的按鈕或少一種語言的文字。真的聲音和畫面要在你的電腦上聽看看。
 
+### 改原地覆蓋翻譯（譯文蓋在畫面上原文的位置）
+
+1. `inplace.py`：colors、paint；MAX_PENDING、MAX_CACHE；視窗一律 hidden=True（擷取拍不到）：讀螢幕才不會把自己的譯文讀回來，所以它「不能」加進 capture_mask
+2. `watcher.py`、`service.py`：on_frame（辨識完、視窗不見兩個地方都要叫）；_on_frame、_inplace_apply、_inplace_translate；來源關掉 reset、區域清單改了 keep_only、換語言和語氣 clear_cache
+3. `snap.py`：blocks（方框和字的大小）；paragraphs 照舊
+4. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 inplace（Ctrl+Shift+O）、NOTES 的 inplace_on、inplace_off、inplace_no_region；inplace 預設關；說明裡的 {inplace}
+5. `app.js`、`i18n.js`：螢幕讀取頁的開關段落（inplace-section）、hk_inplace、inplace_ 開頭的文字（13 種語言）
+
+自動把關：測試會擋：一段一段的方框、取底色和字色（字和底太像改黑或白）、畫的位置和放不下時往下長、同一段只翻一次、別的翻譯排隊時先等、區域移動／消失／關掉／換語言時視窗跟著動或收掉、讀螢幕接手後不再進浮動留言。真的蓋得準不準、擷取真的拍不到、遊戲視窗模式下看起來如何，只能在 Windows 上試。
+
+### 改影片字幕（影片、音訊檔做雙語 .srt）
+
+1. `filesubs.py`：decode 不能用 faster_whisper.audio.decode_audio：它呼叫 av.open 時帶的參數，我們鎖的 av 19 不收（見 constraints.txt）；cut 的 MAX_SEGMENT；MAX_SECONDS（整段聲音在記憶體裡）
+2. `service.py`、`server.py`：filesubs_start/cancel/open/pick、_ensure_recognizer（收音和影片字幕共用）；_maybe_free_speech 工作中不放掉模型；/api/filesubs；filesubs 事件
+3. `window.py`、`oswin.py`：choose_file（pywebview 的開檔視窗）、reveal（檔案總管裡指出來）
+4. `memory.py`、`subtitles.py`：translate 的 remember=file、work：翻好的記進這一部；寫出來的 .srt 匯入字幕檔那邊讀得回來
+5. `app.js`、`i18n.js`、`style.css`：「影片字幕」頁（filesubsPage、fs-live）、導覽項目放在「語言與一般」後面（Ctrl+數字不變）、fs_ 開頭的文字（13 種語言）
+
+自動把關：測試會擋：解聲音（有 PyAV 就真的解一個 wav）、字幕檔的格式和時間、三種內容、不蓋掉舊檔、唯讀資料夾改存別處、重複句只留一個、聊天排隊時先等、取消會存已做好的、各種錯誤代碼、翻好的記進作品。真的影片和語音模型，在雲端用過 tiny 模型跑過一次；實際速度和 Windows 的選檔視窗要在你的電腦上試。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -495,9 +515,9 @@
 | --- | --- | --- |
 | 視窗 | `livelingo/window.py` | `__main__.py`：開視窗（改壞會報錯） |
 | 系統匣 | `livelingo/tray.py` | `window.py`：系統匣有沒有開起來（改壞不會報錯）<br>`service.py`：系統匣（改壞會報錯） |
-| 浮動留言 | `livelingo/overlay.py` | `hotkeys.py`：短提示顯示在浮動留言上（note）（改壞不會報錯）<br>`service.py`：浮動留言（改壞會報錯） |
+| 浮動留言 | `livelingo/overlay.py` | `hotkeys.py`：短提示顯示在浮動留言上（note）（改壞不會報錯）<br>`service.py`：浮動留言（改壞會報錯）<br>`inplace.py`：蓋在畫面上的視窗用跟浮動留言一樣的（LayeredWindow，擷取拍不到）（改壞不會報錯） |
 | 直播字幕（給 OBS 的網頁） | `livelingo/stream.py` | `service.py`：直播字幕：每則留言、翻到一半的譯文、刪掉、清空（on_message、on_partial、on_removed、clear）（改壞會報錯） |
-| 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯） |
+| 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯）<br>`inplace.py`：換行排字（_wrap）、字型、han_kind（改壞會報錯） |
 | 框選聊天區 | `livelingo/region.py` | `quickbox.py`：顏色和字型（改壞會報錯）<br>`__main__.py`：框選模式（改壞會報錯）<br>`__main__.py`：框選翻譯用同一個框選程式（--mode snap）（改壞不會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
 | 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼；程式自己的短提示（略過幾則、引擎重開）也用 NOTES，介面那邊要有同名的 n_ 文字（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯）<br>`guide.py`：四個全域快速鍵的名稱（overlay、mic、copy、quick）（改壞不會報錯） |
 | 快速輸入框 | `livelingo/quickbox.py` | `service.py`：打的字（另開一個程式）（改壞不會報錯）<br>`__main__.py`：快速輸入模式（--quick-input）（改壞會報錯） |
@@ -506,11 +526,13 @@
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
 | 語言學習：挑生字、單字本、複習 | `livelingo/learn.py` | `service.py`：學習模式挑生字（Wordbook.fresh）、單字本的收、刪、複習（改壞會報錯） |
 | 對話摘要：切出一段段對話、存摘要、搜尋 | `livelingo/recap.py` | `service.py`：切出對話（sessions、worth、GAP）、存摘要、搜尋（改壞會報錯） |
-| 框選翻譯：把辨識出的一列列字接成一段段 | `livelingo/snap.py` | `service.py`：框選翻譯把辨識出的字接成段（paragraphs）（改壞會報錯） |
+| 框選翻譯：把辨識出的一列列字接成一段段 | `livelingo/snap.py` | `service.py`：框選翻譯把辨識出的字接成段（paragraphs）（改壞會報錯）<br>`inplace.py`：一段一段的方框（blocks）（改壞會報錯） |
 | 喊我名字提醒：名字和關鍵字的整理、比對 | `livelingo/mention.py` | `service.py`：名字、關鍵字的整理（clean_words）和比對（find）；訊息的 mention 欄位（改壞會報錯） |
 | 常用句庫：存句子和各語言的譯文（phrases.json） | `livelingo/phrases.py` | `service.py`：常用句庫（Phrasebook：add、remove、set_translation、missing、listing、state）（改壞會報錯） |
-| 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs、works）（改壞不會報錯） |
-| 讀 .srt / .vtt 字幕檔，配成原文和翻譯 | `livelingo/subtitles.py` | `service.py`：字幕檔的預覽和匯入（_subtitle_pairs）；語言用 detect_language 判斷（改壞會報錯） |
+| 原地覆蓋翻譯：把譯文畫在畫面上原文的位置 | `livelingo/inplace.py` | `service.py`：原地覆蓋翻譯（InPlace：set_on、update、reset、keep_only、clear_cache、close）（改壞會報錯）<br>`watcher.py`：每辨識一次畫面就交過去（on_frame）；接手的區域不再送去浮動留言（改壞不會報錯） |
+| 影片、音訊檔做雙語字幕：解聲音、切句、寫 .srt | `livelingo/filesubs.py` | `service.py`：影片字幕的工作（Job、decode、EXTS、MODES、MAX_SECONDS、is_media）（改壞會報錯） |
+| 翻過的句子（不用重翻）、翻譯分享檔 | `livelingo/memory.py` | `service.py`：記住、匯出、匯入、刪一包、清除；教過的句子同步成人工改過的（改壞會報錯）<br>`translate.py`：翻之前查、翻好之後記；模型和詞彙表的指紋（terms_print）（改壞會報錯）<br>`app.js`：分享檔的匯出範圍（RANGES 的 2h、today、all）、狀態欄位（mine、fixed、packs、works）（改壞不會報錯）<br>`filesubs.py`：翻好的句子記進作品（translate 的 remember、work）（改壞不會報錯） |
+| 讀 .srt / .vtt 字幕檔，配成原文和翻譯 | `livelingo/subtitles.py` | `service.py`：字幕檔的預覽和匯入（_subtitle_pairs）；語言用 detect_language 判斷（改壞會報錯）<br>`filesubs.py`：寫出來的 .srt 要讀得回來（原文在上、譯文在下）（改壞不會報錯） |
 | 作品：從視窗標題認出在看哪一部影片、哪一個網頁 | `livelingo/works.py` | `service.py`：每一句是在哪一部看到的（_work_now）：挑視窗、整理標題、算 key（改壞會報錯）<br>`memory.py`：匯入第 2 版分享檔時用標題重算作品的 key（改壞會報錯） |
 | 儲存空間：大檔案搬移、刪除 | `livelingo/storage.py` | `service.py`：大檔案放在哪（self.store）、搬移、刪掉沒在用的（改壞會報錯）<br>`__main__.py`：卸載時把搬出去的大檔案也刪掉（--remove-store）（改壞會報錯）<br>`installer.iss`：卸載前叫程式自己清（[UninstallRun]）；記號檔的名字；留下設定時要刪的資料夾名字（models、engine）（改壞不會報錯）<br>`build.yml`：真的卸載一次，看搬出去的有沒有刪、旁邊的檔案有沒有被動到（改壞不會報錯）<br>`app.js`：儲存空間頁的欄位（items、moving、lost）（改壞不會報錯）<br>`report.py`：儲存空間那一段列的項目（改壞不會報錯） |
 | 每一版改了什麼（每種介面語言） | `livelingo/changes.py`<br>`livelingo/data/changes.json` | `service.py`：關於頁和更新提示要顯示的改動（改壞會報錯）<br>`updater.py`：從網路拿來的說明先過一次 clean（改壞會報錯）<br>`build.yml`：發行時把 changes.json 一起放上去，發行說明也從它產生（改壞不會報錯）<br>`app.js`：改動的格式（版本 → 語言 → 句子）（改壞不會報錯） |
@@ -534,10 +556,10 @@
 | --- | --- | --- |
 | 請翻譯模型做的小事：回話建議 | `livelingo/core/assist.py` | `service.py`：回話建議的提示和解析（reply_prompt、parse_replies）（改壞會報錯） |
 | 念出我的譯文（Windows 內建語音） | `livelingo/core/speak.py` | `service.py`：念出我的譯文（Speaker.say）；念出來的聲音又被收到時不要再翻（recent、_is_own_voice）（改壞會報錯） |
-| 看螢幕 | `livelingo/core/watcher.py` | `service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
+| 看螢幕 | `livelingo/core/watcher.py` | `inplace.py`：normalize（同一段字的比對用）（改壞會報錯）<br>`service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
 | 文字辨識 | `livelingo/core/ocr.py` | `snap.py`：辨識出的每一列（Line：text、x、y、h、w、score）（改壞不會報錯）<br>`service.py`：文字辨識；對方的語言用哪一個辨識模型（model_of），讀螢幕自動偵測時同一個模型的語言都會一起讀（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `core/speak.py`：播到選的播放裝置（_soundcard，跟「對方的聲音從哪個裝置出來」同一份清單）（改壞會報錯）<br>`service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
-| 語音辨識 | `livelingo/core/speech.py` | `service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
+| 語音辨識 | `livelingo/core/speech.py` | `filesubs.py`：一句一句辨識（Service 把 Recognizer.transcribe 傳進來）（改壞不會報錯）<br>`service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
 | 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字平常只在記憶體裡（改壞會報錯）<br>`voicebook.py`：聲紋的長度和模型（MODEL、DIM）要跟聲紋模型一致；換模型舊檔就作廢（改壞不會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |

@@ -2931,7 +2931,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     try:
         service.start_hotkeys()
         state = service.state()["hotkeys"]
-        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok"}
+        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok", "inplace": "ok"}
         assert state["defaults"] == DEFAULTS["hotkeys"]
 
         # 開關字幕
@@ -3227,7 +3227,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "麥克風 (HyperX)")
         assert (light("listen")["code"], light("listen")["name"]) == ("listen_found", "耳機 (HyperX)")
         assert (light("screen")["state"], light("screen")["code"]) == ("off", "screen_none")
-        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 8)
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 9)
         assert (light("saving")["state"], light("saving")["folder"]) == ("ok", str(tmp_path))
         assert first["worst"] == "warn"
 
@@ -7096,3 +7096,342 @@ def test_snap_pick_phrases_and_call_outs(tmp_path, monkeypatch):
     finally:
         service.closing.set()
         worker.join(2)
+
+
+def test_inplace_translation_covers_the_original(tmp_path, monkeypatch):
+    """2.13.0：原地覆蓋翻譯——把畫面上讀到的一段一段字，翻好後蓋在原文的位置。"""
+    import threading
+    import time as _time
+
+    import numpy as np
+
+    from livelingo import hotkeys, inplace, oswin, snap
+    from livelingo.core.ocr import Line
+    from livelingo.core.watcher import ScreenWatcher
+    from livelingo.overlay import MemoryWindow
+    from livelingo.service import Service
+
+    # ---- 一段一段的方框：左上到右下包住每一列；字的大小取每列高度的中間值
+    row = lambda text, x, y, h=20, w=0, s=0.9: Line(text, x, y, h, s, w)      # noqa: E731
+    got = snap.blocks([row("Defeat 5 wolves in", 10, 10, 20, 150), row("the northern forest.", 12, 34, 22, 170), row("Gold: 200", 300, 200, 18, 80)])
+    assert [b["text"] for b in got] == ["Defeat 5 wolves in the northern forest.", "Gold: 200"]
+    assert (got[0]["x"], got[0]["y"], got[0]["w"], got[0]["h"], got[0]["size"]) == (10, 10, 172, 46, 22) and got[1]["x"] == 300
+
+    # ---- 顏色：底色取最多的、字色取離底色最遠的；字和底色太像就改黑或白
+    bgr = np.zeros((60, 200, 3), dtype=np.uint8)
+    bgr[:] = (90, 40, 30)      # BGR：深藍
+    bgr[20:26, 20:120] = (240, 240, 240)
+    bg, fg = inplace.colors(bgr, 10, 10, 120, 30)
+    assert bg == (30, 40, 90) and all(c > 200 for c in fg)
+    bgr[20:26, 20:120] = (95, 45, 35)      # 字和底幾乎同色
+    assert inplace.colors(bgr, 10, 10, 120, 30)[1] == (245, 245, 245)
+    light = np.full((30, 100, 3), 235, dtype=np.uint8)
+    light[10:14, 10:80] = (225, 225, 225)
+    assert inplace.colors(light, 0, 0, 100, 30)[1] == (20, 20, 20)
+    assert inplace.colors(light, 500, 500, 10, 10) == ((0, 0, 0), (255, 255, 255))      # 在畫面外：不會出錯
+
+    # ---- 畫：色塊在原文的位置、外面全透明；太長的譯文縮小字、再不行就把色塊往下長
+    block = {"x": 20, "y": 20, "w": 160, "h": 24, "size": 22, "tr": "往北邊的森林消滅五隻狼", "bg": (30, 40, 90), "fg": (240, 240, 240)}
+    image = inplace.paint((300, 200), [block])
+    alpha = np.asarray(image)[:, :, 3]
+    assert alpha[30, 100] > 240 and alpha[190, 290] == 0 and alpha[2, 2] == 0 and alpha[30, 5] == 0
+    assert tuple(np.asarray(image)[22, 22][:3]) == (30, 40, 90)
+    long = dict(block, tr="這是一段很長很長的譯文，" * 8)
+    taller = np.asarray(inplace.paint((300, 400), [long]))[:, :, 3]
+    assert (taller[:, 100] > 0).sum() > (alpha[:, 100] > 0).sum()      # 放不下：往下長
+    assert not np.asarray(inplace.paint((300, 200), [dict(block, tr=None)]))[:, :, 3].any()      # 還沒翻好：什麼都不畫
+
+    # ---- 主程式
+    asked = []
+
+    class Fake:
+        tone = "casual"
+
+        def translate(self, text, target, source=None, context=None, **kw):
+            asked.append((text, target, source, kw.get("remember")))
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    notes = []
+    service = Service(tmp_path / "svc")
+    service.cfg.set(my_lang="zh-TW", their_lang="ko", ui_lang="zh-TW", back_translate=False)
+    service.translator = Fake()
+    service._wake_engine = lambda: None
+    service.overlay.note = notes.append
+    service.hub.publish = lambda *a, **k: None
+    service.phase = "ready"
+    service.sources["screen"]["on"] = True
+    service.inplace.window_class = MemoryWindow      # Windows 上預設是真的視窗，測試一律用記憶體裡的
+
+    def wait(test, seconds=5):
+        end = _time.time() + seconds
+        while _time.time() < end and not test():
+            _time.sleep(0.02)
+        assert test()
+
+    try:
+        # 還沒框過區域：打開不了，說一聲、開關回到關
+        service.update_config({"inplace": True})
+        assert service.cfg["inplace"] is False and notes == [hotkeys.NOTES["zh-TW"]["inplace_no_region"]] and not service.inplace.on
+        assert service.inplace.update({"id": "r1"}, {"left": 0, "top": 0}, None, []) is False      # 關著：不接手
+        service.cfg.set(regions=[{"id": "r1", "name": "chat", "left": 100, "top": 50, "width": 320, "height": 120, "on": True}])
+        service.update_config({"inplace": True})
+        assert service.cfg["inplace"] is True and service.inplace.on
+
+        place = {"left": 100, "top": 50, "width": 320, "height": 120}
+        frame = np.full((120, 320, 3), (60, 50, 40), dtype=np.uint8)
+        lines = [row("몬스터 5마리를", 10, 10, 20, 150), row("처치하세요", 10, 32, 20, 100), row("你好嗎我很好", 10, 80), row("12345", 200, 80)]
+        assert service._on_frame({"id": "r1"}, place, frame, lines) is True
+        wait(lambda: service.inplace.shown() == 1)
+        wait(lambda: service.inplace._windows.get("r1") is not None and service.inplace._windows["r1"].image is not None)
+        window = service.inplace._windows["r1"]
+        assert asked == [("몬스터 5마리를 처치하세요", "zh-TW", "ko", "screen")]      # 自己的語言、數字不翻；兩列接成一段翻一次
+        assert window.hidden is True and window.rect == [100, 50, 320, 120] and window.image.size == (320, 120)      # 擷取拍不到、位置在區域上
+        assert np.asarray(window.image)[22, 30, 3] > 240 and np.asarray(window.image)[100, 300, 3] == 0
+
+        # 畫面沒有大變、又讀到同一段：用記住的，不再翻；先讓別的翻譯排隊：新的一段等著，原有的照舊
+        service._on_frame({"id": "r1"}, place, frame, lines)
+        monkeypatch.setattr(service.jobs, "waiting", lambda: 1)
+        lines2 = lines[:2] + [row("보상: 금화 이백 개", 10, 100, 20, 150)]
+        service._on_frame({"id": "r1"}, place, frame, lines2)
+        _time.sleep(0.9)
+        assert len(asked) == 1 and service.inplace.shown() == 1
+        monkeypatch.setattr(service.jobs, "waiting", lambda: 0)
+        wait(lambda: len(asked) == 2 and service.inplace.shown() == 2)
+        assert asked[1][0] == "보상: 금화 이백 개"
+
+        # 區域移動（跟著視窗）：同一個視窗搬到新位置；換語言：蓋著的是舊語言，先收掉重翻
+        moved = dict(place, left=300, top=80)
+        service._on_frame({"id": "r1"}, moved, frame, lines2)
+        wait(lambda: window.rect == [300, 80, 320, 120])
+        service.update_config({"my_lang": "en"})
+        assert service.inplace.shown() == 0
+        service._on_frame({"id": "r1"}, moved, frame, lines2)
+        wait(lambda: service.inplace.shown() == 2 and asked[-1][1] == "en")
+
+        # 視窗不見了（區域現在不讀）、區域被關掉、來源關掉：蓋著的譯文都收起來
+        service._on_frame({"id": "r1"}, None, None, [])
+        assert service.inplace._windows == {} and service.inplace.shown() == 0
+        service._on_frame({"id": "r1"}, moved, frame, lines2)
+        wait(lambda: service.inplace.shown() == 2)
+        service.inplace.keep_only(set())
+        assert service.inplace._windows == {}
+        service._on_frame({"id": "r1"}, moved, frame, lines2)
+        wait(lambda: service.inplace.shown() == 2)
+        service.inplace.reset()
+        assert service.inplace._windows == {} and service.inplace.on
+
+        # 快速鍵：開關；關掉之後不接手、視窗全收
+        service._on_frame({"id": "r1"}, moved, frame, lines2)
+        wait(lambda: service.inplace.shown() == 2)
+        notes.clear()
+        service._hotkey_work("inplace")
+        assert service.cfg["inplace"] is False and notes == [hotkeys.NOTES["zh-TW"]["inplace_off"]] and service.inplace._windows == {}
+        assert service._on_frame({"id": "r1"}, moved, frame, lines2) is False
+        service._hotkey_work("inplace")
+        assert service.cfg["inplace"] is True and notes[-1] == hotkeys.NOTES["zh-TW"]["inplace_on"]
+        assert "inplace" in hotkeys.ACTIONS and hotkeys.normalize(hotkeys.DEFAULTS["inplace"] if hasattr(hotkeys, "DEFAULTS") else "Ctrl+Shift+O") == "Ctrl+Shift+O"
+    finally:
+        service.closing.set()
+        service.inplace.close()
+
+    # ---- 讀螢幕那一邊：on_frame 接手的區域不再送去浮動留言；沒接手才照舊
+    heard = []
+
+    class Ocr:
+        model = "builtin"
+
+        def read(self, bgr):
+            return [row("몬스터를 처치하세요", 10, 10, 20, 150)]
+
+    watcher = ScreenWatcher(Ocr(), on_message=lambda *a: heard.append(a), interval=0.01, source_langs={"ko"}, first_scan_keep=4,
+                            grab=lambda region: np.zeros((region["height"], region["width"], 3), dtype=np.uint8) + 40)
+    watcher.set_regions([{"id": "r9", "left": 0, "top": 0, "width": 200, "height": 80}])
+    seen = []
+    watcher.on_frame = lambda region, place, bgr, lines: seen.append((region["id"], place["width"], bgr.shape, [l.text for l in lines])) or True
+    slot = watcher._slots[0]
+    watcher._look(slot, watcher.grab)      # 第一次：畫面還不知道穩不穩，先等
+    watcher._look(slot, watcher.grab)
+    assert seen == [("r9", 200, (80, 200, 3), ["몬스터를 처치하세요"])] and heard == [] and slot.stats["scans"] == 1
+    watcher.on_frame = lambda *a: False
+    slot.last_done = None
+    watcher._look(slot, watcher.grab)
+    assert [h[0] for h in heard] == ["몬스터를 처치하세요"]
+
+
+def test_video_subtitles_from_a_media_file(tmp_path, monkeypatch):
+    """2.13.0：影片、音訊檔 → 聽出每一句、翻譯、存成雙語 .srt（放在影片旁邊），翻好的也記進作品。"""
+    import threading
+    import time as _time
+    import wave
+    from pathlib import Path
+
+    import numpy as np
+
+    from livelingo import filesubs, oswin
+    from livelingo.service import Service
+
+    # ---- 字幕檔的寫法：時間格式、三種模式、沒有譯文的只放原文、時間不倒退、不蓋掉舊檔、唯讀資料夾改存別處
+    assert filesubs.stamp(3725.5) == "01:02:05,500" and filesubs.stamp(-1) == "00:00:00,000"
+    cues = [{"start": 1.0, "end": 2.5, "text": "안녕하세요", "tr": "你好"}, {"start": 2.0, "end": 2.1, "text": "네", "tr": "是"},
+            {"start": 5.0, "end": 6.0, "text": "你好", "tr": ""}, {"start": 7.0, "end": 8.0, "text": "", "tr": ""}]
+    both = filesubs.srt_text(cues)
+    assert both.startswith("1\n00:00:01,000 --> 00:00:02,500\n안녕하세요\n你好\n\n2\n00:00:02,500 --> 00:00:03,000\n네\n是\n\n3\n00:00:05,000 --> 00:00:06,000\n你好\n")
+    assert both.count("-->") == 3
+    assert filesubs.srt_text(cues, "tr").split("\n")[2] == "你好" and "안녕하세요" not in filesubs.srt_text(cues, "tr")
+    assert filesubs.srt_text(cues, "src").split("\n")[2] == "안녕하세요" and "你好\n\n" not in filesubs.srt_text(cues, "src").split("3\n")[0]
+    from livelingo import subtitles
+
+    parsed = subtitles.parse(both)      # 我們寫的，匯入字幕檔那邊讀得回來（原文在上、譯文在下）
+    assert [c["lines"] for c in parsed] == [["안녕하세요", "你好"], ["네", "是"], ["你好"]]
+    media = tmp_path / "Show: ep1?.mp4"
+    media.write_bytes(b"x")
+    first = filesubs.output_path(str(media), "zh-TW")
+    assert first.name == "Show_ ep1_.zh-TW.srt" and first.parent == tmp_path
+    first.write_text("old", encoding="utf-8")
+    assert filesubs.output_path(str(media), "zh-TW").name == "Show_ep1_.zh-TW (2).srt".replace("Show_ep1_", "Show_ ep1_")
+    saved = filesubs.write_srt(tmp_path / "no-such-dir" / "a.srt", "hi", tmp_path / "fallback")
+    assert saved == tmp_path / "fallback" / "a.srt" and saved.read_bytes().startswith(b"\xef\xbb\xbf")
+    assert filesubs.is_media("C:/x/Movie.MKV") and not filesubs.is_media("notes.txt") and not filesubs.is_media("")
+
+    # ---- 真的解聲音：任何取樣率、雙聲道都變成 16 kHz 單聲道（有裝 PyAV 才試；Windows 的檢查一定有）
+    try:
+        import av  # noqa: F401
+    except ImportError:
+        pass
+    else:
+        wav = tmp_path / "tone.wav"
+        with wave.open(str(wav), "wb") as w:
+            w.setnchannels(2)
+            w.setsampwidth(2)
+            w.setframerate(44100)
+            t = np.arange(44100) / 44100
+            tone = (np.sin(2 * np.pi * 440 * t) * 12000).astype(np.int16)
+            w.writeframes(np.stack([tone, tone], axis=1).tobytes())
+        audio = filesubs.decode(str(wav))
+        assert audio.dtype == np.float32 and abs(len(audio) - 16000) < 400 and 0.3 < float(np.abs(audio).max()) < 0.5
+        try:
+            filesubs.decode(str(tmp_path / "Show: ep1?.mp4"))
+            raise AssertionError("not a media file")
+        except AssertionError:
+            raise
+        except Exception:  # noqa: BLE001
+            pass
+
+    # ---- 一個工作：切句 → 辨識 → 翻譯（原文已經是目標語言的不翻）；重複的一句只留一個；別的翻譯在排隊就先等；可以取消，取消也存已經做好的
+    audio = np.zeros(16000 * 30, dtype=np.float32)
+    spans = [(0.5, 3.0), (4.0, 6.0), (6.5, 7.5), (10.0, 12.0), (20.0, 22.0)]
+    said = {0.5: ("안녕하세요", "ko", False), 4.0: ("你好", "zh", False), 6.5: ("你好", "zh", False), 10.0: None, 20.0: ("잘 가요", "ko", True)}
+    seen = []
+
+    def recognize(chunk, langs):
+        seen.append((len(chunk), tuple(langs)))
+        return said[spans[len(seen) - 1][0]]
+
+    waits = iter([True, True, False])
+    states, finished = [], []
+    job = filesubs.Job(str(media), ["ko", "zh"], "zh", "zh-TW", "both", recognize, lambda text, lang, before: f"<{lang}>{text}|{len(before)}",
+                       on_state=states.append, wait=lambda: next(waits, False), fallback=tmp_path / "fb",
+                       decode_fn=lambda path: audio, cut_fn=lambda a: spans, on_done=finished.append)
+    started = _time.time()
+    job.run()
+    assert job.result["ok"] and job.result["cues"] == 3 and job.result["langs"] == ["ko", "zh"] and job.result["unsure"] == 1
+    assert finished == [job.result] and _time.time() - started >= 0.7      # 前兩次「有人在排隊」各等了 0.4 秒
+    assert [c["text"] for c in job.cues] == ["안녕하세요", "你好", "잘 가요"] and [c["tr"] for c in job.cues] == ["<ko>안녕하세요|0", "", "<ko>잘 가요|2"]
+    assert seen[0] == (int(2.5 * 16000), ("ko", "zh")) and [s["stage"] for s in states][:3] == ["decoding", "cutting", "working"] and states[-1]["stage"] == "done"
+    assert states[-1]["done"] == states[-1]["total"] == 5 and Path(job.result["path"]).read_text(encoding="utf-8-sig").count("-->") == 3
+
+    for kwargs, error in ((dict(decode_fn=lambda p: (_ for _ in ()).throw(OSError("bad file"))), "unreadable"), (dict(decode_fn=lambda p: np.zeros(0, dtype=np.float32)), "no_audio"),
+                          (dict(cut_fn=lambda a: []), "no_speech"), (dict(recognize=lambda c, l: None), "no_speech")):
+        args = dict(decode_fn=lambda p: audio, cut_fn=lambda a: spans, recognize=lambda c, l: None, translate=lambda *a: "", on_done=lambda r: None)
+        args.update(kwargs)
+        bad = filesubs.Job(str(media), ["ko"], "zh", "zh-TW", "both", args.pop("recognize"), args.pop("translate"), **args)
+        bad.run()
+        assert bad.result["ok"] is False and bad.result["error"] == error and bad.state["stage"] == "failed", error
+    monkeypatch.setattr(filesubs, "MAX_SECONDS", 10)
+    long = filesubs.Job(str(media), ["ko"], "zh", "zh-TW", "both", recognize, lambda *a: "", decode_fn=lambda p: audio, cut_fn=lambda a: spans)
+    long.run()
+    assert long.result["error"] == "too_long"
+    monkeypatch.undo()
+
+    counter = iter(range(100))
+    cancelled = filesubs.Job(str(media), ["ko"], "zh", "zh-TW", "tr", lambda c, l: (f"문장 {next(counter)}", "ko", False), lambda t, l, b: "你好", decode_fn=lambda p: audio,
+                             cut_fn=lambda a: spans, fallback=tmp_path / "fb", on_state=lambda s: cancelled.cancel.set() if s["done"] >= 2 else None)
+    cancelled.run()
+    assert cancelled.result["ok"] and cancelled.result["partial"] and cancelled.result["cues"] == 2      # 取消：做好的兩句照樣存
+
+    # ---- 主程式：錯誤代碼、真的跑一個、翻好的記進作品、結果能在檔案總管裡指出來
+    class Fake:
+        tone = "casual"
+
+        def __init__(self):
+            self.calls = []
+
+        def translate(self, text, target, source=None, context=None, **kw):
+            self.calls.append((text, target, source, tuple(context or ()), kw.get("remember"), kw.get("work")))
+            return f"<{target}>{text}"
+
+        def clear_cache(self):
+            pass
+
+    gate = threading.Event()
+
+    class Hear:
+        beam = 1
+        count = 0
+
+        def transcribe(self, chunk, langs):
+            gate.wait(5)
+            Hear.count += 1
+            return ("안녕하세요 여러분" if Hear.count == 1 else "다음 이야기", "ko", False)
+
+    events, notices = [], []
+    service = Service(tmp_path / "svc")
+    service.cfg.set(my_lang="zh-TW", their_lang="ko", ui_lang="zh-TW")
+    service.translator = Fake()
+    service._wake_engine = lambda: None
+    service.hub.publish = lambda name, data=None: (events.append((name, data)), notices.append(data) if name == "notice" else None)
+    video = tmp_path / "[Sub] My Drama - 01 (1080p).mkv"
+    video.write_bytes(b"x")
+    assert service.filesubs_start(str(video))["error"] == "fs_not_ready"
+    service.phase = "ready"
+    assert service.filesubs_start(str(video))["error"] == "fs_no_model"
+    (service.store / "models" / "whisper").mkdir(parents=True)
+    (service.store / "models" / "whisper" / "model.bin").write_bytes(b"x")
+    assert service.filesubs_start("relative.mp4")["error"] == "fs_not_found" and service.filesubs_start(str(tmp_path / "gone.mp4"))["error"] == "fs_not_found"
+    (tmp_path / "notes.txt").write_text("x")
+    assert service.filesubs_start(str(tmp_path / "notes.txt"))["error"] == "fs_not_media"
+    assert service.filesubs_pick() == {"ok": False, "error": "fs_no_window"} and service.filesubs_state()["can_pick"] is False
+    service.recognizer = Hear()
+    monkeypatch.setattr(filesubs, "decode", lambda path: audio)
+    monkeypatch.setattr(filesubs, "cut", lambda a: [(1.0, 3.0), (5.0, 8.0)])
+    started = service.filesubs_start(f' "{video}" ', lang="ko", target="ja", mode="both")
+    assert started == {"ok": True}
+    assert service.filesubs_start(str(video)) == {"ok": False, "error": "fs_busy"} and service.filesubs_state()["busy"] is True      # 還在做：不開第二個
+    gate.set()
+    end = _time.time() + 10
+    while _time.time() < end and not (service._subs_result and service._subs_job and not service._subs_job.is_alive()):
+        _time.sleep(0.02)
+    result = service._subs_result
+    assert result and result["ok"] and result["cues"] == 2 and result["name"] == video.name and result["target"] == "ja"
+    srt = Path(result["path"])
+    assert srt.parent == tmp_path and srt.name == "[Sub] My Drama - 01 (1080p).ja.srt"
+    assert srt.read_text(encoding="utf-8-sig").splitlines()[:4] == ["1", "00:00:01,000 --> 00:00:03,000", "안녕하세요 여러분", "<ja>안녕하세요 여러분"]
+    key = result["work"]
+    assert key and service.translator.calls[0][1:] == ("ja", "ko", (), "file", key) and service.translator.calls[1][3] == ("안녕하세요 여러분",) and service.translator.calls[1][0] == "다음 이야기"
+    assert service.memory.work_info(key)["title"] == result["title"] != ""
+    assert [name for name, _ in events if name in ("filesubs", "memory")].count("filesubs") >= 3 and ("memory", service.memory.state()) in events
+    assert notices[-1]["code"] == "filesubs_done" and service.filesubs_state()["busy"] is False and service.filesubs_state()["result"]["path"] == result["path"]
+    revealed = []
+    monkeypatch.setattr(oswin, "reveal", lambda path: revealed.append(path) or True)
+    assert service.filesubs_open() == {"ok": True} and revealed == [result["path"]]
+    service.recognizer = None      # 辨識模型被放掉了：下一個工作自己再載入（這裡沒有真的模型，所以會失敗，但不會卡住）
+    monkeypatch.setattr(service, "_ensure_recognizer", lambda: (_ for _ in ()).throw(RuntimeError("the speech model is missing")))
+    assert service.filesubs_start(str(video), lang="auto", mode="src")["ok"] is True
+    end = _time.time() + 10
+    while _time.time() < end and service._subs_job.is_alive():
+        _time.sleep(0.02)
+    assert service._subs_result["ok"] is False and service._subs_result["error"] == "failed" and notices[-1]["code"] == "filesubs_failed"
+    service.closing.set()

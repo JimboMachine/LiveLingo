@@ -16,7 +16,7 @@ import traceback
 from collections import deque
 from pathlib import Path
 
-from . import __version__, apps, assets, changes, chatpaint, gpu, guide, mention, oswin, paths, report, snap, storage, subtitles, updater, voicebook, works
+from . import __version__, apps, assets, changes, chatpaint, filesubs, gpu, guide, mention, oswin, paths, report, snap, storage, subtitles, updater, voicebook, works
 from .config import (ACCENTS, DEFAULTS, EDITABLE, MAX_LAYOUTS, MAX_REGIONS, OVERLAY_FORMS, OVERLAY_LOOK, THEMES, UI_LANGS, Config,
                      Glossary, Lessons)
 from .core.engine import Engine
@@ -36,6 +36,7 @@ from .hotkeys import ACTIONS as HOTKEY_ACTIONS
 from .hotkeys import NOTES as HOTKEY_NOTES
 from .hotkeys import Hotkeys
 from .hotkeys import normalize as hotkey_normalize
+from .inplace import InPlace
 from .overlay import BAR_LOOK, Overlay
 from .phrases import Phrasebook
 from .paths import self_command
@@ -299,9 +300,15 @@ class Service:
         self._report = ""             # 上一次做給使用者看的問題報告（存檔、複製用的就是這一份）
         self._download_cancel = threading.Event()
         self._selecting = False
+        self._subs_job: filesubs.Job | None = None      # 影片字幕：現在做的那一個（filesubs.py）
+        self._subs_result: dict | None = None
+        self._subs_key = ""
         self.on_quit = lambda: None    # 請視窗關閉、讓程式正常結束（介面按離開）
         self.exit_now = lambda: self.on_quit()   # 立刻結束整個程式（更新時用；__main__ 會換成真的）
         self.overlay = Overlay(self)   # 浮動留言
+        # 原地覆蓋翻譯（inplace.py）：譯文蓋在畫面上原文的位置；視窗跟浮動留言用同一種，但擷取拍不到
+        self.inplace = InPlace(self._inplace_translate, self._inplace_wanted, self.overlay.window_class,
+                               target=lambda: self.cfg["my_lang"], busy=lambda: self.jobs.waiting() > 0, log=self.log)
         self.stream = StreamOut(self)  # 直播模式：給 OBS 的字幕頁（stream.py）
         # 念出我的譯文：Windows 內建語音念到選的播放裝置（core/speak.py）
         self.speaker = Speaker(self.data, device=lambda: self.cfg["speak_device"], on_done=self._spoke, log=self.log)
@@ -364,6 +371,7 @@ class Service:
             "words": {str(k): v for k, v in self._words.items()},
             "wordbook": self.wordbook.state(),
             "phrases": self.phrases_state(),
+            "filesubs": self.filesubs_state(),
             "recaps": dict(self.recaps.state(), **self._recap),
             "record": self.record_state(),
             "hotkeys": self.hotkeys_state(),
@@ -824,7 +832,7 @@ class Service:
             self.log(f"the translation engine woke up in {time.time() - started:.1f} s")
 
     def _maybe_free_speech(self) -> None:
-        if self.pipelines:
+        if self.pipelines or (self._subs_job is not None and self._subs_job.is_alive()):
             self._voice_off_since = None
             return
         now = time.monotonic()
@@ -2298,6 +2306,9 @@ class Service:
                     self._note("mic_on" if turn_on else "mic_off")
             elif name == "copy":
                 self._note("copied" if self.copy_last() else "nothing")
+            elif name == "inplace":
+                self.update_config({"inplace": not self.cfg["inplace"]})
+                self._note("inplace_on" if self.cfg["inplace"] else "inplace_off")
         except Exception:  # noqa: BLE001
             self.log(traceback.format_exc())
 
@@ -2643,6 +2654,92 @@ class Service:
             if shown:
                 self._card_show(shown)
 
+    # ------------------------------------------------------------------ 影片、音訊檔產生雙語字幕（2.13.0）
+
+    def filesubs_state(self) -> dict:
+        """給介面：現在有沒有在做、做到哪、上一個做完的結果。"""
+        job = self._subs_job
+        busy = bool(job and job.is_alive())
+        return {"busy": busy, "job": dict(job.state) if job else None, "result": self._subs_result,
+                "can_pick": bool(self.window and hasattr(self.window, "choose_file")),
+                "exts": sorted(filesubs.EXTS), "max_hours": filesubs.MAX_SECONDS // 3600}
+
+    def _subs_tell(self, state: dict) -> None:
+        self.hub.publish("filesubs", dict(self.filesubs_state(), job=state))
+
+    def filesubs_pick(self) -> dict:
+        """用 Windows 的視窗選影片或音訊檔。回傳 {"ok", "path"}；按取消是 ok 但 path 空的。"""
+        if not self.window or not hasattr(self.window, "choose_file"):
+            return {"ok": False, "error": "fs_no_window"}
+        picked = self.window.choose_file(sorted(filesubs.EXTS))
+        return {"ok": True, "path": picked or ""}
+
+    def filesubs_start(self, path: str, lang: str = "", target: str = "", mode: str = "both") -> dict:
+        """開始替一個檔案產生字幕。lang：影片裡的人說的語言（語音辨識用的名字，auto = 自動判斷，空 = 對方的語言）；
+        target：翻成什麼（預設我的語言）；mode：both 原文＋譯文 / tr 只有譯文 / src 只有原文。回傳 {"ok"} 或 {"ok": False, "error"}。"""
+        if self._subs_job is not None and self._subs_job.is_alive():
+            return {"ok": False, "error": "fs_busy"}
+        path = str(path or "").strip().strip('"')
+        if not path or not Path(path).is_absolute() or not Path(path).is_file():
+            return {"ok": False, "error": "fs_not_found"}
+        if not filesubs.is_media(path):
+            return {"ok": False, "error": "fs_not_media"}
+        if self.phase != "ready":
+            return {"ok": False, "error": "fs_not_ready"}
+        if not (self.store / "models" / "whisper" / "model.bin").exists():
+            return {"ok": False, "error": "fs_no_model"}
+        target = target if target in LANGS else self.cfg["my_lang"]
+        if lang == "auto":
+            langs = self._auto_families()
+        elif lang in VOICE_FAMILIES:
+            langs = [lang]
+        else:
+            langs = [LANGS[self.cfg["their_lang"]]["family"]]
+        title = works.clean_title(Path(path).stem)
+        key = works.work_key(title)
+        if key:
+            self.memory.saw(key, title)
+        mode = mode if mode in filesubs.MODES else "both"
+        label = target if mode != "src" else langs[0]
+        self._subs_result = None
+        self._voice_off_since = None      # 辨識模型這段時間不要被放掉
+
+        def recognize(audio, wanted):
+            recognizer = self._ensure_recognizer()
+            recognizer.beam = BEAMS[self.cfg["speech_mode"]]
+            return recognizer.transcribe(audio, wanted)
+
+        def translate(text, source, before):
+            self._wake_engine()
+            return self.translator.translate(text, target, source=source, context=before or None, remember="file", work=key)
+
+        def done(result: dict) -> None:
+            self._subs_result = dict(result, name=Path(path).name, work=key, title=title, target=target)
+            if result.get("ok") and key:
+                self._work_told.discard(key)
+                self.hub.publish("memory", self.memory.state())
+            self.hub.publish("filesubs", self.filesubs_state())
+            self.notice("filesubs_done" if result.get("ok") else "filesubs_failed")
+
+        job = filesubs.Job(path, langs, LANGS[target]["family"], label, mode, recognize, translate, on_state=self._subs_tell,
+                           wait=lambda: self.jobs.waiting() > 0, fallback=self.data / "subtitles",
+                           log=self.log, on_done=done)
+        self._subs_job, self._subs_key = job, key
+        job.start()
+        self.hub.publish("filesubs", self.filesubs_state())
+        return {"ok": True}
+
+    def filesubs_cancel(self) -> dict:
+        job = self._subs_job
+        if job is not None and job.is_alive():
+            job.cancel.set()
+        return {"ok": True}
+
+    def filesubs_open(self) -> dict:
+        """在檔案總管裡指出做好的字幕檔。"""
+        result = self._subs_result or {}
+        return {"ok": bool(result.get("path") and oswin.reveal(result["path"]))}
+
     # ------------------------------------------------------------------ 喊我名字提醒（2.11.0）
 
     def _mention_of(self, msg: dict, translated: str) -> str:
@@ -2950,6 +3047,10 @@ class Service:
                 self._restart_voice("listen")
         if changed("regions"):
             self._regions_changed()
+        if changed("inplace"):
+            self._inplace_apply()
+        if changed("my_lang", "their_lang", "their_auto", "also_english", "tone", "tone_keep"):
+            self.inplace.clear_cache()      # 蓋在畫面上的譯文是舊語言、舊語氣翻的
         if changed("speech_device"):
             threading.Thread(target=self._speech_device_changed, daemon=True).start()
         if changed("tell_speakers"):
@@ -3025,6 +3126,38 @@ class Service:
         self.submit("screen", text, lang, unsure=score < 0.8, place=(region or {}).get("name", "") if many else "",
                     **({"shown": shown} if shown else {}))
 
+    # ------------------------------------------------------------------ 原地覆蓋翻譯（2.13.0）
+
+    def _inplace_wanted(self, text: str) -> str | None:
+        from .core.watcher import wanted
+
+        return wanted(text, self._screen_langs())
+
+    def _inplace_translate(self, text: str, lang: str) -> str:
+        """蓋在畫面上的那一段：翻成我的語言。引擎還沒好就先不翻（回傳空字串，下一次畫面有變再來）。"""
+        if self.phase != "ready" or self.closing.is_set():
+            return ""
+        self._wake_engine()
+        return self.translator.translate(text[:MAX_TEXT], self.cfg["my_lang"], source=lang, remember="screen")
+
+    def _on_frame(self, region: dict, place, bgr, lines) -> bool:
+        return self.inplace.update(region, place, bgr, lines)
+
+    def _inplace_apply(self) -> None:
+        """「原地覆蓋翻譯」開關改了。要有開著的框選區域才有東西可以蓋；讀螢幕沒開的話一起打開。"""
+        on = bool(self.cfg["inplace"])
+        if on and not self._regions_on() and not self.cfg["regions"]:
+            self.cfg.set(inplace=False)
+            self.hub.publish("config", self.cfg.snapshot())
+            self._note("inplace_no_region")
+            return
+        self.inplace.set_on(on)
+        if on:
+            if self.watcher:
+                self.watcher.on_frame = self._on_frame
+            if not self.sources["screen"]["on"] and not self.sources["screen"]["busy"]:
+                self.set_source("screen", True)
+
     def _shown_pair_lang(self) -> str | None:
         return LANGS[self.cfg["my_lang"]]["family"] if self.cfg["use_shown_translation"] else None
 
@@ -3091,6 +3224,7 @@ class Service:
         active = self._regions_on()
         if self.watcher:
             self.watcher.set_regions(active)
+        self.inplace.keep_only({str(r.get("id") or "") for r in active})
         if not active and (self.sources["screen"]["on"] or self.cfg["sources"].get("screen")):
             self.set_source("screen", False)      # 沒有開著的區域了
 
@@ -3108,6 +3242,7 @@ class Service:
                     on_stats=lambda stats: self.hub.publish("screen_stats", stats), on_black=self._screen_black,
                     mask=self.capture_mask)
                 self.watcher.pair_lang = self._shown_pair_lang()
+                self.watcher.on_frame = self._on_frame
                 self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
             self.watcher.paused = False
@@ -3325,15 +3460,11 @@ class Service:
                 self._stop_watcher()
             self._source("screen", on=False, busy=False, error=str(ex))
 
-    def _start_voice(self, key: str, again: bool = False) -> None:
-        """again：斷線之後自動重新連接的那幾次（失敗了不顯示錯誤，接著等下一次）。"""
-        kind = VOICE_KIND[key]
-        self._voice_open.pop(key, None)
-        self._source(key, busy=True, error="")
-        try:
-            from .core.speech import Recognizer, SpeechPipeline
+    def _ensure_recognizer(self):
+        """語音辨識模型（Whisper）；還沒載入就載入。收音和「影片字幕」共用同一個。模型沒下載會丟出錯誤。"""
+        from .core.speech import Recognizer
 
-            self._voice_off_since = time.monotonic()      # 正在開收音：語音辨識模型先不要被放掉
+        with self._lock:
             if self.recognizer is None:
                 model_dir = self.store / "models" / "whisper"
                 if not (model_dir / "model.bin").exists():
@@ -3342,7 +3473,18 @@ class Service:
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]), device=device,
                                              compute_type=compute, on_fallback=self._speech_gpu_failed)
                 self.recognizer.turn = self._cpu_turn
-            recognizer = self.recognizer
+            return self.recognizer
+
+    def _start_voice(self, key: str, again: bool = False) -> None:
+        """again：斷線之後自動重新連接的那幾次（失敗了不顯示錯誤，接著等下一次）。"""
+        kind = VOICE_KIND[key]
+        self._voice_open.pop(key, None)
+        self._source(key, busy=True, error="")
+        try:
+            from .core.speech import SpeechPipeline
+
+            self._voice_off_since = time.monotonic()      # 正在開收音：語音辨識模型先不要被放掉
+            recognizer = self._ensure_recognizer()
             device = self.cfg["speaker_device"] if key == "listen" else self.cfg["mic_device"]
             capture = None
             if key == "listen" and self.cfg["listen_apps"] and not self._apps_audio_off and hasattr(self.audio, "capture_apps"):
@@ -4013,6 +4155,7 @@ class Service:
             else:
                 if self.watcher:
                     self.watcher.paused = True
+                self.inplace.reset()
                 self._source("screen", on=False, error="")
         elif on:
             threading.Thread(target=self._start_voice, args=(key,), daemon=True).start()
@@ -4177,6 +4320,9 @@ class Service:
         self._voices_save()
         if self.meters:
             self.meters.stop()
+        self.inplace.close()
+        if self._subs_job is not None:
+            self._subs_job.cancel.set()
         self.overlay.stop()
         self._stop_watcher()
         for key in list(self.pipelines):

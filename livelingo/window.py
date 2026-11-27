@@ -106,6 +106,22 @@ class WindowCtl:
             self.service.log(f"folder dialog failed: {ex!r}")
             return ""
 
+    def choose_file(self, extensions=()) -> str:
+        """跳出 Windows 的「開啟檔案」視窗，回傳選到的檔案；按取消回傳空字串。extensions：認得的副檔名（含點）。"""
+        try:
+            import webview
+
+            kind = getattr(getattr(webview, "FileDialog", None), "OPEN", None)
+            if kind is None:
+                kind = webview.OPEN_DIALOG
+            exts = ";".join(f"*{e}" for e in extensions)
+            types = (f"Media files ({exts})", "All files (*.*)") if exts else ()
+            picked = self.win.create_file_dialog(kind, allow_multiple=False, file_types=types)
+            return str(picked[0]) if picked else ""
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"file dialog failed: {ex!r}")
+            return ""
+
     def set_chrome(self, caption: str, text: str, dark: bool) -> bool:
         """標題列的顏色跟著介面的主題。"""
         try:

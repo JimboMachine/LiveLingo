@@ -226,6 +226,8 @@ class ScreenWatcher(threading.Thread):
         self.on_status = on_status or (lambda s: None)
         self.on_stats = on_stats or (lambda stats: None)      # on_stats({區域 id: 統計數字})，數字有變才呼叫
         self.on_black = on_black or (lambda ids: None)        # on_black([區域 id])：哪幾個區域抓到的畫面是全黑的，有變才呼叫
+        # on_frame(區域, 現在的位置, 畫面, 辨識出的每一列)：交給原地覆蓋翻譯。回傳 True = 它接手了這一區，不再送去浮動留言
+        self.on_frame = None
         self.black_after = 5.0                                # 連續黑幾秒才算（切換畫面時黑一下不算）
         self.interval = interval
         self.source_langs = source_langs or {"ko"}
@@ -328,6 +330,8 @@ class ScreenWatcher(threading.Thread):
         place = self.locate(slot.region)
         if not place:
             slot.prev = None      # 視窗回來之後等畫面停下來再讀
+            if self.on_frame:
+                self.on_frame(slot.region, None, None, [])      # 視窗不見了：蓋在上面的譯文也收起來
             return
         bgr = np.ascontiguousarray(grab(place))
         try:
@@ -363,7 +367,11 @@ class ScreenWatcher(threading.Thread):
                 return
         slot.moving_since = None
         slot.last_done = th
-        rows = message_lines(self.ocr.read(bgr))
+        raw = self.ocr.read(bgr)
+        if self.on_frame and self.on_frame(slot.region, place, bgr, raw):
+            slot.stats["scans"] += 1      # 譯文直接蓋在原處，不進浮動留言
+            return
+        rows = message_lines(raw)
         slot.edge, edge = text_edge(rows, bgr.shape[1], slot.edge)
         lines = join_wrapped(rows, slot.seen, edge)      # 換行的訊息接回一則
         texts = [normalize(ln.text) for ln, _ in lines]
