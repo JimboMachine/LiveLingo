@@ -7325,7 +7325,8 @@ def test_snap_pick_phrases_and_call_outs(tmp_path, monkeypatch):
         service.cfg.set(pick_copy=True)
         copied[:] = ["이전에 복사한 글"]
         assert service.pick_text() is True and bool(pressed) == oswin.IS_WIN
-        assert service.messages[-1]["original"] == ("다음 퀘스트" if oswin.IS_WIN else "이전에 복사한 글")
+        want = "다음 퀘스트" if oswin.IS_WIN else "이전에 복사한 글"
+        wait(lambda: service.messages and service.messages[-1]["original"] == want)      # 畫面來的字翻好才進對話（背景在翻）
         service.cfg.set(pick_copy=False)
 
         # 框選翻譯：假的框選結果、假的畫面、假的辨識；兩段各翻各的，小卡一次列出
