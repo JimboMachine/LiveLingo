@@ -232,10 +232,11 @@ def test_service_encrypt_switch(tmp_path, monkeypatch, fake_dpapi):
         service.shutdown()
 
 
-def test_battery_saver_enters_and_restores_only_untouched_settings(tmp_path):
+def test_battery_saver_enters_and_restores_only_untouched_settings(tmp_path, monkeypatch):
     from livelingo import power
     from livelingo.service import Service
 
+    monkeypatch.setattr(power, "on_battery", lambda: None)      # 「查不到電源」：power_check() 不給參數時就是去查，Windows 沒有電池的機器會答「有插電」，所以固定成 None
     service = Service(tmp_path)
     events, notices = [], []
     service.hub.publish = lambda name, data=None: events.append((name, data))
@@ -246,14 +247,14 @@ def test_battery_saver_enters_and_restores_only_untouched_settings(tmp_path):
         service.update_config({"speech_mode": "accurate", "live_captions": True, "denoise": False})
         assert service.power_check(True) is False      # 功能沒開：靠電池也不動
         service.update_config({"battery_saver": True})
-        assert service.power_check(None) is False and service.power_check(False) is False      # 查不到、有插電：不動
+        assert service.power_check() is False and service.power_check(False) is False      # 查不到、有插電：不動
         assert service.power_check(True) is True
         assert service.cfg["speech_mode"] == "fast" and service.cfg["live_captions"] is False and service.cfg["denoise"] is False
         assert service.cfg["saver_saved"] == {"values": {"speech_mode": "accurate", "live_captions": True}}      # 只記有被換掉的
         assert abs(service.watcher.interval - 0.7 * power.SAVER_SLOW) < 1e-9 and ("saver", {"on": True}) in events and notices == ["saver_on"]
         assert service.power_check(True) is True and notices == ["saver_on"]      # 已經在省電：不重做
         service.update_config({"speech_mode": "accurate"})      # 省電期間自己改回去
-        assert service.power_check(None) is True      # 查不到電源：維持現狀
+        assert service.power_check() is True      # 查不到電源：維持現狀
         assert service.power_check(False) is False
         assert service.cfg["speech_mode"] == "accurate" and service.cfg["live_captions"] is True      # 沒被動過的換回去，被動過的不蓋掉
         assert service.cfg["saver_saved"] == {} and service.watcher.interval == 0.7 and notices == ["saver_on", "saver_off"] and ("saver", {"on": False}) in events
