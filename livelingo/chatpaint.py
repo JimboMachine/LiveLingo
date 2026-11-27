@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 # 名字的顏色：對方說的、螢幕上讀到的、我自己的；note 是程式自己的短提示（例如按了快速鍵：麥克風開了）
+PIN_COLOR = (255, 214, 102)          # 釘選的句子（2.17.0），名字用這個顏色
 MENTION_COLOR = (255, 112, 112)      # 提到我的那一則，名字用這個顏色（喊我名字提醒）
 NAME_COLORS = {"heard": (196, 148, 255), "screen": (255, 196, 92), "me": (92, 222, 255), "note": (74, 222, 154)}
 NOTE_NAME = "LiveLingo"
@@ -339,13 +340,25 @@ def _faded(tile: Image.Image, alpha: float) -> Image.Image:
 
 
 def compose(tiles: list[tuple[Image.Image, float]], size: tuple[int, int], *, grow: str = "up", opacity: int = 100,
-            lines: int = 0) -> Image.Image:
+            lines: int = 0, pinned: list | None = None) -> Image.Image:
     """
     把留言疊成一張圖。tiles 是 [(圖, 透明度 0~1)]，舊的在前。
     grow：up = 最新的在最下面，舊的往上推；down = 從最上面開始往下排，最新的在最下面那一則。
     放不下的舊留言在邊緣淡出。opacity 是整體不透明度（30 到 100），lines 是最多顯示幾則（0 = 放得下就顯示）。
     """
     width, height = size
+    if pinned:      # 釘選的句子（2.17.0）：固定在最上面，最多用掉一半的高度，其他留言排在下面剩下的地方
+        canvas = Image.new("RGBA", (max(1, width), max(1, height)), (0, 0, 0, 0))
+        strength = max(0.3, min(1.0, opacity / 100))
+        y = 0
+        for tile, alpha in pinned:
+            if y + tile.height > height // 2 and y:
+                break
+            canvas.alpha_composite(_faded(tile, alpha * strength), (0, y))
+            y += tile.height
+        if height - y > 8:
+            canvas.alpha_composite(compose(tiles, (width, height - y), grow=grow, opacity=opacity, lines=lines), (0, y))
+        return canvas
     canvas = Image.new("RGBA", (max(1, width), max(1, height)), (0, 0, 0, 0))
     strength = max(0.3, min(1.0, opacity / 100))
     if lines > 0:

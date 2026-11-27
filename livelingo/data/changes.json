@@ -1,4 +1,136 @@
 {
+  "2.17.0": {
+    "zh-TW": [
+      "拖圖片進來翻：把圖片或截圖拖進 LiveLingo 視窗，就會讀字、一段一段翻，結果出現在對話裡。讀畫面頁也可以直接選一張圖片。",
+      "剪貼簿圖片翻譯：用 Win+Shift+S 截完圖，按 Ctrl+Shift+Y 就翻剪貼簿裡的圖，結果在滑鼠旁邊。",
+      "攝影機翻實物（讀畫面頁）：按「攝影機拍一張」，倒數 3 秒後拍下菜單、說明書或包裝來翻。拍完攝影機馬上關掉。",
+      "條漫長圖模式：讀取區域可以打開「條漫長圖模式」，捲動網頁漫畫時每個對話框各翻一則，捲回去看過的不再翻。",
+      "手把快捷鍵（語言與一般頁，預設關）：按住 Back 或 LB＋RB 再按一顆鍵，就叫出回話建議、框選翻譯等功能。按 Ctrl+Shift+F1 會跳出所有快捷鍵的一覽。",
+      "浮動字幕：滑鼠移上去會變很淡，看得到下面的遊戲按鈕。對話裡每一句多了「釘選」，釘住的句子固定在浮動字幕最上面（最多 3 句）。",
+      "說話直接送進遊戲聊天（聲音裝置頁，預設關）：麥克風說的話翻好後替你打開聊天框、貼上、送出。有些遊戲的防作弊可能不允許，打開前請先確認。",
+      "圖片和攝影機都只在這台電腦上讀字；照片只有開著框選翻譯相簿時才會留。手把、攝影機、送進遊戲聊天要在你的電腦上試過才算數。"
+    ],
+    "zh-CN": [
+      "拖图片进来翻：把图片或截图拖进 LiveLingo 窗口，就会读字、一段一段翻，结果出现在对话里。读屏幕页也可以直接选一张图片。",
+      "剪贴板图片翻译：用 Win+Shift+S 截完图，按 Ctrl+Shift+Y 就翻剪贴板里的图，结果在鼠标旁边。",
+      "摄像头翻实物（读屏幕页）：点“摄像头拍一张”，倒数 3 秒后拍下菜单、说明书或包装来翻。拍完摄像头马上关闭。",
+      "条漫长图模式：读取区域可以打开“条漫长图模式”，滚动网页漫画时每个对话框各翻一条，滚回去看过的不再翻。",
+      "手柄快捷键（语言与常规页，默认关）：按住 Back 或 LB＋RB 再按一个键，就调出回话建议、框选翻译等功能。按 Ctrl+Shift+F1 会弹出所有快捷键的一览。",
+      "浮动字幕：鼠标移上去会变得很淡，看得到下面的游戏按钮。对话里每一句多了“置顶”，置顶的句子固定在浮动字幕最上面（最多 3 句）。",
+      "说话直接发到游戏聊天（声音设备页，默认关）：麦克风说的话翻好后替你打开聊天框、粘贴、发送。有些游戏的反作弊可能不允许，打开前请先确认。",
+      "图片和摄像头都只在这台电脑上读字；照片只有开着框选翻译相册时才会保留。手柄、摄像头、发到游戏聊天要在你的电脑上试过才算数。"
+    ],
+    "en": [
+      "Drag images in to translate: drop an image or screenshot onto the LiveLingo window and it reads and translates the text part by part in the conversation. You can also pick an image on the Screen page.",
+      "Clipboard image translation: after Win+Shift+S, press Ctrl+Shift+Y to translate the clipboard image. The result shows next to the mouse.",
+      "Translate real things with your camera (Screen page): press Take a camera photo and after a 3-second countdown it snaps a menu, manual or package. The camera turns off right away.",
+      "Long-strip comic mode: turn it on for a reading area and, while you scroll a web comic, each speech bubble becomes one line. Bubbles you scroll back to aren't translated again.",
+      "Controller shortcuts (Language & general, off by default): hold Back or LB+RB and press a button for reply ideas, box-select and more. Ctrl+Shift+F1 shows a cheat sheet of every hotkey.",
+      "Floating subtitles fade when the mouse is on them, so you can see the game buttons below. Each line in the conversation has Pin; pinned lines stay at the top of the floating subtitles (up to 3).",
+      "Send speech straight to game chat (Audio page, off by default): your translated speech is pasted into the chat box and sent. Some games' anti-cheat may not allow it; check before turning it on.",
+      "Images and camera photos are read only on this PC; photos are kept only when the box-select album is on. Controller, camera and game-chat sending still need trying on your own PC."
+    ],
+    "ko": [
+      "이미지를 끌어다 번역: 이미지나 스크린샷을 LiveLingo 창에 놓으면 글자를 읽고 부분별로 번역해 대화에 보여 줘요. 화면 읽기 페이지에서 이미지를 골라도 돼요.",
+      "클립보드 이미지 번역: Win+Shift+S로 캡처한 뒤 Ctrl+Shift+Y를 누르면 클립보드 이미지를 번역해 마우스 옆에 보여 줘요.",
+      "카메라로 실물 번역(화면 읽기 페이지): '카메라로 찍기'를 누르면 3초 뒤 메뉴, 설명서, 포장을 찍어 번역해요. 찍고 나면 카메라는 바로 꺼져요.",
+      "세로 웹툰 모드: 읽기 영역에서 켜면 웹툰을 스크롤할 때 말풍선마다 한 줄씩 번역하고, 다시 올라가 본 말풍선은 다시 번역하지 않아요.",
+      "게임패드 단축키(언어와 일반 페이지, 기본 꺼짐): Back이나 LB+RB를 누른 채 버튼을 누르면 답장 추천, 영역 번역 등을 불러요. Ctrl+Shift+F1을 누르면 모든 단축키를 한눈에 보여 줘요.",
+      "떠 있는 자막: 마우스를 올리면 아주 흐려져 아래 게임 버튼이 보여요. 대화의 각 문장에 '고정'이 생겨, 고정한 문장은 떠 있는 자막 맨 위에 남아요(최대 3개).",
+      "말한 내용을 게임 채팅으로 바로 보내기(오디오 장치 페이지, 기본 꺼짐): 마이크로 말한 번역을 채팅창에 붙여 넣고 보내요. 일부 게임 안티치트가 허용하지 않을 수 있으니 먼저 확인하세요.",
+      "이미지와 카메라는 이 PC에서만 글자를 읽고, 사진은 영역 번역 앨범이 켜져 있을 때만 남아요. 게임패드, 카메라, 채팅 보내기는 실제 PC에서 확인이 필요해요."
+    ],
+    "ja": [
+      "画像をドラッグして翻訳：画像やスクショを LiveLingo のウィンドウに置くと、文字を読んで段落ごとに訳し、会話に表示します。画面読み取りページで画像を選ぶこともできます。",
+      "クリップボード画像の翻訳：Win+Shift+S で撮ったあと Ctrl+Shift+Y を押すと、クリップボードの画像を訳してマウスの横に出します。",
+      "カメラで実物を翻訳（画面読み取りページ）：「カメラで撮る」を押すと 3 秒後にメニューや説明書、パッケージを撮って訳します。撮ったらカメラはすぐ閉じます。",
+      "縦スクロール漫画モード：読み取り範囲でオンにすると、ウェブ漫画をスクロールしたとき吹き出しごとに 1 件ずつ訳し、戻って見た吹き出しは訳し直しません。",
+      "コントローラーのショートカット（言語と一般ページ、既定はオフ）：Back か LB＋RB を押しながらボタンで返信の提案や範囲翻訳などを呼び出せます。Ctrl+Shift+F1 で全ショートカットの一覧を表示。",
+      "浮かぶ字幕：マウスを乗せるととても薄くなり、下のゲームのボタンが見えます。会話の各文に「ピン留め」が付き、留めた文は浮かぶ字幕のいちばん上に残ります（最大 3 件）。",
+      "話した言葉をそのままゲームのチャットへ（音声デバイスページ、既定はオフ）：マイクで話した訳をチャット欄に貼って送ります。チート対策で許されないゲームもあるので、先に確認を。",
+      "画像とカメラの文字はこの PC だけで読み、写真は範囲翻訳アルバムがオンのときだけ残ります。コントローラー、カメラ、チャット送信は実機での確認が必要です。"
+    ],
+    "vi": [
+      "Kéo ảnh vào để dịch: thả ảnh hoặc ảnh chụp màn hình vào cửa sổ LiveLingo, chữ sẽ được đọc và dịch từng đoạn trong cuộc trò chuyện. Cũng có thể chọn ảnh ở trang Đọc màn hình.",
+      "Dịch ảnh trong bộ nhớ tạm: sau Win+Shift+S, bấm Ctrl+Shift+Y để dịch ảnh vừa chụp. Kết quả hiện cạnh chuột.",
+      "Dịch đồ vật bằng camera (trang Đọc màn hình): bấm Chụp bằng camera, sau 3 giây đếm ngược sẽ chụp thực đơn, sách hướng dẫn hay bao bì để dịch. Camera tắt ngay sau đó.",
+      "Chế độ truyện cuộn dọc: bật cho một vùng đọc, khi cuộn truyện web mỗi khung thoại thành một dòng. Khung cuộn ngược lại xem không dịch lại.",
+      "Phím tắt tay cầm (trang Ngôn ngữ & chung, mặc định tắt): giữ Back hoặc LB+RB rồi bấm nút để gọi gợi ý trả lời, dịch vùng chọn… Ctrl+Shift+F1 hiện bảng mọi phím tắt.",
+      "Phụ đề nổi mờ đi khi chuột ở trên, để thấy nút game bên dưới. Mỗi câu trong cuộc trò chuyện có nút Ghim; câu đã ghim nằm trên cùng phụ đề nổi (tối đa 3).",
+      "Gửi lời nói thẳng vào chat game (trang Âm thanh, mặc định tắt): bản dịch lời nói được dán vào khung chat và gửi. Chống gian lận của một số game có thể không cho phép, hãy kiểm tra trước.",
+      "Ảnh và camera chỉ được đọc trên máy này; ảnh chỉ được giữ khi album dịch vùng chọn bật. Tay cầm, camera và gửi vào chat game cần thử trên máy của bạn."
+    ],
+    "th": [
+      "ลากรูปเข้ามาแปล: วางรูปหรือภาพหน้าจอบนหน้าต่าง LiveLingo จะอ่านข้อความและแปลทีละส่วนในบทสนทนา หรือเลือกรูปในหน้าอ่านหน้าจอก็ได้",
+      "แปลรูปในคลิปบอร์ด: หลัง Win+Shift+S กด Ctrl+Shift+Y เพื่อแปลรูปในคลิปบอร์ด ผลจะแสดงข้างเมาส์",
+      "แปลของจริงด้วยกล้อง (หน้าอ่านหน้าจอ): กด ถ่ายด้วยกล้อง นับถอยหลัง 3 วินาทีแล้วถ่ายเมนู คู่มือ หรือบรรจุภัณฑ์มาแปล กล้องปิดทันที",
+      "โหมดการ์ตูนเลื่อนยาว: เปิดสำหรับพื้นที่อ่าน เมื่อเลื่อนอ่านเว็บตูน แต่ละช่องคำพูดจะเป็นหนึ่งบรรทัด ช่องที่เลื่อนกลับไปดูจะไม่แปลซ้ำ",
+      "ปุ่มลัดจอย (หน้าภาษาและทั่วไป ปิดไว้ก่อน): กด Back หรือ LB+RB ค้างแล้วกดปุ่มเพื่อเรียกคำตอบแนะนำ แปลแบบเลือกพื้นที่ ฯลฯ กด Ctrl+Shift+F1 ดูรายการปุ่มลัดทั้งหมด",
+      "ซับลอยจะจางลงเมื่อเมาส์อยู่บนซับ เห็นปุ่มเกมด้านล่างได้ แต่ละประโยคในบทสนทนามีปุ่มปักหมุด ประโยคที่ปักไว้จะอยู่บนสุดของซับลอย (สูงสุด 3)",
+      "ส่งคำพูดเข้าแชทเกมทันที (หน้าอุปกรณ์เสียง ปิดไว้ก่อน): คำแปลของสิ่งที่พูดผ่านไมค์จะถูกวางในช่องแชทและส่ง ระบบกันโกงบางเกมอาจไม่อนุญาต ตรวจก่อนเปิด",
+      "รูปและกล้องอ่านข้อความในเครื่องนี้เท่านั้น รูปจะถูกเก็บเฉพาะเมื่อเปิดอัลบั้มแปลแบบเลือกพื้นที่ จอย กล้อง และการส่งเข้าแชทเกมต้องลองบนเครื่องคุณ"
+    ],
+    "id": [
+      "Seret gambar untuk diterjemahkan: jatuhkan gambar atau tangkapan layar ke jendela LiveLingo, teksnya dibaca dan diterjemahkan per bagian di percakapan. Bisa juga pilih gambar di halaman Baca layar.",
+      "Terjemahan gambar papan klip: setelah Win+Shift+S, tekan Ctrl+Shift+Y untuk menerjemahkan gambar di papan klip. Hasilnya muncul di samping mouse.",
+      "Terjemahkan benda nyata dengan kamera (halaman Baca layar): tekan Foto dengan kamera, setelah hitung mundur 3 detik menu, buku panduan, atau kemasan difoto dan diterjemahkan. Kamera langsung mati.",
+      "Mode komik gulir panjang: nyalakan untuk area baca, saat menggulir komik web tiap balon kata jadi satu baris. Balon yang digulir kembali tidak diterjemahkan lagi.",
+      "Pintasan kontroler (Bahasa & umum, mati secara bawaan): tahan Back atau LB+RB lalu tekan tombol untuk saran balasan, terjemahan area, dll. Ctrl+Shift+F1 menampilkan daftar semua tombol pintas.",
+      "Subtitle mengambang memudar saat mouse di atasnya, sehingga tombol game di bawah terlihat. Tiap kalimat di percakapan punya Sematkan; kalimat tersemat tetap di atas subtitle mengambang (maks. 3).",
+      "Kirim ucapan langsung ke chat game (halaman Audio, mati secara bawaan): terjemahan ucapanmu ditempel ke kotak chat dan dikirim. Anti-cheat beberapa game mungkin tidak mengizinkan; cek dulu.",
+      "Gambar dan foto kamera hanya dibaca di PC ini; foto disimpan hanya jika album terjemahan area menyala. Kontroler, kamera, dan kirim ke chat game perlu dicoba di PC-mu."
+    ],
+    "es": [
+      "Arrastra imágenes para traducir: suelta una imagen o captura en la ventana de LiveLingo y lee y traduce el texto por partes en la conversación. También puedes elegir una imagen en la página Pantalla.",
+      "Traducción de la imagen del portapapeles: tras Win+Shift+S, pulsa Ctrl+Shift+Y para traducirla. El resultado aparece junto al ratón.",
+      "Traduce cosas reales con la cámara (página Pantalla): pulsa Foto con la cámara y tras una cuenta de 3 segundos fotografía un menú, manual o envase. La cámara se apaga enseguida.",
+      "Modo cómic de tira larga: actívalo en un área de lectura y, al desplazarte por un cómic web, cada bocadillo es una línea. Los bocadillos a los que vuelves no se traducen otra vez.",
+      "Atajos del mando (Idioma y general, desactivado): mantén Back o LB+RB y pulsa un botón para ideas de respuesta, traducción por selección y más. Ctrl+Shift+F1 muestra una chuleta con todos los atajos.",
+      "Los subtítulos flotantes se atenúan con el ratón encima, para ver los botones del juego. Cada línea de la conversación tiene Fijar; las fijadas quedan arriba en los subtítulos flotantes (hasta 3).",
+      "Enviar lo que dices al chat del juego (página Audio, desactivado): tu voz traducida se pega en el chat y se envía. El antitrampas de algunos juegos puede no permitirlo; compruébalo antes.",
+      "Las imágenes y fotos se leen solo en este PC; las fotos se guardan solo si el álbum de selección está activado. Mando, cámara y envío al chat aún deben probarse en tu PC."
+    ],
+    "pt": [
+      "Arraste imagens para traduzir: solte uma imagem ou captura na janela do LiveLingo e o texto é lido e traduzido por partes na conversa. Também dá para escolher uma imagem na página Tela.",
+      "Tradução da imagem da área de transferência: depois do Win+Shift+S, aperte Ctrl+Shift+Y para traduzi-la. O resultado aparece ao lado do mouse.",
+      "Traduza coisas reais com a câmera (página Tela): aperte Foto com a câmera e, após contagem de 3 segundos, ela fotografa um cardápio, manual ou embalagem. A câmera desliga na hora.",
+      "Modo quadrinho em tira longa: ligue numa área de leitura e, ao rolar um webcomic, cada balão vira uma linha. Balões aos quais você volta não são traduzidos de novo.",
+      "Atalhos do controle (Idioma e geral, desligado): segure Back ou LB+RB e aperte um botão para sugestões de resposta, tradução por seleção e mais. Ctrl+Shift+F1 mostra um resumo de todos os atalhos.",
+      "As legendas flutuantes esmaecem com o mouse em cima, mostrando os botões do jogo. Cada linha da conversa tem Fixar; as fixadas ficam no topo das legendas flutuantes (até 3).",
+      "Enviar a fala direto ao chat do jogo (página Áudio, desligado): sua fala traduzida é colada no chat e enviada. O anticheat de alguns jogos pode não permitir; confira antes.",
+      "Imagens e fotos são lidas só neste PC; fotos ficam guardadas só com o álbum da seleção ligado. Controle, câmera e envio ao chat ainda precisam ser testados no seu PC."
+    ],
+    "ru": [
+      "Перетащите картинку для перевода: бросьте картинку или скриншот в окно LiveLingo, и текст прочитается и переведётся по частям в разговоре. Картинку можно выбрать и на странице «Экран».",
+      "Перевод картинки из буфера: после Win+Shift+S нажмите Ctrl+Shift+Y, и картинка из буфера переведётся. Результат появится у курсора.",
+      "Перевод реальных вещей камерой (страница «Экран»): нажмите «Снять камерой» — через 3 секунды она снимет меню, инструкцию или упаковку. Камера сразу выключается.",
+      "Режим длинного комикса: включите для области чтения — при прокрутке веб-комикса каждое облачко становится строкой. Облачка, к которым вы вернулись, не переводятся снова.",
+      "Кнопки геймпада (страница «Язык и общее», выключено): удерживайте Back или LB+RB и нажмите кнопку — варианты ответа, выделенный перевод и др. Ctrl+Shift+F1 показывает шпаргалку всех клавиш.",
+      "Плавающие субтитры бледнеют под мышью, и видны кнопки игры. У каждой строки в разговоре есть «Закрепить»; закреплённые остаются вверху плавающих субтитров (до 3).",
+      "Речь прямо в чат игры (страница «Звук», выключено): переведённая речь вставляется в чат и отправляется. Античит некоторых игр может это запрещать — проверьте заранее.",
+      "Картинки и фото читаются только на этом ПК; фото сохраняются, только если включён альбом выделенного перевода. Геймпад, камеру и отправку в чат нужно проверить на вашем ПК."
+    ],
+    "de": [
+      "Bilder zum Übersetzen hineinziehen: Lass ein Bild oder einen Screenshot aufs LiveLingo-Fenster fallen, der Text wird gelesen und abschnittsweise im Gespräch übersetzt. Auf der Seite Bildschirm kannst du auch ein Bild wählen.",
+      "Bild aus der Zwischenablage übersetzen: Nach Win+Umschalt+S Strg+Umschalt+Y drücken. Das Ergebnis erscheint neben der Maus.",
+      "Echte Dinge mit der Kamera übersetzen (Seite Bildschirm): Kamerafoto aufnehmen drücken, nach 3 Sekunden Countdown werden Speisekarte, Anleitung oder Verpackung fotografiert. Die Kamera geht sofort aus.",
+      "Langstreifen-Comic-Modus: für einen Lesebereich einschalten; beim Scrollen durch einen Webcomic wird jede Sprechblase eine Zeile. Blasen, zu denen du zurückscrollst, werden nicht erneut übersetzt.",
+      "Controller-Kürzel (Sprache & Allgemein, aus): Back oder LB+RB halten und eine Taste drücken für Antwortideen, Bereichsübersetzung usw. Strg+Umschalt+F1 zeigt eine Übersicht aller Tastenkürzel.",
+      "Schwebende Untertitel verblassen unter der Maus, damit die Spieltasten sichtbar sind. Jede Zeile im Gespräch hat Anheften; angeheftete bleiben oben in den schwebenden Untertiteln (bis zu 3).",
+      "Gesprochenes direkt in den Spielchat (Seite Audio, aus): Deine übersetzte Sprache wird in den Chat eingefügt und gesendet. Manche Anti-Cheat-Systeme erlauben das nicht; vorher prüfen.",
+      "Bilder und Kamerafotos werden nur auf diesem PC gelesen; Fotos bleiben nur, wenn das Bereichsübersetzungs-Album an ist. Controller, Kamera und Chat-Senden müssen noch auf deinem PC getestet werden."
+    ],
+    "fr": [
+      "Glissez des images pour traduire : déposez une image ou capture sur la fenêtre LiveLingo, le texte est lu et traduit par parties dans la conversation. Vous pouvez aussi choisir une image sur la page Écran.",
+      "Traduction de l’image du presse-papiers : après Win+Maj+S, appuyez sur Ctrl+Maj+Y pour la traduire. Le résultat s’affiche près de la souris.",
+      "Traduisez des objets avec la caméra (page Écran) : appuyez sur Photo avec la caméra, après 3 secondes elle photographie un menu, un manuel ou un emballage. La caméra s’éteint aussitôt.",
+      "Mode bande dessinée verticale : activez-le sur une zone de lecture ; en faisant défiler un webtoon, chaque bulle devient une ligne. Les bulles revues ne sont pas retraduites.",
+      "Raccourcis manette (Langue et général, désactivé) : maintenez Back ou LB+RB et appuyez sur un bouton pour les idées de réponse, la traduction par sélection… Ctrl+Maj+F1 affiche tous les raccourcis.",
+      "Les sous-titres flottants pâlissent sous la souris pour laisser voir les boutons du jeu. Chaque ligne de la conversation a Épingler ; les lignes épinglées restent en haut (jusqu’à 3).",
+      "Envoyer la parole dans le chat du jeu (page Audio, désactivé) : votre voix traduite est collée dans le chat et envoyée. L’anti-triche de certains jeux peut l’interdire ; vérifiez avant.",
+      "Images et photos ne sont lues que sur ce PC ; les photos ne sont gardées que si l’album de sélection est activé. Manette, caméra et envoi au chat restent à tester sur votre PC."
+    ]
+  },
   "2.16.0": {
     "zh-TW": [
       "遊戲專屬版面（讀畫面頁）：每個遊戲記住自己的浮動字幕位置、對方的語言和要讀的區域，切到那個遊戲就自動換過去。",

@@ -459,6 +459,9 @@ else:
 
 # ---------------------------------------------------------------------- 控制
 
+HOVER_ALPHA = 0.18      # 滑鼠在浮動字幕上時的透明度（2.17.0）
+HOVER_POLL = 0.15       # 開著「滑鼠靠近變淡」時多久看一次滑鼠在哪
+
 class Overlay:
     """決定現在要顯示哪幾則留言、各自多透明，畫好之後交給視窗。"""
 
@@ -477,6 +480,8 @@ class Overlay:
         self._last = None
         self._screens = None          # 上一次看到的螢幕配置（變了要檢查留言還在不在畫面上）
         self._told = 0.0
+        self.pins: list[dict] = []    # 釘在最上面的句子（2.17.0）：不會淡出、不會被新的擠掉
+        self.cursor = oswin.cursor_pos      # 滑鼠在哪（測試時換掉）
 
     # ---- 開關 ----
 
@@ -632,6 +637,28 @@ class Overlay:
         """程式自己的短提示（按了快速鍵之後告訴你發生了什麼事）。幾秒就消失，新的會換掉舊的。"""
         self.on_removed("note")
         self.push("note", text, key="note", life=NOTE_SECONDS)
+
+    def wake(self) -> None:
+        """設定改了：下一輪一定重畫。"""
+        self._last = None
+        self._wake.set()
+
+    def set_pins(self, msgs: list[dict]) -> None:
+        """釘選的句子（舊的在前）。"""
+        with self._lock:
+            self.pins = [{"key": f"pin{m['id']}", "kind": "me" if m.get("who") == "me" else ("screen" if m.get("via") == "screen" else "heard"),
+                          "text": m.get("translated") or "", "original": m.get("original") or "", "at": 0.0,
+                          "version": len(m.get("translated") or ""), "life": 0.0, "who": None, "mention": False, "pinned": True}
+                         for m in msgs if m.get("translated")]
+        self.wake()
+
+    def hovered(self) -> bool:
+        """滑鼠在浮動字幕上面（四周多算 8 像素）。"""
+        pos = self.cursor() if self.cursor else None
+        if not pos or not self.rect:
+            return False
+        x, y, w, h = self.rect
+        return x - 8 <= pos[0] <= x + w + 8 and y - 8 <= pos[1] <= y + h + 8
 
     def on_removed(self, key) -> None:
         with self._lock:
@@ -837,13 +864,13 @@ class Overlay:
 
     def _tile(self, item: dict, width: int, size: int, cfg: dict):
         style = chatpaint.style_of(cfg)
-        key = (item["key"], item["version"], bool(item.get("mention")), width, size, cfg["overlay_original"], cfg["overlay_backdrop"],
+        key = (item["key"], item["version"], bool(item.get("mention")), bool(item.get("pinned")), width, size, cfg["overlay_original"], cfg["overlay_backdrop"],
                cfg["ui_lang"], cfg["my_lang"], cfg["their_lang"], chatpaint.style_key(style))
         tile = self._tiles.get(key)
         if tile is None:
             names = chatpaint.NAMES.get(cfg["ui_lang"] or "en", chatpaint.NAMES["en"])
             original = item["original"] if cfg["overlay_original"] and item["original"] != item["text"] else ""
-            name, tint = names.get(item["kind"], chatpaint.NOTE_NAME), None
+            name, tint = names.get(item["kind"], chatpaint.NOTE_NAME), chatpaint.PIN_COLOR if item.get("pinned") else None
             if item.get("who"):      # 分得出是誰：名字換成那個人的，顏色也是他的
                 name, tint = chatpaint.speaker_name(item["who"][0], cfg["ui_lang"] or "en", item["who"][1]), chatpaint.speaker_color(item["who"][0])
             if item.get("mention"):      # 提到我：名字前面加 @、換成紅色，在一排字幕裡一眼就看得到
@@ -877,18 +904,26 @@ class Overlay:
         alphas = [1.0 if self.editing else self._alpha(i, now, self._life(i, life)) for i in items]
         moving = any(a < 0.999 for a in alphas)
         wait = 0.04 if moving else 1.0
+        # 滑鼠移到浮動字幕上：整塊變很淡（本來就點得穿），看得到下面的遊戲按鈕（2.17.0）
+        fade = bool(cfg["overlay_hover_fade"]) and not self.editing and self.hovered()
+        pins = [] if self.editing else list(self.pins)
+        if cfg["overlay_hover_fade"] and not self.editing:
+            wait = min(wait, HOVER_POLL)
         ends = [self._life(i, life) - FADE_OUT - (now - i["at"]) for i in items if self._life(i, life)]
         if ends and not moving:
             wait = max(0.04, min(1.0, min(ends)))
-        signature = (tuple((i["key"], i["version"], round(a, 2)) for i, a in zip(items, alphas)), tuple(self.rect),
+        signature = (tuple((i["key"], i["version"], round(a, 2)) for i, a in zip(items, alphas)), tuple(self.rect), fade,
+                     tuple((p["key"], p["version"]) for p in pins),
                      size, self.editing, cfg["overlay_original"], cfg["overlay_backdrop"], cfg["ui_lang"],
                      chatpaint.style_key(chatpaint.style_of(cfg)))
         if signature == self._last:
             return None, wait
         self._last = signature
-        tiles = [(self._tile(i, width, size, cfg), a) for i, a in zip(items, alphas)]
+        dim = HOVER_ALPHA if fade else 1.0
+        tiles = [(self._tile(i, width, size, cfg), a * dim) for i, a in zip(items, alphas)]
+        pinned = [(self._tile(p, width, size, cfg), dim) for p in pins]
         image = chatpaint.compose(tiles, (width, height), grow=cfg["overlay_grow"], opacity=int(cfg["overlay_opacity"]),
-                                  lines=int(cfg["overlay_lines"]))
+                                  lines=int(cfg["overlay_lines"]), pinned=pinned)
         if self.editing:
             image = chatpaint.edit_frame(image, cfg["ui_lang"] or "en", size)
         return image, wait

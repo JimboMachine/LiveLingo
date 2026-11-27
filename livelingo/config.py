@@ -86,7 +86,15 @@ DEFAULTS = {
     "player_notes": {},          # 玩家備註：{"遊戲 ID": "備註"}
     "combat_slow": True,         # 畫面一直大幅變動（戰鬥中）時少讀幾次
     "fullscreen_warn": True,     # 遊戲用獨佔全螢幕時提醒改成無邊框視窗
-    "wall_monitor": 1,           # 副螢幕字幕牆開在第幾個螢幕（oswin.monitors() 的順序）
+    "wall_monitor": 1,
+    # 2.17.0：手把快捷鍵、浮動字幕滑鼠靠近變淡、說話直接送進遊戲聊天（預設關：會替你按鍵，有些遊戲的防作弊不喜歡）、攝影機
+    "gamepad_on": False,         # 讀手把按鈕（Back＋另一顆鍵）來做快速鍵的事
+    "gamepad_keys": {"reply": "Back+A", "mic": "Back+X", "overlay": "Back+B", "snap": "Back+Y", "keys": "Back+Start"},
+    "overlay_hover_fade": True,  # 滑鼠移到浮動字幕上就變很淡（本來就點得穿），看得到下面的遊戲按鈕
+    "chat_send": False,          # 我說的話翻好後，替我貼進遊戲的聊天框
+    "chat_send_open": "enter",   # 貼之前先按哪個鍵打開聊天框：enter / slash / t / none
+    "chat_send_enter": True,     # 貼完按 Enter 送出
+    "camera_index": 0,           # 用第幾台攝影機（0 = 第一台）           # 副螢幕字幕牆開在第幾個螢幕（oswin.monitors() 的順序）
     "alert_words": [],           # 喊我名字提醒：對方的話裡出現這些字就標出來、響一聲（mention.py），空的 = 不提醒
     "alert_sound": True,         # 提醒的時候響一聲
     "recap_auto": True,          # 一段對話結束（安靜 10 分鐘）自動整理重點（recap.py）
@@ -112,7 +120,7 @@ DEFAULTS = {
     # 快速輸入框用 Q 不用 T：Ctrl+Shift+T 是所有瀏覽器的「重開剛關掉的分頁」，全域快速鍵會把它搶走。
     "hotkeys": {"overlay": "Ctrl+Shift+S", "mic": "Ctrl+Shift+M", "copy": "Ctrl+Shift+C", "quick": "Ctrl+Shift+Q", "reply": "Ctrl+Shift+R",
                 "pick": "Ctrl+Shift+X", "snap": "Ctrl+Shift+F", "phrase": "Ctrl+Shift+P", "inplace": "Ctrl+Shift+O",
-                "private": "Ctrl+Shift+H"},
+                "private": "Ctrl+Shift+H", "clipimg": "Ctrl+Shift+Y", "keys": "Ctrl+Shift+F1"},
     "hotkeys_v": 2,              # 快速鍵預設的版本：2 = Ctrl+Shift+字母（2.13.1 起）；舊設定檔沒有這個值，載入時只換掉還是舊預設的那幾個
     "window": {"w": 980, "h": 720, "x": None, "y": None},
     "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
@@ -151,7 +159,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "game_profile_auto", "story_book", "snap_album", "channel_colors", "player_notes", "combat_slow", "fullscreen_warn", "wall_monitor", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "game_profile_auto", "story_book", "snap_album", "channel_colors", "player_notes", "combat_slow", "fullscreen_warn", "wall_monitor", "gamepad_on", "gamepad_keys", "overlay_hover_fade", "chat_send", "chat_send_open", "chat_send_enter", "camera_index", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

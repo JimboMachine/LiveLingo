@@ -437,3 +437,69 @@ def exclusive_fullscreen() -> bool:
         return state.value == 3
     except Exception:  # noqa: BLE001
         return False
+
+
+def cursor_pos() -> tuple[int, int] | None:
+    """滑鼠現在在螢幕的哪裡（2.17.0，浮動字幕滑鼠靠近變淡用）。不是 Windows 是 None。"""
+    if not IS_WIN:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        point = wintypes.POINT()
+        if ctypes.windll.user32.GetCursorPos(ctypes.byref(point)):
+            return point.x, point.y
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def foreground_is_self() -> bool:
+    """最前面的視窗是不是 LiveLingo 自己（主視窗、小框）。不是 Windows 一律 False。"""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+        import os
+        from ctypes import wintypes
+
+        u32 = ctypes.windll.user32
+        pid = wintypes.DWORD()
+        u32.GetWindowThreadProcessId(u32.GetForegroundWindow(), ctypes.byref(pid))
+        return pid.value == os.getpid()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+CHAT_KEYS = {"enter": 0x0D, "slash": 0xBF, "t": 0x54, "none": 0}
+
+
+def send_chat(text: str, open_key: str = "enter", submit: bool = True) -> bool:
+    """說話直接送進遊戲聊天（2.17.0，預設關）：放進剪貼簿 → 按開聊天框的鍵 → Ctrl+V → Enter。
+    只在使用者打開這個功能時才會用；按的就是這幾下，不讀使用者按的任何鍵。不是 Windows 回傳 False。"""
+    if not IS_WIN or not text or not copy_text(text):
+        return False
+    import ctypes
+    import time
+
+    u32 = ctypes.windll.user32
+    end = time.monotonic() + 1.5
+    while time.monotonic() < end and any(u32.GetAsyncKeyState(vk) & 0x8000 for vk in (0x12, 0x11, 0x10)):
+        time.sleep(0.02)      # 等使用者放開 Alt、Ctrl、Shift（按住說話的鍵可能還按著）
+
+    def tap(*vks):
+        for vk in vks:
+            u32.keybd_event(vk, 0, 0, 0)
+        for vk in reversed(vks):
+            u32.keybd_event(vk, 0, 2, 0)
+
+    key = CHAT_KEYS.get(open_key, 0x0D)
+    if key:
+        tap(key)
+        time.sleep(0.15)      # 聊天框打開要一點時間
+    tap(0x11, 0x56)           # Ctrl+V
+    time.sleep(0.1)
+    if submit:
+        tap(0x0D)
+    return True
