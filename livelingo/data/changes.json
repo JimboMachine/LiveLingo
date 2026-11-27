@@ -131,6 +131,99 @@
       "Nouveau « Autotest de traduction » sur la page Qualité : retraduit de vraies phrases déjà mal traduites, les note et indique celles qui se sont dégradées depuis la dernière fois. Seulement sur ce PC."
     ]
   },
+  "2.13.1": {
+    "zh-TW": [
+      "出錯訊息改成一句白話：不再直接跳出「RuntimeError…」這類原文，而是說發生了什麼、可以怎麼做（磁碟滿了、被別的程式用著、沒有權限、找不到裝置、網路不通…）。電腦回報的原文收進「詳細」，回報問題時再展開。",
+      "麥克風和電腦播放的聲音因為同一個原因都打不開時，只出現一則提醒，不再兩則疊在一起。",
+      "設定頁最上面多了搜尋框：打「快速鍵」「備份」「麥克風」就列出在哪一頁的哪一段，按一下跳過去並框起來。Enter 開第一個結果、Esc 清掉；每種介面語言都用自己的說法找得到。",
+      "快速鍵預設從 Ctrl+Alt+字母 改成 Ctrl+Shift+字母（德文、法文等鍵盤上 Ctrl+Alt 就是 AltGr，會跟打字衝突）。還是原本預設的會自動換，你自己設過的不會變；快速輸入框從 T 改成 Q。",
+      "麥克風：有些麥克風第一種收音方式一定打不開，以前每次開都先失敗一次才改用備用方式。現在備用方式真的收到聲音後會記住這支麥克風，下次直接用；只記裝置名稱和日期，30 天或換版本後會重新試一次。"
+    ],
+    "zh-CN": [
+      "出错消息改成一句白话：不再直接弹出“RuntimeError…”这类原文，而是说明发生了什么、可以怎么做（磁盘满了、被别的程序占用、没有权限、找不到设备、网络不通…）。电脑返回的原文收进“详细”，反馈问题时再展开。",
+      "麦克风和电脑播放的声音因为同一个原因都打不开时，只出现一条提醒，不再两条叠在一起。",
+      "设置页最上面多了搜索框：输入“快捷键”“备份”“麦克风”就列出在哪一页的哪一段，点一下跳过去并框起来。Enter 打开第一个结果、Esc 清除；每种界面语言都能用自己的说法搜到。",
+      "快捷键默认从 Ctrl+Alt+字母 改成 Ctrl+Shift+字母（德语、法语等键盘上 Ctrl+Alt 就是 AltGr，会跟打字冲突）。还是原来默认的会自动换，你自己设置过的不会变；快速输入框从 T 改成 Q。",
+      "麦克风：有些麦克风第一种收音方式一定打不开，以前每次开启都先失败一次才改用备用方式。现在备用方式真的收到声音后会记住这支麦克风，下次直接使用；只记设备名称和日期，30 天或换版本后会重新试一次。"
+    ],
+    "en": [
+      "Error messages are one plain sentence now instead of “RuntimeError…”: what happened and what to do (disk full, in use by another program, no permission, device not found, network down…). The raw text is under “Details”.",
+      "If the microphone and the PC sound both fail for the same reason, you now get one notice instead of two stacked ones.",
+      "Settings has a search box at the top: type “hotkeys”, “backup” or “microphone” to see the page and section, then click to jump there. Enter opens the first result, Esc clears.",
+      "Hotkey defaults are now Ctrl+Shift+letter instead of Ctrl+Alt+letter (Ctrl+Alt is AltGr on German and French keyboards). Unchanged defaults switch automatically, yours stay. Quick input moved from T to Q.",
+      "Microphones that always fail the first capture method no longer fail once on every start: after the fallback really picks up sound, LiveLingo remembers it. Only the device name and date are saved; retried after 30 days or an update."
+    ],
+    "ko": [
+      "오류 메시지가 'RuntimeError…' 같은 원문 대신 한 문장의 쉬운 말로 바뀌었습니다. 무슨 일이 있었고 어떻게 하면 되는지 알려 줍니다(디스크 가득 참, 다른 프로그램이 사용 중, 권한 없음, 장치 없음, 네트워크 끊김 등). 원문은 '자세히'에 들어 있습니다.",
+      "마이크와 PC 소리가 같은 이유로 모두 열리지 않을 때는 알림이 두 개가 아니라 하나만 나타납니다.",
+      "설정 맨 위에 검색창이 생겼습니다. '단축키', '백업', '마이크'를 입력하면 어느 페이지의 어느 부분인지 보여 주고, 누르면 그곳으로 이동합니다. Enter는 첫 결과 열기, Esc는 지우기입니다.",
+      "단축키 기본값이 Ctrl+Alt+글자에서 Ctrl+Shift+글자로 바뀌었습니다(독일어·프랑스어 키보드에서 Ctrl+Alt는 AltGr). 기본값 그대로인 것만 자동으로 바뀌고 직접 정한 것은 그대로입니다. 빠른 입력은 T에서 Q로 바뀌었습니다.",
+      "첫 번째 수음 방식이 항상 실패하는 마이크도 더 이상 시작할 때마다 한 번 실패하지 않습니다. 대체 방식으로 소리가 실제로 들어오면 그 마이크를 기억합니다. 기기 이름과 날짜만 저장하며, 30일이 지나거나 업데이트되면 다시 시도합니다."
+    ],
+    "ja": [
+      "エラーメッセージを「RuntimeError…」のような原文ではなく、何が起きたか・どうすればよいかを一文で伝える形にしました（ディスクがいっぱい、他のプログラムが使用中、権限がない、デバイスが見つからない、ネットワークに接続できない など）。原文は「詳細」にしまってあります。",
+      "マイクとPCの音が同じ理由で開けないときは、通知が2つ重なるのではなく1つだけ表示されます。",
+      "設定画面の一番上に検索ボックスを追加しました。「ショートカット」「バックアップ」「マイク」と入力すると、どのページのどの項目かが表示され、クリックで移動できます。Enter で最初の結果、Esc でクリアします。",
+      "ショートカットの初期値を Ctrl+Alt+文字 から Ctrl+Shift+文字 に変更しました（ドイツ語・フランス語キーボードでは Ctrl+Alt が AltGr のため）。初期値のままのものは自動で切り替わり、自分で設定したものは変わりません。クイック入力は T から Q になりました。",
+      "最初の収音方式が必ず失敗するマイクでも、起動のたびに一度失敗することがなくなりました。予備の方式で実際に音が入ると、そのマイクを記憶します。保存するのはデバイス名と日付だけで、30 日たつかアップデートすると再度試します。"
+    ],
+    "vi": [
+      "Thông báo lỗi giờ là một câu dễ hiểu thay vì “RuntimeError…”: chuyện gì đã xảy ra và nên làm gì (ổ đĩa đầy, đang được chương trình khác dùng, không có quyền, không thấy thiết bị, mất mạng…). Nội dung gốc nằm trong “Chi tiết”.",
+      "Khi micro và âm thanh máy tính cùng lỗi vì một lý do, bạn chỉ nhận một thông báo thay vì hai thông báo chồng lên nhau.",
+      "Trang Cài đặt có ô tìm kiếm ở trên cùng: gõ “phím tắt”, “sao lưu” hoặc “micro” để thấy trang và mục tương ứng, rồi bấm để nhảy tới. Enter mở kết quả đầu, Esc để xóa.",
+      "Phím tắt mặc định giờ là Ctrl+Shift+chữ thay cho Ctrl+Alt+chữ (trên bàn phím Đức, Pháp, Ctrl+Alt là AltGr). Phím còn nguyên mặc định sẽ tự đổi, phím bạn tự đặt giữ nguyên. Ô nhập nhanh đổi từ T sang Q.",
+      "Micro luôn lỗi ở cách thu âm thứ nhất không còn lỗi một lần mỗi khi bật: khi cách dự phòng thực sự thu được tiếng, LiveLingo nhớ micro đó. Chỉ lưu tên thiết bị và ngày; sau 30 ngày hoặc khi cập nhật sẽ thử lại."
+    ],
+    "th": [
+      "ข้อความแจ้งข้อผิดพลาดเป็นประโยคเดียวที่เข้าใจง่าย แทน “RuntimeError…”: บอกว่าเกิดอะไรขึ้นและควรทำอย่างไร (ดิสก์เต็ม โปรแกรมอื่นกำลังใช้อยู่ ไม่มีสิทธิ์ ไม่พบอุปกรณ์ เครือข่ายขัดข้อง…) ส่วนข้อความต้นฉบับเก็บไว้ใน “รายละเอียด”",
+      "ถ้าไมโครโฟนและเสียงจากคอมพิวเตอร์เปิดไม่ได้ด้วยเหตุผลเดียวกัน จะแสดงการแจ้งเตือนเพียงรายการเดียว ไม่ซ้อนกันสองรายการ",
+      "หน้าตั้งค่ามีช่องค้นหาอยู่ด้านบนสุด: พิมพ์ “คีย์ลัด” “สำรอง” หรือ “ไมโครโฟน” จะเห็นว่าอยู่หน้าไหนส่วนไหน แล้วกดเพื่อไปที่นั่น Enter เปิดผลลัพธ์แรก Esc ล้างคำค้น",
+      "คีย์ลัดเริ่มต้นเปลี่ยนเป็น Ctrl+Shift+ตัวอักษร แทน Ctrl+Alt+ตัวอักษร (บนคีย์บอร์ดเยอรมัน/ฝรั่งเศส Ctrl+Alt คือ AltGr) ค่าที่ยังเป็นค่าเริ่มต้นจะเปลี่ยนให้เอง ค่าที่ตั้งเองไม่เปลี่ยน ช่องพิมพ์ด่วนเปลี่ยนจาก T เป็น Q",
+      "ไมโครโฟนที่เปิดด้วยวิธีแรกไม่ได้เสมอ จะไม่ล้มเหลวหนึ่งครั้งทุกครั้งที่เปิดอีก: เมื่อวิธีสำรองรับเสียงได้จริง LiveLingo จะจำไมโครโฟนนั้น เก็บเฉพาะชื่ออุปกรณ์และวันที่ ลองใหม่เมื่อครบ 30 วันหรืออัปเดต"
+    ],
+    "id": [
+      "Pesan error kini satu kalimat sederhana, bukan “RuntimeError…”: apa yang terjadi dan apa yang bisa dilakukan (disk penuh, dipakai program lain, tidak ada izin, perangkat tidak ditemukan, jaringan putus…). Teks aslinya disimpan di “Detail”.",
+      "Jika mikrofon dan suara PC sama-sama gagal karena alasan yang sama, Anda hanya mendapat satu pemberitahuan, bukan dua yang bertumpuk.",
+      "Pengaturan punya kotak pencarian di atas: ketik “tombol pintas”, “cadangan” atau “mikrofon” untuk melihat halaman dan bagiannya, lalu klik untuk melompat ke sana. Enter membuka hasil pertama, Esc menghapus.",
+      "Bawaan tombol pintas kini Ctrl+Shift+huruf, bukan Ctrl+Alt+huruf (di keyboard Jerman/Prancis, Ctrl+Alt adalah AltGr). Yang masih bawaan berganti otomatis, yang Anda atur sendiri tetap. Input cepat pindah dari T ke Q.",
+      "Mikrofon yang selalu gagal di cara rekam pertama tidak lagi gagal sekali tiap dibuka: setelah cara cadangan menangkap suara, LiveLingo mengingatnya. Hanya nama perangkat dan tanggal disimpan; dicoba ulang setelah 30 hari atau pembaruan."
+    ],
+    "es": [
+      "Los mensajes de error son ahora una frase clara en lugar de «RuntimeError…»: qué pasó y qué puedes hacer (disco lleno, en uso por otro programa, sin permiso, dispositivo no encontrado, sin red…). El texto original queda en «Detalles».",
+      "Si el micrófono y el sonido del PC fallan por el mismo motivo, ahora recibes un solo aviso en vez de dos apilados.",
+      "Ajustes tiene un cuadro de búsqueda arriba: escribe «atajos», «copia de seguridad» o «micrófono» para ver la página y la sección y pulsa para ir allí. Intro abre el primer resultado y Esc borra.",
+      "Los atajos por defecto pasan a Ctrl+Shift+letra en lugar de Ctrl+Alt+letra (en teclados alemán y francés, Ctrl+Alt es AltGr). Los que seguían por defecto cambian solos; los que configuraste tú no. La entrada rápida pasa de T a Q.",
+      "Los micrófonos que siempre fallan con el primer método de captura ya no fallan una vez en cada inicio: cuando el alternativo capta sonido, LiveLingo lo recuerda. Solo guarda nombre y fecha; reintenta tras 30 días o una actualización."
+    ],
+    "pt": [
+      "As mensagens de erro agora são uma frase clara em vez de “RuntimeError…”: o que aconteceu e o que fazer (disco cheio, em uso por outro programa, sem permissão, dispositivo não encontrado, sem rede…). O texto original fica em “Detalhes”.",
+      "Se o microfone e o som do PC falharem pelo mesmo motivo, agora aparece um único aviso em vez de dois empilhados.",
+      "As Configurações têm uma caixa de busca no topo: digite “atalhos”, “backup” ou “microfone” para ver a página e a seção; clique para ir até lá e vê-la destacada. Enter abre o primeiro resultado e Esc limpa.",
+      "Os atalhos padrão agora são Ctrl+Shift+letra, em vez de Ctrl+Alt+letra (em teclados alemão e francês, Ctrl+Alt é o AltGr). Os que ainda eram padrão mudam sozinhos; os que você definiu ficam. A entrada rápida passou de T para Q.",
+      "Microfones que sempre falham no primeiro método de captura não falham mais uma vez a cada início: quando o alternativo capta som, o LiveLingo o lembra. Só guarda nome do dispositivo e data; tenta de novo após 30 dias ou atualização."
+    ],
+    "ru": [
+      "Сообщения об ошибках теперь — одна понятная фраза вместо «RuntimeError…»: что произошло и что можно сделать (диск заполнен, занято другой программой, нет прав, устройство не найдено, нет сети…). Исходный текст — в «Подробности».",
+      "Если микрофон и звук компьютера не открываются по одной и той же причине, вы получите одно уведомление вместо двух наложенных.",
+      "В настройках вверху есть строка поиска: введите «горячие клавиши», «резервная копия» или «микрофон» — появятся страница и раздел, нажмите, чтобы перейти. Enter открывает первый результат, Esc — очищает.",
+      "Горячие клавиши по умолчанию теперь Ctrl+Shift+буква вместо Ctrl+Alt+буква (на немецкой и французской клавиатурах Ctrl+Alt — это AltGr). Неизменённые заменятся сами, ваши останутся. Быстрый ввод: Q вместо T.",
+      "Микрофоны, для которых первый способ записи не срабатывает, больше не дают ошибку при каждом запуске: когда запасной способ получает звук, LiveLingo это запоминает. Хранятся имя устройства и дата; повтор через 30 дней или после обновления."
+    ],
+    "de": [
+      "Fehlermeldungen sind jetzt ein verständlicher Satz statt „RuntimeError…“: was passiert ist und was zu tun ist (Datenträger voll, von anderem Programm belegt, keine Berechtigung, Gerät fehlt, kein Netz…). Das Original steht unter „Details“.",
+      "Scheitern Mikrofon und PC-Ton aus demselben Grund, kommt jetzt eine einzige Meldung statt zwei übereinander.",
+      "Die Einstellungen haben oben ein Suchfeld: „Tastenkürzel“, „sichern“ oder „Mikrofon“ eintippen zeigt Seite und Abschnitt, ein Klick springt dorthin. Enter öffnet den ersten Treffer, Esc leert.",
+      "Die Standard-Tastenkürzel sind jetzt Ctrl+Shift+Buchstabe statt Ctrl+Alt+Buchstabe (auf deutschen und französischen Tastaturen ist Ctrl+Alt = AltGr). Unveränderte Standards wechseln automatisch, eigene bleiben. Schnelleingabe: Q statt T.",
+      "Mikrofone, deren erste Aufnahmemethode immer scheitert, schlagen nicht mehr bei jedem Start erst fehl: Lieferte die Ersatzmethode Ton, merkt sich LiveLingo das. Gespeichert: nur Gerätename, Datum; nach 30 Tagen oder Update neu probiert."
+    ],
+    "fr": [
+      "Les erreurs s’affichent en une phrase claire au lieu de « RuntimeError… » : ce qui s’est passé et quoi faire (disque plein, accès refusé, périphérique introuvable, réseau coupé…). Le texte d’origine est sous « Détails ».",
+      "Si le micro et le son du PC échouent pour la même raison, vous recevez une seule alerte au lieu de deux empilées.",
+      "Les réglages ont une zone de recherche en haut : tapez « raccourcis », « sauvegarde » ou « micro » pour voir la page et la section, cliquez pour y aller. Entrée ouvre le premier résultat, Échap efface.",
+      "Les raccourcis par défaut sont désormais Ctrl+Shift+lettre au lieu de Ctrl+Alt+lettre (sur les claviers allemand et français, Ctrl+Alt est AltGr). Ceux restés par défaut changent seuls, les vôtres restent. La saisie rapide passe de T à Q.",
+      "Les micros dont la première méthode de capture échoue toujours n’échouent plus à chaque démarrage : si la méthode de secours capte du son, LiveLingo le retient. Seuls nom et date sont gardés ; nouvel essai après 30 jours ou mise à jour."
+    ]
+  },
   "2.13.0": {
     "zh-TW": [
       "新增「原地覆蓋翻譯」：譯文直接蓋在畫面上原文的位置，選單、任務說明、別人的聊天不用移開視線。在「螢幕讀取」打開，或按 Ctrl+Shift+O。",

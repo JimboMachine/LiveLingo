@@ -609,6 +609,99 @@ def test_microphone_second_way(monkeypatch):
     time.sleep(0)
 
 
+def test_microphone_remembers_second_way(monkeypatch, tmp_path):
+    """第一種方式每次都打不開的麥克風：第二種真的收到聲音就記住，下次直接用第二種，不再每次先失敗一次。
+    記的東西會過期、換版本會作廢；記住的做法哪天行不通了就忘掉，讓第一種再試一次。"""
+    import json
+    import sys
+    import time
+    import types
+
+    import numpy as np
+
+    from livelingo.core import audio
+
+    calls = {"recorder": 0}
+
+    class Mic:
+        name, id, isloopback = "Microphone (RØDE NT-USB Mini)", "mic-rode", False
+
+        def recorder(self, **kw):
+            calls["recorder"] += 1
+            assert 1 == 2          # 跟真的一樣：沒有訊息的 AssertionError
+
+    mic = Mic()
+    soundcard = types.SimpleNamespace(all_microphones=lambda include_loopback=False: [mic], default_microphone=lambda: mic)
+    monkeypatch.setattr(audio, "_soundcard", lambda: soundcard)
+
+    class Stream:
+        def __init__(self, callback=None, device=None, **kw):
+            self.callback = callback
+
+        def __enter__(self):
+            self.callback(np.full((audio.BLOCK, 1), 0.25, dtype=np.float32), audio.BLOCK, None, None)
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    devices = [{"name": "Microphone (RØDE NT-USB Mini)", "max_input_channels": 1}]
+    apis = [{"name": "MME", "devices": [0], "default_input_device": 0}]
+    monkeypatch.setitem(sys.modules, "sounddevice", types.SimpleNamespace(
+        InputStream=Stream, query_devices=lambda: devices, query_hostapis=lambda: apis))
+    logged = []
+    monkeypatch.setattr(audio, "log", logged.append)
+    path, now = tmp_path / "mic_ways.json", [1_700_000_000.0]
+    name = "Microphone (RØDE NT-USB Mini)"
+
+    def listen(ways):
+        errors = []
+        cap = audio.Capture("mic", on_error=lambda k, ex: errors.append(str(ex)), ways=ways)
+        cap.start()
+        deadline = time.time() + 3
+        while time.time() < deadline and cap.q.empty() and cap.is_alive():      # 等第一段聲音，或是兩種方式都失敗而結束
+            time.sleep(0.01)
+        cap.stop()
+        cap.join(3)
+        return cap, errors
+
+    cap, errors = listen(audio.Ways(path, "2.13.1", clock=lambda: now[0]))      # 第一次：第一種失敗一次，第二種收到聲音 → 記住
+    assert cap.backend == "portaudio" and not errors and calls["recorder"] == 1
+    assert any("failed" in line for line in logged)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert list(saved["second"]) == [name] and "audio" not in path.read_text(encoding="utf-8")      # 只有裝置名稱和日期
+
+    logged.clear()
+    cap, errors = listen(audio.Ways(path, "2.13.1", clock=lambda: now[0]))      # 重開程式：從檔案讀回來，直接用第二種
+    assert cap.backend == "portaudio" and not errors and calls["recorder"] == 1      # 第一種完全沒再試
+    assert not any("failed" in line for line in logged) and any("as remembered" in line for line in logged)
+
+    cap, errors = listen(audio.Ways(path, "2.13.0", clock=lambda: now[0]))      # 換了版本：記的作廢，再試一次第一種
+    assert calls["recorder"] == 2 and not errors and cap.backend == "portaudio"
+    ways = audio.Ways(path, "2.13.0", clock=lambda: now[0])
+    assert ways.prefers_second(name)      # 剛剛在 2.13.0 又記了一次
+    now[0] += 31 * 86400
+    assert not ways.prefers_second(name)      # 超過 30 天：再讓第一種試一次
+    listen(ways)
+    assert calls["recorder"] == 3 and ways.prefers_second(name)
+
+    def busy(self):
+        raise OSError("device is busy")
+
+    monkeypatch.setattr(audio.Capture, "_run_portaudio", busy)      # 記住的做法這次行不通：忘掉，第一種再試，兩種都失敗才回報
+    cap, errors = listen(ways)
+    assert calls["recorder"] == 4 and not ways.prefers_second(name)
+    assert len(errors) == 1 and "AssertionError" in errors[0] and "device is busy" in errors[0]
+    assert json.loads(path.read_text(encoding="utf-8"))["second"] == {}
+
+    path.write_text("{ not json", encoding="utf-8")      # 檔案壞了：當作什麼都沒記過，不會出錯
+    assert audio.Ways(path, "2.13.1").second == {}
+    nowhere = audio.Ways(tmp_path / "never" / "mic_ways.json", "2.13.1")
+    nowhere.remember("")      # 沒有名稱的不記
+    nowhere.forget("沒記過的")
+    assert nowhere.second == {} and not (tmp_path / "never").exists()
+
+
 def test_quiet_microphone_and_levels():
     import numpy as np
 
@@ -803,7 +896,7 @@ def test_quality_page_is_split_from_words_and_memory():
 
     # 新的一頁接在「翻譯品質」後面、有圖示、能被打開；這四種資料搬過去了，就跟著新的一頁重畫
     assert '["quality", "nav_quality", "quality"], ["vocab", "nav_vocab", "vocab"]' in js and "    vocab: '<svg" in js
-    assert 'else if (S.ui.tab === "vocab") page.innerHTML = vocabPage();' in js
+    assert 'if (tab === "vocab") return vocabPage();' in js      # 每一頁怎麼組出來都寫在 pageHTML 裡（搜尋也靠它把每一頁組一遍）
     for event in ("glossary", "game", "lessons", "memory"):
         line = next(line for line in js.splitlines() if line.strip().startswith(f"{event}: ("))
         assert 'S.ui.tab === "vocab"' in line and '"quality"' not in line, event
@@ -2927,7 +3020,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     service.notice = lambda code, **kw: notices.append(code)
     publish = service.hub.publish
     service.hub.publish = lambda name, data=None: (events.append((name, data)), publish(name, data))[1]
-    backend = hotkeys.FakeBackend(taken=["Ctrl+Alt+C"])
+    backend = hotkeys.FakeBackend(taken=["Ctrl+Shift+C"])
     service.hotkeys.backend = backend
     service._hotkey = lambda name: service._hotkey_work(name) if name != "quick" else service.quick_input()      # 測試裡直接做，不另開執行緒
     service.hotkeys.on_fire = service._hotkey
@@ -2939,24 +3032,24 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
 
         # 開關字幕
         was = service.cfg["overlay"]
-        assert backend.press("Ctrl+Alt+S") and service.cfg["overlay"] is (not was)
-        backend.press("Ctrl+Alt+S")
+        assert backend.press("Ctrl+Shift+S") and service.cfg["overlay"] is (not was)
+        backend.press("Ctrl+Shift+S")
         assert service.cfg["overlay"] is was
 
         # 被佔用的那一組按了沒反應；換一組就好了，而且只動那一個
-        assert not backend.press("Ctrl+Alt+C")
-        result = service.update_config({"hotkeys": {"copy": "ctrl+shift+c"}})
+        assert not backend.press("Ctrl+Shift+C")
+        result = service.update_config({"hotkeys": {"copy": "ctrl+alt+c"}})
         assert result["saved"] and result["changed"] == ["hotkeys"]
-        assert service.cfg["hotkeys"] == {**DEFAULTS["hotkeys"], "copy": "Ctrl+Shift+C"}
+        assert service.cfg["hotkeys"] == {**DEFAULTS["hotkeys"], "copy": "Ctrl+Alt+C"}
         assert service.hotkeys.states["copy"] == "ok" and ("hotkeys", service.hotkeys_state()) in events
         # 跟別的動作一樣的、不能用的：不收，也說了為什麼
-        assert service.update_config({"hotkeys": {"mic": "Ctrl+Alt+S"}})["changed"] == [] and notices[-1] == "hotkey_same"
+        assert service.update_config({"hotkeys": {"mic": "Ctrl+Shift+S"}})["changed"] == [] and notices[-1] == "hotkey_same"
         assert service.update_config({"hotkeys": {"mic": "M"}})["changed"] == [] and notices[-1] == "hotkey_invalid"
         # 兩個互換是可以的；空字串 = 不用
-        swapped = service.update_config({"hotkeys": {"overlay": "Ctrl+Alt+M", "mic": "Ctrl+Alt+S"}})
-        assert swapped["changed"] == ["hotkeys"] and service.cfg["hotkeys"]["mic"] == "Ctrl+Alt+S"
+        swapped = service.update_config({"hotkeys": {"overlay": "Ctrl+Shift+M", "mic": "Ctrl+Shift+S"}})
+        assert swapped["changed"] == ["hotkeys"] and service.cfg["hotkeys"]["mic"] == "Ctrl+Shift+S"
         service.update_config({"hotkeys": {"quick": ""}})
-        assert service.hotkeys.states["quick"] == "off" and not backend.press("Ctrl+Alt+T")
+        assert service.hotkeys.states["quick"] == "off" and not backend.press("Ctrl+Shift+Q")
         service.update_config({"hotkeys": DEFAULTS["hotkeys"]})      # 恢復預設
         assert service.cfg["hotkeys"] == DEFAULTS["hotkeys"]
         saved = __import__("json").loads((tmp_path / "config.json").read_text(encoding="utf-8"))
@@ -2965,42 +3058,42 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
         # 設定頁在等新組合：先停用，恢復之後照舊
         before = service.cfg["overlay"]
         service.pause_hotkeys(True)
-        assert not backend.press("Ctrl+Alt+S") and service.cfg["overlay"] is before
+        assert not backend.press("Ctrl+Shift+S") and service.cfg["overlay"] is before
         service.pause_hotkeys(False)
-        assert backend.press("Ctrl+Alt+S") and service.cfg["overlay"] is (not before)
+        assert backend.press("Ctrl+Shift+S") and service.cfg["overlay"] is (not before)
 
         # 複製我上一句的翻譯：只找我說的、已經翻好的；沒有就說沒有
-        service.update_config({"hotkeys": {"copy": "Ctrl+Shift+C"}})
+        service.update_config({"hotkeys": {"copy": "Ctrl+Alt+C"}})      # 預設那組被別的程式佔了，這裡換成這一組
         notes = []
         service.overlay.note = notes.append
         service.cfg.set(ui_lang="zh-TW")
-        backend.press("Ctrl+Shift+C")
+        backend.press("Ctrl+Alt+C")
         assert copied == [] and notes[-1] == hotkeys.NOTES["zh-TW"]["nothing"]
         service.cfg.set(ui_lang="ko")
         service.messages.extend([
             {"id": 1, "who": "me", "via": "typed", "original": "等我一下", "translated": "잠깐만 기다려", "copied": False},
             {"id": 2, "who": "them", "via": "heard", "original": "알겠어", "translated": "知道了", "copied": False},
             {"id": 3, "who": "me", "via": "spoken", "original": "還沒翻好", "translated": "", "pending": True, "copied": False}])
-        backend.press("Ctrl+Shift+C")
+        backend.press("Ctrl+Alt+C")
         assert copied == ["잠깐만 기다려"] and notes[-1] == hotkeys.NOTES["ko"]["copied"]
         assert service.messages[0]["copied"] is True and events[-2][0] == "message" and events[-2][1]["id"] == 1
 
         # 麥克風：引擎還沒好的時候不動，說一聲；好了之後開、關，各有提示
         calls = []
         service.set_source = lambda key, on: (calls.append((key, on)), service.sources[key].update(on=on))
-        backend.press("Ctrl+Alt+M")
+        backend.press("Ctrl+Shift+M")
         assert calls == [] and notes[-1] == hotkeys.NOTES["ko"]["not_ready"]
         service.phase = "ready"
-        backend.press("Ctrl+Alt+M")
-        backend.press("Ctrl+Alt+M")
+        backend.press("Ctrl+Shift+M")
+        backend.press("Ctrl+Shift+M")
         assert calls == [("mic", True), ("mic", False)] and notes[-2:] == [hotkeys.NOTES["ko"]["mic_on"], hotkeys.NOTES["ko"]["mic_off"]]
 
         # 快速輸入框：打的字當成我打的字去翻譯（翻好自動複製是打字本來就有的）；引擎沒好就不開
         sent = []
         service.submit = lambda via, text, **kw: sent.append((via, text))
         monkeypatch.setenv("LIVELINGO_FAKE_QUICK", "等我一下")
-        service.update_config({"hotkeys": {"quick": "Ctrl+Alt+T"}})
-        assert backend.press("Ctrl+Alt+T") and sent == [("typed", "等我一下")]
+        service.update_config({"hotkeys": {"quick": "Ctrl+Shift+Q"}})
+        assert backend.press("Ctrl+Shift+Q") and sent == [("typed", "等我一下")]
         service.phase = "starting"
         assert not service.quick_input() and len(sent) == 1
     finally:
@@ -3043,6 +3136,86 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     calls = {ast.unparse(n.func) for path in ("window.py", "service.py")
              for n in ast.walk(ast.parse((root / path).read_text(encoding="utf-8"))) if isinstance(n, ast.Call)}
     assert "service.tray.start" in calls and "self.start_hotkeys" in calls
+
+
+def test_hotkey_defaults_are_ctrl_shift_and_own_settings_stay(tmp_path, monkeypatch):
+    """
+    快速鍵預設從 Ctrl+Alt+字母改成 Ctrl+Shift+字母（德文、法文等鍵盤上 Ctrl+Alt 就是 AltGr，會跟打字撞）。
+    從舊版升上來：還是舊預設的換成新預設，自己設過的（換了別組、清空）一個都不動；
+    新預設剛好被自己設的另一個動作用掉的，那個動作先留著舊的；換過一次就不再換；舊版匯出的設定檔匯入時也一樣處理。
+    """
+    import json
+
+    from livelingo import hotkeys, oswin
+    from livelingo.config import DEFAULTS, HOTKEYS_V, OLD_HOTKEYS, Config, migrate_hotkeys
+    from livelingo.service import SETTINGS_SKIP, Service
+
+    new, old = DEFAULTS["hotkeys"], OLD_HOTKEYS
+    assert set(new) == set(hotkeys.ACTIONS) and set(old) == set(new) - {"inplace", "private"} and DEFAULTS["hotkeys_v"] == HOTKEYS_V == 2      # 「原地覆蓋」（2.13.0）、「隱私暫停」（2.14.0）一開始就是 Ctrl+Shift，沒有舊預設要換
+    new8 = {k: v for k, v in new.items() if k in old}      # 有舊預設的那八個動作
+    assert all(c.startswith("Ctrl+Shift+") for c in new.values()) and all(c.startswith("Ctrl+Alt+") for c in old.values())
+    assert all(hotkeys.normalize(c) == c for c in (*new.values(), *old.values()))
+    assert "Ctrl+Shift+T" not in new.values()      # 瀏覽器的「重開剛關掉的分頁」：全域快速鍵會把它搶走，快速輸入框改用 Q
+    assert {k: v.rsplit("+", 1)[1] for k, v in new8.items() if old[k].rsplit("+", 1)[1] != v.rsplit("+", 1)[1]} == {"quick": "Q"}
+    assert "hotkeys_v" in SETTINGS_SKIP
+
+    # ---- 全新安裝：直接是新預設，不用寫檔
+    fresh = Config(tmp_path / "fresh")
+    assert fresh["hotkeys"] == new and fresh["hotkeys_v"] == 2 and not (tmp_path / "fresh" / "config.json").exists()
+
+    # ---- 2.12.0 的設定檔（沒有 hotkeys_v）：全都是舊預設 → 全換
+    folder = tmp_path / "old"
+    folder.mkdir()
+    (folder / "config.json").write_text(json.dumps({"theme": "light", "hotkeys": dict(old)}), encoding="utf-8")
+    config = Config(folder)
+    assert config["hotkeys"] == new and config["theme"] == "light"
+    assert json.loads((folder / "config.json").read_text(encoding="utf-8"))["hotkeys"] == new      # 馬上存下來
+    assert json.loads((folder / "config.json").read_text(encoding="utf-8"))["hotkeys_v"] == 2
+    assert Config(folder)["hotkeys"] == new
+
+    # ---- 換過一次就不再換：之後自己又設回 Ctrl+Alt+S，下次開程式還是 Ctrl+Alt+S
+    config.set(hotkeys={**new, "overlay": "Ctrl+Alt+S"})
+    assert Config(folder)["hotkeys"]["overlay"] == "Ctrl+Alt+S"
+
+    # ---- 自己設過的不動：換了別組、清空、設成別的動作的舊預設，都原樣留著
+    mine = {**old, "mic": "Ctrl+Alt+Q", "copy": "", "snap": "Ctrl+Shift+F9", "phrase": old["reply"], "reply": ""}
+    folder2 = tmp_path / "custom"
+    folder2.mkdir()
+    (folder2 / "config.json").write_text(json.dumps({"hotkeys": mine}), encoding="utf-8")
+    got = Config(folder2)["hotkeys"]
+    assert (got["mic"], got["copy"], got["snap"], got["phrase"], got["reply"]) == ("Ctrl+Alt+Q", "", "Ctrl+Shift+F9", old["reply"], "")
+    assert (got["overlay"], got["quick"], got["pick"]) == (new["overlay"], new["quick"], new["pick"])
+
+    # ---- 新預設已經被自己設的另一個動作用掉：那個動作先留著舊的，免得兩個動作搶同一組
+    clash = {**old, "reply": "Ctrl+Shift+S"}
+    assert migrate_hotkeys(clash) == {**new8, "overlay": old["overlay"], "reply": "Ctrl+Shift+S"}
+
+    # ---- 壞掉的設定檔不會讓程式開不起來
+    assert migrate_hotkeys(None) == new and migrate_hotkeys("x") == new
+    folder3 = tmp_path / "broken"
+    folder3.mkdir()
+    (folder3 / "config.json").write_text(json.dumps({"hotkeys_v": "two", "hotkeys": dict(old)}), encoding="utf-8")
+    assert Config(folder3)["hotkeys"] == new
+    (folder3 / "config.json").write_text(json.dumps({"hotkeys": None}), encoding="utf-8")
+    assert Config(folder3)["hotkeys"] == new
+
+    # ---- 設定檔匯出匯入：新版匯出的照原樣套；舊版匯出的（沒有 hotkeys_v）還是舊預設的換成新預設
+    monkeypatch.setattr(oswin, "open_path", lambda path: True)
+    service = Service(tmp_path / "pc")
+    service.hotkeys.backend = hotkeys.FakeBackend()
+    service.start_hotkeys()
+    try:
+        done = service.settings_export()
+        exported = json.loads((service.transcript_dir() / done["name"]).read_text(encoding="utf-8"))
+        assert exported["hotkeys_v"] == 2 and "hotkeys_v" not in exported["config"]
+        legacy = {"kind": exported["kind"], "version": 1, "app_version": "2.12.0", "config": {"hotkeys": {**old, "mic": "Ctrl+Alt+Q"}}}
+        assert service.settings_import(legacy)["ok"]
+        assert service.cfg["hotkeys"] == {**new, "mic": "Ctrl+Alt+Q"}
+        assert service.hotkeys.bindings["mic"] == "Ctrl+Alt+Q" and service.hotkeys.bindings["overlay"] == new["overlay"]
+        current = {**exported, "config": {"hotkeys": {**old}}}      # 新版匯出的：自己設的 Ctrl+Alt+字母就是自己設的
+        assert service.settings_import(current)["ok"] and service.cfg["hotkeys"] == {**new, **old}      # 匯入的蓋上去，檔案裡沒有的動作（原地覆蓋）留著預設
+    finally:
+        service.shutdown()
 
 
 def test_history_kept_searched_exported_cleared(tmp_path, monkeypatch):
@@ -3296,7 +3469,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         service.sources["screen"].update(error="", on=False)
 
         # 快速鍵
-        service.hotkeys.backend.taken = {hotkeys.parse("Ctrl+Alt+C")}
+        service.hotkeys.backend.taken = {hotkeys.parse("Ctrl+Shift+C")}
         service.hotkeys.set(service.cfg["hotkeys"])
         assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("warn", 1)
         service.update_config({"hotkeys": {name: "" for name in hotkeys.ACTIONS}})
@@ -3351,7 +3524,7 @@ def test_settings_export_import_reset_undo(tmp_path, monkeypatch):
     layout = {"name": "打 LOL", "look": {"overlay_font": 30, "overlay_bold": False}, "rect": [50, 60, 500, 260], "form": "float", "monitor": 0}
     try:
         service.update_config({"theme": "light", "accent": "rose", "overlay_font": 40, "tone": "polite", "my_lang": "ja", "ui_lang": "ja",
-                               "history_days": "90", "hotkeys": {"mic": "Ctrl+Shift+M"}, "ptt": True, "voice_sensitivity": 5})
+                               "history_days": "90", "hotkeys": {"mic": "Ctrl+Alt+M"}, "ptt": True, "voice_sensitivity": 5})
         service.cfg.set(regions=[region], overlay_layouts=[layout], overlay_rect=[100, 100, 500, 300], setup_done=True,
                         window={"w": 1000, "h": 700, "x": 5, "y": 6}, interval=1.0)
         mine = service.cfg.snapshot()
@@ -3372,13 +3545,13 @@ def test_settings_export_import_reset_undo(tmp_path, monkeypatch):
             assert now[key] == DEFAULTS[key], key
         for key in (*RESET_KEEP, *SETTINGS_SKIP):
             assert now[key] == mine[key], key
-        assert service.hotkeys.bindings["mic"] == "Ctrl+Alt+M" and service.history.days == DEFAULTS["history_days"]      # 馬上生效
+        assert service.hotkeys.bindings["mic"] == "Ctrl+Shift+M" and service.history.days == DEFAULTS["history_days"]      # 馬上生效
         assert service.state()["settings_backup"]["reason"] == "reset"
 
         # ---- 復原：跟恢復預設之前一模一樣，留著的那一份用掉了
         undone = service.settings_undo()
         assert undone["ok"] and service.cfg.snapshot() == mine and service.settings_backup() is None
-        assert service.hotkeys.bindings["mic"] == "Ctrl+Shift+M"
+        assert service.hotkeys.bindings["mic"] == "Ctrl+Alt+M"
         assert service.settings_undo() == {"ok": False, "error": "no_backup"}
 
         # ---- 匯入：換一台電腦（全新的設定）匯入剛才那個檔，聊天區和版面也回來
@@ -3401,7 +3574,7 @@ def test_settings_export_import_reset_undo(tmp_path, monkeypatch):
         for junk in (None, [], "x", {"kind": "livelingo-library"}, {"kind": SETTINGS_KIND}, {"kind": SETTINGS_KIND, "config": []}):
             assert service.settings_import(junk) == {"ok": False, "error": "not_settings"}
         weird = {"kind": SETTINGS_KIND, "config": {
-            "theme": "neon", "accent": "blue", "overlay_font": 9999, "hotkeys": {"mic": "M", "copy": "Ctrl+Alt+S"}, "history_days": 13,
+            "theme": "neon", "accent": "blue", "overlay_font": 9999, "hotkeys": {"mic": "M", "copy": "Ctrl+Shift+S"}, "history_days": 13,
             "regions": [{"id": "r9", "left": 1, "top": 1, "width": 500, "height": 300, "name": "x" * 99, "app": "Game.exe", "anchor": "bad"},
                         {"id": "tiny", "left": 0, "top": 0, "width": 5, "height": 5}, "junk", {"id": "r9", "left": 0, "top": 0, "width": 99, "height": 99}],
             "overlay_layouts": [{"name": "ok", "look": {"overlay_font": "big", "overlay_bold": True}, "rect": [1, 2, 300, 200], "monitor": "x"},
@@ -3531,6 +3704,137 @@ def test_keyboard_only_paths():
     assert 'if (S.ui.resetAsk && S.view === "settings") actions["set-reset-no"]();' in js
     assert 'if (S.ui.histConfirm && S.view === "settings") actions["hist-clear-no"]();' in js
     assert "/^[1-9]$/.test(e.key)" in js
+
+
+def test_error_messages_are_plain_and_the_raw_text_stays_in_detail():
+    """第 4 項：出錯訊息一句白話（磁碟滿了、被別的程式用著、沒有權限…），電腦回報的原文收進「詳細」。
+    原因的比對規則在 app.js 的 WHY_RULES；這裡拿真實的錯誤訊息用 Python 的 re 跑一遍，所以規則只能用兩邊都看得懂的寫法。"""
+    import re
+    from pathlib import Path
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    js = (ui / "app.js").read_text(encoding="utf-8")
+    i18n = (ui / "i18n.js").read_text(encoding="utf-8")
+    css = (ui / "style.css").read_text(encoding="utf-8")
+
+    block = re.search(r"const WHY_RULES = \[(.*?)\n  \];", js, re.S).group(1)
+    rules = re.findall(r'\["(\w+)", "([^"]*)"\]', block)
+    assert [c for c, _ in rules] == ["full", "denied", "busy", "gone", "missing", "network", "audio"]
+    assert not any("\\" in p for _, p in rules)      # 反斜線在 JS 字串和 Python 裡意思不一樣，不用
+
+    def why(raw, audio=False):      # 和 app.js 的 whyCode 一樣：由上往下，先比到的先用
+        for code, pattern in rules:
+            if re.search(pattern, raw, re.I):
+                return code
+        return "audio" if audio and raw else ""
+
+    corpus = {
+        "full": ["[Errno 28] No space left on device", "OSError: [WinError 112] There is not enough space on the disk", "Disk is full"],
+        "denied": ["[WinError 5] Access is denied", "PermissionError: [Errno 13] Permission denied: 'C:\\Users\\x\\models'", "0x80070005 E_ACCESSDENIED", "Operation not permitted"],
+        "busy": ["[WinError 32] The process cannot access the file because it is being used by another process", "[Errno 16] Device or resource busy",
+                 "AUDCLNT_E_DEVICE_IN_USE (0x8889000a)", "[WinError 10048] Only one usage of each socket address is normally permitted", "[PaErrorCode -9985] Device unavailable"],
+        "gone": ["no microphone found", "PortAudioError: Error querying device -1", "[Errno 19] No such device", "AUDCLNT_E_DEVICE_INVALIDATED (0x88890004)", "Invalid device [PaErrorCode -9996]"],
+        "missing": ["[WinError 3] The system cannot find the path specified: 'C:\\x'", "FileNotFoundError: [Errno 2] No such file or directory: 'models'"],
+        "network": ["<urlopen error [Errno 11001] getaddrinfo failed>", "HTTP Error 503: Service Unavailable", "ConnectionResetError: [WinError 10054]", "The read operation timed out",
+                    "SSL: CERTIFICATE_VERIFY_FAILED"],
+        "audio": ["the audio component failed to load: No module named 'soundcard'", "Error opening InputStream: Invalid sample rate [PaErrorCode -9997]",
+                  "CoInitialize has not been called", "Unanticipated host error [PaErrorCode -9999]: 'WASAPI'"],
+    }
+    for code, texts in corpus.items():
+        for text in texts:
+            assert why(text) == code, (code, text)
+    assert why("") == "" and why("something odd happened") == ""
+    assert why("something odd happened", audio=True) == "audio" and why("", audio=True) == ""      # 收音出的錯、認不出原因：多半是收音元件打不開這個裝置
+    assert why("[WinError 50] The request is not supported") != "denied"      # WinError 5 不能把 50 也算進去
+
+    # 每個原因都有十三種語言的白話（why_unknown 是認不出原因的時候用的）
+    for code in [c for c, _ in rules] + ["unknown"]:
+        assert i18n.count(f"why_{code}: ") == len(UI_LANGS), code
+    for key in ("raw_detail", "err_unknown", "audio_failed_both", "mic_failed", "listen_failed"):
+        assert len(re.findall(rf"(?<![\w]){key}: ", i18n)) == len(UI_LANGS), key
+    texts = re.findall(r"(?<![\w])(?:mic_failed|listen_failed): \"([^\"]*)\"", i18n)
+    assert len(texts) == 2 * len(UI_LANGS)
+    for text in texts:
+        assert "{why}" in text and "{error}" not in text, text      # 一句白話，不再把原文塞進同一句
+
+    # 介面上不再有把原文直接放進句子裡的地方：{ error: … } 一律是 why(…) 或空的，原文走 rawFold / toast 的「詳細」
+    for m in re.finditer(r"\{ error: ([^,}]*)", js):
+        assert m.group(1).startswith(("why(", '""')), m.group(0)
+    assert "RuntimeError" not in js
+    assert "detail: why(detail)" in js and 'rawFold("fs", res.detail)' in js and 'toast(fsError(r.error, r.detail), 7000, "warn", r.detail)' in js      # 影片字幕頁的失敗也一樣：句子說原因，原文在「詳細」
+    assert js.count("rawFold(") >= 10 and '"toast-detail"' in js and "toast(text, ms, level, raw)" in js
+    # 「詳細」是按鈕/摺疊，鍵盤到得了；原文用等寬字、會換行、不超出框
+    assert "<details class=\"raw-fold\"" in js and "<summary id=" in js and 'class="raw" tabindex="0"' in js
+    assert re.search(r"pre\.raw \{[^}]*overflow: auto[^}]*white-space: pre-wrap[^}]*overflow-wrap: anywhere", css)
+    assert ".raw-fold > summary" in css and ".toast .link" in css
+
+
+def test_settings_pages_have_a_search_box_that_finds_every_section():
+    """第 3 項：設定頁很多，快速鍵、字幕記錄、備份都藏在「語言與一般」裡找不到。每一頁設定最上面有搜尋框：
+    把每一頁照現在的語言組一遍，每一區的標題和字都收進索引；打幾個字就列出哪一頁的哪一區，按下去跳過去。
+    （跳過去的位置、鍵盤、十三種語言實際搜得到什麼，是用瀏覽器跑過的；這裡守住骨架、文字和「以後多一頁也會被搜到」。）"""
+    import re
+    import unicodedata
+    from pathlib import Path
+
+    ui = Path(__file__).resolve().parent.parent / "livelingo" / "ui"
+    js, html, css = [(ui / name).read_text(encoding="utf-8") for name in ("app.js", "index.html", "style.css")]
+    i18n = (ui / "i18n.js").read_text(encoding="utf-8")
+
+    # 骨架：搜尋框在每一頁設定的最上面（不跟著那一頁重畫），結果蓋在那一頁上面
+    assert 'id="settings-bar" role="search"' in html and 'type="search" id="settings-q"' in html
+    assert 'data-i18n-label="sq_label"' in html and 'data-i18n-ph="sq_ph"' in html and 'data-act="sq-clear"' in html
+    assert html.index('id="settings-bar"') < html.index('id="settings-page"') < html.index('id="sq-results"')
+    assert "input[type=\"search\"]" in css and ".sq-results" in css and ".settings-body" in css
+    assert "[data-i18n-ph]" in js      # 提示字要跟著介面語言換
+
+    # 對話記錄、學習、說明不是設定：不放搜尋框，也不收進搜尋；其他每一頁（包括以後新增的）都會被收進去
+    assert 'const SEARCH_SKIP = ["history", "learn", "help"];' in js
+    tabs = re.findall(r'\["(\w+)", "nav_\w+", "\w+"\]', re.search(r"const TABS = \[(.*?)\];", js).group(1))
+    assert len(tabs) >= 12 and len(set(tabs)) == len(tabs)
+    for tab in tabs:      # 每一頁的內容都在 pageHTML 裡（搜尋靠它把每一頁組一遍；general 是最後的預設）
+        assert tab == "general" or f'if (tab === "{tab}") return ' in js, tab
+    assert "page.innerHTML = pageHTML(S.ui.tab);" in js and "tpl.innerHTML = pageForIndex(tab);" in js
+    # 組一遍的時候不能有副作用：這幾個函式不能去讀資料、開麥克風、或改設定
+    body = re.search(r"function pageHTML\(tab\) \{(.*?)\n  \}", js, re.S).group(1)
+    assert not re.search(r"\b(post|get|load[A-Z]\w*|toast)\(", body)
+
+    # 搜尋用到的字：十三種語言都有
+    keys = ("sq_label", "sq_ph", "sq_clear", "sq_none", "sq_count", "sq_more", "sq_page", "kw_hotkeys", "kw_backup", "kw_record", "kw_window")
+    for key in keys:
+        assert len(re.findall(rf"(?<![\w]){key}: ", i18n)) == len(UI_LANGS), key
+    for key in ("sq_none", "sq_count", "sq_more"):      # 要填的東西每種語言都有
+        for text in re.findall(rf'(?<![\w]){key}: "([^"]*)"', i18n):
+            assert re.search(r"\{[qn]\}", text), (key, text)
+    # 同義字：每一個 data-kw 都有對應的字（十三種語言）；Jimbo 找不到的三個東西都有
+    kws = re.findall(r'data-kw="(\w+)"', js)
+    assert set(kws) == {"kw_hotkeys", "kw_backup", "kw_record", "kw_window"} and all(f'"{k}"' in js or f"{k}:" in i18n for k in kws)
+    assert 'data-titleonly' in js      # 「這一版改了什麼」只找標題，內文是更新紀錄，不是設定
+
+    # 搜尋框裡舉的例子，真的搜得到：每種語言的三個例子都要出現在那種語言的標題或同義字裡（和 app.js 的 fold 一樣的比法）
+    def fold(text):
+        text = unicodedata.normalize("NFKD", text)
+        return re.sub(r"\s+", " ", re.sub("[̀-ͯ]", "", text).lower()).strip()
+
+    blocks = re.split(r'\n  "([A-Za-z-]+)": \{', i18n)[1:]
+    by_lang = dict(zip(blocks[::2], blocks[1::2]))
+    examples = {
+        "zh-TW": ("快速鍵", "字幕記錄", "備份"), "zh-CN": ("快捷键", "字幕记录", "备份"), "en": ("hotkeys", "subtitle log", "backup"),
+        "ko": ("단축키", "자막 기록", "백업"), "ja": ("ショートカット", "字幕", "バックアップ"), "vi": ("phím tắt", "nhật ký phụ đề", "sao lưu"),
+        "th": ("คีย์ลัด", "บันทึกซับไตเติล", "สำรอง"), "id": ("tombol pintas", "log subtitle", "cadang"), "es": ("atajos", "subtítulos", "copia de seguridad"),
+        "pt": ("atalhos", "legendas", "backup"), "ru": ("клавиши", "журнал", "резервная копия"), "de": ("Tastenkürzel", "Untertitel", "sichern"),
+        "fr": ("raccourcis", "sous-titres", "sauvegarde"),
+    }
+    assert set(examples) == set(UI_LANGS) == set(by_lang)
+    for lang, words in examples.items():
+        def value(key):
+            return re.search(rf'(?<![\w]){key}: "((?:[^"\\]|\\.)*)"', by_lang[lang]).group(1)
+
+        shown = fold(value("sq_ph"))
+        hay = fold(" ".join(value(k) for k in ("hk_title", "rec_title", "set_title", "window_title", "kw_hotkeys", "kw_backup", "kw_record", "kw_window")))
+        for word in words:
+            assert fold(word) in shown, (lang, word, "提示字裡沒有這個例子")
+            assert fold(word) in hay, (lang, word, "例子搜不到東西")
 
 
 def test_storage_sizes_move_and_remove_unused(tmp_path, monkeypatch):
@@ -4300,14 +4604,14 @@ def test_help_page_and_the_page_for_a_friend(tmp_path, monkeypatch):
     assert 'e.key === "F1"' in js and "/^[1-9]$/.test(e.key)" in js and 'e.key === "Escape"' in js
 
     # 沒設定的快速鍵：寫「沒設定」，不畫成按鍵
-    assert guide.fill("按 [[{quick}]] 或 [[{mic}]]，版本 {version}", {"quick": "Ctrl+Alt+T", "mic": "", "version": "2.3.0"}, "（沒設定）") == "按 [[Ctrl+Alt+T]] 或 （沒設定），版本 2.3.0"
+    assert guide.fill("按 [[{quick}]] 或 [[{mic}]]，版本 {version}", {"quick": "Ctrl+Shift+Q", "mic": "", "version": "2.3.0"}, "（沒設定）") == "按 [[Ctrl+Shift+Q]] 或 （沒設定），版本 2.3.0"
     assert guide.page("xx", {})["title"] == data["en"]["title"]      # 沒有的語言用英文
 
     opened = []
     monkeypatch.setattr("livelingo.service.oswin.open_path", lambda p: opened.append(Path(p)))
     service = Service(tmp_path / "data")
     service.cfg.set(ui_lang="zh-TW", their_lang="ko", transcript_dir=str(tmp_path / "out"), ptt_key="F9",
-                    hotkeys={"overlay": "Ctrl+Alt+S", "mic": "", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Shift+F2"})
+                    hotkeys={"overlay": "Ctrl+Shift+S", "mic": "", "copy": "Ctrl+Shift+C", "quick": "Ctrl+Shift+F2"})
     page = service.help_state()
     text = "\n".join(item for section in page["sections"] for item in section["items"])
     assert page["ok"] and page["title"] == "說明" and page["friend_lang"] == "ko" and set(page["langs"]) == set(UI_LANGS)
@@ -4320,7 +4624,7 @@ def test_help_page_and_the_page_for_a_friend(tmp_path, monkeypatch):
     path = Path(saved["path"])
     assert saved["ok"] and saved["name"] == "LiveLingo-quick-start-ko.html" and path.parent == tmp_path / "out" and opened == [tmp_path / "out"]
     html = path.read_text(encoding="utf-8")
-    assert html.startswith("<!doctype html>") and '<html lang="ko">' in html and "<kbd>Ctrl+Alt+T</kbd>" in html and "<kbd>Ctrl+Alt+M</kbd>" in html      # 朋友是新裝的：預設快速鍵
+    assert html.startswith("<!doctype html>") and '<html lang="ko">' in html and "<kbd>Ctrl+Shift+Q</kbd>" in html and "<kbd>Ctrl+Shift+M</kbd>" in html      # 朋友是新裝的：預設快速鍵
     assert "Ctrl+Shift+F2" not in html and f'<a href="{guide.DOWNLOAD}">' in html and f"LiveLingo {service.state()['version']}" in html
     assert html.count("<section>") == 1 + len(guide.FRIEND_SECTIONS) and "<svg" in html and "{" not in re.sub(r"<style>.*?</style>", "", html, flags=re.S)
     for banned in ("<script", "src=", "<link", "@import", "url(h", "url('", 'url("'):      # 獨立的一頁：不載入任何外部的東西（url(#…) 是標誌自己的漸層）
@@ -5027,7 +5331,9 @@ def test_failed_translation_says_why_and_can_be_retried(tmp_path):
     assert lost._engine_lost(RuntimeError("the translation engine keeps stopping"), code="keeps_stopping") is False
     assert lost.phase == "error" and lost.detail["code"] == "keeps_stopping" and lost.detail["log"].endswith("engine-stopped.log")
     assert i18n.count("err_restart_failed: ") == len(UI_LANGS) and 'code="restart_failed"' in ui.parent.joinpath("service.py").read_text(encoding="utf-8")
-    assert i18n.count("err_keeps_stopping: ") == len(UI_LANGS) and 'd.code ? t("err_" + d.code) : (d.message || "")' in app
+    # 有代碼就顯示白話；沒有代碼的也是一句白話，電腦回報的原文收在「詳細」裡（第 4 項）
+    assert i18n.count("err_keeps_stopping: ") == len(UI_LANGS) and 'd.code ? t("err_" + d.code) : t("err_unknown")' in app
+    assert 'rawFold("engine", d.message)' in app and i18n.count("err_unknown: ") == len(UI_LANGS)
     lost._engine_lost(RuntimeError("boom"))
     assert lost.detail["code"] == "" and lost.detail["message"] == "boom" and lost.detail["log"].endswith("engine.log")
 
@@ -6576,7 +6882,7 @@ def test_seven_features_part_two(tmp_path, monkeypatch):
     assert assist.parse_replies("a ||| b\nc ||| d\ne ||| f\ng ||| h", "en") == [{"text": "a", "meaning": "b"}, {"text": "c", "meaning": "d"}, {"text": "e", "meaning": "f"}]
     assert [r["text"] for r in assist.parse_replies("왜 죽었어? někaký 몬스터 ||| 為什麼死了\n괜찮아 ||| 沒關係", "zh-TW", their_lang="ko")] == ["괜찮아"]
     assert assist.parse_replies("¿Qué tal? ||| 怎麼樣", "zh-TW", their_lang="es")[0]["text"] == "¿Qué tal?"      # 拉丁字母的語言照收
-    assert "reply" in hotkeys.ACTIONS and DEFAULTS["hotkeys"]["reply"] == "Ctrl+Alt+R"
+    assert "reply" in hotkeys.ACTIONS and DEFAULTS["hotkeys"]["reply"] == "Ctrl+Shift+R"
     assert all({"reply_nothing", "reply_copied"} <= set(table) for table in hotkeys.NOTES.values())
 
     service = Service(tmp_path)

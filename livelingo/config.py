@@ -87,10 +87,13 @@ DEFAULTS = {
     "usage_keep": True,          # 使用數字（每天幾句、失敗幾次、平均等多久）記在這台電腦上（usage.json）；只有數字
     "store_dir": "",             # 大檔案（模型、翻譯引擎）搬到哪個資料夾；空的 = 跟設定放一起（storage.py）
     "store_leftover": [],        # 搬完之後還刪不掉的舊資料夾（當時檔案還開著），下次開程式再刪
-    # 全域快速鍵（hotkeys.ACTIONS）：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框、回話建議。空字串 = 不用
-    "hotkeys": {"overlay": "Ctrl+Alt+S", "mic": "Ctrl+Alt+M", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Alt+T", "reply": "Ctrl+Alt+R",
-                "pick": "Ctrl+Alt+X", "snap": "Ctrl+Alt+F", "phrase": "Ctrl+Alt+P", "inplace": "Ctrl+Shift+O",
+    # 全域快速鍵（hotkeys.ACTIONS）：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框、回話建議……。空字串 = 不用。
+    # 預設用 Ctrl+Shift+字母：Ctrl+Alt 在德文、法文、西班牙文等鍵盤上就是 AltGr，會跟打字（@、€、µ、{ }）撞。
+    # 快速輸入框用 Q 不用 T：Ctrl+Shift+T 是所有瀏覽器的「重開剛關掉的分頁」，全域快速鍵會把它搶走。
+    "hotkeys": {"overlay": "Ctrl+Shift+S", "mic": "Ctrl+Shift+M", "copy": "Ctrl+Shift+C", "quick": "Ctrl+Shift+Q", "reply": "Ctrl+Shift+R",
+                "pick": "Ctrl+Shift+X", "snap": "Ctrl+Shift+F", "phrase": "Ctrl+Shift+P", "inplace": "Ctrl+Shift+O",
                 "private": "Ctrl+Shift+H"},
+    "hotkeys_v": 2,              # 快速鍵預設的版本：2 = Ctrl+Shift+字母（2.13.1 起）；舊設定檔沒有這個值，載入時只換掉還是舊預設的那幾個
     "window": {"w": 980, "h": 720, "x": None, "y": None},
     "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
     "accent": "mint",            # 強調色：mint / blue / violet / rose / cyan
@@ -134,6 +137,26 @@ EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
 MAX_REGIONS = 6
 MAX_LAYOUTS = 5
+HOTKEYS_V = 2
+OLD_HOTKEYS = {"overlay": "Ctrl+Alt+S", "mic": "Ctrl+Alt+M", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Alt+T", "reply": "Ctrl+Alt+R",
+               "pick": "Ctrl+Alt+X", "snap": "Ctrl+Alt+F", "phrase": "Ctrl+Alt+P"}      # 2.12.0 以前的預設（只用來認「這個還是舊預設」）
+
+
+def migrate_hotkeys(current: dict) -> dict:
+    """舊預設（Ctrl+Alt+字母）換成新預設（Ctrl+Shift+字母）。自己設過的不動：跟舊預設不一樣的（換了別組、清空）都原樣留著。
+    新預設剛好已經被另一個動作用掉的（自己設的），那個動作先不換，免得兩個動作搶同一組鍵。"""
+    if not isinstance(current, dict):
+        return dict(DEFAULTS["hotkeys"])
+    keys = dict(current)
+    for name, old in OLD_HOTKEYS.items():
+        target = DEFAULTS["hotkeys"].get(name)
+        if keys.get(name) != old or not target:
+            continue
+        if any(other != name and keys.get(other) == target for other in keys):
+            continue
+        keys[name] = target
+    return keys
+
 OVERLAY_FORMS = ("float", "bar")
 OVERLAY_LOOK = tuple(k for k in DEFAULTS if k.startswith("overlay_")
                      and k not in ("overlay_rect", "overlay_form", "overlay_monitor", "overlay_layouts"))      # 「恢復預設外觀」會還原的項目
@@ -180,6 +203,7 @@ class Config:
         self.error = ""              # 上一次存檔失敗的原因（空的：有存好）
         self.on_fail = None          # 存不進去時呼叫一次（傳原因），之後存好了再失敗才會再呼叫
         self.data = json.loads(json.dumps(DEFAULTS))
+        migrated = False
         try:
             saved = json.loads(self.path.read_text(encoding="utf-8"))
             for k, v in saved.items():
@@ -192,6 +216,11 @@ class Config:
         else:
             if "layout" not in saved:      # 從舊版升上來：原本是很窄的視窗，新版面需要寬一點，只調這一次
                 self.data["layout"] = 1
+            version = saved.get("hotkeys_v", 1)
+            if not isinstance(version, int) or version < HOTKEYS_V:      # 從舊版升上來：快速鍵預設改了，只換掉還是舊預設的，自己設過的不動
+                self.data["hotkeys"] = migrate_hotkeys(self.data["hotkeys"])
+                self.data["hotkeys_v"] = HOTKEYS_V
+                migrated = True
         old = self.data.get("region")
         if isinstance(old, dict) and not self.data["regions"]:      # 舊版的單一聊天區搬成第一個區域
             self.data["regions"] = [{"id": "r1", "name": "", "on": True, "app": "", "anchor": None,
@@ -203,6 +232,8 @@ class Config:
             if self.data["window"]["w"] < 900:
                 self.data["window"] = dict(DEFAULTS["window"])
             self.data["layout"] = 2
+        if migrated:
+            self.save()      # 記下「換過了」：之後自己又設回 Ctrl+Alt+字母，下次開程式就不會再被換掉
 
     def __getitem__(self, key):
         with self._lock:
