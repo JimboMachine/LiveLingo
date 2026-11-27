@@ -571,6 +571,16 @@
 
 自動把關：測試會擋：推薦設定的規則、設定檔存／換／刪和不碰「我的東西」、時間軸分段、圖示語言小字、新標記只標一次、不合法的字體縮放不收。真的縮小視窗、真的工具列圖示、色盲配色的觀感要在你的電腦上看。
 
+### 筆電省電模式、安全模式啟動、穩定版和搶先版、免安裝版、敏感資料遮蔽、歷史和單字本加密（2.21.0）
+
+1. `config.py`、`service.py`、`history.py`、`learn.py`：battery_saver、update_channel、redact、encrypt_data 在 DEFAULTS 和 EDITABLE；saver_saved 不能在介面改、設定匯出匯入要跳過；RESET_KEEP 要留著 redact 和 encrypt_data
+2. `service.py`、`redact.py`、`history.py`、`learn.py`：新增任何「存起來」的地方（歷史、字幕記錄、單字本、摘要）都要先 _keep_text／_keep_row；改欄位名要同步 redact.mask_row 的預設欄位
+3. `history.py`、`learn.py`、`secure.py`：加密只在 Windows；讀的時候明文和 enc1: 都要認得；打不開的內容不能被重寫掉
+4. `app.js`、`i18n.js`、`style.css`：事件 saver；#safe-row、#saver-section、#privacy-section；按鈕 safe-undo、safe-keep；13 種語言都要有 sf_ bs_ rx_ ec_ ch_ pt_ 開頭的字和 n_saver_on、n_saver_off、n_encrypt_unavailable、n_encrypt_failed
+5. `updater.py`、`paths.py`、`build.yml`：搶先版靠 GitHub 的預先發行（prerelease）；build.yml 要能發 beta 分支、免安裝版 zip（旁邊有 portable.txt）
+
+自動把關：測試會擋：遮蔽的規則（密碼詞、信箱、Luhn 卡號、金鑰、身分證字號，一般句子不誤遮）、歷史和單字本加密後讀得回來又不是明文、打不開的行不被丟掉也不被改、省電模式進出和只換回沒被動過的設定、安全模式、搶先版挑最新的發行、免安裝版的判斷。真的 Windows 資料保護（有 Windows 專用測試）、真的電池、按住 Shift 開啟、搶先版和免安裝版的發行要在你的電腦和 GitHub 上試。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -583,7 +593,7 @@
 | 自動打包與發佈 | `.github/workflows/build.yml`<br>`packaging/ci_install_test.py`<br>`packaging/check_pins.py` | `updater.py`：發佈出去的檔名（改壞不會報錯） |
 | 安裝程式 | `packaging/installer.iss` | `updater.py`：靜默安裝的參數（改壞不會報錯）<br>`build.yml`：做安裝檔（改壞不會報錯） |
 | 版本號 | `livelingo/__init__.py` | `changes.py`：現在是哪一版（改壞會報錯）<br>`__main__.py`：版本號（改壞會報錯）<br>`service.py`：版本號（改壞會報錯）<br>`updater.py`：比較版本（改壞會報錯）<br>`build.yml`：版本號、發佈標籤（改壞不會報錯） |
-| 自動更新 | `livelingo/updater.py` | `guide.py`：下載網址要和更新用的是同一個地方（改壞不會報錯）<br>`service.py`：檢查更新（改壞會報錯） |
+| 自動更新 | `livelingo/updater.py` | `guide.py`：下載網址要和更新用的是同一個地方（改壞不會報錯）<br>`service.py`：檢查更新（改壞會報錯）<br>`service.py`：_check_update：beta 頻道呼叫 updater.check(channel="beta")，穩定版維持 check()（舊測試用沒有參數的假函式換掉它）（改壞不會報錯） |
 | 自我檢查 | `livelingo/selftest.py` | `__main__.py`：自我檢查模式（改壞會報錯）<br>`build.yml`：自我檢查的結果、截圖檔名（改壞不會報錯） |
 | 測試 | `tests/test_basics.py`<br>`tests/devserver.py` | `build.yml`：跑測試（改壞不會報錯） |
 
@@ -649,6 +659,7 @@
 | 翻譯的排隊：我自己的句子先翻，螢幕上排太久的略過 | `livelingo/jobs.py` | `service.py`：翻譯的排隊：誰先翻、還在說的半句排最後而且只留最新的（put_live）、螢幕上排太久的略過（略過時用 hotkeys.NOTES 的 skipped 和介面的 n_skipped 說一聲）（改壞會報錯） |
 | 使用數字：每天幾句、失敗幾次、平均等多久（只有數字） | `livelingo/usage.py` | `service.py`：翻好一句（或翻失敗）就記一次；關程式時把還沒寫的寫進檔案（改壞會報錯）<br>`app.js`：健康檢查頁的三個數字和 14 天小圖（today、week、month、days）（改壞不會報錯）<br>`report.py`：問題報告裡放使用數字（只有次數）（改壞不會報錯）<br>`storage.py`：usage.json 算在「設定和紀錄」那一項的大小裡（改壞不會報錯） |
 | 說明頁，和一頁給朋友的快速上手（每種介面語言） | `livelingo/guide.py`<br>`livelingo/data/help.json` | `service.py`：說明頁的內容（填進現在的快速鍵）；把給朋友的一頁存成檔案（改壞會報錯）<br>`app.js`：說明頁的欄位（sections、items）和 [[鍵]] 的寫法；F1 開說明（改壞不會報錯） |
+| 敏感資料遮蔽：密碼、信箱、卡號、金鑰、身分證字號存檔前換成 ▒▒▒ | `livelingo/redact.py` | `service.py`：_keep_text / _keep_row：存進歷史、字幕記錄、單字本例句、摘要之前遮蔽（cfg redact）（改壞會報錯） |
 
 ### 中樞（所有東西都經過這裡）
 
@@ -656,7 +667,7 @@
 | --- | --- | --- |
 | 進入點 | `livelingo/__main__.py`<br>`packaging/entry.py` | `livelingo.spec`：打包的進入點（改壞不會報錯） |
 | 本機 API | `livelingo/server.py` | `app.js`：API 路徑（/api/…）（改壞不會報錯）<br>`window.py`：介面的網址（改壞不會報錯）<br>`__main__.py`：開本機伺服器（改壞會報錯） |
-| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯）<br>`overlay.py`：訊息的 mention 欄位：浮動留言把提到我的那一則名字標紅（MENTION_COLOR）（改壞不會報錯）<br>`quickbox.py`：翻譯結果小卡：card.json（{items: [{original, translated}], done}）；常用句庫小框：phrases-in.json → phrases-out.json，--card / --phrase-box / --phrase-out（改壞不會報錯）<br>`app.js`：常用句庫（/api/phrases、phrases 事件、S.phrases）；提到我的那一則（mention 欄位）（改壞不會報錯）<br>`quickbox.py`：回話小框：replies-in.json（建議）→ replies-out.json（選的那句），--reply-box / --reply-out / --their（改壞不會報錯）<br>`stream.py`：留言的欄位（who、via、original、translated、pending、error）、說話者名字（speaker_tag）（改壞不會報錯）<br>`watcher.py`：colors 開著時 on_message 多帶 color=；slow_busy 開著時畫面一直大動就讀慢（改壞不會報錯） |
+| 主體 | `livelingo/service.py` | `app.js`：事件名稱（含還沒翻完的譯文 partial）、狀態和留言的欄位（改壞不會報錯）<br>`i18n.js`：提醒代碼（n_…）（改壞不會報錯）<br>`tray.py`：來源和字幕記錄的狀態與開關（改壞不會報錯）<br>`overlay.py`：留言的欄位；還沒翻完的譯文（on_partial，只有對方說的話）（改壞不會報錯）<br>`quickbox.py`：交回去的檔案格式（{"text"}）（改壞不會報錯）<br>`window.py`：視窗出現時開系統匣圖示（改壞不會報錯）<br>`transcript.py`：留言的欄位（改壞不會報錯）<br>`history.py`：留言的欄位（改壞不會報錯）<br>`__main__.py`：啟動主體（改壞會報錯）<br>`server.py`：每條 API 對應的方法（改壞會報錯）<br>`overlay.py`：訊息的 mention 欄位：浮動留言把提到我的那一則名字標紅（MENTION_COLOR）（改壞不會報錯）<br>`quickbox.py`：翻譯結果小卡：card.json（{items: [{original, translated}], done}）；常用句庫小框：phrases-in.json → phrases-out.json，--card / --phrase-box / --phrase-out（改壞不會報錯）<br>`app.js`：常用句庫（/api/phrases、phrases 事件、S.phrases）；提到我的那一則（mention 欄位）（改壞不會報錯）<br>`quickbox.py`：回話小框：replies-in.json（建議）→ replies-out.json（選的那句），--reply-box / --reply-out / --their（改壞不會報錯）<br>`stream.py`：留言的欄位（who、via、original、translated、pending、error）、說話者名字（speaker_tag）（改壞不會報錯）<br>`watcher.py`：colors 開著時 on_message 多帶 color=；slow_busy 開著時畫面一直大動就讀慢（改壞不會報錯）<br>`redact.py`：mask_row 預設遮 original、translated、place 三個欄位（改壞不會報錯） |
 | 設定與詞彙表 | `livelingo/config.py` | `app.js`：設定名稱（S.cfg.…）（改壞不會報錯）<br>`i18n.js`：介面語言清單（UI_LANGS，十三種）（改壞不會報錯）<br>`window.py`：視窗大小、置頂、關閉時收到系統匣（改壞不會報錯）<br>`tray.py`：每種介面語言的選單文字、設定名稱（改壞不會報錯）<br>`overlay.py`：顯示方式、位置、哪個螢幕、外觀、自己存的版面（overlay_…）（改壞不會報錯）<br>`chatpaint.py`：每種介面語言的名字、提示、範例，還有字型（改壞不會報錯）<br>`region.py`：每種介面語言的提示和字型（改壞不會報錯）<br>`hotkeys.py`：預設的組合（hotkeys）、每種介面語言的短提示（改壞不會報錯）<br>`quickbox.py`：每種介面語言的提示（改壞不會報錯）<br>`transcript.py`：每種介面語言的標題、存檔資料夾（改壞不會報錯）<br>`history.py`：要不要保存、保留幾天、每種介面語言的標題（改壞不會報錯）<br>`changes.py`：每種介面語言都要寫（改壞不會報錯）<br>`storage.py`：store_dir、store_leftover（改壞不會報錯）<br>`report.py`：報告的標題和說明每種介面語言都要寫（改壞不會報錯）<br>`usage.py`：usage_keep：要不要記（改壞不會報錯）<br>`guide.py`：每種介面語言都要寫；給朋友的那一頁用預設快速鍵（改壞不會報錯）<br>`server.py`：外觀的預設值（改壞會報錯）<br>`service.py`：所有設定、詞彙表、學過的句子（改壞會報錯）<br>`stream.py`：stream、stream_original、stream_mine、stream_port、stream_key；字的大小和停留秒數跟 overlay_font、overlay_seconds（改壞不會報錯）<br>`installer.iss`：安裝程式的語言（改壞不會報錯）<br>`overlay.py`：reduce_motion：_alpha 不淡入淡出、frame 的等待時間不算淡出（改壞不會報錯） |
 
 ### 核心（翻譯、辨識文字、收音、辨識語音）
@@ -682,8 +693,11 @@
 
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
-| 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`changes.py`：changes.json 放在哪（改壞會報錯）<br>`guide.py`：help.json 和品牌標誌放在哪（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯） |
+| 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`changes.py`：changes.json 放在哪（改壞會報錯）<br>`guide.py`：help.json 和品牌標誌放在哪（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯）<br>`updater.py`：enabled()：免安裝版（paths.portable()）不自動更新（改壞會報錯） |
 | Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、接著哪些螢幕和各自的大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯）<br>`overlay.py`：cursor_pos：滑鼠靠近變淡（改壞不會報錯）<br>`service.py`：send_chat、foreground_is_self：說話送進遊戲聊天（預設關）（改壞不會報錯）<br>`service.py`：exclusive_fullscreen：獨佔全螢幕提醒（改壞不會報錯） |
 | 開著哪些程式 | `livelingo/apps.py` | `works.py`：apps.windows() 的欄位（exe、title、rect、minimized）（改壞不會報錯）<br>`service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
 | 模型下載 | `livelingo/assets.py` | `storage.py`：模型和引擎的檔名、資料夾（改壞會報錯）<br>`service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN、分辨說話者的聲紋模型）（改壞會報錯）<br>`voices.py`：聲紋模型的檔案（打開功能時才下載）（改壞不會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯）<br>`README.md`：第一次下載大約幾 GB（要和實際的檔案大小對得上）（改壞不會報錯） |
 | 顯示卡判斷 | `livelingo/gpu.py` | `service.py`：選模式（改壞會報錯） |
+| 筆電省電模式：看是不是靠電池、省電時要換的設定 | `livelingo/power.py` | `service.py`：_power_watch / power_check：on_battery() 查電源；SAVER_SET、SAVER_SLOW 決定省電時換什麼（改壞會報錯） |
+| 安全模式啟動：按住 Shift 或 --safe | `livelingo/safemode.py` | `__main__.py`：main()：Service 建好之後問 requested()（Shift、--safe、環境變數），是的話 service.safe_start()（改壞會報錯） |
+| Windows 資料保護加密（DPAPI）：歷史和單字本用 | `livelingo/secure.py` | `service.py`：state 的 secure = available()；encrypt_data 開不了（不是 Windows）就丟掉並說一聲（改壞會報錯）<br>`history.py`：每一行 seal / unseal；打不開的行原樣留著（locked）（改壞會報錯）<br>`learn.py`：整個 wordbook.json seal / unseal；打不開就 locked、不覆蓋（改壞會報錯） |

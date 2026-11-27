@@ -14,10 +14,12 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import __version__
+from . import __version__, paths
 from .assets import DownloadError, fetch
 
 RELEASE_API = "https://api.github.com/repos/JimboMachine/LiveLingo/releases/latest"
+RELEASES_API = "https://api.github.com/repos/JimboMachine/LiveLingo/releases?per_page=10"      # 搶先版：看最近幾個發行（含預先發行的）
+CHANNELS = ("stable", "beta")      # 穩定版：只看正式發行；搶先版：預先發行的也看，拿最新的
 TAG_API = "https://api.github.com/repos/JimboMachine/LiveLingo/releases/tags/v{version}"      # 某一個舊版本（回上一版用）
 ASSET_NAME = "LiveLingo-Setup.exe"
 NOTES_NAME = "changes.json"   # 跟安裝檔一起發行的「每一版改了什麼」
@@ -44,8 +46,8 @@ def api_url() -> str:
 
 
 def enabled() -> bool:
-    """只有裝好的 Windows 版才自動更新（從原始碼執行時不會）。測試時可以用環境變數強制打開。"""
-    if os.environ.get("LIVELINGO_NO_UPDATE"):
+    """只有裝好的 Windows 版才自動更新（從原始碼執行時不會；免安裝版也不會，它沒有安裝程式可以換檔案）。測試時可以用環境變數強制打開。"""
+    if os.environ.get("LIVELINGO_NO_UPDATE") or paths.portable():
         return False
     return bool(os.environ.get("LIVELINGO_UPDATE_API")) or (sys.platform == "win32" and getattr(sys, "frozen", False))
 
@@ -68,8 +70,22 @@ def _release(url: str, timeout: float) -> dict:
         return json.loads(r.read().decode("utf-8"))
 
 
-def check(timeout: float = 8) -> dict | None:
-    """有新版本就回傳 {"version", "url", "size", "sha256", "notes_url"}，沒有或查不到就回傳 None。"""
+def releases_url() -> str:
+    return os.environ.get("LIVELINGO_RELEASES_API") or RELEASES_API
+
+
+def check(timeout: float = 8, channel: str = "stable") -> dict | None:
+    """有新版本就回傳 {"version", "url", "size", "sha256", "notes_url"}，沒有或查不到就回傳 None。
+    channel="beta"（搶先版）：預先發行的也算，從最近幾個發行裡拿版本最新的那個；不是 beta 就只看最新的正式發行。"""
+    if channel == "beta":
+        found = None
+        for rel in _release(releases_url(), timeout) or []:
+            if not isinstance(rel, dict) or rel.get("draft") or not is_newer(rel.get("tag_name") or ""):
+                continue
+            info = _installer(rel)
+            if info and (found is None or is_newer(info["version"], found["version"])):
+                found = info
+        return found
     rel = _release(api_url(), timeout)
     if rel.get("draft") or rel.get("prerelease") or not is_newer(rel.get("tag_name") or ""):
         return None

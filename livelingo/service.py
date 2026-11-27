@@ -34,7 +34,7 @@ from .qualitycheck import QualityCheck
 from . import textfix
 from .corrections import Corrections
 from . import cheatsheet, gametools, imagetext
-from . import highlights, introduce, pace, recommend, sessionlog, study, timeline, tone as tone_mod, voicecmd
+from . import highlights, introduce, pace, power, recommend, redact, secure, sessionlog, study, timeline, tone as tone_mod, voicecmd
 from . import profiles as profiles_mod
 from . import gamepad as gamepad_mod
 from .album import Album
@@ -80,9 +80,9 @@ RECONNECT_WAITS = (2, 4, 8, 15, 30, 30, 30)      # 收音裝置斷線後，隔�
 BEAMS = {"fast": 1, "accurate": 5}      # 語音辨識「比較快／比較準」各用多寬的搜尋
 SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveLingo 的設定檔」
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
-SETTINGS_SKIP = ("window", "layout", "hotkeys_v", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
+SETTINGS_SKIP = ("window", "layout", "hotkeys_v", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key", "saver_saved")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
-RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip", "abbr_skip", "game_profiles", "player_notes")
+RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip", "abbr_skip", "game_profiles", "player_notes", "redact", "encrypt_data")
 MAX_PINS = 3                                   # 浮動字幕最上面最多釘幾句（2.17.0）
 KEYS_SECONDS = 10.0                            # 快捷鍵一覽小卡停幾秒
 CHAT_OPEN_KEYS = ("enter", "slash", "t", "none")      # 說話送進遊戲聊天：先按哪個鍵打開聊天框
@@ -109,6 +109,7 @@ REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
 WHATS_NEW_FLOOR = "2.5.0"      # 沒有「上次看到哪一版」的紀錄（這個功能出現以前就裝好的）：把這一版以後錯過的改動一次說完
 UI_SCALES = (90, 100, 115, 130, 150)      # 全介面字體縮放可以選的比例（%，2.20.0）
 REMIND_EVERY = 1800        # 每日複習提醒：多久看一次有沒有該複習的字（2.19.0）
+POWER_EVERY = 20.0         # 省電模式：多久看一次電腦是不是靠電池（2.21.0）
 MAX_MARKED = 60            # 最近幾則訊息的生字標記留著（介面重開也看得到）
 RECAP_RECENT = 6 * 3600     # 自動摘要只補最近這麼久之內結束的對話
 RECAP_EVERY = 30.0          # 每隔幾秒看一次有沒有剛結束、還沒摘要的對話
@@ -308,8 +309,11 @@ class Service:
         self.closing = threading.Event()
         self._ids = itertools.count(1)
         self.transcript = Transcript()
-        self.history = History(self.data, bool(self.cfg["history_keep"]), int(self.cfg["history_days"]))
-        self.wordbook = Wordbook(self.data)      # 語言學習的單字本（learn.py）
+        self.history = History(self.data, bool(self.cfg["history_keep"]), int(self.cfg["history_days"]), encrypt=bool(self.cfg["encrypt_data"]))
+        self.wordbook = Wordbook(self.data, encrypt=bool(self.cfg["encrypt_data"]))      # 語言學習的單字本（learn.py）
+        self.safe_mode = False         # 這次是安全模式啟動的（2.21.0）
+        self._saver = bool(self.cfg["saver_saved"])      # 省電模式現在是不是開著（上次關程式時還靠著電池，設定還是省電的那一組）
+        self._saver_lock = threading.Lock()
         self.recaps = Recaps(self.data)          # 對話摘要（recap.py）
         self.profiles = profiles_mod.Profiles(self.data / "profiles.json")      # 多份設定檔（profiles.py，2.20.0）
         self._recap = {"state": "off", "id": ""}      # 正在整理的摘要（給介面）
@@ -445,9 +449,13 @@ class Service:
             "scenarios": self.scenarios_state(),
             "replies": dict(self._replies),
             "words": {str(k): v for k, v in self._words.items()},
-            "wordbook": self.wordbook.state(),
+            "wordbook": dict(self.wordbook.state(), locked=self.wordbook.locked),
             "tips": highlights.new_tabs(self.cfg["tips_seen"], __version__),      # 有新功能、還沒點進去看過的設定頁（2.20.0）
             "profiles": self.profiles.names(),
+            "saver": {"on": self._saver, "battery": power.on_battery()},
+            "safe_mode": self.safe_mode,
+            "secure": secure.available(),
+            "portable": paths.portable(),
             "phrases": self.phrases_state(),
             "filesubs": self.filesubs_state(),
             "recaps": dict(self.recaps.state(), **self._recap),
@@ -500,6 +508,7 @@ class Service:
         threading.Thread(target=self._game_watch, daemon=True, name="game-watch").start()
         threading.Thread(target=self._update_watch, daemon=True, name="update-watch").start()
         threading.Thread(target=self._review_remind, daemon=True, name="review-remind").start()
+        threading.Thread(target=self._power_watch, daemon=True, name="power-watch").start()
 
     def _boot(self) -> None:
         try:
@@ -581,13 +590,19 @@ class Service:
             except Exception:  # noqa: BLE001
                 self.log(traceback.format_exc())
 
+    def _check_update(self) -> dict | None:
+        """照選的頻道查新版本（2.21.0）：穩定版只看正式發行；搶先版連預先發行的也看。"""
+        if self.cfg["update_channel"] == "beta":
+            return updater.check(channel="beta")
+        return updater.check()
+
     def update_recheck(self) -> bool:
         """查一次有沒有新版本；有（而且還沒提醒過、也不是使用者退回來或說先不要的那一版）就在畫面上提醒，回傳 True。
         只提醒，不會自己下載或更新；使用者在設定裡關掉了檢查就不連網路。"""
         if not updater.enabled() or not self.cfg["update_check"] or self.phase != "ready":
             return False
         try:
-            info = updater.check()
+            info = self._check_update()
         except Exception as ex:  # noqa: BLE001  沒有網路：下次再看
             self.log(f"update re-check failed: {ex!r}")
             return False
@@ -620,7 +635,7 @@ class Service:
             return False
         self.set_phase("updating", step="checking")
         try:
-            info = updater.check()
+            info = self._check_update()
         except Exception as ex:  # noqa: BLE001  沒有網路：照常使用
             self.log(f"update check failed: {ex!r}")
             return False
@@ -987,7 +1002,7 @@ class Service:
 
     def _resume_sources(self) -> None:
         """上次關掉程式時開著的來源，這次自動再打開。"""
-        if not self.cfg["setup_done"]:
+        if not self.cfg["setup_done"] or self.safe_mode:      # 安全模式：什麼來源都不自動打開，要自己按
             return
         want = self.cfg["sources"]
         if want.get("screen") and self._regions_on():
@@ -1077,13 +1092,21 @@ class Service:
         else:
             self.overlay.on_message(msg)
             self.stream.on_message(msg)
-        if not self.private and self.history.add(msg):      # 隱私暫停的時候不記
+        if not self.private and self.history.add(self._keep_row(msg)):      # 隱私暫停的時候不記；密碼、信箱、卡號之類的遮掉再存
             self.hub.publish("history", self.history.state())
         if self.transcript.on and not self.private:
             who = self.speaker_tag(msg)      # 字幕檔只寫現在還算數的說話者（重新分辨之前標的不寫）
-            self.transcript.add(dict(msg, speaker=who[0], voice=who[1]) if who else {k: v for k, v in msg.items() if k != "speaker"})
+            self.transcript.add(self._keep_row(dict(msg, speaker=who[0], voice=who[1]) if who else {k: v for k, v in msg.items() if k != "speaker"}))
             self.hub.publish("record", self.record_state())
         return msg
+
+    def _keep_text(self, text):
+        """要存起來的文字（歷史、字幕記錄、單字本的例句、摘要）：開了敏感資料遮蔽就把密碼、信箱、卡號、金鑰、身分證字號換成 ▒▒▒（2.21.0）。
+        畫面上和浮動字幕照常顯示，只是不留下來。"""
+        return redact.mask(text) if self.cfg["redact"] else text
+
+    def _keep_row(self, row: dict) -> dict:
+        return redact.mask_row(row) if self.cfg["redact"] else row
 
     def _drop(self, msg_id: int) -> None:
         with self._lock:
@@ -1995,6 +2018,97 @@ class Service:
         changed = [] if forget else self._apply_settings({k: v for k, v in values.items() if k in DEFAULTS and k not in SETTINGS_SKIP})
         path.unlink(missing_ok=True)
         return {"ok": True, "changed": changed, "count": len(changed), "saved": not self.cfg.error, "backup": None}
+
+    # ------------------------------------------------------------------ 安全模式（2.21.0）
+
+    def safe_start(self) -> None:
+        """開啟時按住 Shift（或加 --safe）：這次用預設設定開，之前的設定留一份，在畫面上問要不要換回去。
+        語言、框好的聊天區、字幕資料夾本來就不會動（跟「恢復預設」一樣）；這次也不會自動打開收音和讀螢幕。"""
+        self.safe_mode = True
+        try:
+            self.settings_reset()
+            self.log("safe mode: started with default settings (previous settings kept as a backup)")
+        except Exception:  # noqa: BLE001
+            self.log(traceback.format_exc())
+
+    def safe_action(self, keep: bool) -> dict:
+        """畫面上的提示：keep = 就用預設設定（把留著的備份丟掉）；否則換回之前的設定。"""
+        out = self.settings_undo(forget=bool(keep))
+        if out.get("ok") or out.get("error") == "no_backup":
+            self.safe_mode = False
+        return out
+
+    # ------------------------------------------------------------------ 敏感資料：加密（2.21.0）
+
+    def _encrypt_changed(self, on: bool) -> None:
+        """開／關加密：歷史和單字本馬上照新的設定重存一次。做不到（不是 Windows、檔案打不開）就換回原本的設定並說一聲。"""
+        ok_history = self.history.set_encrypt(on)
+        ok_book = self.wordbook.set_encrypt(on)
+        if not (ok_history and ok_book):
+            if ok_history:
+                self.history.set_encrypt(not on)
+            if ok_book:
+                self.wordbook.set_encrypt(not on)
+            self.cfg.set(encrypt_data=not on)
+            self.hub.publish("config", self.cfg.snapshot())
+            self.notice("encrypt_failed")
+        self.hub.publish("history", self.history.state())
+        self.hub.publish("wordbook", dict(self.wordbook.state(), locked=self.wordbook.locked))
+
+    # ------------------------------------------------------------------ 筆電省電模式（2.21.0）
+
+    def _screen_interval(self) -> float:
+        return float(self.cfg["interval"]) * (power.SAVER_SLOW if self._saver else 1.0)
+
+    def _power_watch(self) -> None:
+        if self.closing.wait(5.0):      # 先讓開啟的流程跑一下
+            return
+        while True:
+            try:
+                self.power_check()
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+            if self.closing.wait(POWER_EVERY):
+                return
+
+    def power_check(self, battery=None) -> bool:
+        """
+        看電腦是不是靠電池，決定要不要省電。開了「筆電省電模式」又靠電池：辨識換成快速、關掉即時字幕和降噪、讀螢幕的間隔拉長；
+        插上電（或關掉這個功能）就換回來。只換回「還是省電那一組」的項目，期間自己改過的不動。回傳現在是不是省電中。
+        battery：True 靠電池、False 有插電、None 查不到（測試時可以直接給）。
+        """
+        with self._saver_lock:
+            if battery is None:
+                battery = power.on_battery()
+            want = bool(self.cfg["battery_saver"]) and battery is True
+            if want and not self._saver:
+                self._saver_enter()
+            elif self._saver and not want and (battery is not None or not self.cfg["battery_saver"]):
+                self._saver_exit()
+            return self._saver
+
+    def _saver_enter(self) -> None:
+        values = {k: self.cfg[k] for k, v in power.SAVER_SET.items() if self.cfg[k] != v}
+        self.cfg.set(saver_saved={"values": values})      # 先記下原本的，之後才換
+        self._saver = True
+        self.update_config(dict(power.SAVER_SET))
+        self._saver_apply()
+        self.notice("saver_on")
+
+    def _saver_exit(self) -> None:
+        saved = (self.cfg["saver_saved"] or {}).get("values") or {}
+        back = {k: v for k, v in saved.items() if k in power.SAVER_SET and self.cfg[k] == power.SAVER_SET[k]}
+        self.cfg.set(saver_saved={})
+        self._saver = False
+        if back:
+            self.update_config(back)
+        self._saver_apply()
+        self.notice("saver_off")
+
+    def _saver_apply(self) -> None:
+        if self.watcher is not None:
+            self.watcher.interval = self._screen_interval()
+        self.hub.publish("saver", {"on": self._saver})
 
     # ------------------------------------------------------------------ 健康檢查
 
@@ -3178,6 +3292,11 @@ class Service:
             else:
                 if changes["engine_rest"] not in ENGINE_REST:
                     changes.pop("engine_rest")
+        if changes.get("update_channel") not in (None, *updater.CHANNELS):
+            changes.pop("update_channel")
+        if changes.get("encrypt_data") and not secure.available():      # 不是 Windows：開不了，說一聲
+            changes.pop("encrypt_data")
+            self.notice("encrypt_unavailable")
         if "history_days" in changes:
             try:
                 changes["history_days"] = int(changes["history_days"])
@@ -3258,6 +3377,12 @@ class Service:
             self.overlay.wake()
         if changed("history_keep", "history_days"):
             self.history.configure(after["history_keep"], after["history_days"])
+        if changed("encrypt_data"):
+            self._encrypt_changed(bool(after["encrypt_data"]))
+        if changed("battery_saver"):
+            threading.Thread(target=self.power_check, daemon=True, name="power-now").start()
+        if changed("update_channel") and not self.closing.is_set():
+            threading.Thread(target=self.update_recheck, daemon=True, name="update-channel").start()
         if changed("usage_keep"):
             self.usage.configure(after["usage_keep"])
             self.hub.publish("history", self.history.state())
@@ -3472,7 +3597,7 @@ class Service:
             if self.watcher is None:
                 self.watcher = ScreenWatcher(
                     ocr, on_message=self._on_screen_line, on_status=self._screen_error,
-                    interval=float(self.cfg["interval"]), source_langs=self._screen_langs(),
+                    interval=self._screen_interval(), source_langs=self._screen_langs(),
                     grab=getattr(self, "grab", None), locate=self._locate,
                     on_stats=lambda stats: self.hub.publish("screen_stats", stats), on_black=self._screen_black,
                     mask=self.capture_mask)
@@ -4240,7 +4365,7 @@ class Service:
             with self._lock:
                 msg = next((m for m in self.messages if m["id"] == msg_id), None) if msg_id is not None else None
             if msg:
-                example, example_tr = msg.get("original", ""), msg.get("translated", "")
+                example, example_tr = self._keep_text(msg.get("original", "")), self._keep_text(msg.get("translated", ""))
             if not meaning:
                 if self.phase != "ready":
                     return {"ok": False, "error": "not_ready"}
@@ -4329,7 +4454,7 @@ class Service:
                 text, lang, tr = msg.get("original", ""), msg.get("lang", ""), msg.get("translated", "")
                 if not note:
                     note = self._explained.get(msg_id, "").split("\n")[0]
-            ok = self.wordbook.add_sentence(text, lang, tr, note) is not None
+            ok = self.wordbook.add_sentence(self._keep_text(text), lang, self._keep_text(tr), self._keep_text(note)) is not None
         else:
             return {"ok": False, "error": "unknown"}
         self.hub.publish("wordbook", self.wordbook.state())
@@ -4505,7 +4630,7 @@ class Service:
         else:
             with self._lock:
                 rows = [m for m in self.messages if not m.get("pending") and not m.get("error") and m.get("translated")]
-        return [r for r in rows if float(r.get("at") or 0) > since]
+        return [self._keep_row(r) for r in rows if float(r.get("at") or 0) > since]
 
     def recap_check(self) -> None:
         """自動摘要：最後一段對話安靜超過 10 分鐘、夠長、還沒摘要過，就整理一份。"""

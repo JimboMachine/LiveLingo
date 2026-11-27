@@ -1,4 +1,136 @@
 {
+  "2.21.0": {
+    "zh-TW": [
+      "筆電省電模式（語言與一般頁）：靠電池時，語音辨識換成「比較快」、關掉即時字幕和降噪、讀螢幕的間隔拉長三倍；插上電換回原本的，期間自己改過的設定不會被動。預設關閉。",
+      "安全模式：開 LiveLingo 時按住 Shift（或在捷徑加 --safe），這次用預設設定開，不自動打開收音和讀螢幕，原本的設定留一份，畫面上可以選換回去或就用預設。設定改壞了、快速鍵衝突時用。",
+      "更新頻道（關於頁）：穩定版只收正式發行；搶先版會比別人早拿到新功能，可能還有小問題，隨時能換回穩定版，也可以用「回到上一版」退回。",
+      "免安裝版：新增 LiveLingo-Portable.zip，解壓縮就能用，資料放在程式旁邊的 data 資料夾，整個資料夾可以搬到隨身碟。免安裝版不會自動更新，要新版請重新下載。",
+      "敏感資料遮蔽（預設開）：「密碼是…」「password: …」後面的字、信箱、信用卡號、金鑰、身分證字號，存進歷史、字幕記錄、單字本例句和摘要之前換成 ▒▒▒。畫面上照常顯示，只是不留下來。",
+      "加密歷史和單字本（只有 Windows，預設關）：用 Windows 資料保護加密檔案，只有這個帳號在這台電腦上打得開，不用記密碼。換帳號或複製到別台電腦就讀不到；可隨時關掉。打不開的資料不會被刪或改。",
+      "「恢復預設」和安全模式不會動敏感資料的兩個開關，免得一次復原把遮蔽或加密悄悄關掉。省電模式換掉的設定會記起來，程式關掉重開也會換回去。",
+      "這幾項要在你的電腦上實際用過才算數：Windows 加密、電池偵測、按住 Shift 啟動、搶先版和免安裝版的發行檔。遮蔽寧可多遮；漏遮或遮錯請用問題報告告訴我們。"
+    ],
+    "zh-CN": [
+      "笔记本省电模式（语言与常规页）：靠电池时，语音识别换成“比较快”、关掉实时字幕和降噪、读屏幕的间隔拉长三倍；插上电换回原来的，期间自己改过的设置不会被动。默认关闭。",
+      "安全模式：启动 LiveLingo 时按住 Shift（或在快捷方式加 --safe），这次用默认设置启动，不自动打开收音和读屏幕，原来的设置留一份，界面上可以选换回去或就用默认。设置改坏了、快捷键冲突时用。",
+      "更新频道（关于页）：稳定版只收正式发布；抢先版会比别人早拿到新功能，可能还有小问题，随时能换回稳定版，也可以用“回到上一版”退回。",
+      "免安装版：新增 LiveLingo-Portable.zip，解压就能用，数据放在程序旁边的 data 文件夹，整个文件夹可以搬到 U 盘。免安装版不会自动更新，要新版请重新下载。",
+      "敏感数据遮蔽（默认开）：“密码是…”“password: …”后面的字、邮箱、信用卡号、密钥、身份证号，存进历史、字幕记录、单词本例句和摘要之前换成 ▒▒▒。屏幕上照常显示，只是不留下来。",
+      "加密历史和单词本（只有 Windows，默认关）：用 Windows 数据保护加密文件，只有这个账号在这台电脑上打得开，不用记密码。换账号或复制到别的电脑就读不到；可随时关掉。打不开的数据不会被删或改。",
+      "“恢复默认”和安全模式不会动敏感数据的两个开关，免得一次恢复把遮蔽或加密悄悄关掉。省电模式换掉的设置会记起来，程序关掉重开也会换回去。",
+      "这几项要在你的电脑上实际用过才算数：Windows 加密、电池检测、按住 Shift 启动、抢先版和免安装版的发布文件。遮蔽宁可多遮；漏遮或遮错请用问题报告告诉我们。"
+    ],
+    "en": [
+      "Laptop battery saver (General page): on battery, speech recognition switches to “faster”, live captions and noise reduction turn off, and screen reading slows to a third. Plugging in restores everything. Off by default.",
+      "Safe mode: hold Shift while starting LiveLingo (or add --safe to the shortcut) to start with default settings and without auto-starting listening or screen reading. Your old settings are kept so you can switch back.",
+      "Update channel (About page): Stable only gets official releases. Beta gets new features earlier but may have small problems; switch back to Stable any time, or use the previous-version option.",
+      "Portable version: new LiveLingo-Portable.zip. Unzip and run; all data stays in the data folder next to the program, so the folder can go on a USB drive. It doesn't update itself; download new versions.",
+      "Sensitive data masking (on by default): whatever follows “password is…” or “password: …”, plus emails, card numbers, API keys and ID numbers, become ▒▒▒ before going into history, transcripts, word examples and summaries.",
+      "Encrypt history and word list (Windows only, off by default): files are encrypted with Windows data protection so only this account on this PC can open them. Unreadable data is never deleted or changed.",
+      "Restore defaults and safe mode leave the two sensitive-data switches alone, so a restore can't quietly turn off masking or encryption. Settings changed by battery saver are remembered across restarts.",
+      "These need real-world use on your PC: Windows encryption, battery detection, Shift-held start, and the beta and portable release files. Masking prefers hiding too much; report misses through the problem report."
+    ],
+    "ko": [
+      "노트북 절전 모드(일반 페이지): 배터리일 때 음성 인식이 '빠르게'로 바뀌고 실시간 자막과 잡음 제거가 꺼지며 화면 읽기 간격이 3배로 늘어납니다. 전원을 연결하면 모두 원래대로 돌아옵니다. 기본은 꺼짐.",
+      "안전 모드: LiveLingo를 켤 때 Shift를 누르고 있으면(또는 바로가기에 --safe) 기본 설정으로 시작하고 듣기·화면 읽기는 자동으로 켜지 않습니다. 이전 설정은 보관되어 되돌릴 수 있습니다.",
+      "업데이트 채널(정보 페이지): 안정 버전은 정식 릴리스만 받습니다. 베타는 새 기능을 먼저 받지만 작은 문제가 있을 수 있습니다. 언제든 안정 버전으로 돌아가거나 이전 버전으로 되돌릴 수 있습니다.",
+      "설치 없이 쓰는 버전: LiveLingo-Portable.zip이 추가되었습니다. 압축을 풀어 바로 쓰고, 데이터는 프로그램 옆 data 폴더에 있어 USB로 옮길 수 있습니다. 자동 업데이트는 되지 않으니 새 버전은 다시 받으세요.",
+      "민감한 정보 가리기(기본 켜짐): '비밀번호는…', 'password: …' 뒤의 글자, 이메일, 카드번호, 키, 주민등록번호는 기록·자막 파일·단어장 예문·요약에 저장되기 전에 ▒▒▒로 바뀝니다. 화면에는 그대로 보입니다.",
+      "기록·단어장 암호화(Windows 전용, 기본 꺼짐): Windows 데이터 보호로 파일을 암호화해 이 PC의 이 계정에서만 열 수 있습니다. 열 수 없는 데이터는 삭제하거나 바꾸지 않습니다.",
+      "'기본값 복원'과 안전 모드는 민감한 정보 스위치 두 개를 건드리지 않습니다. 절전 모드가 바꾼 설정은 기억해 두었다가 재시작해도 원래대로 돌려놓습니다.",
+      "다음 항목은 실제 PC에서 써 봐야 확인됩니다: Windows 암호화, 배터리 감지, Shift 시작, 베타·설치 없는 버전 배포 파일. 가리기는 넉넉히 가리는 쪽이며, 놓친 경우는 문제 보고로 알려 주세요."
+    ],
+    "ja": [
+      "ノートPC省電力モード（一般ページ）：バッテリー駆動中は音声認識が「速さ優先」になり、リアルタイム字幕とノイズ低減がオフ、画面の読み取り間隔が3倍に。電源につなぐと元に戻ります。初期設定はオフ。",
+      "セーフモード：LiveLingo を起動するとき Shift を押し続ける（またはショートカットに --safe）と、初期設定で起動し、音声と画面の読み取りは自動で始まりません。元の設定は控えが残り、戻せます。",
+      "更新チャンネル（情報ページ）：安定版は正式リリースだけ。先行版は新機能をいち早く受け取れますが小さな不具合があるかもしれません。いつでも安定版に戻せ、前のバージョンにも戻せます。",
+      "ポータブル版：LiveLingo-Portable.zip を追加。展開してすぐ使え、データはプログラムの隣の data フォルダーに入るので USB メモリに移せます。自動更新はしないので、新版は改めてダウンロードしてください。",
+      "機密データのマスク（初期設定でオン）：「パスワードは…」「password: …」に続く文字、メール、カード番号、キー、ID番号は、履歴・字幕記録・単語帳の例文・要約に保存する前に ▒▒▒ に。画面にはそのまま表示されます。",
+      "履歴と単語帳の暗号化（Windows のみ、初期設定はオフ）：Windows のデータ保護で暗号化し、この PC のこのアカウントだけが開けます。開けないデータを削除・変更することはありません。",
+      "「初期設定に戻す」とセーフモードは、機密データの2つのスイッチには触れません。省電力モードで変えた設定は記憶され、再起動しても元に戻ります。",
+      "次の項目は実際の PC で使ってみないと確かめられません：Windows の暗号化、バッテリー検出、Shift 押しながらの起動、先行版とポータブル版の配布ファイル。マスクは多めに隠す方針です。漏れは問題レポートで教えてください。"
+    ],
+    "vi": [
+      "Chế độ tiết kiệm pin laptop (trang Chung): khi chạy pin, nhận dạng giọng nói chuyển sang “nhanh hơn”, tắt phụ đề trực tiếp và giảm ồn, đọc màn hình thưa gấp ba. Cắm sạc là trở lại như cũ. Mặc định tắt.",
+      "Chế độ an toàn: giữ Shift khi mở LiveLingo (hoặc thêm --safe vào lối tắt) để mở với cài đặt mặc định, không tự bật nghe và đọc màn hình. Cài đặt cũ được giữ lại để bạn quay về.",
+      "Kênh cập nhật (trang Giới thiệu): Ổn định chỉ nhận bản chính thức. Beta nhận tính năng mới sớm hơn nhưng có thể còn lỗi nhỏ; có thể đổi lại Ổn định bất cứ lúc nào hoặc quay về phiên bản trước.",
+      "Bản di động: thêm LiveLingo-Portable.zip. Giải nén là dùng, dữ liệu nằm trong thư mục data cạnh chương trình nên chép được vào USB. Bản này không tự cập nhật; hãy tải bản mới.",
+      "Che dữ liệu nhạy cảm (mặc định bật): phần sau “mật khẩu là…” hay “password: …”, email, số thẻ, khóa, số định danh thành ▒▒▒ trước khi vào lịch sử, bản ghi phụ đề, ví dụ sổ từ và tóm tắt. Trên màn hình vẫn hiện bình thường.",
+      "Mã hóa lịch sử và sổ từ (chỉ Windows, mặc định tắt): mã hóa bằng bảo vệ dữ liệu của Windows, chỉ tài khoản này trên máy này mở được. Dữ liệu không mở được sẽ không bị xóa hay sửa.",
+      "“Khôi phục mặc định” và chế độ an toàn không đụng đến hai công tắc dữ liệu nhạy cảm. Cài đặt do chế độ tiết kiệm pin thay đổi được ghi nhớ, mở lại chương trình vẫn được khôi phục.",
+      "Những mục sau cần dùng thật trên máy bạn: mã hóa Windows, nhận biết pin, giữ Shift khi mở, tệp phát hành Beta và bản di động. Che dữ liệu thà che thừa; sót thì báo qua báo cáo sự cố."
+    ],
+    "th": [
+      "โหมดประหยัดแบตเตอรี่แล็ปท็อป (หน้าทั่วไป): เมื่อใช้แบตเตอรี่ การรู้จำเสียงเปลี่ยนเป็น “เร็วกว่า” ปิดคำบรรยายสดและตัดเสียงรบกวน อ่านหน้าจอห่างขึ้นสามเท่า เสียบปลั๊กแล้วกลับเป็นเดิม ค่าเริ่มต้นคือปิด",
+      "โหมดปลอดภัย: กด Shift ค้างตอนเปิด LiveLingo (หรือเติม --safe ที่ทางลัด) เพื่อเปิดด้วยค่าเริ่มต้น โดยไม่เปิดการฟังและการอ่านหน้าจออัตโนมัติ การตั้งค่าเดิมถูกเก็บไว้ให้สลับกลับได้",
+      "ช่องทางอัปเดต (หน้าเกี่ยวกับ): เสถียรรับเฉพาะรุ่นทางการ เบต้าได้ฟีเจอร์ใหม่ก่อนแต่อาจมีปัญหาเล็กน้อย สลับกลับเป็นเสถียรได้ทุกเมื่อ หรือย้อนกลับไปรุ่นก่อนหน้า",
+      "เวอร์ชันพกพา: เพิ่ม LiveLingo-Portable.zip แตกไฟล์แล้วใช้ได้เลย ข้อมูลอยู่ในโฟลเดอร์ data ข้างโปรแกรม ย้ายไปแฟลชไดรฟ์ได้ ไม่อัปเดตเอง หากต้องการรุ่นใหม่ให้ดาวน์โหลดใหม่",
+      "ปกปิดข้อมูลสำคัญ (เปิดอยู่เป็นค่าเริ่มต้น): ข้อความหลัง “รหัสผ่านคือ…” หรือ “password: …” อีเมล เลขบัตร คีย์ เลขประจำตัว จะเป็น ▒▒▒ ก่อนบันทึกลงประวัติ บันทึกคำบรรยาย ตัวอย่างและสรุป บนหน้าจอยังเห็นตามปกติ",
+      "เข้ารหัสประวัติและสมุดคำศัพท์ (เฉพาะ Windows ค่าเริ่มต้นปิด): เข้ารหัสด้วยการป้องกันข้อมูลของ Windows เปิดได้เฉพาะบัญชีนี้บนเครื่องนี้ ข้อมูลที่เปิดไม่ได้จะไม่ถูกลบหรือแก้ไข",
+      "“คืนค่าเริ่มต้น” และโหมดปลอดภัยจะไม่แตะสวิตช์ข้อมูลสำคัญทั้งสองตัว ส่วนค่าที่โหมดประหยัดแบตเตอรี่เปลี่ยนไปจะถูกจำไว้ แม้ปิดแล้วเปิดใหม่ก็คืนค่าให้",
+      "ต้องลองใช้จริงบนเครื่องของคุณจึงจะยืนยันได้: การเข้ารหัส Windows การตรวจจับแบตเตอรี่ การกด Shift ตอนเปิด ไฟล์เผยแพร่รุ่นเบต้าและรุ่นพกพา การปกปิดเน้นปิดเกินไว้ก่อน หากตกหล่นแจ้งผ่านรายงานปัญหา"
+    ],
+    "id": [
+      "Penghemat baterai laptop (halaman Umum): saat memakai baterai, pengenalan suara beralih ke “lebih cepat”, teks langsung dan peredam bising dimatikan, pembacaan layar tiga kali lebih jarang. Dicolokkan = kembali normal. Bawaan: mati.",
+      "Mode aman: tahan Shift saat membuka LiveLingo (atau tambahkan --safe pada pintasan) untuk memulai dengan pengaturan bawaan tanpa menyalakan dengar dan baca layar otomatis. Pengaturan lama disimpan agar bisa dikembalikan.",
+      "Kanal pembaruan (halaman Tentang): Stabil hanya menerima rilis resmi. Beta mendapat fitur baru lebih awal tetapi mungkin ada masalah kecil; bisa kembali ke Stabil kapan saja atau ke versi sebelumnya.",
+      "Versi portabel: LiveLingo-Portable.zip baru. Ekstrak lalu pakai; data ada di folder data di samping program sehingga bisa dibawa dengan flashdisk. Tidak memperbarui diri; unduh versi baru.",
+      "Penyamaran data sensitif (aktif secara bawaan): teks setelah “kata sandi adalah…” atau “password: …”, email, nomor kartu, kunci, dan nomor identitas menjadi ▒▒▒ sebelum masuk riwayat, transkrip, contoh kata, dan ringkasan.",
+      "Enkripsi riwayat dan buku kata (hanya Windows, bawaan mati): dienkripsi dengan perlindungan data Windows sehingga hanya akun ini di PC ini yang bisa membukanya. Data yang tidak terbuka tidak dihapus atau diubah.",
+      "“Kembalikan bawaan” dan mode aman tidak menyentuh dua sakelar data sensitif. Pengaturan yang diubah penghemat baterai diingat dan dikembalikan walau aplikasi ditutup dan dibuka lagi.",
+      "Hal berikut perlu dicoba langsung di PC Anda: enkripsi Windows, deteksi baterai, memulai dengan Shift, serta berkas rilis beta dan portabel. Penyamaran memilih berlebih; laporkan yang terlewat lewat laporan masalah."
+    ],
+    "es": [
+      "Ahorro de batería del portátil (página General): con batería, el reconocimiento de voz pasa a «más rápido», se apagan subtítulos en vivo y reducción de ruido y la lectura de pantalla va tres veces más espaciada. Desactivado por defecto.",
+      "Modo seguro: mantén Mayús al abrir LiveLingo (o añade --safe al acceso directo) para iniciar con los ajustes predeterminados y sin activar solos la escucha ni la lectura de pantalla. Se guardan tus ajustes para volver.",
+      "Canal de actualizaciones (página Acerca de): Estable solo recibe versiones oficiales. Beta recibe las novedades antes pero puede tener fallos pequeños; puedes volver a Estable o a la versión anterior.",
+      "Versión portátil: nuevo LiveLingo-Portable.zip. Descomprime y usa; los datos van a la carpeta data junto al programa y puedes llevarla en una memoria USB. No se actualiza sola; descarga las nuevas versiones.",
+      "Ocultar datos sensibles (activado por defecto): lo que sigue a «la contraseña es…» o «password: …», correos, tarjetas, claves y números de identidad pasan a ▒▒▒ antes de guardarse en historial, transcripciones, ejemplos y resúmenes.",
+      "Cifrar historial y vocabulario (solo Windows, desactivado): se cifran con la protección de datos de Windows y solo esta cuenta en este PC puede abrirlos. Los datos que no se puedan abrir no se borran ni se modifican.",
+      "«Restaurar valores» y el modo seguro no tocan los dos interruptores de datos sensibles. Los ajustes que cambia el ahorro de batería se recuerdan y se restauran aunque cierres y abras el programa.",
+      "Esto requiere uso real en tu PC: cifrado de Windows, detección de batería, inicio con Mayús y los archivos de la beta y la versión portátil. Se prefiere ocultar de más; avisa de lo omitido con el informe de problemas."
+    ],
+    "pt": [
+      "Economia de bateria do notebook (página Geral): na bateria, o reconhecimento de voz muda para «mais rápido», legendas ao vivo e redução de ruído são desligadas e a leitura de tela fica três vezes mais espaçada. Desligado por padrão.",
+      "Modo seguro: segure Shift ao abrir o LiveLingo (ou adicione --safe ao atalho) para iniciar com as configurações padrão, sem ligar sozinhos a escuta e a leitura de tela. Suas configurações ficam guardadas para voltar.",
+      "Canal de atualização (página Sobre): Estável recebe só versões oficiais. Beta recebe novidades antes, mas pode ter pequenos problemas; volte ao Estável ou à versão anterior quando quiser.",
+      "Versão portátil: novo LiveLingo-Portable.zip. Extraia e use; os dados ficam na pasta data ao lado do programa e podem ir num pen drive. Não se atualiza sozinha; baixe as versões novas.",
+      "Ocultar dados sensíveis (ligado por padrão): o que vem depois de «a senha é…» ou «password: …», e-mails, cartões, chaves e documentos viram ▒▒▒ antes de ir para histórico, transcrições, exemplos e resumos.",
+      "Criptografar histórico e vocabulário (só Windows, desligado): protegidos pela proteção de dados do Windows, só esta conta neste PC abre. Dados que não abrem nunca são apagados ou alterados.",
+      "«Restaurar padrões» e o modo seguro não mexem nas duas chaves de dados sensíveis. As configurações trocadas pela economia de bateria são lembradas e restauradas mesmo após reiniciar.",
+      "Estes pontos precisam de uso real no seu PC: criptografia do Windows, detecção de bateria, início com Shift e os arquivos de lançamento beta e portátil. Na dúvida oculta-se a mais; avise falhas pelo relatório de problemas."
+    ],
+    "ru": [
+      "Экономия заряда ноутбука (страница «Общие»): от батареи распознавание речи — «быстрее», живые субтитры и шумоподавление выключены, чтение экрана втрое реже. После подключения к сети всё возвращается. По умолчанию выкл.",
+      "Безопасный режим: удерживайте Shift при запуске LiveLingo (или добавьте --safe к ярлыку) — запуск с настройками по умолчанию, без автозапуска прослушивания и чтения экрана. Прежние настройки сохраняются, их можно вернуть.",
+      "Канал обновлений (страница «О программе»): «Стабильный» получает только официальные релизы. «Бета» — новые функции раньше, но возможны мелкие ошибки; можно вернуться к «Стабильному» или к предыдущей версии.",
+      "Портативная версия: новый LiveLingo-Portable.zip. Распакуйте и запускайте; данные лежат в папке data рядом с программой, её можно перенести на флешку. Сама не обновляется; скачивайте новые версии.",
+      "Скрытие конфиденциальных данных (включено по умолчанию): то, что идёт после «пароль…» или «password: …», почта, номера карт, ключи и номера документов заменяются на ▒▒▒ до записи в историю, субтитры, примеры и сводки.",
+      "Шифрование истории и словаря (только Windows, по умолчанию выкл.): защита данных Windows, открыть может только эта учётная запись на этом ПК. Данные, которые не открываются, не удаляются и не меняются.",
+      "«Сброс настроек» и безопасный режим не трогают два переключателя конфиденциальных данных. Настройки, изменённые экономией заряда, запоминаются и возвращаются даже после перезапуска.",
+      "Нужна проверка на вашем ПК: шифрование Windows, определение батареи, запуск с Shift, файлы бета- и портативной версий. Скрывается с запасом; о пропусках сообщайте через отчёт о проблеме."
+    ],
+    "de": [
+      "Akkusparmodus (Seite Allgemein): im Akkubetrieb wechselt die Spracherkennung auf „schneller“, Live-Untertitel und Rauschunterdrückung gehen aus, Bildschirmlesen läuft dreimal seltener. Am Netz wird alles zurückgesetzt. Standard: aus.",
+      "Abgesicherter Modus: LiveLingo mit gedrückter Umschalttaste starten (oder --safe an die Verknüpfung): Start mit Standardeinstellungen, ohne Zuhören und Bildschirmlesen automatisch zu starten. Alte Einstellungen bleiben zum Zurückwechseln.",
+      "Update-Kanal (Seite Info): „Stabil“ erhält nur offizielle Versionen. „Beta“ bekommt neue Funktionen früher, kann aber kleine Fehler haben; jederzeit zurück zu „Stabil“ oder zur vorherigen Version.",
+      "Portable Version: neue LiveLingo-Portable.zip. Entpacken und starten; alle Daten liegen im Ordner „data“ neben dem Programm und passen auf einen USB-Stick. Sie aktualisiert sich nicht selbst; neue Versionen herunterladen.",
+      "Sensible Daten verdecken (standardmäßig an): Was nach „Passwort ist…“ oder „password: …“ folgt, dazu E-Mails, Kartennummern, Schlüssel und Ausweisnummern, wird vor dem Speichern in Verlauf, Mitschriften und Zusammenfassungen zu ▒▒▒.",
+      "Verlauf und Wortliste verschlüsseln (nur Windows, standardmäßig aus): Windows-Datenschutz, nur dieses Konto auf diesem PC kann sie öffnen. Nicht lesbare Daten werden weder gelöscht noch verändert.",
+      "„Standard wiederherstellen“ und der abgesicherte Modus lassen die beiden Schalter für sensible Daten unberührt. Vom Akkusparmodus geänderte Einstellungen werden gemerkt und auch nach einem Neustart zurückgesetzt.",
+      "Das muss auf Ihrem PC real erprobt werden: Windows-Verschlüsselung, Akku-Erkennung, Start mit Umschalttaste sowie die Beta- und Portable-Dateien. Es wird lieber zu viel verdeckt; Lücken bitte über den Problembericht melden."
+    ],
+    "fr": [
+      "Économie de batterie (page Général) : sur batterie, reconnaissance vocale « plus rapide », sous-titres en direct et réduction du bruit éteints, lecture d'écran trois fois moins fréquente. Rebranché, tout revient. Désactivé par défaut.",
+      "Mode sans échec : maintenez Maj au lancement de LiveLingo (ou ajoutez --safe au raccourci) pour démarrer avec les réglages par défaut, sans lancer seuls l'écoute ni la lecture d'écran. Vos anciens réglages sont gardés pour revenir.",
+      "Canal de mises à jour (page À propos) : Stable ne reçoit que les versions officielles. Bêta reçoit les nouveautés plus tôt mais peut avoir de petits défauts ; retour à Stable ou à la version précédente à tout moment.",
+      "Version portable : nouveau LiveLingo-Portable.zip. Décompressez et lancez ; les données sont dans le dossier data à côté du programme, transportable sur clé USB. Pas de mise à jour automatique ; téléchargez les nouvelles versions.",
+      "Masquage des données sensibles (activé par défaut) : ce qui suit « le mot de passe est… » ou « password : … », e-mails, numéros de carte, clés et numéros d'identité deviennent ▒▒▒ avant l'historique, transcriptions, exemples et résumés.",
+      "Chiffrer historique et carnet de mots (Windows seulement, désactivé) : protection des données de Windows, seul ce compte sur ce PC peut les ouvrir. Les données illisibles ne sont ni supprimées ni modifiées.",
+      "« Rétablir les valeurs par défaut » et le mode sans échec ne touchent pas les deux interrupteurs de données sensibles. Les réglages changés par l'économie de batterie sont mémorisés et rétablis même après redémarrage.",
+      "À valider en usage réel sur votre PC : chiffrement Windows, détection de la batterie, lancement avec Maj, fichiers des versions bêta et portable. Le masquage préfère trop cacher ; signalez les oublis via le rapport de problème."
+    ]
+  },
   "2.20.0": {
     "zh-TW": [
       "新功能亮點：更新之後，有新功能的設定頁在左邊導覽上標一個「新」，點進去看過就消失，一個頁面只標一次。全新安裝的人不會看到。",
@@ -2184,12 +2316,5 @@
     "en": ["Fixed statements being translated as questions.", "When a translation is wrong you can teach the whole sentence, and it is used from then on.", "When the microphone cannot be opened the reason is shown, and the microphone can be found automatically."],
     "ko": ["평서문이 의문문으로 번역되던 문제를 고쳤습니다.", "번역이 틀렸을 때 문장 전체의 번역을 가르칠 수 있고, 이후로는 그대로 번역합니다.", "마이크를 열 수 없을 때 이유를 보여 주고, 마이크를 자동으로 찾을 수 있습니다."],
     "ja": ["平叙文が疑問文として翻訳される問題を修正しました。", "翻訳が違うときは文全体の訳を教えられ、以後はその訳を使います。", "マイクを開けないときは理由を表示し、マイクを自動で探せます。"]
-  },
-  "2.1.0": {
-    "zh-TW": ["新增浮動留言：翻譯像聊天室一樣浮在遊戲畫面上。"],
-    "zh-CN": ["新增浮动留言：翻译像聊天室一样浮在游戏画面上。"],
-    "en": ["New floating chat: translations float over the game like a chat room."],
-    "ko": ["떠 있는 채팅 추가: 번역이 채팅방처럼 게임 화면 위에 표시됩니다."],
-    "ja": ["フローティングチャットを追加：翻訳がチャット欄のようにゲーム画面の上に表示されます。"]
   }
 }

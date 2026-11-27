@@ -70,6 +70,15 @@ def main() -> int:
         from .core.procaudio import probe
 
         return probe(_arg("--probe-app-audio"))
+    if "--data-dir" in sys.argv:      # 資料放在哪個資料夾（發行流程用它確認免安裝版的資料真的放在程式旁邊）
+        from .paths import data_dir
+
+        out = _arg("--data-dir")
+        if out:
+            Path(out).write_text(str(data_dir()), encoding="utf-8")
+        else:
+            print(data_dir())
+        return 0
     if "--version" in sys.argv:
         from . import __version__
 
@@ -101,6 +110,10 @@ def main() -> int:
         return 0
 
     service = Service(data)
+    from . import safemode
+
+    if safemode.requested():      # 按住 Shift 開（或加 --safe）：這次用預設設定（2.21.0）
+        service.safe_start()
     service.watch_errors()      # 沒被接住的錯誤寫進紀錄檔，並在畫面上說一聲
 
     def exit_now():

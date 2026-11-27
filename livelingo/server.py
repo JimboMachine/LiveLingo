@@ -401,6 +401,8 @@ class Server:
                         return self._json(service.stream_action(str(body.get("action") or "")))
                     if route == "/api/copy":
                         return self._json({"ok": service.copy(int(body.get("id") or 0))})
+                    if route == "/api/safe":      # 安全模式（2.21.0）：就用預設設定 / 換回之前的設定
+                        return self._json(service.safe_action(bool(body.get("keep"))))
                     if route == "/api/settings":      # 設定的匯出、匯入、恢復預設、復原
                         if body.get("export"):
                             return self._json(service.settings_export())
