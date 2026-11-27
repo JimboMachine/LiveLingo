@@ -156,6 +156,7 @@ class Recognizer:
         self.turn = None
         self.beam = 1          # 1 = 快；5 = 比較準、慢大約一倍（設定裡的「比較準」）
         self.hotwords = lambda lang: ""      # hotwords(語言) → 先告訴模型的詞，用空格分開（Service 換成真的）
+        self.cantonese = lambda: False       # 粵語（2.15.0）：True 的時候「中文」照粵語聽（Whisper 的 yue），出來的字還是當中文翻
         self._quick = False    # 這一次是「還在說就先辨識」：一律用快的
         self._lock = threading.Lock()
         # Whisper 預設每次都把聲音補到 30 秒再算。我們一句最長 12 秒，補到 15 秒就夠，
@@ -193,10 +194,17 @@ class Recognizer:
             words = self.hotwords(lang) if lang else ""
         except Exception:  # noqa: BLE001
             words = ""
+        spoken = "yue" if lang == "zh" and self._yue() else lang
         return self.model.transcribe(
-            audio, language=lang, beam_size=1 if self._quick else self.beam, temperature=0.0, condition_on_previous_text=False,
+            audio, language=spoken, beam_size=1 if self._quick else self.beam, temperature=0.0, condition_on_previous_text=False,
             without_timestamps=True, chunk_length=self._now_window,
             initial_prompt="以下是繁體中文的句子。" if lang == "zh" else None, **({"hotwords": words} if words else {}))
+
+    def _yue(self) -> bool:
+        try:
+            return bool(self.cantonese())
+        except Exception:  # noqa: BLE001
+            return False
 
     def _run(self, audio: np.ndarray, langs: list[str], share_encoder: bool = True, stay: float = 1.0):
         m = self.model
@@ -211,6 +219,9 @@ class Recognizer:
                 probs = [(tok[2:-2], p) for tok, p in m.model.detect_language(enc)[0]]
             else:
                 _, _, probs = m.detect_language(audio)
+            if "zh" in langs and self._yue():      # 粵語算中文：Whisper 會把粵語分到 yue，跟 zh 合起來比
+                yue = max((p for l, p in probs if l == "yue"), default=0.0)
+                probs = [(l, max(p, yue) if l == "zh" else p) for l, p in probs]
             lang = self.pick_language(probs, langs, stay)
         if enc is not None:
             real_encode, pending = m.encode, [enc]
@@ -301,6 +312,12 @@ class SpeechPipeline(threading.Thread):
         self.langs = langs
         self.stay = 1.0          # 大於 1：比較相信 langs[0]（自動偵測對方語言時用）
         self.on_text = on_text
+        try:      # length：這句話說了幾秒（斷句修補用，2.15.0）。只給收得下的（測試裡的假函式不一定收）
+            import inspect
+
+            self._wants_length = "length" in inspect.signature(on_text).parameters
+        except (TypeError, ValueError):
+            self._wants_length = False
         self.on_state = on_state or (lambda kind, speaking: None)
         # on_level(來源, 現在的音量 0~1, 已經連續幾秒完全沒聲音)：給介面畫音量條、提醒「麥克風沒聲音」
         self.on_level = on_level or (lambda kind, level, silent_for: None)
@@ -392,7 +409,7 @@ class SpeechPipeline(threading.Thread):
                 given = True
                 who = self._who(utter, voice)      # 這一句是誰說的（有開「分辨說話者」才會有）
                 self.on_text(kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False,
-                             **({"speaker": who} if who else {}))
+                             **({"speaker": who} if who else {}), **({"length": len(utter) / SR} if getattr(self, "_wants_length", False) else {}))
                 self._live_text = None      # 先顯示的那一則已經被整句接手
                 self.pacer.reset()
         if not self.on_partial:

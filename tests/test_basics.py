@@ -2268,7 +2268,7 @@ def test_voice_tuning_delay_echo_and_push_to_talk(tmp_path):
 
     service = Service(tmp_path)
     service.translator = Echo()
-    service.cfg.set(back_translate=False)
+    service.cfg.set(back_translate=False, join_split=False)      # 這裡的句子一句接一句很快送進來，不是切成兩半的同一句
     assert service.state()["ptt_keys"] == list(oswin.PTT_KEYS) and service.cfg["ptt_key"] in oswin.PTT_KEYS
 
     # ---- 設定：檢查範圍，收音中的管線直接換
@@ -6446,7 +6446,8 @@ def test_each_speaker_has_their_own_languages(tmp_path, monkeypatch):
 
     def open_app(**more):
         service = Service(data)
-        service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False, ui_lang="zh-TW", tell_speakers=True, **more)
+        service.cfg.set(back_translate=False, my_lang="zh-TW", their_lang="ko", drop_echo=False, ui_lang="zh-TW", tell_speakers=True,
+                        join_split=False, **more)      # 一句接一句很快送進來：不要被當成切成兩半的同一句（2.15.0）
         service.translator = _FakeModel("你好")
         threading.Thread(target=service._translate_worker, daemon=True).start()
         service.speakers_load()

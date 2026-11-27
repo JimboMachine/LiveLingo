@@ -775,6 +775,21 @@ class Translator:
         """記住的翻法用哪個語氣分開存：保留語氣翻出來的跟直翻的不混用。"""
         return self.tone + ("+keep" if self.keep_tone else "")
 
+    def second_opinion(self, text: str, target: str, source: str | None = None) -> str:
+        """換一種寫法（簡短的）再翻一次（2.15.0：沒把握的句子拿來跟第一次比）。不用暫存、不記，翻不出來回傳空字串。"""
+        text = text.strip()[:MAX_TEXT]
+        source = source or detect_language(text) or "en"
+        if not text or source == LANGS[target]["family"]:
+            return ""
+        kind = sentence_kind(text, source)
+        sent = with_end_mark(plain_zh(text) if source == "zh" else text, source, kind)
+        hints = self.hints(text, source, target)
+        with self._lock, self._my_turn():
+            out = trim_extra(self._ask(sent, source, target, hints, [], "short"), sent, source, target)
+        if meta_reply(out, sent):
+            return ""
+        return tidy(to_script(out, target), target, self.keep())
+
     def clear_cache(self) -> None:
         self._cache.clear()
 

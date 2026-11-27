@@ -67,6 +67,16 @@ DEFAULTS = {
     "speak_heard_screen": False, # 畫面上讀到的聊天也念（關掉 = 只念聽到的語音）
     "speak_heard_device": None,  # 念到哪個播放裝置（我的耳機），None = Windows 預設
     "speak_heard_name": "",
+    # 翻譯品質的小修補（2.15.0，textfix.py）
+    "join_split": True,          # 一句話被語音切成兩半（中間停了一下）：後半句接回前半句再翻
+    "ocr_fix": True,             # 讀螢幕常見的讀錯（數字裡的 O、l；韓文子音縮寫裡的 0、7）先修好再翻
+    "drop_fillers": True,        # 整句只有「嗯」「啊」、笑聲：不出字幕、不翻
+    "unsure_recheck": True,      # 標成「可能聽錯／看錯」的句子換一種寫法再翻一次，兩次意思差不多就不標
+    "unsure_view": "mark",       # 還是沒把握的句子：mark = 標出來 / dim = 灰掉 / hide = 不顯示（主視窗留著，浮動字幕不出）
+    "abbr_suggest": True,        # 對方一直用、又不在詞彙表裡的縮寫：出現第 5 次時問要不要補意思
+    "abbr_skip": [],             # 問過、說「不用」的縮寫：不再問
+    "cantonese": False,          # 對方說的中文照粵語聽（Whisper 的 yue）
+    "slang_notes": True,         # 對方的話裡有用語包認得的網路用語、縮寫：譯文下面加一行小字說意思
     "alert_words": [],           # 喊我名字提醒：對方的話裡出現這些字就標出來、響一聲（mention.py），空的 = 不提醒
     "alert_sound": True,         # 提醒的時候響一聲
     "recap_auto": True,          # 一段對話結束（安靜 10 分鐘）自動整理重點（recap.py）
@@ -131,7 +141,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
@@ -364,6 +374,7 @@ class Lessons:
     一模一樣的句子之後直接用這個翻法，類似的句子會把它當範例給模型參考。"""
 
     LIMIT = 400
+    KEEP_OLD = 5      # 改過的翻法（2.15.0）：每一句留最近幾個舊的，改錯了可以退回上一版
 
     def __init__(self, folder: Path):
         self.path = folder / "lessons.json"
@@ -372,27 +383,44 @@ class Lessons:
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
             self.items = [{"src": str(i["src"]).strip(), "dst": str(i["dst"]).strip(), "lang": str(i["lang"]),
-                           "target": str(i["target"])} for i in raw
-                          if str(i.get("src", "")).strip() and str(i.get("dst", "")).strip()][: self.LIMIT]
+                           "target": str(i["target"]),
+                           "old": [str(o).strip() for o in i.get("old", []) if str(o).strip()][-self.KEEP_OLD:] if isinstance(i.get("old"), list) else []}
+                          for i in raw if str(i.get("src", "")).strip() and str(i.get("dst", "")).strip()][: self.LIMIT]
         except FileNotFoundError:
             pass
         except Exception:  # noqa: BLE001
             self.items = []
 
     def list(self) -> list[dict]:
+        """舊的翻法（old）只有改過的句子才帶（介面才知道哪一句可以退回上一版）。"""
         with self._lock:
-            return [dict(i) for i in self.items]
+            return [{k: v for k, v in i.items() if k != "old" or v} for i in self.items]
 
-    def add(self, src: str, dst: str, lang: str, target: str) -> bool:
-        src, dst = src.strip()[:500], dst.strip()[:500]
+    def add(self, src: str, dst: str, lang: str, target: str, before: str = "") -> bool:
+        """before：教之前畫面上的譯文（機器翻的那一版）。這句之前教過的話，舊的翻法也留著（最多 KEEP_OLD 個）。"""
+        src, dst, before = src.strip()[:500], dst.strip()[:500], (before or "").strip()[:500]
         if not src or not dst or src == dst:
             return False
         with self._lock:
+            had = next((i for i in self.items if i["src"] == src and i["target"] == target), None)
+            old = list(had["old"]) + [had["dst"]] if had else ([before] if before and before != src else [])
+            old = [o for o in old if o and o != dst][-self.KEEP_OLD:]
             self.items = [i for i in self.items if not (i["src"] == src and i["target"] == target)]
-            self.items.insert(0, {"src": src, "dst": dst, "lang": lang, "target": target})
+            self.items.insert(0, {"src": src, "dst": dst, "lang": lang, "target": target, "old": old})
             del self.items[self.LIMIT:]
             self._save()
         return True
+
+    def undo(self, src: str, target: str) -> str:
+        """退回上一版：回傳退回後的翻法；退到最早（機器翻的那一版）之後就不再是教過的句子，回傳那一版但這句從清單拿掉。
+        沒有舊的可以退：回傳空字串。"""
+        with self._lock:
+            item = next((i for i in self.items if i["src"] == src and i["target"] == target), None)
+            if not item or not item["old"]:
+                return ""
+            item["dst"] = item["old"].pop()
+            self._save()
+            return item["dst"]
 
     def remove(self, src: str, target: str) -> None:
         with self._lock:
@@ -412,7 +440,7 @@ class Lessons:
                 lang, target = str(item.get("lang", "")), str(item.get("target", ""))
                 if not src or not dst or src == dst or lang not in sources or target not in targets or (src, target) in have:
                     continue
-                self.items.append({"src": src, "dst": dst, "lang": lang, "target": target})
+                self.items.append({"src": src, "dst": dst, "lang": lang, "target": target, "old": []})
                 have.add((src, target))
                 added += 1
             if added:

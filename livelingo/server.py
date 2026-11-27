@@ -289,6 +289,15 @@ class Server:
                         if action == "open":
                             return self._json(service.filesubs_open())
                         return self._json({"ok": False, "error": "unknown"})
+                    if route == "/api/lessons/undo":      # 教過的句子退回上一版（2.15.0）
+                        return self._json(service.lesson_undo(str(body.get("src") or ""), str(body.get("target") or "")))
+                    if route == "/api/abbr":       # 縮寫提醒的回答：word、meaning（空的 = 不用，不再問）
+                        return self._json(service.abbr_answer(str(body.get("word") or ""), str(body.get("meaning") or "")))
+                    if route == "/api/corrections":      # 每週錯誤報告：report / clear
+                        action = str(body.get("action") or "")
+                        if action == "clear":
+                            return self._json(service.corrections_clear())
+                        return self._json(service.corrections_report())
                     if route == "/api/names":      # 名字建議的回答：name、keep（true = 加進不翻的字，false = 不是名字）
                         return self._json(service.name_answer(str(body.get("name") or ""), bool(body.get("keep"))))
                     if route == "/api/private":    # 隱私暫停：on

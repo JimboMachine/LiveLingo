@@ -75,8 +75,10 @@ def candidates(text: str) -> list[str]:
 class NameWatch:
     """數對方的話裡每個可能是名字的字出現在幾則裡。到了 NEED 則就回傳它一次（之後不再回傳）。"""
 
-    def __init__(self, need: int = NEED):
+    def __init__(self, need: int = NEED, find=None):
+        """find(text) → 這句裡要數的字（不給就是 candidates：像名字的字）。縮寫提醒（textfix）也用這個數。"""
         self.need = need
+        self.find = find or candidates
         self.counts: Counter = Counter()
         self.asked: set[str] = set()
 
@@ -84,7 +86,7 @@ class NameWatch:
         """skip：已經在不翻的字、詞彙表、或使用者說過「不是名字」的字（不分大小寫）。回傳該問的字，沒有就是空字串。"""
         skip = {str(s).lower() for s in skip}
         ask = ""
-        for word in candidates(text):
+        for word in self.find(text):
             key = word.lower()
             if key in skip or key in self.asked:
                 continue
