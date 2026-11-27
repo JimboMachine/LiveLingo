@@ -1,4 +1,136 @@
 {
+  "2.16.0": {
+    "zh-TW": [
+      "遊戲專屬版面（讀畫面頁）：每個遊戲記住自己的浮動字幕位置、對方的語言和要讀的區域，切到那個遊戲就自動換過去。",
+      "劇情書（歷史頁）：標成「劇情對話框」的區域讀到的劇情，照遊戲分本記下來，可以從頭讀、翻頁、匯出成文字檔。",
+      "框選翻譯相簿（讀畫面頁）：框選翻譯時連截圖一起留著，之後可以回來看當時畫面上寫了什麼。最多 200 張。",
+      "聊天頻道分色：照讀到的字的顏色，在譯文旁邊標同一種顏色，隊伍、公會、私訊分得出來。玩家備註（詞彙與記憶頁）：替玩家 ID 寫一句備註，對方提到時標在譯文下面。",
+      "打架時讀慢一點：畫面一直大動時少讀幾次聊天區，不跟遊戲搶電腦。遊戲用獨佔全螢幕時會提醒一次改成無邊框視窗，因為那時浮動字幕蓋不上去。",
+      "讀畫面頁新增「自動找聊天框」（整個螢幕找最像聊天框的地方）和「套用常見遊戲範本」（15 個常見遊戲）。加好的區域先關著，看過位置再打開。",
+      "副螢幕字幕牆（字幕視窗頁）：在另一個螢幕開全螢幕大字幕，主螢幕專心玩。要接兩個螢幕。",
+      "劇情書和相簿都只存在這台電腦，隱私暫停時不存。範本位置是大概的，套用後請自己看一下。"
+    ],
+    "zh-CN": [
+      "游戏专属布局（读屏幕页）：每个游戏记住自己的浮动字幕位置、对方的语言和要读的区域，切到那个游戏就自动换过去。",
+      "剧情书（历史页）：标成“剧情对话框”的区域读到的剧情，按游戏分本记下来，可以从头读、翻页、导出成文本文件。",
+      "框选翻译相册（读屏幕页）：框选翻译时连截图一起留着，之后可以回来看当时画面上写了什么。最多 200 张。",
+      "聊天频道分色：按读到的字的颜色，在译文旁边标同一种颜色，队伍、公会、私信分得出来。玩家备注（词汇与记忆页）：给玩家 ID 写一句备注，对方提到时标在译文下面。",
+      "打架时读慢一点：画面一直大动时少读几次聊天区，不跟游戏抢电脑。游戏用独占全屏时会提醒一次改成无边框窗口，因为那时浮动字幕盖不上去。",
+      "读屏幕页新增“自动找聊天框”（整个屏幕找最像聊天框的地方）和“套用常见游戏模板”（15 个常见游戏）。加好的区域先关着，看过位置再打开。",
+      "副屏字幕墙（字幕窗口页）：在另一个屏幕开全屏大字幕，主屏幕专心玩。要接两个屏幕。",
+      "剧情书和相册都只存在这台电脑，隐私暂停时不存。模板位置是大概的，套用后请自己看一下。"
+    ],
+    "en": [
+      "Per-game layouts (Screen page): each game remembers its floating-subtitle position, the other side's language and the areas to read, and switches to them when you switch to that game.",
+      "Story book (History page): story lines read from areas marked as story dialog are kept per game. Read from the start, page through, or export to a text file.",
+      "Box-select album (Screen page): each box-select translation keeps its screenshot, so you can look back at what the screen said. Up to 200.",
+      "Chat channel colors: each translation is marked with the color of the text it came from, so team, guild and whispers stand apart. Player notes (Words page): write a note for a player ID and see it when they are mentioned.",
+      "Read slower during fights: when the screen keeps moving, the chat area is read less often so the game runs smoother. In exclusive fullscreen you get one reminder to use borderless window, since floating subtitles can't show there.",
+      "Screen page adds Find the chat box (searches the whole screen) and Use a game template (15 common games). New areas start off so you can check the position first.",
+      "Subtitle wall (Subtitles page): opens big fullscreen subtitles on another screen while you play on the main one. Needs two screens.",
+      "The story book and album stay on this PC and save nothing during privacy pause. Template positions are approximate; check them after applying."
+    ],
+    "ko": [
+      "게임별 배치(화면 읽기 페이지): 게임마다 떠 있는 자막 위치, 상대 언어, 읽을 영역을 기억해 그 게임으로 바꾸면 자동으로 적용해요.",
+      "스토리 북(기록 페이지): '스토리 대화창'으로 표시한 영역에서 읽은 스토리를 게임별로 기록해요. 처음부터 읽고, 넘기고, 텍스트 파일로 내보낼 수 있어요.",
+      "영역 번역 앨범(화면 읽기 페이지): 영역 번역할 때 스크린샷도 함께 남겨, 그때 화면에 뭐라고 쓰여 있었는지 다시 볼 수 있어요. 최대 200장.",
+      "채팅 채널 색 구분: 읽은 글자 색으로 번역 옆에 같은 색을 표시해 팀, 길드, 귓속말을 구분해요. 플레이어 메모(단어와 기억 페이지): 플레이어 ID에 메모를 달면 언급될 때 번역 아래에 보여요.",
+      "전투 중엔 천천히 읽기: 화면이 계속 크게 움직이면 채팅 영역을 덜 읽어 게임이 더 부드러워요. 전용 전체 화면이면 떠 있는 자막이 안 보여서 테두리 없는 창으로 바꾸라고 한 번 알려요.",
+      "화면 읽기 페이지에 '채팅창 자동 찾기'(화면 전체 검색)와 '게임 템플릿 적용'(인기 게임 15개)이 생겼어요. 새 영역은 꺼진 채로 추가되니 위치를 확인하고 켜세요.",
+      "보조 화면 자막 벽(자막 창 페이지): 다른 화면에 큰 전체 화면 자막을 띄우고 메인 화면에서 게임해요. 화면이 두 개 필요해요.",
+      "스토리 북과 앨범은 이 PC에만 저장되고 개인 정보 일시 중지 중엔 저장하지 않아요. 템플릿 위치는 대략이니 적용 후 확인하세요."
+    ],
+    "ja": [
+      "ゲームごとのレイアウト（画面読み取りページ）：ゲームごとに浮かぶ字幕の位置、相手の言語、読む範囲を覚え、そのゲームに切り替えると自動で適用します。",
+      "ストーリーブック（履歴ページ）：「ストーリー会話」にした範囲で読んだストーリーをゲームごとに記録。最初から読む、ページ送り、テキストに書き出しができます。",
+      "範囲翻訳アルバム（画面読み取りページ）：範囲翻訳のスクリーンショットも残し、あとで画面に何が書いてあったか見返せます。最大 200 枚。",
+      "チャットチャンネルの色分け：読んだ文字の色で訳文の横に印を付け、チーム、ギルド、ささやきを区別。プレイヤーメモ（単語と記憶ページ）：ID にメモを付けると、話題に出たとき訳文の下に表示。",
+      "戦闘中はゆっくり読む：画面が動き続けるときはチャット範囲を読む回数を減らし、ゲームを軽くします。排他フルスクリーンでは浮かぶ字幕が出ないため、ボーダーレスへの変更を一度だけ知らせます。",
+      "画面読み取りページに「チャット欄を自動で探す」（画面全体を検索）と「ゲームのテンプレートを使う」（よくある 15 本）を追加。新しい範囲はオフで追加されるので位置を確認してからオンに。",
+      "字幕ウォール（字幕ウィンドウページ）：別の画面に大きな全画面字幕を出し、メイン画面でプレイできます。画面が 2 つ必要です。",
+      "ストーリーブックとアルバムはこの PC だけに保存され、プライバシー一時停止中は保存しません。テンプレートの位置はおおよそなので、適用後に確認してください。"
+    ],
+    "vi": [
+      "Bố cục riêng cho từng game (trang Đọc màn hình): mỗi game nhớ vị trí phụ đề nổi, ngôn ngữ đối phương và vùng cần đọc, tự áp dụng khi bạn chuyển sang game đó.",
+      "Sổ cốt truyện (trang Lịch sử): lời thoại đọc từ vùng đánh dấu hộp thoại cốt truyện được lưu theo từng game. Đọc từ đầu, lật trang hoặc xuất ra tệp văn bản.",
+      "Album dịch vùng chọn (trang Đọc màn hình): mỗi lần dịch vùng chọn giữ kèm ảnh chụp, để xem lại màn hình lúc đó ghi gì. Tối đa 200 ảnh.",
+      "Tô màu kênh chat: bản dịch được đánh dấu bằng màu chữ gốc để phân biệt đội, bang hội, tin nhắn riêng. Ghi chú người chơi (trang Từ ngữ): ghi chú cho ID, hiện dưới bản dịch khi được nhắc tới.",
+      "Đọc chậm hơn khi giao tranh: màn hình chuyển động liên tục thì đọc vùng chat thưa hơn để game mượt hơn. Ở toàn màn hình độc quyền, phụ đề nổi không hiện nên sẽ nhắc một lần chuyển sang cửa sổ không viền.",
+      "Trang Đọc màn hình có thêm Tự tìm khung chat (tìm trên toàn màn hình) và Dùng mẫu game (15 game phổ biến). Vùng mới được thêm ở trạng thái tắt để bạn kiểm tra vị trí trước.",
+      "Tường phụ đề (trang Cửa sổ phụ đề): mở phụ đề lớn toàn màn hình ở màn hình khác, màn hình chính để chơi. Cần hai màn hình.",
+      "Sổ cốt truyện và album chỉ lưu trên máy này, không lưu khi tạm dừng riêng tư. Vị trí của mẫu chỉ gần đúng, hãy kiểm tra sau khi áp dụng."
+    ],
+    "th": [
+      "เลย์เอาต์เฉพาะเกม (หน้าอ่านหน้าจอ): แต่ละเกมจำตำแหน่งซับลอย ภาษาอีกฝ่าย และพื้นที่ที่ต้องอ่าน แล้วสลับให้อัตโนมัติเมื่อคุณเปลี่ยนไปเกมนั้น",
+      "สมุดเนื้อเรื่อง (หน้าประวัติ): เนื้อเรื่องที่อ่านจากพื้นที่กล่องบทสนทนาเนื้อเรื่องถูกเก็บแยกตามเกม อ่านตั้งแต่ต้น เปิดทีละหน้า หรือส่งออกเป็นไฟล์ข้อความได้",
+      "อัลบั้มแปลแบบเลือกพื้นที่ (หน้าอ่านหน้าจอ): เก็บภาพหน้าจอไว้กับทุกการแปลแบบเลือกพื้นที่ ย้อนดูได้ว่าตอนนั้นหน้าจอเขียนอะไร สูงสุด 200 ภาพ",
+      "แยกสีช่องแชท: ติดสีตามสีตัวอักษรต้นทางไว้ข้างคำแปล แยกทีม กิลด์ กระซิบได้ บันทึกผู้เล่น (หน้าคำศัพท์): เขียนโน้ตให้ ID แล้วจะแสดงใต้คำแปลเมื่อถูกพูดถึง",
+      "อ่านช้าลงตอนต่อสู้: เมื่อภาพเคลื่อนไหวต่อเนื่องจะอ่านพื้นที่แชทน้อยลงให้เกมลื่นขึ้น ในโหมดเต็มจอแบบเอกสิทธิ์ซับลอยไม่แสดง จึงเตือนหนึ่งครั้งให้ใช้หน้าต่างไร้ขอบ",
+      "หน้าอ่านหน้าจอเพิ่ม หากล่องแชทอัตโนมัติ (ค้นทั้งจอ) และ ใช้เทมเพลตเกม (15 เกมยอดนิยม) พื้นที่ใหม่จะเริ่มแบบปิด ตรวจตำแหน่งก่อนแล้วค่อยเปิด",
+      "กำแพงซับ (หน้าหน้าต่างซับ): เปิดซับใหญ่เต็มจอบนอีกจอ จอหลักไว้เล่นเกม ต้องมีสองจอ",
+      "สมุดเนื้อเรื่องและอัลบั้มเก็บไว้ในเครื่องนี้เท่านั้น และไม่เก็บระหว่างหยุดชั่วคราวเพื่อความเป็นส่วนตัว ตำแหน่งเทมเพลตเป็นค่าประมาณ ตรวจดูหลังใช้"
+    ],
+    "id": [
+      "Tata letak per game (halaman Baca layar): tiap game mengingat posisi subtitle mengambang, bahasa lawan bicara, dan area yang dibaca, lalu diterapkan saat kamu pindah ke game itu.",
+      "Buku cerita (halaman Riwayat): alur cerita dari area bertanda dialog cerita disimpan per game. Baca dari awal, berpindah halaman, atau ekspor ke file teks.",
+      "Album terjemahan area (halaman Baca layar): tiap terjemahan area menyimpan tangkapan layarnya, jadi bisa dilihat lagi isi layar saat itu. Hingga 200.",
+      "Warna kanal chat: terjemahan ditandai warna teks asalnya, sehingga tim, guild, dan bisikan terpisah. Catatan pemain (halaman Kata): tulis catatan untuk ID dan lihat di bawah terjemahan saat ID itu disebut.",
+      "Baca lebih lambat saat bertarung: saat layar terus bergerak, area chat dibaca lebih jarang agar game lebih lancar. Di layar penuh eksklusif subtitle mengambang tidak tampil, jadi ada satu pengingat untuk pakai jendela tanpa bingkai.",
+      "Halaman Baca layar menambah Cari kotak chat otomatis (seluruh layar) dan Pakai templat game (15 game populer). Area baru dimulai dalam keadaan mati agar posisinya bisa dicek dulu.",
+      "Dinding subtitle (halaman Jendela subtitle): subtitle besar layar penuh di layar lain, layar utama untuk main. Perlu dua layar.",
+      "Buku cerita dan album hanya ada di PC ini dan tidak menyimpan apa pun saat jeda privasi. Posisi templat hanya perkiraan; periksa setelah diterapkan."
+    ],
+    "es": [
+      "Diseños por juego (página Pantalla): cada juego recuerda la posición de los subtítulos flotantes, el idioma del otro y las áreas que se leen, y se aplican al cambiar a ese juego.",
+      "Libro de historia (página Historial): las líneas leídas en áreas marcadas como diálogo de historia se guardan por juego. Léelas desde el principio, pasa páginas o expórtalas a texto.",
+      "Álbum de traducción por selección (página Pantalla): cada traducción por selección guarda su captura, para volver a ver qué decía la pantalla. Hasta 200.",
+      "Colores por canal: cada traducción lleva el color del texto original, así se distinguen equipo, gremio y susurros. Notas de jugadores (página Palabras): escribe una nota para un ID y verla cuando lo mencionen.",
+      "Leer más despacio en combate: si la imagen no para de moverse, el chat se lee menos para que el juego vaya más fluido. En pantalla completa exclusiva los subtítulos no se ven, así que avisa una vez para usar ventana sin bordes.",
+      "La página Pantalla añade Buscar el chat automáticamente (toda la pantalla) y Usar una plantilla de juego (15 juegos comunes). Las áreas nuevas empiezan apagadas para revisar la posición.",
+      "Muro de subtítulos (página Subtítulos): subtítulos grandes a pantalla completa en otra pantalla mientras juegas en la principal. Necesita dos pantallas.",
+      "El libro de historia y el álbum se quedan en este PC y no guardan nada en pausa de privacidad. Las posiciones de las plantillas son aproximadas; revísalas."
+    ],
+    "pt": [
+      "Layouts por jogo (página Tela): cada jogo lembra a posição das legendas flutuantes, o idioma do outro lado e as áreas lidas, e tudo é aplicado ao mudar para aquele jogo.",
+      "Livro da história (página Histórico): falas lidas em áreas marcadas como diálogo de história ficam guardadas por jogo. Leia do começo, vire páginas ou exporte para texto.",
+      "Álbum da tradução por seleção (página Tela): cada tradução por seleção guarda a captura, para rever o que a tela dizia. Até 200.",
+      "Cores por canal: cada tradução leva a cor do texto original, separando time, guilda e sussurros. Notas de jogadores (página Palavras): escreva uma nota para um ID e veja-a quando ele for citado.",
+      "Ler mais devagar em combate: com a imagem se mexendo sem parar, o chat é lido menos para o jogo rodar melhor. Em tela cheia exclusiva as legendas não aparecem, então há um aviso para usar janela sem bordas.",
+      "A página Tela ganha Encontrar o chat automaticamente (tela inteira) e Usar um modelo de jogo (15 jogos comuns). Áreas novas começam desligadas para você conferir a posição.",
+      "Parede de legendas (página Legendas): legendas grandes em tela cheia em outra tela enquanto você joga na principal. Precisa de duas telas.",
+      "O livro da história e o álbum ficam neste PC e não salvam nada na pausa de privacidade. As posições dos modelos são aproximadas; confira depois de aplicar."
+    ],
+    "ru": [
+      "Раскладки для игр (страница «Экран»): каждая игра помнит положение плавающих субтитров, язык собеседника и области чтения и применяет их, когда вы переключаетесь на неё.",
+      "Книга сюжета (страница «История»): реплики из областей «сюжетный диалог» сохраняются по играм. Читайте с начала, листайте или экспортируйте в текст.",
+      "Альбом выделенного перевода (страница «Экран»): к каждому выделенному переводу сохраняется снимок, чтобы потом посмотреть, что было на экране. До 200.",
+      "Цвета каналов чата: перевод помечается цветом исходного текста, чтобы различать команду, гильдию и личные. Заметки об игроках (страница «Слова»): заметка к ID видна под переводом, когда его упоминают.",
+      "Медленнее в бою: если картинка всё время движется, чат читается реже, и игре легче. В эксклюзивном полноэкранном режиме плавающих субтитров не видно — один раз напомним включить окно без рамки.",
+      "На странице «Экран» появились «Найти чат автоматически» (по всему экрану) и «Применить шаблон игры» (15 популярных игр). Новые области добавляются выключенными, чтобы проверить положение.",
+      "Стена субтитров (страница «Субтитры»): крупные полноэкранные субтитры на другом экране, пока вы играете на главном. Нужны два экрана.",
+      "Книга сюжета и альбом хранятся только на этом ПК и ничего не сохраняют во время паузы приватности. Положения шаблонов примерные — проверьте их."
+    ],
+    "de": [
+      "Layouts pro Spiel (Seite Bildschirm): Jedes Spiel merkt sich Lage der schwebenden Untertitel, Sprache des Gegenübers und gelesene Bereiche und wendet sie beim Wechsel ins Spiel an.",
+      "Story-Buch (Seite Verlauf): Zeilen aus Bereichen, die als Story-Dialog markiert sind, werden pro Spiel aufbewahrt. Von vorn lesen, blättern oder als Text exportieren.",
+      "Album der Bereichsübersetzung (Seite Bildschirm): Jede Bereichsübersetzung behält ihren Screenshot, damit du später siehst, was dort stand. Bis zu 200.",
+      "Chatkanal-Farben: Übersetzungen tragen die Farbe des Originaltexts, so sind Team, Gilde und Flüstern unterscheidbar. Spielernotizen (Seite Wörter): Notiz zu einer ID, sichtbar unter der Übersetzung, wenn sie genannt wird.",
+      "Im Kampf langsamer lesen: Bewegt sich das Bild ständig, wird der Chat seltener gelesen, damit das Spiel flüssiger läuft. Im exklusiven Vollbild sind schwebende Untertitel unsichtbar, daher ein Hinweis auf randloses Fenster.",
+      "Die Seite Bildschirm bekommt „Chatfenster automatisch finden“ (ganzer Bildschirm) und „Spielvorlage verwenden“ (15 bekannte Spiele). Neue Bereiche starten ausgeschaltet, damit du die Lage prüfen kannst.",
+      "Untertitelwand (Seite Untertitel): große Vollbild-Untertitel auf einem anderen Bildschirm, während du auf dem Hauptbildschirm spielst. Braucht zwei Bildschirme.",
+      "Story-Buch und Album bleiben auf diesem PC und speichern in der Privatsphäre-Pause nichts. Die Lage der Vorlagen ist ungefähr; prüfe sie nach dem Anwenden."
+    ],
+    "fr": [
+      "Dispositions par jeu (page Écran) : chaque jeu retient la position des sous-titres flottants, la langue de l’autre et les zones lues, appliquées quand vous passez sur ce jeu.",
+      "Livre de l’histoire (page Historique) : les répliques des zones marquées dialogue d’histoire sont gardées par jeu. Relisez depuis le début, feuilletez ou exportez en texte.",
+      "Album de traduction par sélection (page Écran) : chaque traduction par sélection garde sa capture, pour revoir ce que disait l’écran. Jusqu’à 200.",
+      "Couleurs des canaux : chaque traduction porte la couleur du texte d’origine, pour distinguer équipe, guilde et messages privés. Notes sur les joueurs (page Mots) : une note par ID, affichée sous la traduction quand il est cité.",
+      "Lecture plus lente en combat : si l’image bouge sans arrêt, le chat est lu moins souvent pour un jeu plus fluide. En plein écran exclusif les sous-titres flottants sont invisibles : un seul rappel pour passer en fenêtré sans bordure.",
+      "La page Écran ajoute « Trouver le chat automatiquement » (tout l’écran) et « Utiliser un modèle de jeu » (15 jeux courants). Les nouvelles zones démarrent désactivées pour vérifier la position.",
+      "Mur de sous-titres (page Sous-titres) : grands sous-titres plein écran sur un autre écran pendant que vous jouez sur le principal. Il faut deux écrans.",
+      "Le livre de l’histoire et l’album restent sur ce PC et n’enregistrent rien pendant la pause confidentialité. Les positions des modèles sont approximatives ; vérifiez-les."
+    ]
+  },
   "2.15.0": {
     "zh-TW": [
       "對方說到一半停一下、句子被切成兩則時，會接回一句再翻。整句只有「嗯」「啊」或笑聲的不出字幕。這兩項在「聲音裝置」頁可以關掉。",

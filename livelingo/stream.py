@@ -34,11 +34,16 @@ body{font-family:"Microsoft JhengHei","Microsoft YaHei","Malgun Gothic","Yu Goth
 .tr{font-size:var(--size);font-weight:700;line-height:1.25}
 .me .tr{color:#9fe7ff}
 .who{font-size:calc(var(--size) * .55);opacity:.8;margin-right:.4em}
+html.wall,html.wall body{background:#0B0D10}
+html.wall .line{text-align:left;text-shadow:none;border-bottom:1px solid #222;padding-bottom:8px}
 </style></head>
 <body style="--size:36px"><div id="lines"></div>
 <script>
 (function () {
-  var key = new URLSearchParams(location.search).get("k") || "";
+  var params = new URLSearchParams(location.search);
+  var key = params.get("k") || "";
+  var wall = params.get("wall") === "1";      // 副螢幕字幕牆（2.16.0）：黑底、多幾行、不會自己消失
+  if (wall) document.documentElement.classList.add("wall");
   var style = { original: true, seconds: 15, lines: 3, size: 36 };
   var items = [];
   var box = document.getElementById("lines");
@@ -65,7 +70,11 @@ body{font-family:"Microsoft JhengHei","Microsoft YaHei","Malgun Gothic","Yu Goth
   }
   function connect() {
     var es = new EventSource("/obs/events?k=" + encodeURIComponent(key));
-    es.addEventListener("style", function (e) { style = JSON.parse(e.data); document.body.style.setProperty("--size", style.size + "px"); draw(); });
+    es.addEventListener("style", function (e) {
+      style = JSON.parse(e.data);
+      if (wall) { style.lines = Math.max(style.lines, 10); style.seconds = 0; style.original = true; }
+      document.body.style.setProperty("--size", style.size + "px"); draw();
+    });
     es.addEventListener("line", function (e) { put(JSON.parse(e.data)); });
     es.addEventListener("remove", function (e) { var id = JSON.parse(e.data).id; items = items.filter(function (m) { return m.id !== id; }); draw(); });
     es.addEventListener("clear", function () { items = []; draw(); });
@@ -87,13 +96,14 @@ class StreamOut:
         self.httpd: ThreadingHTTPServer | None = None
         self.port = 0
         self.error = ""
+        self.wall_on = False      # 副螢幕字幕牆開著（2.16.0）：沒開直播模式也要讓這一頁開著
 
     # ---- 開關 ----
 
     def apply(self) -> None:
         """照設定開或關。打開時沒有通行碼就產生一個存起來（之後網址固定）。"""
         cfg = self.service.cfg
-        if not cfg["stream"]:
+        if not cfg["stream"] and not self.wall_on:
             self.stop()
             return
         if not cfg["stream_key"]:
@@ -125,10 +135,10 @@ class StreamOut:
             self.send("bye", {})
             threading.Thread(target=lambda: (httpd.shutdown(), httpd.server_close()), daemon=True).start()
 
-    def url(self) -> str:
+    def url(self, wall: bool = False) -> str:
         if not self.port:
             return ""
-        return f"http://127.0.0.1:{self.port}/obs?k={self.service.cfg['stream_key']}"
+        return f"http://127.0.0.1:{self.port}/obs?k={self.service.cfg['stream_key']}" + ("&wall=1" if wall else "")
 
     def state(self) -> dict:
         with self._lock:

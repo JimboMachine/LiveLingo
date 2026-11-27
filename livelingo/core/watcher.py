@@ -173,7 +173,28 @@ def wanted(text: str, source_langs: set[str]) -> str | None:
     return None
 
 
+BUSY_MOVE = 18.0       # 縮圖平均變動超過這麼多：整塊畫面都在動（戰鬥、轉鏡頭）
+BUSY_AFTER = 3.0       # 連續這麼多秒都這樣才算戰鬥中
+BUSY_SLOW = 3          # 戰鬥中每隔幾倍的時間才讀一次
 STORY_WAIT = 12.0      # 劇情對話框：畫面一直在動時最多等幾秒（一般區域是 3 秒）
+
+
+# 聊天頻道分色（2.16.0）：公會、隊伍、全體聊天在畫面上顏色不一樣
+def line_color(bgr, x: int, y: int, w: int, h: int) -> str:
+    """這一列字的顏色（#RRGGBB）。拿這一塊裡跟背景差最多的那些點（字）的平均色；看不出來就是空字串。"""
+    if w <= 2 or h <= 2:
+        return ""
+    box = bgr[max(0, y):max(0, y) + h, max(0, x):max(0, x) + w]
+    if box.size == 0:
+        return ""
+    px = box.reshape(-1, 3).astype(np.float32)
+    bg = np.median(px, axis=0)
+    far = np.abs(px - bg).sum(axis=1)
+    keep = px[far >= max(60.0, np.percentile(far, 85))]
+    if len(keep) < 6:
+        return ""
+    b, g, r = (int(v) for v in keep.mean(axis=0))
+    return f"#{r:02X}{g:02X}{b:02X}"
 
 
 class _Slot:
@@ -241,6 +262,12 @@ class ScreenWatcher(threading.Thread):
         self.grab = grab                      # 測試時可以換成別的擷取函式
         self.locate = locate or (lambda region: region)
         self.paused = False
+        # 聊天頻道分色（2.16.0）：True 的時候每一則多交一個 color=（那一列字的顏色），on_message 要收得下
+        self.colors = False
+        # 戰鬥中降低讀取（2.16.0）：畫面一直大幅變動（打架、轉鏡頭）時，等久一點再讀，不跟遊戲搶電腦
+        self.slow_busy = False
+        self._busy_since: float | None = None
+        self._busy_seen = 0.0
         self._halt = threading.Event()
         self._lock = threading.Lock()
         self._slots: list[_Slot] = []
@@ -306,10 +333,15 @@ class ScreenWatcher(threading.Thread):
             self.failed = True       # 整個讀螢幕的功能停了（例如抓不到螢幕畫面）
             self.on_status(str(ex))
 
+    def busy(self) -> bool:
+        """畫面最近一直在大幅變動（連續 BUSY_AFTER 秒）：戰鬥中，讀慢一點。"""
+        return bool(self.slow_busy and self._busy_since is not None and time.monotonic() - self._busy_since >= BUSY_AFTER
+                    and time.monotonic() - self._busy_seen < 2.0)
+
     def _loop(self, grab):
         told = None
         while not self._halt.is_set():
-            time.sleep(self.interval)
+            time.sleep(self.interval * (BUSY_SLOW if self.busy() else 1))
             if self.paused:
                 continue
             with self._lock:
@@ -355,7 +387,13 @@ class ScreenWatcher(threading.Thread):
             except Exception:  # noqa: BLE001
                 pass
         th = self._thumb(bgr)
-        stable = slot.prev is not None and float(np.abs(th - slot.prev).mean()) < 1.0
+        moved = float(np.abs(th - slot.prev).mean()) if slot.prev is not None else 0.0
+        stable = slot.prev is not None and moved < 1.0
+        if moved >= BUSY_MOVE:      # 整塊畫面都在變（不是多一行字）：記下來，一直這樣就讀慢一點
+            self._busy_seen = time.monotonic()
+            self._busy_since = self._busy_since or self._busy_seen
+        elif self._busy_since is not None and time.monotonic() - self._busy_seen > 2.0:
+            self._busy_since = None
         # 只要有幾個小格子明顯變了就算有變化（一行新訊息只佔畫面很小一塊）
         changed = slot.last_done is None or int((np.abs(th - slot.last_done) > 16).sum()) >= 3
         slot.prev = th
@@ -411,18 +449,20 @@ class ScreenWatcher(threading.Thread):
                 slot.stats["repeat"] += 1     # 之前讀過的同一則
             else:
                 slot.seen.add(ln.text, parts)
-                fresh.append((ln.text, lang, ln.score, lines[pairs[i]][0].text if i in pairs else ""))
+                color = line_color(bgr, ln.x, ln.y, getattr(ln, "w", 0) or len(ln.text) * ln.h, ln.h) if self.colors else ""
+                fresh.append((ln.text, lang, ln.score, lines[pairs[i]][0].text if i in pairs else "", color))
         if slot.first:
             # 第一次只翻畫面最下面幾則，免得一口氣翻一整頁
             slot.first = False
             slot.stats["old"] += max(0, len(fresh) - self.first_scan_keep)
             fresh = fresh[-self.first_scan_keep:]
         slot.stats["sent"] += len(fresh)
-        for text, lang, score, shown in fresh:
+        for text, lang, score, shown, color in fresh:
+            more = {"color": color} if self.colors else {}
             if shown:
-                self.on_message(text, lang, score, slot.region, shown)
+                self.on_message(text, lang, score, slot.region, shown, **more)
             else:
-                self.on_message(text, lang, score, slot.region)
+                self.on_message(text, lang, score, slot.region, **more)
 
     def _pairs(self, lines) -> dict[int, int]:
         """雙語字幕：{要翻的那一行: 緊鄰的我的語言那一行}。沒開（pair_lang 是 None）就是空的。

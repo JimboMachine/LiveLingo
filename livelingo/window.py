@@ -92,6 +92,31 @@ class WindowCtl:
         if geom and geom[0] >= MAIN_MIN[0] and geom[1] >= 300 and geom[2] > -30000:
             self.service.cfg.set(window={"w": geom[0], "h": geom[1], "x": geom[2], "y": geom[3]})
 
+    def open_wall(self, url: str, rect) -> bool:
+        """副螢幕字幕牆（2.16.0）：另開一個沒有邊框的視窗，鋪滿 rect（左, 上, 寬, 高）那個螢幕，顯示 url。
+        已經開著就換位置。關掉用 close_wall。"""
+        try:
+            import webview
+
+            x, y, w, h = (int(v) for v in rect)
+            wall = getattr(self, "wall", None)
+            if wall is not None:
+                wall.move(x, y)
+                wall.resize(w, h)
+                return True
+            self.wall = webview.create_window("LiveLingo", url, x=x, y=y, width=w, height=h, frameless=True,
+                                              background_color="#0B0D10", focus=False)
+            self.wall.events.closed += lambda: setattr(self, "wall", None)
+            return True
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"subtitle wall window failed: {ex!r}")
+            return False
+
+    def close_wall(self) -> None:
+        wall, self.wall = getattr(self, "wall", None), None
+        if wall is not None:
+            self._safe(wall.destroy)
+
     def choose_folder(self, start: str = "") -> str:
         """跳出 Windows 的「選擇資料夾」視窗，回傳選到的資料夾；按取消回傳空字串。"""
         try:

@@ -421,3 +421,19 @@ def open_mic_settings() -> bool:
         return True
     except OSError:
         return False
+
+
+def exclusive_fullscreen() -> bool:
+    """有程式用「獨佔全螢幕」（D3D exclusive fullscreen）在跑（2.16.0）：這時浮動字幕蓋不上去、讀螢幕常抓到黑畫面。
+    Windows 的 SHQueryUserNotificationState 回 QUNS_RUNNING_D3D_FULL_SCREEN（3）就是。不是 Windows 一律 False。"""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+
+        state = ctypes.c_int(0)
+        if ctypes.windll.shell32.SHQueryUserNotificationState(ctypes.byref(state)) != 0:
+            return False
+        return state.value == 3
+    except Exception:  # noqa: BLE001
+        return False

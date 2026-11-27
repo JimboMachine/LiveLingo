@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "note": "常見遊戲的聊天框（或劇情對話框）大概在遊戲視窗的哪裡（2.16.0）：box = [左, 上, 寬, 高]，都是佔遊戲視窗的比例。只是起點：每個人的解析度、介面縮放、聊天框位置都可能不一樣，套用之後要自己看一下、拖到剛好。story = 這一塊是劇情對話框。",
+  "games": {
+    "league of legends.exe": {"box": [0.005, 0.60, 0.30, 0.22]},
+    "valorant-win64-shipping.exe": {"box": [0.01, 0.62, 0.30, 0.22]},
+    "overwatch.exe": {"box": [0.01, 0.55, 0.30, 0.25]},
+    "tslgame.exe": {"box": [0.01, 0.62, 0.28, 0.20]},
+    "cs2.exe": {"box": [0.01, 0.55, 0.32, 0.25]},
+    "r5apex.exe": {"box": [0.01, 0.50, 0.30, 0.20]},
+    "r5apex_dx12.exe": {"box": [0.01, 0.50, 0.30, 0.20]},
+    "dota2.exe": {"box": [0.01, 0.48, 0.32, 0.20]},
+    "fortniteclient-win64-shipping.exe": {"box": [0.01, 0.62, 0.28, 0.20]},
+    "maplestory.exe": {"box": [0.0, 0.72, 0.40, 0.22]},
+    "lostark.exe": {"box": [0.0, 0.62, 0.30, 0.25]},
+    "genshinimpact.exe": {"box": [0.15, 0.76, 0.70, 0.17], "story": true},
+    "starrail.exe": {"box": [0.15, 0.76, 0.70, 0.17], "story": true},
+    "deltaforce-win64-shipping.exe": {"box": [0.01, 0.60, 0.30, 0.22]},
+    "marvel-win64-shipping.exe": {"box": [0.01, 0.52, 0.28, 0.22]}
+  }
+}

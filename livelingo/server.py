@@ -139,6 +139,21 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._send(200, service.overlay_preview(), "image/png")
+                if url.path == "/api/story":      # 劇情書：game、offset
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    try:
+                        offset = int((query.get("offset") or ["0"])[0])
+                    except ValueError:
+                        offset = 0
+                    return self._json(service.story_state((query.get("game") or [""])[0], offset))
+                if url.path == "/api/album_image":      # 相簿的一張截圖：id
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    data = service.album.image((query.get("id") or [""])[0])
+                    if data is None:
+                        return self._send(404, b"not found", "text/plain")
+                    return self._send(200, data, "image/png")
                 if url.path == "/api/events":
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -289,6 +304,18 @@ class Server:
                         if action == "open":
                             return self._json(service.filesubs_open())
                         return self._json({"ok": False, "error": "unknown"})
+                    if route == "/api/profile":     # 遊戲專屬版面：save / remove / apply（exe 沒給 = 現在的遊戲）
+                        return self._json(service.profile_action(str(body.get("action") or ""), str(body.get("exe") or "")))
+                    if route == "/api/template":    # 常見遊戲範本：照開著的遊戲加一個聊天區
+                        return self._json(service.template_apply())
+                    if route == "/api/find_chat":   # 自動找聊天框
+                        return self._json(service.find_chat())
+                    if route == "/api/wall":        # 副螢幕字幕牆：open / close
+                        return self._json(service.wall_action(str(body.get("action") or "")))
+                    if route == "/api/story":       # 劇情書：export / clear（game）
+                        return self._json(service.story_action(str(body.get("action") or ""), str(body.get("game") or "")))
+                    if route == "/api/album":       # 框選翻譯相簿：list / remove（id）
+                        return self._json(service.album_action(str(body.get("action") or ""), str(body.get("id") or "")))
                     if route == "/api/lessons/undo":      # 教過的句子退回上一版（2.15.0）
                         return self._json(service.lesson_undo(str(body.get("src") or ""), str(body.get("target") or "")))
                     if route == "/api/abbr":       # 縮寫提醒的回答：word、meaning（空的 = 不用，不再問）
