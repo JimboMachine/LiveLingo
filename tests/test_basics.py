@@ -3032,7 +3032,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     try:
         service.start_hotkeys()
         state = service.state()["hotkeys"]
-        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok", "inplace": "ok", "private": "ok", "clipimg": "ok", "keys": "ok"}
+        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok", "inplace": "ok", "private": "ok", "clipimg": "ok", "keys": "ok", "mark": "ok"}
         assert state["defaults"] == DEFAULTS["hotkeys"]
 
         # 開關字幕
@@ -3156,7 +3156,7 @@ def test_hotkey_defaults_are_ctrl_shift_and_own_settings_stay(tmp_path, monkeypa
     from livelingo.service import SETTINGS_SKIP, Service
 
     new, old = DEFAULTS["hotkeys"], OLD_HOTKEYS
-    assert set(new) == set(hotkeys.ACTIONS) and set(old) == set(new) - {"inplace", "private", "clipimg", "keys"} and DEFAULTS["hotkeys_v"] == HOTKEYS_V == 2      # 「原地覆蓋」（2.13.0）、「隱私暫停」（2.14.0）一開始就是 Ctrl+Shift，沒有舊預設要換
+    assert set(new) == set(hotkeys.ACTIONS) and set(old) == set(new) - {"inplace", "private", "clipimg", "keys", "mark"} and DEFAULTS["hotkeys_v"] == HOTKEYS_V == 2      # 「原地覆蓋」（2.13.0）、「隱私暫停」（2.14.0）一開始就是 Ctrl+Shift，沒有舊預設要換
     new8 = {k: v for k, v in new.items() if k in old}      # 有舊預設的那八個動作
     assert all(c.startswith("Ctrl+Shift+") for c in new.values()) and all(c.startswith("Ctrl+Alt+") for c in old.values())
     assert all(hotkeys.normalize(c) == c for c in (*new.values(), *old.values()))
@@ -3408,7 +3408,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "麥克風 (HyperX)")
         assert (light("listen")["code"], light("listen")["name"]) == ("listen_found", "耳機 (HyperX)")
         assert (light("screen")["state"], light("screen")["code"]) == ("off", "screen_none")
-        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 12)
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 13)
         assert (light("saving")["state"], light("saving")["folder"]) == ("ok", str(tmp_path))
         assert first["worst"] == "warn"
 
@@ -7325,7 +7325,8 @@ def test_snap_pick_phrases_and_call_outs(tmp_path, monkeypatch):
         service.cfg.set(pick_copy=True)
         copied[:] = ["이전에 복사한 글"]
         assert service.pick_text() is True and bool(pressed) == oswin.IS_WIN
-        assert service.messages[-1]["original"] == ("다음 퀘스트" if oswin.IS_WIN else "이전에 복사한 글")
+        want = "다음 퀘스트" if oswin.IS_WIN else "이전에 복사한 글"
+        wait(lambda: service.messages and service.messages[-1]["original"] == want)      # 畫面來的字翻好才進對話（背景在翻）
         service.cfg.set(pick_copy=False)
 
         # 框選翻譯：假的框選結果、假的畫面、假的辨識；兩段各翻各的，小卡一次列出

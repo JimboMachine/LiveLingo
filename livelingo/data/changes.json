@@ -1,4 +1,136 @@
 {
+  "2.18.0": {
+    "zh-TW": [
+      "背景降噪（聲音裝置頁「語音小幫手」，預設關）：辨識之前先壓掉遊戲音樂、風扇、鍵盤聲，吵的場景比較聽得準。",
+      "自動選語音設定：第一次用語音時測一下電腦辨識多快，自動選「比較快／比較準」和要不要即時字幕。你自己改過的不會動，也可以按「重新測一次」。",
+      "語氣小圖示：對方在笑、開玩笑、生氣或難過時，翻譯前面加一個小圖示（浮動字幕上是「(笑)」這種短字）。只看原文裡的 ㅋㅋ、www、哈哈、ㅠㅠ 和聲音大小。",
+      "語音指令（預設關）：對麥克風說「暫停翻譯」「繼續翻譯」「重翻上一句」「清除字幕」「標記精華」等就能控制。整句話就是指令才算，平常聊天不會被誤會。",
+      "左右耳分流：念對方的話給你聽時，可以只放在左耳或右耳，另一邊專心聽遊戲原音。",
+      "聽到對方說「我是 Mina」，會問要不要把這個聲音記成 Mina（要開分辨說話者）。對方講太快、聽不清楚時會提醒，附一句對方語言的「可以說慢一點嗎？」，按一下就複製。",
+      "這一場的紀錄（語言與一般頁）：按 Ctrl+Shift+F3 標記精華，之後看時間點和翻譯方便剪片；通話紀錄可以匯出成 Markdown 或 Word，這一場的翻譯可以存成有時間軸的 .srt 字幕檔。",
+      "降噪、語氣判斷都在這台電腦上做，不另外下載模型。真的吵雜遊戲聲、耳機左右分流要在你的電腦上試過才算數。"
+    ],
+    "zh-CN": [
+      "背景降噪（声音设备页“语音小助手”，默认关）：识别之前先压掉游戏音乐、风扇、键盘声，吵的场景比较听得准。",
+      "自动选语音设置：第一次用语音时测一下电脑识别多快，自动选“比较快／比较准”和要不要实时字幕。你自己改过的不会动，也可以点“重新测一次”。",
+      "语气小图标：对方在笑、开玩笑、生气或难过时，翻译前面加一个小图标（悬浮字幕上是“(笑)”这种短字）。只看原文里的 ㅋㅋ、www、哈哈、ㅠㅠ 和声音大小。",
+      "语音指令（默认关）：对麦克风说“暂停翻译”“继续翻译”“重翻上一句”“清除字幕”“标记精华”等就能控制。整句话就是指令才算，平常聊天不会被误会。",
+      "左右耳分流：念对方的话给你听时，可以只放在左耳或右耳，另一边专心听游戏原声。",
+      "听到对方说“我是 Mina”，会问要不要把这个声音记成 Mina（要开分辨说话者）。对方讲太快、听不清楚时会提醒，附一句对方语言的“可以说慢一点吗？”，点一下就复制。",
+      "这一场的记录（语言与常规页）：按 Ctrl+Shift+F3 标记精华，之后看时间点和翻译方便剪辑；通话记录可以导出成 Markdown 或 Word，这一场的翻译可以存成有时间轴的 .srt 字幕文件。",
+      "降噪、语气判断都在这台电脑上做，不另外下载模型。真的吵杂游戏声、耳机左右分流要在你的电脑上试过才算数。"
+    ],
+    "en": [
+      "Background noise reduction (Audio page, “Voice helpers”, off by default): turns down game music, fans and keyboards before recognizing, so noisy scenes are understood better.",
+      "Automatic speech settings: the first time you use voice, LiveLingo measures how fast this PC recognizes speech and picks Faster/More accurate and live captions. Your own changes stay; you can measure again.",
+      "Tone icons: a small icon before the translation when they laugh, joke, get angry or sad (floating subtitles show a short word like “(laughing)”). Based only on marks like ㅋㅋ, www, haha, ㅠㅠ and loudness.",
+      "Voice commands (off by default): say “pause translation”, “resume translation”, “translate again”, “clear subtitles”, “mark this” and more into your mic. Only a whole-sentence command counts.",
+      "Split by ear: when LiveLingo reads their words to you, put that voice in only the left or right ear and keep the other ear on the game.",
+      "When someone says “I'm Mina”, LiveLingo offers to save that voice as Mina (needs Tell speakers apart). If they talk too fast to follow, a tip offers “Could you speak slower?” in their language, ready to copy.",
+      "This session (Language & general): press Ctrl+Shift+F3 to mark highlights and see their times later for clips; export the call log as Markdown or Word, or save this session's translations as a timed .srt.",
+      "Noise reduction and tone detection run on this PC with no extra download. Real noisy games and ear splitting still need trying on your own PC."
+    ],
+    "ko": [
+      "배경 소음 줄이기(소리 장치 페이지 ‘음성 도우미’, 기본 꺼짐): 인식 전에 게임 음악, 팬, 키보드 소리를 줄여 시끄러운 장면에서 더 잘 알아들어요.",
+      "음성 설정 자동 선택: 처음 음성을 쓸 때 이 PC의 인식 속도를 재서 ‘빠르게/정확하게’와 실시간 자막을 골라요. 직접 바꾼 설정은 그대로이고 ‘다시 측정’도 할 수 있어요.",
+      "말투 아이콘: 상대가 웃거나 농담하거나 화나거나 슬플 때 번역 앞에 작은 아이콘을 붙여요(플로팅 자막에는 ‘(웃음)’ 같은 짧은 말). ㅋㅋ, www, 哈哈, ㅠㅠ와 소리 크기만 봐요.",
+      "음성 명령(기본 꺼짐): 마이크에 “번역 멈춰”, “번역 계속”, “다시 번역”, “자막 지워”, “하이라이트 표시” 등을 말하면 조작돼요. 문장 전체가 명령일 때만 인식해요.",
+      "좌우 귀 분리: 상대의 말을 읽어 줄 때 그 음성을 왼쪽이나 오른쪽 귀에만 두고, 다른 쪽 귀로 게임 원음을 들을 수 있어요.",
+      "상대가 “저는 민아예요”라고 하면 그 목소리를 민아로 저장할지 물어봐요(화자 구분 필요). 너무 빨라서 잘 안 들리면 상대 언어의 “천천히 말해 줄래요?”를 복사할 수 있게 알려 줘요.",
+      "이번 세션 기록(언어 및 일반): Ctrl+Shift+F3로 하이라이트를 표시해 나중에 시간을 보고 편집하고, 통화 기록을 Markdown이나 Word로, 이번 번역을 시간 정보가 있는 .srt로 저장해요.",
+      "소음 줄이기와 말투 판단은 이 PC에서 추가 다운로드 없이 해요. 실제로 시끄러운 게임과 좌우 귀 분리는 직접 PC에서 확인해야 해요."
+    ],
+    "ja": [
+      "背景ノイズ除去（音声デバイスページ「音声アシスト」、既定オフ）：認識の前にゲーム音楽・ファン・キーボードの音を抑え、うるさい場面でも聞き取りやすくします。",
+      "音声設定の自動選択：初めて音声を使うとき PC の認識速度を測り、「速さ優先／正確さ優先」とライブ字幕を選びます。自分で変えた設定はそのまま、「もう一度測る」も可能です。",
+      "口調アイコン：相手が笑う・冗談・怒る・悲しむときに訳の前へ小さなアイコン（フローティング字幕では「(笑)」のような短い語）。ㅋㅋ、www、哈哈、ㅠㅠ と声の大きさだけで判断します。",
+      "音声コマンド（既定オフ）：マイクに「翻訳停止」「翻訳再開」「もう一度翻訳」「字幕を消して」「ここマーク」などと言うと操作できます。文全体がコマンドのときだけ反応します。",
+      "左右の耳を分ける：相手の言葉を読み上げるとき、その声を左耳か右耳だけにして、もう片方でゲームの原音を聞けます。",
+      "相手が「ミナです」と名乗ると、その声をミナとして保存するか尋ねます（話者の区別が必要）。話が速すぎて聞き取れないときは、相手の言語の「ゆっくり話して」をコピーできるよう知らせます。",
+      "このセッションの記録（言語と全般）：Ctrl+Shift+F3 でハイライトに印を付けて後で時間を確認、通話記録を Markdown か Word で書き出し、訳を時間付きの .srt で保存できます。",
+      "ノイズ除去と口調の判断はこの PC で追加ダウンロードなしに行います。実際のうるさいゲームや左右の分離はご自分の PC で試す必要があります。"
+    ],
+    "vi": [
+      "Giảm tiếng ồn nền (trang Thiết bị âm thanh, “Trợ giúp giọng nói”, mặc định tắt): giảm nhạc game, quạt, bàn phím trước khi nhận dạng để nghe rõ hơn khi ồn.",
+      "Tự chọn cài đặt giọng nói: lần đầu dùng giọng nói, đo tốc độ nhận dạng của máy rồi chọn Nhanh hơn/Chính xác hơn và phụ đề trực tiếp. Cài đặt bạn tự đổi được giữ nguyên; có thể đo lại.",
+      "Biểu tượng giọng điệu: thêm biểu tượng nhỏ trước bản dịch khi họ cười, đùa, giận hoặc buồn (phụ đề nổi hiện chữ ngắn như “(cười)”). Chỉ dựa vào ㅋㅋ, www, haha, ㅠㅠ và độ to.",
+      "Lệnh giọng nói (mặc định tắt): nói “tạm dừng dịch”, “tiếp tục dịch”, “dịch lại”, “xóa phụ đề”, “đánh dấu điểm nhấn”… vào mic để điều khiển. Chỉ tính khi cả câu là lệnh.",
+      "Tách tai: khi LiveLingo đọc lời họ cho bạn nghe, có thể chỉ đặt giọng đó ở tai trái hoặc phải, tai kia nghe âm thanh gốc của game.",
+      "Khi họ nói “Tôi là Mina”, LiveLingo hỏi có lưu giọng này thành Mina không (cần Phân biệt người nói). Khi họ nói quá nhanh, hiện câu “Bạn nói chậm lại được không?” bằng ngôn ngữ của họ để sao chép.",
+      "Phiên này (Ngôn ngữ và chung): bấm Ctrl+Shift+F3 để đánh dấu điểm nhấn rồi xem thời điểm để cắt clip; xuất nhật ký cuộc gọi ra Markdown hoặc Word, hoặc lưu bản dịch thành .srt có thời gian.",
+      "Giảm ồn và nhận biết giọng điệu chạy trên máy này, không tải thêm gì. Game ồn thật và tách tai vẫn cần thử trên máy của bạn."
+    ],
+    "th": [
+      "ลดเสียงรบกวนพื้นหลัง (หน้าอุปกรณ์เสียง “ผู้ช่วยเสียง” ปิดไว้ก่อน): ลดเพลงเกม พัดลม คีย์บอร์ดก่อนจำเสียง ฟังชัดขึ้นตอนเสียงดัง",
+      "เลือกการตั้งค่าเสียงอัตโนมัติ: ครั้งแรกที่ใช้เสียง จะวัดความเร็วการจำเสียงของเครื่อง แล้วเลือก เร็วขึ้น/แม่นขึ้น และซับสด การตั้งค่าที่คุณเปลี่ยนเองไม่ถูกแตะ และกดวัดใหม่ได้",
+      "ไอคอนน้ำเสียง: เพิ่มไอคอนเล็ก ๆ หน้าคำแปลเมื่ออีกฝ่ายหัวเราะ ล้อเล่น โกรธ หรือเศร้า (ซับลอยแสดงคำสั้น ๆ เช่น “(หัวเราะ)”) ดูแค่ ㅋㅋ, www, 555, ㅠㅠ และความดัง",
+      "คำสั่งเสียง (ปิดไว้ก่อน): พูด “หยุดแปล” “แปลต่อ” “แปลใหม่” “ล้างซับ” “ทำเครื่องหมายไฮไลต์” ฯลฯ ใส่ไมค์เพื่อควบคุม นับเฉพาะเมื่อทั้งประโยคเป็นคำสั่ง",
+      "แยกหูซ้ายขวา: ตอนอ่านคำพูดของอีกฝ่ายให้ฟัง ให้เสียงนั้นอยู่หูซ้ายหรือขวาข้างเดียว อีกข้างฟังเสียงเกม",
+      "เมื่ออีกฝ่ายพูดว่า “ผมชื่อมิน” จะถามว่าจะบันทึกเสียงนี้เป็นมินไหม (ต้องเปิดแยกผู้พูด) ถ้าพูดเร็วจนฟังไม่ทัน จะเตือนพร้อมประโยค “ช่วยพูดช้าลงหน่อยได้ไหม” ในภาษาของเขาให้คัดลอก",
+      "บันทึกรอบนี้ (ภาษาและทั่วไป): กด Ctrl+Shift+F3 ทำเครื่องหมายไฮไลต์แล้วดูเวลาไว้ตัดคลิป ส่งออกบันทึกการสนทนาเป็น Markdown หรือ Word หรือบันทึกคำแปลเป็น .srt ที่มีเวลา",
+      "ลดเสียงรบกวนและดูน้ำเสียงทำบนเครื่องนี้ ไม่ต้องดาวน์โหลดเพิ่ม เกมที่เสียงดังจริงและการแยกหูยังต้องลองบนเครื่องของคุณ"
+    ],
+    "id": [
+      "Pengurang bising latar (halaman Perangkat audio, “Bantuan suara”, mati bawaan): mengecilkan musik game, kipas, keyboard sebelum dikenali agar lebih jelas saat bising.",
+      "Pengaturan suara otomatis: saat pertama memakai suara, LiveLingo mengukur kecepatan pengenalan PC lalu memilih Lebih cepat/Lebih akurat dan subtitle langsung. Ubahanmu tetap; bisa diukur ulang.",
+      "Ikon nada: ikon kecil sebelum terjemahan saat mereka tertawa, bercanda, marah, atau sedih (subtitle mengambang memakai kata pendek seperti “(tertawa)”). Hanya dari ㅋㅋ, www, wkwk, ㅠㅠ dan kerasnya suara.",
+      "Perintah suara (mati bawaan): ucapkan “jeda terjemahan”, “lanjutkan terjemahan”, “terjemahkan lagi”, “hapus subtitle”, “tandai sorotan”, dll. ke mikrofon. Hanya dihitung jika seluruh kalimat perintah.",
+      "Pisah telinga: saat LiveLingo membacakan ucapan mereka, suaranya bisa hanya di telinga kiri atau kanan, telinga lain untuk suara game.",
+      "Saat mereka bilang “Nama saya Mina”, LiveLingo menawarkan menyimpan suara itu sebagai Mina (perlu Bedakan pembicara). Jika bicara terlalu cepat, muncul “Bisa bicara lebih pelan?” dalam bahasa mereka untuk disalin.",
+      "Sesi ini (Bahasa & umum): tekan Ctrl+Shift+F3 untuk menandai sorotan lalu lihat waktunya untuk klip; ekspor log panggilan ke Markdown atau Word, atau simpan terjemahan sesi sebagai .srt bertimestamp.",
+      "Pengurang bising dan deteksi nada berjalan di PC ini tanpa unduhan tambahan. Game bising sungguhan dan pisah telinga tetap perlu dicoba di PC-mu."
+    ],
+    "es": [
+      "Reducción de ruido (página Audio, «Ayudas de voz», desactivada): baja la música del juego, ventiladores y teclados antes de reconocer para entender mejor en escenas ruidosas.",
+      "Ajustes de voz automáticos: la primera vez que usas la voz, mide la velocidad de este PC y elige Más rápido/Más preciso y subtítulos en vivo. Tus cambios se respetan; puedes medir otra vez.",
+      "Iconos de tono: un icono antes de la traducción cuando se ríen, bromean, se enfadan o están tristes (en los subtítulos flotantes, una palabra como «(risa)»). Solo usa ㅋㅋ, www, jaja, ㅠㅠ y el volumen.",
+      "Comandos de voz (desactivados): di «pausar traducción», «reanudar traducción», «traducir otra vez», «borrar subtítulos», «marcar esto» y más al micrófono. Solo cuenta una frase entera.",
+      "Separar oídos: cuando LiveLingo te lee lo que dicen, esa voz puede sonar solo en el oído izquierdo o derecho y el otro queda para el juego.",
+      "Si alguien dice «Me llamo Mina», ofrece guardar esa voz como Mina (requiere Distinguir hablantes). Si hablan demasiado rápido, sugiere «¿Puedes hablar más despacio?» en su idioma para copiar.",
+      "Esta sesión (Idioma y general): pulsa Ctrl+Shift+F3 para marcar momentos y ver sus tiempos para clips; exporta el registro de la llamada en Markdown o Word, o guarda las traducciones como .srt con tiempos.",
+      "La reducción de ruido y el tono funcionan en este PC sin descargas extra. Los juegos ruidosos reales y la separación de oídos hay que probarlos en tu PC."
+    ],
+    "pt": [
+      "Redução de ruído (página Áudio, “Ajudas de voz”, desligada): abaixa música do jogo, ventoinhas e teclados antes de reconhecer, para entender melhor cenas barulhentas.",
+      "Ajustes de voz automáticos: na primeira vez com voz, mede a velocidade deste PC e escolhe Mais rápido/Mais preciso e legendas ao vivo. Suas mudanças ficam; dá para medir de novo.",
+      "Ícones de tom: um ícone antes da tradução quando estão rindo, brincando, bravos ou tristes (nas legendas flutuantes, uma palavra como “(risos)”). Só usa ㅋㅋ, www, kkkk, ㅠㅠ e o volume.",
+      "Comandos de voz (desligados): diga “pausar tradução”, “retomar tradução”, “traduzir de novo”, “limpar legendas”, “marcar isso” e mais ao microfone. Só vale a frase inteira.",
+      "Separar ouvidos: quando o LiveLingo lê o que dizem, essa voz pode tocar só no ouvido esquerdo ou direito, e o outro fica com o jogo.",
+      "Quando alguém diz “Meu nome é Mina”, oferece salvar essa voz como Mina (precisa de Distinguir falantes). Se falam rápido demais, sugere “Pode falar mais devagar?” no idioma deles para copiar.",
+      "Esta sessão (Idioma e geral): Ctrl+Shift+F3 marca destaques para ver os tempos depois e editar clipes; exporte o registro da chamada em Markdown ou Word, ou salve as traduções como .srt com tempos.",
+      "A redução de ruído e o tom rodam neste PC sem download extra. Jogos barulhentos de verdade e a separação de ouvidos ainda precisam ser testados no seu PC."
+    ],
+    "ru": [
+      "Подавление шума (страница «Звук», «Голосовые помощники», выкл.): перед распознаванием приглушает музыку игры, вентиляторы и клавиатуру, чтобы лучше понимать в шуме.",
+      "Автовыбор настроек речи: при первом использовании голоса измеряет скорость распознавания ПК и выбирает «Быстрее/Точнее» и живые субтитры. Ваши изменения не трогает; можно измерить снова.",
+      "Значки тона: значок перед переводом, когда смеются, шутят, злятся или грустят (в плавающих субтитрах — короткое слово вроде «(смех)»). Только по ㅋㅋ, www, хаха, ㅠㅠ и громкости.",
+      "Голосовые команды (выкл.): скажите в микрофон «пауза перевода», «продолжить перевод», «перевести снова», «очистить субтитры», «отметить это» и др. Считается только целая фраза-команда.",
+      "Разделение по ушам: когда LiveLingo зачитывает их слова, этот голос можно оставить только в левом или правом ухе, а другим слушать игру.",
+      "Когда звучит «Меня зовут Мина», предлагает сохранить этот голос как Мина (нужно «Различать говорящих»). Если говорят слишком быстро, предложит фразу «Можешь помедленнее?» на их языке для копирования.",
+      "Этот сеанс («Язык и общее»): Ctrl+Shift+F3 отмечает лучшие моменты, чтобы потом увидеть время для клипов; журнал разговора — в Markdown или Word, переводы сеанса — в .srt с таймингом.",
+      "Подавление шума и тон работают на этом ПК без доп. загрузок. Реальные шумные игры и разделение по ушам нужно проверить на вашем ПК."
+    ],
+    "de": [
+      "Hintergrundgeräusche reduzieren (Seite Audio, „Sprachhelfer“, aus): dämpft Spielmusik, Lüfter und Tastatur vor der Erkennung, damit laute Szenen besser verstanden werden.",
+      "Spracheinstellungen automatisch: beim ersten Sprachgebrauch misst LiveLingo die Erkennungsgeschwindigkeit und wählt Schneller/Genauer und Live-Untertitel. Eigene Änderungen bleiben; erneut messen geht.",
+      "Tonfall-Symbole: ein Symbol vor der Übersetzung bei Lachen, Scherzen, Wut oder Trauer (schwebende Untertitel zeigen ein kurzes Wort wie „(lacht)“). Nur nach ㅋㅋ, www, haha, ㅠㅠ und Lautstärke.",
+      "Sprachbefehle (aus): sag „Übersetzung pausieren“, „Übersetzung fortsetzen“, „nochmal übersetzen“, „Untertitel löschen“, „das markieren“ u. a. ins Mikro. Zählt nur als ganzer Satz.",
+      "Ohren trennen: Wenn LiveLingo ihre Worte vorliest, kann diese Stimme nur links oder rechts laufen, das andere Ohr bleibt beim Spiel.",
+      "Sagt jemand „Ich heiße Mina“, bietet LiveLingo an, die Stimme als Mina zu speichern (Sprecher unterscheiden nötig). Wird zu schnell gesprochen, gibt es „Kannst du langsamer sprechen?“ in ihrer Sprache zum Kopieren.",
+      "Diese Sitzung (Sprache & Allgemein): Ctrl+Shift+F3 markiert Highlights, deren Zeiten du später für Clips siehst; Gesprächsprotokoll als Markdown oder Word exportieren oder Übersetzungen als .srt mit Zeiten speichern.",
+      "Rauschunterdrückung und Tonfall laufen auf diesem PC ohne Extra-Download. Wirklich laute Spiele und die Ohrtrennung musst du noch am eigenen PC testen."
+    ],
+    "fr": [
+      "Réduction du bruit (page Audio, « Aides vocales », désactivée) : baisse la musique du jeu, les ventilateurs et le clavier avant la reconnaissance pour mieux comprendre dans le bruit.",
+      "Réglages vocaux automatiques : à la première utilisation de la voix, LiveLingo mesure la vitesse du PC et choisit Plus rapide/Plus précis et les sous-titres en direct. Vos choix restent ; mesure possible à nouveau.",
+      "Icônes de ton : une icône avant la traduction quand on rit, plaisante, s’énerve ou est triste (dans les sous-titres flottants, un mot court comme « (rire) »). Basé seulement sur ㅋㅋ, www, mdr, ㅠㅠ et le volume.",
+      "Commandes vocales (désactivées) : dites « pause traduction », « reprendre la traduction », « retraduire », « effacer les sous-titres », « marquer ce moment »… au micro. Seule une phrase entière compte.",
+      "Séparer les oreilles : quand LiveLingo vous lit leurs paroles, cette voix peut passer seulement à gauche ou à droite, l’autre oreille reste sur le jeu.",
+      "Quand quelqu’un dit « Je m’appelle Mina », LiveLingo propose d’enregistrer cette voix comme Mina (Distinguer les voix requis). S’ils parlent trop vite, il propose « Tu peux parler plus lentement ? » dans leur langue à copier.",
+      "Cette session (Langue et général) : Ctrl+Shift+F3 marque les moments forts pour retrouver leurs temps ; exportez le journal d’appel en Markdown ou Word, ou enregistrez les traductions en .srt minuté.",
+      "La réduction du bruit et le ton fonctionnent sur ce PC sans téléchargement. Les vrais jeux bruyants et la séparation des oreilles restent à tester sur votre PC."
+    ]
+  },
   "2.17.0": {
     "zh-TW": [
       "拖圖片進來翻：把圖片或截圖拖進 LiveLingo 視窗，就會讀字、一段一段翻，結果出現在對話裡。讀畫面頁也可以直接選一張圖片。",

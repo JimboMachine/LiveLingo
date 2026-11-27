@@ -34,6 +34,7 @@ from .qualitycheck import QualityCheck
 from . import textfix
 from .corrections import Corrections
 from . import cheatsheet, gametools, imagetext
+from . import introduce, pace, sessionlog, tone as tone_mod, voicecmd
 from . import gamepad as gamepad_mod
 from .album import Album
 from .storybook import StoryBook
@@ -83,6 +84,19 @@ RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", 
 MAX_PINS = 3                                   # 浮動字幕最上面最多釘幾句（2.17.0）
 KEYS_SECONDS = 10.0                            # 快捷鍵一覽小卡停幾秒
 CHAT_OPEN_KEYS = ("enter", "slash", "t", "none")      # 說話送進遊戲聊天：先按哪個鍵打開聊天框
+EAR_SPLITS = ("off", "left", "right")           # 左右耳分流（2.18.0）：念對方的話只放在哪一邊
+MAX_MARKS = 200                                 # 一場最多記幾個精華標記
+SPEED_SECONDS = 5.0                             # 自動選語音設定：拿幾秒的聲音測速度
+
+
+def pick_speech(speed: float) -> tuple[str, bool]:
+    """辨識 1 秒聲音要 speed 秒 →（speech_mode, live_captions）。
+    很快（顯示卡、新的處理器）：用「比較準」也來得及；普通：比較快＋即時字幕；很慢：即時字幕會搶走整句的時間，關掉。"""
+    if speed <= 0.12:
+        return "accurate", True
+    if speed <= 0.45:
+        return "fast", True
+    return "fast", False
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64),
                   "stream_port": (1024, 65000)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
@@ -232,6 +246,12 @@ class Service:
         self._fullscreen_told = False               # 獨佔全螢幕提醒：這次開遊戲說過了
         self.pins: list[int] = []                   # 釘在浮動字幕最上面的句子（2.17.0，最多 MAX_PINS 句）
         self.gamepad = gamepad_mod.Gamepad(self._pad_action)      # 手把快捷鍵（2.17.0，預設關）
+        self.marks: list[dict] = []                 # 精華標記（2.18.0）：這一場按下標記的時間點
+        self.voice_paused = False                   # 語音指令「暫停翻譯」（2.18.0）：自動翻譯先停，打字照常
+        self.pace = pace.PaceWatch()                # 對方講太快的提醒（2.18.0）
+        self._intro_asked: set = set()              # 聽到自我介紹：這次已經問過的說話者
+        self._msg_len: dict[int, float] = {}        # 每一則語音說了幾秒（存成字幕檔時算開始時間用）
+        self._speed_testing = False
         self.quality = QualityCheck(self.data, on_change=lambda st: self.hub.publish("quality", st), log=self.log)
         self.private = False              # 隱私暫停（2.14.0）：開著的時候翻譯照常，但什麼紀錄都不留（不存設定檔，重開就回到平常）
         self._auto_started: list[str] = []    # 開遊戲就開始翻：是我（不是使用者）打開的來源，遊戲關掉時只關這些
@@ -350,7 +370,7 @@ class Service:
         self.speaker = Speaker(self.data, device=lambda: self.cfg["speak_device"], on_done=self._spoke, log=self.log)
         # 念對方的話給我聽（2.14.0）：另一條隊伍、念到我自己的耳機，跟「念我的譯文給對方」分開排隊、分開選裝置
         self.reader = Speaker(self.data, device=lambda: self.cfg["speak_heard_device"], on_done=self._read_done, log=self.log,
-                              voice=self.speaker.voice)
+                              voice=self.speaker.voice, ear=lambda: self.cfg["ear_split"])      # 左右耳分流（2.18.0）
         self._speak: dict = {"voice": "", "lang": "", "error": ""}
 
     # ------------------------------------------------------------------ 給介面的狀態
@@ -412,6 +432,9 @@ class Service:
             "album": self.album.list()[:60],
             "templates": sorted(gametools.templates()),
             "pins": list(self.pins),
+            "marks": list(self.marks),
+            "voice_paused": self.voice_paused,
+            "voice_cmds": {lang: voicecmd.examples(lang) for lang in voicecmd.PHRASES},
             "gamepad": {"available": self.gamepad.available, "buttons": list(gamepad_mod.BUTTONS), "defaults": dict(gamepad_mod.DEFAULTS)},
             "scenarios": self.scenarios_state(),
             "replies": dict(self._replies),
@@ -1142,7 +1165,7 @@ class Service:
 
     def submit(self, via: str, text: str, lang: str | None = None, unsure: bool = False, hear: float = 0.0,
                place: str = "", live: dict | None = None, speaker: int | None = None, shown: str = "", asked: bool = False,
-               tint: str = "", story: bool = False) -> int | None:
+               tint: str = "", story: bool = False, loud: float = 0.0) -> int | None:
         """via：screen（螢幕文字）/ heard（對方的聲音）/ spoken（我說的話）/ typed（我打的字）。
         unsure：辨識的時候沒什麼把握（介面會標「可能聽錯／看錯」，可以改原文重翻）。
         hear：語音辨識花了幾秒。place：螢幕上哪一個區域讀到的（開著不只一個區域時才有）。
@@ -1170,6 +1193,10 @@ class Service:
             msg["story"] = True     # 劇情對話框讀到的：翻好記進劇情書
         if speaker:
             msg.update(speaker=int(speaker), speaker_run=self._speaker_run, voice=self._speaker_names.get(int(speaker), ""))
+        if who == "them" and self.cfg["tone_icons"]:
+            feel = tone_mod.guess(text, loud)      # 語氣小圖示（2.18.0）：在笑、生氣、開玩笑、難過
+            if feel:
+                msg["tone"] = feel
         if live:      # 同一則、同一個時間，先翻出來的半句留在畫面上，等整句翻好再換掉
             msg.update(id=live["id"], time=live["time"], at=live["at"], partial=live.get("partial", ""))
         if via != "screen":      # 螢幕上讀到的要翻完才知道值不值得顯示，其他的先把原文顯示出來
@@ -2429,6 +2456,8 @@ class Service:
             elif name == "private":
                 self.set_private(not self.private)
                 self._note("private_on" if self.private else "private_off")
+            elif name == "mark":
+                self.mark_now()
         except Exception:  # noqa: BLE001
             self.log(traceback.format_exc())
 
@@ -3001,7 +3030,10 @@ class Service:
             self.messages.clear()
             self._live.clear()
             self.pins = []
+            self.marks = []
+            self._msg_len.clear()
         self.hub.publish("cleared", {})
+        self.hub.publish("marks", [])
         self.overlay.clear()
         self.overlay.set_pins([])
         self.stream.clear()
@@ -3044,6 +3076,8 @@ class Service:
             changes["gamepad_keys"] = gamepad_mod.clean(changes["gamepad_keys"], HOTKEY_ACTIONS)
         if changes.get("chat_send_open") not in (None, *CHAT_OPEN_KEYS):
             changes.pop("chat_send_open")
+        if changes.get("ear_split") not in (None, *EAR_SPLITS):
+            changes.pop("ear_split")
         if "camera_index" in changes and not (isinstance(changes["camera_index"], int) and not isinstance(changes["camera_index"], bool)
                                               and 0 <= changes["camera_index"] < 10):
             changes.pop("camera_index")
@@ -3286,6 +3320,8 @@ class Service:
                         color: str = "") -> None:
         """shown：雙語字幕裡緊鄰這一行、我的語言的那一行（開著「用畫面上現成的翻譯」才有）。
         color：這一行字在畫面上的顏色（開著「聊天頻道分色」才有）。"""
+        if self.voice_paused:      # 語音指令「暫停翻譯」（2.18.0）：畫面上的也先不翻
+            return
         many = len(self._regions_on()) > 1      # 只有一個區域時不用標是哪裡讀到的
         if self.cfg["ocr_fix"]:
             fixed = textfix.fix_ocr(text)      # 數字裡的 O、l，韓文子音縮寫裡的 0、7（2.15.0）
@@ -3688,6 +3724,7 @@ class Service:
                                   voices=self._voices_now if key == "listen" else None,
                                   # 每個人自己的語言（主語言、副語言）：設過的人照他的語言聽
                                   speaker_langs=self._speaker_lang_table if key == "listen" else None)
+            pipe.denoise = lambda: bool(self.cfg["denoise"])      # 背景降噪（2.18.0）
             if key == "listen" and self.cfg["their_auto"]:
                 pipe.stay = 1.5
             old = self.pipelines.pop(key, None)
@@ -3698,6 +3735,9 @@ class Service:
             pipe.start()
             self.pipelines[key] = pipe
             self._source(key, on=True, busy=False, quiet="")
+            if self.cfg["speech_autopick"] and not float(self.cfg["speech_picked"] or 0) and not self._speed_testing:
+                self._speed_testing = True
+                threading.Thread(target=self._speed_pick, daemon=True, name="speed").start()
         except Exception as ex:  # noqa: BLE001
             from .core.audio import describe
 
@@ -4032,8 +4072,8 @@ class Service:
         return False
 
     def _on_speech(self, kind: str, text: str, lang: str, seconds: float = 0.0, unsure: bool = False,
-                   speaker: int | None = None, length: float = 0.0) -> None:
-        """seconds：辨識花了幾秒；length：這句話本身說了幾秒。"""
+                   speaker: int | None = None, length: float = 0.0, loud: float = 0.0) -> None:
+        """seconds：辨識花了幾秒；length：這句話本身說了幾秒；loud：比這條收音平常大聲幾倍。"""
         if lang == "error":
             self._source(SOURCE_OF[kind], error=text)
             self._end_live(kind)
@@ -4045,6 +4085,17 @@ class Service:
             self.log(f"{kind} sentence dropped: it is LiveLingo reading my translation aloud")
             self._end_live(kind)
             return
+        if kind == "mic" and self.cfg["voice_commands"]:
+            command = voicecmd.match(text, self.cfg["ui_lang"], self.cfg["my_lang"], lang)      # 整句話就是語音指令（2.18.0）：照做，不翻
+            if command:
+                self._end_live(kind)
+                threading.Thread(target=self._voice_command, args=(command,), daemon=True, name="voicecmd").start()
+                return
+        if self.voice_paused:      # 說了「暫停翻譯」
+            self._end_live(kind)
+            return
+        if kind == "loopback":
+            self._listen_extras(text, lang, unsure, speaker, length)
         if self.cfg["drop_fillers"] and textfix.only_filler(text):      # 只有「嗯」「啊」、笑聲（2.15.0）
             self._end_live(kind)
             return
@@ -4057,7 +4108,9 @@ class Service:
         text = self._voice_script(kind, text, lang, own)
         heard = text
         msg_id = self.submit("heard" if kind == "loopback" else "spoken", text, lang, unsure=unsure, hear=seconds,
-                             live=self._take_live(kind), speaker=speaker if kind == "loopback" else None)
+                             live=self._take_live(kind), speaker=speaker if kind == "loopback" else None, **({"loud": loud} if loud else {}))
+        if msg_id and length:
+            self._msg_len[msg_id] = float(length)
         if speaker:
             self.hub.publish("speakers", self.speakers_state())      # 多了一個人，或某個人又多說一句
             if self._speaker_names.get(int(speaker)) and time.time() - self._voices_saved > VOICES_SAVE_EVERY:
@@ -4390,6 +4443,175 @@ class Service:
         threading.Thread(target=work, daemon=True, name="chat-send").start()
 
     # ------------------------------------------------------------------ 2.16.0：遊戲和畫面
+
+    # ------------------------------------------------------------------ 2.18.0：語音
+
+    def _listen_extras(self, text: str, lang: str, unsure: bool, speaker, length: float) -> None:
+        """對方說的每一句：講太快的提醒、聽到自我介紹就建議記住聲音。"""
+        try:
+            if self.cfg["slow_tip"]:
+                why = self.pace.add(text, lang, unsure, float(length or 0.0))
+                if why:
+                    phrase = pace.ask_in(lang)
+                    self.log(f"they seem to talk too fast ({why}); suggested asking them to slow down")
+                    self.hub.publish("slow_tip", {"why": why, "phrase": phrase, "lang": lang})
+                    self._note("slow_tip", phrase=phrase)
+            if speaker and self.cfg["intro_suggest"] and self.cfg["tell_speakers"] and not self.private:
+                n = int(speaker)
+                if n not in self._intro_asked and not self._speaker_names.get(n):
+                    name = introduce.name_in(text, lang)
+                    if name:
+                        self._intro_asked.add(n)
+                        self.hub.publish("voice_name", {"speaker": n, "name": name, "remember": bool(self.cfg["remember_speakers"])})
+                        self._note("intro_heard", name=name)
+        except Exception:  # noqa: BLE001  提醒失敗不能讓字幕也沒有
+            self.log(traceback.format_exc())
+
+    def _voice_command(self, command: str) -> None:
+        """對麥克風說的語音指令。"""
+        self.log(f"voice command: {command}")
+        try:
+            if command == "pause":
+                self.voice_paused = True
+                self._end_live("loopback")
+                self.hub.publish("voice_paused", True)
+                self._note("vc_pause")
+            elif command == "resume":
+                self.voice_paused = False
+                self.hub.publish("voice_paused", False)
+                self._note("vc_resume")
+            elif command == "again":
+                self._note("vc_again" if self.retranslate_last() else "vc_again_none")
+            elif command == "clear":
+                self.clear_messages()
+                self._note("vc_clear")
+            elif command == "mark":
+                self.mark_now()
+            elif command in ("overlay", "copy"):
+                self._hotkey_work(command)
+        except Exception:  # noqa: BLE001
+            self.log(traceback.format_exc())
+
+    def set_voice_paused(self, on: bool) -> dict:
+        """介面上的「繼續翻譯」按鈕（說了暫停之後）。"""
+        self.voice_paused = bool(on)
+        self.hub.publish("voice_paused", self.voice_paused)
+        return {"ok": True, "paused": self.voice_paused}
+
+    def retranslate_last(self) -> bool:
+        """重翻對方說的（或畫面上讀到的）上一句：用最新的詞彙表和前後文再翻一次，排最前面。"""
+        with self._lock:
+            msg = next((m for m in reversed(self.messages) if m["who"] == "them" and not m.get("pending")), None)
+        if not msg:
+            return False
+        self.translator.clear_cache()
+        msg = dict(msg, pending=True, error="", why="", copied=False, back="")
+        self._post(msg)
+        self.jobs.put(msg, asked=True)
+        return True
+
+    def _session_items(self, voice_only: bool = False) -> list[dict]:
+        with self._lock:
+            items = [dict(m, length=self._msg_len.get(m["id"], 0.0)) for m in self.messages]
+        return sessionlog.rows(items, voice_only)
+
+    def mark_now(self) -> dict | None:
+        """精華標記（2.18.0）：記下現在這個時間點和最新的一句，結束後列出來方便剪片。"""
+        with self._lock:
+            items = [dict(m, length=self._msg_len.get(m["id"], 0.0)) for m in self.messages]
+            last = next((m for m in reversed(self.messages) if not m.get("error")), None)
+        now = time.time()
+        start = sessionlog.started_at(items) if items else now
+        mark = {"id": int(now * 1000), "at": now, "offset": round(max(0.0, now - start), 1),
+                "original": str(last["original"]) if last else "", "translated": str(last.get("translated") or "") if last else "",
+                "msg": last["id"] if last else 0}
+        with self._lock:
+            self.marks = (self.marks + [mark])[-MAX_MARKS:]
+            marks = list(self.marks)
+        self.hub.publish("marks", marks)
+        self._note("mark_done", time=sessionlog.clock(mark["offset"]))
+        return mark
+
+    def marks_action(self, action: str, mark_id: int = 0) -> dict:
+        """add：標記現在；remove：刪掉一個；clear：全部清掉。"""
+        if action == "add":
+            self.mark_now()
+        elif action == "remove":
+            with self._lock:
+                self.marks = [k for k in self.marks if k["id"] != int(mark_id or 0)]
+        elif action == "clear":
+            with self._lock:
+                self.marks = []
+        else:
+            return {"ok": False}
+        with self._lock:
+            marks = list(self.marks)
+        self.hub.publish("marks", marks)
+        return {"ok": True, "marks": marks}
+
+    def session_export(self, kind: str) -> dict:
+        """這一場存成檔案（2.18.0）：md / docx = 通話紀錄（只有語音），srt = 有時間軸的字幕檔（全部翻譯）。"""
+        if kind not in sessionlog.KINDS:
+            return {"ok": False, "error": "kind"}
+        items = self._session_items(voice_only=kind != "srt")
+        if not items:
+            return {"ok": False, "error": "empty"}
+        with self._lock:
+            marks = list(self.marks)
+            start = sessionlog.started_at([dict(m, length=self._msg_len.get(m["id"], 0.0)) for m in self.messages])
+        try:
+            path = sessionlog.save(self.transcript_dir(), kind, items, marks, self.cfg["ui_lang"], start)
+        except OSError as ex:
+            self.log(f"saving the session failed: {ex!r}")
+            return {"ok": False, "error": "save"}
+        self.log(f"session saved as {kind}: {len(items)} lines")
+        return {"ok": True, "path": str(path), "name": path.name, "count": len(items)}
+
+    def _speed_pick(self) -> None:
+        """自動選語音設定（2.18.0）：第一次用語音時，拿幾秒的聲音給語音模型辨識看看要多久，
+        照速度選「比較快／比較準」和即時字幕。只改使用者還沒自己動過的設定，只測一次（設定裡可以重測）。"""
+        try:
+            import numpy as np
+
+            from .core.audio import SR
+
+            rec = self._ensure_recognizer()
+            rng = np.random.default_rng(1)
+            t = np.arange(int(SR * SPEED_SECONDS)) / SR
+            sound = (0.02 * rng.standard_normal(len(t)) + 0.05 * np.sin(2 * np.pi * 220 * t) * (np.sin(2 * np.pi * 3 * t) > 0)).astype(np.float32)
+            started = time.monotonic()
+            rec.transcribe(sound, [self.cfg["their_lang"] if self.cfg["their_lang"] in LANGS else "en"])
+            spent = time.monotonic() - started
+            speed = round(spent / SPEED_SECONDS, 3)
+            mode, live = pick_speech(speed)
+            changes = {"speech_picked": max(speed, 0.001)}
+            if self.cfg["speech_mode"] == DEFAULTS["speech_mode"]:
+                changes["speech_mode"] = mode
+            if self.cfg["live_captions"] == DEFAULTS["live_captions"]:
+                changes["live_captions"] = live
+            self.log(f"speech speed: {spent:.2f}s for {SPEED_SECONDS:.0f}s of sound on {getattr(rec, 'device', 'cpu')}; picked {mode}, live captions {live}")
+            self.cfg.set(**changes)
+            rec.beam = BEAMS[self.cfg["speech_mode"]]
+            self.hub.publish("config", self.cfg.snapshot())
+            if mode == "accurate":
+                self.notice("speech_picked_accurate")
+            elif live:
+                self.notice("speech_picked_fast")
+            else:
+                self.notice("speech_picked_slow")
+        except Exception:  # noqa: BLE001  測不了就照預設
+            self.log(traceback.format_exc())
+        finally:
+            self._speed_testing = False
+
+    def speech_repick(self) -> dict:
+        """設定頁的「重新測速」。"""
+        if self._speed_testing:
+            return {"ok": False}
+        self.cfg.set(speech_picked=0.0, speech_mode=DEFAULTS["speech_mode"], live_captions=DEFAULTS["live_captions"])
+        self._speed_testing = True
+        threading.Thread(target=self._speed_pick, daemon=True, name="speed").start()
+        return {"ok": True}
 
     def _screen_extra(self, color: str, region: dict | None) -> dict:
         """讀畫面那一則多帶的：頻道顏色、是不是劇情對話框。沒有就不帶（submit 的舊呼叫方式不變）。"""

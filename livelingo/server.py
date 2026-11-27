@@ -312,6 +312,16 @@ class Server:
                         return self._json(service.camera_translate())
                     if route == "/api/pin":         # 釘選句子：id、on
                         return self._json(service.pin_action(body.get("id"), bool(body.get("on", True))))
+                    if route == "/api/marks":       # 精華標記：add / remove（id）/ clear（2.18.0）
+                        return self._json(service.marks_action(str(body.get("action") or ""), int(body.get("id") or 0)))
+                    if route == "/api/session":     # 這一場存成檔案：kind = md / docx / srt；open = 打開存好的資料夾
+                        if body.get("open"):
+                            return self._json({"ok": service.open_transcript("folder")})
+                        return self._json(service.session_export(str(body.get("kind") or "")))
+                    if route == "/api/voicepause":  # 語音指令暫停之後，介面按「繼續翻譯」
+                        return self._json(service.set_voice_paused(bool(body.get("on"))))
+                    if route == "/api/speedpick":   # 重新測速、自動選語音設定
+                        return self._json(service.speech_repick())
                     if route == "/api/keys":        # 快捷鍵一覽小卡
                         return self._json({"ok": True, "lines": service.show_keys()})
                     if route == "/api/profile":     # 遊戲專屬版面：save / remove / apply（exe 沒給 = 現在的遊戲）

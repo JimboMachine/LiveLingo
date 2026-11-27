@@ -606,7 +606,14 @@ class Overlay:
         kind = "me" if msg.get("who") == "me" else ("screen" if msg.get("via") == "screen" else "heard")
         if kind == "me" and not self.service.cfg["overlay_mine"]:
             return
-        self.push(kind, msg["translated"], msg.get("original", ""), key=msg["id"], who=self._who(msg), mention=bool(msg.get("mention")))
+        text = msg["translated"]
+        cfg = self.service.cfg
+        if msg.get("tone") and cfg["tone_icons"]:      # 語氣小圖示（2.18.0）：遊戲裡畫不出彩色表情，用一個短字
+            from .tone import word
+
+            feel = word(msg["tone"], cfg["ui_lang"] or "en")
+            text = f"({feel}) {text}" if feel else text
+        self.push(kind, text, msg.get("original", ""), key=msg["id"], who=self._who(msg), mention=bool(msg.get("mention")))
 
     def _who(self, msg: dict) -> tuple | None:
         """這一則是第幾個說話者、叫什麼名字（有開「分辨說話者」而且分得出來才有）。"""

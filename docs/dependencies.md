@@ -546,6 +546,15 @@
 
 自動把關：測試會擋：手把組合的整理和觸發、快捷鍵一覽的文字、圖片解碼和太大的擋下、讀圖走 _read_image、條漫一個對話框一則且不重翻、釘選最多 3 句和浮動字幕的位置、滑鼠在上面時變淡、送進聊天只送麥克風且預設關、各個 /api。真的手把、剪貼簿、攝影機、送進遊戲聊天要在你的電腦上試。
 
+### 背景降噪、左右耳分流、語氣小圖示、語音指令、自動選語音設定、通話紀錄匯出、自報名字記聲音、講太快提醒、精華標記、存成字幕檔（2.18.0）
+
+1. `hotkeys.py`、`config.py`、`guide.py`：ACTIONS 加了 mark：DEFAULTS hotkeys（Ctrl+Shift+F3）、help.json keys 段 13 種語言都要有 {mark}、guide.VALUES、介面 HOTKEYS、舊測試數快速鍵的地方
+2. `speech.py`、`core/denoise.py`：denoise 預設關；降噪只給 Whisper，聲紋（分辨說話者）用原本的聲音
+3. `service.py`、`voicecmd.py`：只看麥克風；voice_commands 預設關；暫停時對方的話和畫面的字都不翻，打字照常
+4. `app.js`、`i18n.js`、`style.css`：marks、slow_tip、voice_name、voice_paused 事件；#voice-help-section、#session-section、#vpause-row、#voice-name-row、#slow-row
+
+自動把關：測試會擋：降噪真的把噪音壓低又不改長度、語氣的判斷、語音指令只認整句、自我介紹的名字、講太快的提醒和冷卻、Word／Markdown／.srt 的內容、精華標記、暫停翻譯、單邊耳朵、自動選設定。真的吵雜遊戲聲、真的耳機分流要在你的電腦上試。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -580,7 +589,7 @@
 | 系統匣 | `livelingo/tray.py` | `window.py`：系統匣有沒有開起來（改壞不會報錯）<br>`service.py`：系統匣（改壞會報錯） |
 | 浮動留言 | `livelingo/overlay.py` | `hotkeys.py`：短提示顯示在浮動留言上（note）（改壞不會報錯）<br>`service.py`：浮動留言（改壞會報錯）<br>`inplace.py`：蓋在畫面上的視窗用跟浮動留言一樣的（LayeredWindow，擷取拍不到）（改壞不會報錯）<br>`service.py`：current_entry/apply_entry：遊戲專屬版面存的浮動字幕位置（改壞不會報錯） |
 | 直播字幕（給 OBS 的網頁） | `livelingo/stream.py` | `service.py`：直播字幕：每則留言、翻到一半的譯文、刪掉、清空（on_message、on_partial、on_removed、clear）（改壞會報錯）<br>`service.py`：wall_on、url(wall=True)：副螢幕字幕牆用直播字幕頁（改壞不會報錯） |
-| 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯）<br>`inplace.py`：換行排字（_wrap）、字型、han_kind（改壞會報錯） |
+| 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯）<br>`inplace.py`：換行排字（_wrap）、字型、han_kind（改壞會報錯）<br>`sessionlog.py`：NAMES、speaker_name：誰說的（改壞會報錯） |
 | 框選聊天區 | `livelingo/region.py` | `quickbox.py`：顏色和字型（改壞會報錯）<br>`__main__.py`：框選模式（改壞會報錯）<br>`__main__.py`：框選翻譯用同一個框選程式（--mode snap）（改壞不會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
 | 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼；程式自己的短提示（略過幾則、引擎重開）也用 NOTES，介面那邊要有同名的 n_ 文字（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯）<br>`guide.py`：四個全域快速鍵的名稱（overlay、mic、copy、quick）（改壞不會報錯）<br>`gamepad.py`：動作名字跟 hotkeys.ACTIONS 一樣（service 用 HOTKEY_ACTIONS 過濾）（改壞不會報錯） |
 | 快速輸入框 | `livelingo/quickbox.py` | `service.py`：打的字（另開一個程式）（改壞不會報錯）<br>`__main__.py`：快速輸入模式（--quick-input）（改壞會報錯） |
@@ -601,6 +610,11 @@
 | 圖片來源：拖進來的圖片、剪貼簿的圖、攝影機拍一張，變成給讀字用的影像 | `livelingo/imagetext.py` | `service.py`：from_data_url（/api/image）、clipboard_image（clipimg 快速鍵）、camera_frame（/api/camera），讀字走 _read_image（改壞會報錯） |
 | 手把快捷鍵：讀 XInput 按鈕，Back＋鍵觸發跟鍵盤快速鍵一樣的動作 | `livelingo/gamepad.py` | `service.py`：Gamepad(_pad_action)、clean(gamepad_keys)、BUTTONS/DEFAULTS 給介面（改壞會報錯） |
 | 快捷鍵一覽小卡：動作名字從 i18n.js 的 hk_ 拿 | `livelingo/cheatsheet.py` | `service.py`：show_keys：lines(hotkeys, 手把, 介面語言)（改壞會報錯） |
+| 語氣小圖示：從原文記號和聲音大小猜在笑、開玩笑、生氣、難過 | `livelingo/tone.py` | `service.py`：submit：對方的話 tone_icons 開著就 guess(text, loud) → msg.tone（改壞會報錯）<br>`overlay.py`：word(tone, 介面語言)：浮動字幕在譯文前面加 (笑) 這種短字（改壞會報錯） |
+| 語音指令：整句話就是指令才算，13 種介面語言的說法 | `livelingo/voicecmd.py` | `service.py`：_on_speech：麥克風整句 match(text, ui_lang) → _voice_command；state 的 voice_cmds 用 examples（改壞會報錯） |
+| 聽到自報名字：找出「我是 Mina」裡的名字 | `livelingo/introduce.py` | `service.py`：_listen_extras：name_in → voice_name 事件（要開分辨說話者），記住走 speaker_rename（改壞會報錯） |
+| 對方講太快：最近幾句沒把握或太快就提醒，附請對方慢一點的句子 | `livelingo/pace.py` | `service.py`：_listen_extras：PaceWatch.add → slow_tip 事件和浮動字幕提示 ask_in(語言)（改壞會報錯） |
+| 這一場的紀錄：通話紀錄 Markdown／Word、.srt 字幕檔、精華時間點 | `livelingo/sessionlog.py` | `service.py`：session_export（/api/session）、mark_now（/api/marks、mark 快速鍵），存在 transcript_dir（改壞會報錯） |
 | 常用句庫：存句子和各語言的譯文（phrases.json） | `livelingo/phrases.py` | `service.py`：常用句庫（Phrasebook：add、remove、set_translation、missing、listing、state）（改壞會報錯） |
 | 原地覆蓋翻譯：把譯文畫在畫面上原文的位置 | `livelingo/inplace.py` | `service.py`：原地覆蓋翻譯（InPlace：set_on、update、reset、keep_only、clear_cache、close）（改壞會報錯）<br>`watcher.py`：每辨識一次畫面就交過去（on_frame）；接手的區域不再送去浮動留言（改壞不會報錯） |
 | 影片、音訊檔做雙語字幕：解聲音、切句、寫 .srt | `livelingo/filesubs.py` | `service.py`：影片字幕的工作（Job、decode、EXTS、MODES、MAX_SECONDS、is_media）（改壞會報錯） |
@@ -628,11 +642,12 @@
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
 | 請翻譯模型做的小事：回話建議 | `livelingo/core/assist.py` | `service.py`：回話建議的提示和解析（reply_prompt、parse_replies）（改壞會報錯） |
-| 念出我的譯文（Windows 內建語音） | `livelingo/core/speak.py` | `service.py`：念出我的譯文（Speaker.say）；念出來的聲音又被收到時不要再翻（recent、_is_own_voice）（改壞會報錯） |
+| 念出我的譯文（Windows 內建語音） | `livelingo/core/speak.py` | `service.py`：念出我的譯文（Speaker.say）；念出來的聲音又被收到時不要再翻（recent、_is_own_voice）（改壞會報錯）<br>`service.py`：reader 的 ear=cfg ear_split：to_ear 做成只有一邊的雙聲道（改壞不會報錯） |
+| 背景降噪：頻譜減法，沒人說話時記住噪音，辨識前減掉 | `livelingo/core/denoise.py` | `speech.py`：SpeechPipeline.denoise() 開著：沒人說話時 learn、辨識前 clean（整句和半句）（改壞會報錯） |
 | 看螢幕 | `livelingo/core/watcher.py` | `inplace.py`：normalize（同一段字的比對用）（改壞會報錯）<br>`service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
 | 文字辨識 | `livelingo/core/ocr.py` | `snap.py`：辨識出的每一列（Line：text、x、y、h、w、score）（改壞不會報錯）<br>`service.py`：文字辨識；對方的語言用哪一個辨識模型（model_of），讀螢幕自動偵測時同一個模型的語言都會一起讀（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `core/speak.py`：播到選的播放裝置（_soundcard，跟「對方的聲音從哪個裝置出來」同一份清單）（改壞會報錯）<br>`service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
-| 語音辨識 | `livelingo/core/speech.py` | `filesubs.py`：一句一句辨識（Service 把 Recognizer.transcribe 傳進來）（改壞不會報錯）<br>`service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯）<br>`names.py`：hotwords 字串交給 faster-whisper 的 hotwords（空的就不帶）（改壞不會報錯） |
+| 語音辨識 | `livelingo/core/speech.py` | `filesubs.py`：一句一句辨識（Service 把 Recognizer.transcribe 傳進來）（改壞不會報錯）<br>`service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯）<br>`service.py`：pipe.denoise = cfg denoise；on_text 收 loud=（語氣用，舊的假函式沒有這個參數就不給）（改壞不會報錯）<br>`names.py`：hotwords 字串交給 faster-whisper 的 hotwords（空的就不帶）（改壞不會報錯） |
 | 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字平常只在記憶體裡（改壞會報錯）<br>`voicebook.py`：聲紋的長度和模型（MODEL、DIM）要跟聲紋模型一致；換模型舊檔就作廢（改壞不會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
