@@ -166,14 +166,14 @@
 
 ### 改收音或語音辨識
 
-1. `audio.py`：裝置、兩種收音方式
+1. `audio.py`：裝置、兩種收音方式；記住「這支麥克風要用第二種方式」（Ways，存在 mic_ways.json：只有裝置名稱、日期、程式版本，30 天或換版本就作廢）。新加的收音方式要想清楚：記住的做法失敗了要能自己忘掉（forget）
 2. `speech.py`：斷句、辨識、選語言
 3. `meters.py`：音量
 4. `service.py`：找麥克風、自動偵測語言；斷線後自動重新連接（_voice_error、RECONNECT_WAITS）：靠收音那邊「打開成功」和「出錯」兩個通知，新的收音方式兩個都要叫
 5. `app.js`、`i18n.js`：音量條、錯誤訊息；卡片上的「正在重新連接」（來源的 lost 欄位）和健康檢查的黃燈
 6. `test_basics.py`：假裝置的檢查
 
-自動把關：測試用假的音訊裝置。真的麥克風和喇叭只能在你的電腦上確認。
+自動把關：測試用假的音訊裝置，會擋：第二種方式收到聲音才記、記住之後直接用第二種、過期或換版本就忘掉、記住的做法行不通時自己忘掉再試第一種。真的麥克風和喇叭只能在你的電腦上確認。
 
 ### 改視窗行為
 
@@ -229,15 +229,15 @@
 ### 改快速鍵或快速輸入框
 
 1. `hotkeys.py`：動作名稱（ACTIONS）、能用的鍵、短提示的每種介面語言
-2. `config.py`：預設的組合
-3. `service.py`：檢查送來的組合、每個動作做什麼、設定頁等新組合時先停用
+2. `config.py`：預設的組合（DEFAULTS["hotkeys"]：一律 Ctrl+Shift+字母，不用 Ctrl+Alt，因為德文、法文鍵盤上那就是 AltGr）。換預設要把 hotkeys_v（HOTKEYS_V）加一、舊預設放進 OLD_HOTKEYS，migrate_hotkeys 才會只換「還是舊預設」的人，自己設過的不動；快速輸入框用 Q（Ctrl+Shift+T 是瀏覽器的「重開分頁」）
+3. `service.py`：檢查送來的組合、每個動作做什麼、設定頁等新組合時先停用；設定檔匯出帶 hotkeys_v（不算設定，在 SETTINGS_SKIP），舊版匯出的檔案匯入時一樣只換還是舊預設的
 4. `app.js`：動作清單、按鍵怎麼變成組合的寫法、狀態怎麼顯示
 5. `i18n.js`：每個動作的名稱和說明
 6. `overlay.py`、`chatpaint.py`：短提示怎麼顯示、停留多久
 7. `quickbox.py`、`__main__.py`：輸入框的參數和交回去的檔案
 8. `selftest.py`、`test_basics.py`：登記、按下、輸入框的檢查
 
-自動把關：測試會擋：組合鍵的寫法、兩個動作撞鍵、每種介面語言的提示、這兩個檔案裡出現替人打字或讀按鍵的函式。真的按下去有沒有反應、輸入框有沒有跑到遊戲上面，只能在 Windows 上試。
+自動把關：測試會擋：組合鍵的寫法、兩個動作撞鍵、預設不是 Ctrl+Shift+字母、從舊版升上來時自己設過的被換掉、每種介面語言的提示、這兩個檔案裡出現替人打字或讀按鍵的函式。真的按下去有沒有反應、輸入框有沒有跑到遊戲上面、跟瀏覽器或遊戲自己的快速鍵撞不撞，只能在 Windows 上試。
 
 ### 改聊天區（可以好幾個、可以跟著程式視窗）
 
@@ -257,7 +257,7 @@
 2. `translate.py`：ask_free：跟翻譯同一條排隊
 3. `service.py`、`server.py`：replies、reply_box、reply_copy；/api/replies；replies 事件
 4. `quickbox.py`、`__main__.py`：回話小框（choose）、命令列參數；13 種語言的 REPLY_TEXTS
-5. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 reply（ACTIONS、預設 Ctrl+Alt+R、NOTES 的 reply_nothing / reply_copied、說明頁的 {reply}）
+5. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 reply（ACTIONS、預設 Ctrl+Shift+R、NOTES 的 reply_nothing / reply_copied、說明頁的 {reply}）
 6. `app.js`、`i18n.js`、`style.css`：對方那句下面的「怎麼回？」和建議
 7. `selftest.py`：reply_box
 8. `test_basics.py`：test_seven_features_part_two
@@ -292,7 +292,7 @@
 1. `snap.py`：paragraphs：上下緊貼、左邊對齊才接成一段；一個框最多幾段
 2. `service.py`：pick_text、snap_text、_snap_read、_card_show、_card_done（翻好、略過、失敗三條路都要叫）；submit 的 asked
 3. `quickbox.py`、`__main__.py`、`region.py`：小卡（card）、13 種語言的 CARD_TEXTS；--card 參數；框選的 --mode snap 和 SNAP_HINTS
-4. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 pick（Ctrl+Alt+X）、snap（Ctrl+Alt+F）；NOTES 的 pick_empty、snap_nothing；pick_copy 預設關；說明裡的 {pick} {snap}
+4. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 pick（Ctrl+Shift+X）、snap（Ctrl+Shift+F）；NOTES 的 pick_empty、snap_nothing；pick_copy 預設關；說明裡的 {pick} {snap}
 5. `app.js`、`i18n.js`：快速鍵清單、hk_pick、hk_snap、pick_copy 的文字（13 種語言）
 
 自動把關：測試用假的辨識和假的框選結果檢查接段、翻譯、小卡內容、翻不出來和沒讀到字的提示；真的按快速鍵、框選畫面有沒有跑到遊戲上面、替人按 Ctrl+C 有沒有用，只能在 Windows 上試。
@@ -302,7 +302,7 @@
 1. `phrases.py`：phrases.json 的格式（items、tr、fixed）、MAX_PHRASES、起手的句子（STARTERS）
 2. `service.py`、`server.py`：phrase_action、_phrases_fill（換對方語言時補翻）、phrase_box、_phrase_box_write；/api/phrases；phrases 事件
 3. `quickbox.py`、`__main__.py`：小框（phrases）、13 種語言的 PHRASE_TEXTS；--phrase-box / --phrase-out
-4. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 phrase（Ctrl+Alt+P）、NOTES 的 phrase_empty、phrase_copied；說明裡的 {phrase}
+4. `hotkeys.py`、`config.py`、`guide.py`：快速鍵 phrase（Ctrl+Shift+P）、NOTES 的 phrase_empty、phrase_copied；說明裡的 {phrase}
 5. `app.js`、`i18n.js`：設定頁的「常用句庫」段落、ph_ 開頭的文字（13 種語言）
 
 自動把關：測試會擋：加、刪、改譯文、重複和滿了的處理、檔案壞了照樣開、換對方語言後補翻、改過的譯文不被蓋掉、小框的檔案交接。小框長什麼樣、數字鍵有沒有反應，只能在 Windows 上試。
@@ -395,6 +395,28 @@
 5. `test_basics.py`：test_usage_numbers_are_local_counts_only
 
 自動把關：測試會擋：翻譯流程裡沒有記數、usage.py 出現連網路的東西、檔案裡出現數字以外的東西。新的來源有沒有算進去，要自己看一次。
+
+### 新增或改設定頁的頁面、段落（設定頁最上面的搜尋框要找得到）
+
+1. `app.js`：每一頁的內容在 pageHTML(tab)，搜尋索引（settingsIndex，換介面語言就重建）是照它畫出來的頁面建的：新的設定頁要同時進 TABS 和 pageHTML；段落要有標題（h2，或 .setting-row 裡的名稱）；不該被搜到的頁放進 SEARCH_SKIP
+2. `app.js`：pageHTML 只能組 HTML，不能打 API、不能改狀態（搜尋會替每一頁各畫一次）；靠非同步資料才出現的項目（裝置、螢幕）用 pageForIndex 的替身，其他的只搜得到段落標題
+3. `i18n.js`：搜尋框和結果的文字（sq_ 開頭）；別名和同義詞（kw_ 開頭，空格隔開，每種介面語言寫自己的說法，例如「快速鍵」「快捷键」「hotkeys」「단축키」），段落用 data-kw 指到它；段落名字使用者猜不到時才加。內容很長的段落（例如更新說明）用 data-titleonly，只用標題和一句說明來比對
+4. `index.html`、`style.css`：搜尋列（#settings-bar）、結果（#sq-results）、跳過去之後框起來的 .found；700px 以下和每一種語言的長度不能擠、不能橫向捲動
+5. `guide.py`：說明頁和 README 如果提到「設定頁最上面的搜尋」，要和實際的做法一致
+6. `test_basics.py`：test_settings_pages_have_a_search_box_that_finds_every_section
+
+自動把關：測試會擋：新的頁面沒接進 pageHTML、pageHTML 裡有會做事的呼叫、搜尋用的文字少一種語言、各種語言的範例（快速鍵、備份、麥克風）找不到對的段落。搜尋框照畫出來的設定頁自己建索引，所以新段落不用另外登記；別名說得好不好、跳過去之後捲到哪裡、框起來的樣子，要自己開起來搜一次。
+
+### 新增或改「出錯了」的提示（要一句白話，電腦回報的原文收進「詳細」）
+
+1. `app.js`：WHY_RULES（原文裡的關鍵字 → 原因代碼，由上往下先比到的先用）和 why()、whyCode()：新的原因加一條規則，認不出來就用「不明原因」，不能出現 RuntimeError 這類字眼；規則的寫法要 JavaScript 和 Python 的 re 都看得懂（測試用後者跑）
+2. `app.js`：原文一律走 rawFold（摺起來的「詳細」）或提醒上的「詳細」按鈕（toast 的 raw 參數）；不要把 e.message 放進句子。同一個原因的兩則提醒（收音和聽對方）要併成一則
+3. `i18n.js`：why_原因（一句白話：發生了什麼＋可以怎麼做）、err_unknown、raw_detail、audio_failed_both；每種介面語言
+4. `service.py`、`translate.py`：背景送給介面的 error 欄位維持原文（介面才認得出原因）；翻譯失敗的代碼（why()）多一種時看「改事件或留言的格式」
+5. `style.css`：原文的樣子（.raw-fold、pre.raw）：等寬字、會換行、不超出框
+6. `test_basics.py`：test_error_messages_are_plain_and_the_raw_text_stays_in_detail
+
+自動把關：測試會擋：原因的比對規則認錯（拿真實的錯誤訊息逐一跑）、少一種語言的白話、介面又把原文直接塞進句子裡、「詳細」鍵盤到不到。白話說得準不準、同一個原因的兩則提醒有沒有併成一則，要自己在 Windows 上讓它出錯看看。
 
 ### 改頁面的名字、按鈕的名字、快速鍵、鍵盤操作，或加使用者會用到的新功能
 

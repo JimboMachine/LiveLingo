@@ -97,19 +97,54 @@
   async function saveCfg(patch, key) {      // 使用者改設定都走這裡：存好顯示「已儲存」，存不進去說清楚
     const r = await post("/api/config", patch);
     if (r && r.ok && r.saved) flashSaved(key || Object.keys(patch)[0]);
-    else toast(t("n_save_failed", { error: (r && r.error) || "" }), 8000, "error");
+    else toast(t("n_save_failed", { error: why(r && r.error) }), 8000, "error", r && r.error);
     return r;
   }
 
   let toastTimer = null;
-  function toast(text, ms, level) {      // level：info（預設）/ warn / error
+  function toast(text, ms, level, raw) {      // level：info（預設）/ warn / error；raw：電腦回報的原文，有的話後面多一顆「詳細」，按了才看得到
     const el = $("toast");
-    el.textContent = text;
     el.dataset.toast = level || "info";      // 不能叫 data-level：那是音量條用的，會被 paintLevels 當成音量條改寬度
     el.hidden = false;
+    S.ui.toastRaw = raw ? String(raw) : "";
+    if (S.ui.toastRaw) el.innerHTML = `<span>${esc(text)}</span> <button class="link" data-act="toast-detail">${esc(t("raw_detail"))}</button>`;
+    else el.textContent = text;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.hidden = true; }, ms || 4200);
   }
+  // 提示上有按鈕（「詳細」），滑鼠停在上面或鍵盤選到的時候不要自己消失
+  $("toast").addEventListener("mouseenter", () => clearTimeout(toastTimer));
+  $("toast").addEventListener("focusin", () => clearTimeout(toastTimer));
+  $("toast").addEventListener("mouseleave", () => { clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; }, 4000); });
+
+  // ---------------------------------------------------------------- 出錯訊息：一句白話，電腦回報的原文收進「詳細」
+
+  // 電腦回報的原文 → 原因代碼（i18n 的 why_代碼）。由上往下比，先比到的先用。
+  // pattern 只用 JS 和 Python 都看得懂的寫法：tests 會拿真實的錯誤訊息用 Python 的 re 跑一遍。
+  const WHY_RULES = [
+    ["full", "no space left|not enough space|disk (is )?full|errno 28|winerror 112"],
+    ["denied", "permission|access is denied|access denied|winerror 5([^0-9]|$)|errno 13|0x80070005|e_accessdenied|not permitted"],
+    ["busy", "busy|in use|being used by another|winerror 32([^0-9]|$)|winerror 10048|address already in use|only one usage|0x8889000a|0x8889000e|errno 16([^0-9]|$)|device unavailable|exclusive"],
+    ["gone", "no microphone|device not found|no such device|invalid device|querying device|0x88890004|0x80070490|errno 19([^0-9]|$)|unplugged|disconnected"],
+    ["missing", "no such file|filenotfound|winerror [23]([^0-9]|$)|errno 2([^0-9]|$)|cannot find the|not a directory"],
+    ["network", "connection|timed out|timeout|getaddrinfo|urlopen|http error|ssl:|sslerror|certificate|winerror 100[0-9][0-9]|winerror 11001|name resolution|remote end closed"],
+    ["audio", "audio component|soundcard|mediafoundation|paerrorcode|portaudio|0x8889|coinitialize|wasapi|invalid sample rate|host error"]
+  ];
+  function whyCode(raw, audio) {      // audio：收音出的錯：認不出原因的，多半是收音元件打不開這個裝置
+    const text = String(raw || "");
+    for (const [code, pattern] of WHY_RULES) if (new RegExp(pattern, "i").test(text)) return code;
+    return audio && text ? "audio" : "";
+  }
+  const why = (raw, audio) => { const code = whyCode(raw, audio); return t(code ? "why_" + code : "why_unknown"); };
+  // 原文收在「詳細」裡，點開才看得到。開著還是闔著記在 S.ui.rawOpen，畫面重畫不會自己闔起來
+  function rawFold(id, raw) {
+    if (!raw) return "";
+    return `<details class="raw-fold" data-raw="${esc(id)}"${(S.ui.rawOpen || {})[id] ? " open" : ""}><summary id="raw-${esc(id)}">${esc(t("raw_detail"))}</summary><pre class="raw" tabindex="0">${esc(raw)}</pre></details>`;
+  }
+  document.addEventListener("toggle", (e) => {      // toggle 不會往上傳，要在最外層用 capture 接
+    const d = e.target;
+    if (d && d.dataset && d.dataset.raw) (S.ui.rawOpen = S.ui.rawOpen || {})[d.dataset.raw] = d.open;
+  }, true);
 
   const ICON = {
     screen: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
@@ -147,6 +182,7 @@
       el.setAttribute("aria-label", t(el.dataset.i18nLabel));
       el.title = t(el.dataset.i18nLabel);
     });
+    document.querySelectorAll("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
   }
 
   // ---------------------------------------------------------------- 主題
@@ -285,13 +321,14 @@
     }
     if (mic.on && mic.quiet === "blocked") return { text: t("mic_blocked"), buttons: winBtn + findBtn };
     if (mic.on && mic.quiet) return { text: t("mic_silent"), buttons: findBtn };
-    if (mic.error && !mic.on && !mic.busy) return { text: t("mic_failed"), detail: mic.error, buttons: findBtn, level: "error" };
+    if (mic.error && !mic.on && !mic.busy) return { text: t("mic_failed", { why: why(mic.error, true) }), raw: mic.error, rawId: "mic", buttons: findBtn, level: "error" };
     return null;
   }
 
   function noticeHTML(n, icon) {
     return `<div class="mic-note ${n.busy ? "info" : (n.level || "warn")}">${icon}<div><div class="text">${esc(n.text)}</div>
       ${n.detail ? `<div class="detail">${esc(n.detail)}</div>` : ""}
+      ${n.raw ? rawFold(n.rawId || "note", n.raw) : ""}
       ${n.buttons ? `<div class="btns">${n.buttons}</div>` : ""}</div></div>`;
   }
 
@@ -302,11 +339,22 @@
 
   function renderMicRow() {
     const row = $("mic-row");
-    const listen = S.sources.listen || {};
-    const html = micNoticeHTML()
-      + (listen.error && !listen.on && !listen.busy ? noticeHTML({ text: t("listen_failed"), detail: listen.error, level: "error" }, ICON.listen) : "");
+    const listen = S.sources.listen || {}, mic = S.sources.mic || {};
+    const micFailed = !!(mic.error && !mic.on && !mic.busy && !S.ui.find), listenFailed = !!(listen.error && !listen.on && !listen.busy);
+    const code = whyCode(mic.error, true);
+    let html;
+    if (micFailed && listenFailed && code === whyCode(listen.error, true)) {      // 兩個都打不開、原因又一樣：只說一次（兩張一樣的提醒疊在一起很吵）
+      html = noticeHTML({ text: t("audio_failed_both", { why: why(mic.error, true) }), level: "error", rawId: "audio",
+        raw: `${t("src_mic")}: ${mic.error}\n${t("src_listen")}: ${listen.error}`,
+        buttons: code === "audio" ? "" : `<button class="primary" data-act="find-mic">${esc(t("find_btn"))}</button>` }, ICON.mic);
+    } else {
+      html = micNoticeHTML()
+        + (listenFailed ? noticeHTML({ text: t("listen_failed", { why: why(listen.error, true) }), raw: listen.error, rawId: "listen", level: "error" }, ICON.listen) : "");
+    }
+    const held = row.contains(document.activeElement) && document.activeElement.id;      // 「詳細」上有焦點：重畫之後還在那裡
     row.hidden = !html;
     row.innerHTML = html;
+    if (held && $(held)) $(held).focus();
   }
 
   // 字幕記錄：右上角的按鈕（開始 / 結束並儲存），存好之後在來源卡片下面說存到哪了
@@ -372,7 +420,7 @@
       ? `<button class="unsure" data-act="fix" data-id="${m.id}">${ICON.info}<span>${esc(t(m.via === "screen" ? "unsure_seen" : "unsure_heard"))}</span></button>` : "";
     if (m.error) {
       // 先用看得懂的話說原因；電腦回報的原文放在提示裡（滑鼠移上去看得到），不知道原因的才直接顯示
-      body += `<div class="text failed" title="${esc(m.error)}">${esc(m.why && m.why !== "other" ? t("err_" + m.why) : t("failed", { error: m.error }))}</div>` +
+      body += `<div class="text failed" title="${esc(m.error)}">${esc(m.why && m.why !== "other" ? t("err_" + m.why) : t("failed", { error: why(m.error) }))}</div>` +
         `<div class="actions"><button data-act="again" data-id="${m.id}">${esc(t("retry"))}</button></div>`;
     } else if (m.pending) {
       // 翻到一半的譯文先顯示（一個字一個字出來）；還沒有字的時候才寫「翻譯中」
@@ -446,7 +494,7 @@
     if (S.cfg.tell_speakers) {
       if (sp.state === "downloading") more = `<div class="note">${ICON.info}<span id="spk-percent">${esc(t("spk_downloading", { mb: sp.mb, percent: sp.percent || 0 }))}</span></div>`;
       else if (sp.state === "loading") more = `<div class="note">${ICON.info}<span>${esc(t("spk_loading"))}</span></div>`;
-      else if (sp.state === "failed") more = `<div class="note warn">${ICON.info}<span>${esc(t("spk_failed", { error: sp.error || "" }))}</span>
+      else if (sp.state === "failed") more = `<div class="note warn">${ICON.info}<span>${esc(t("spk_failed", { error: "" }).trim())}${rawFold("spk", sp.error)}</span>
         <button class="primary small" data-act="spk-retry">${esc(t("retry"))}</button></div>`;
       else if (sp.state === "ready" && !(sp.people || []).length) more = `<div class="note">${ICON.info}<span>${esc(t("spk_none"))}</span></div>`;
       else if (sp.state === "ready") more = `<div class="sub">${esc(t(sp.remember ? "spk_list_kept" : "spk_list"))}</div>` + sp.people.map((p) => `
@@ -531,7 +579,7 @@
   function devicesHTML() {
     const dv = S.ui.devices;
     if (!dv) return `<div class="note">${ICON.info}<span>${esc(t("dev_loading"))}</span></div>`;
-    if (!dv.ok) return `<div class="note warn">${ICON.info}<span>${esc(t("dev_error", { error: dv.error }))}</span></div>`;
+    if (!dv.ok) return `<div class="note warn">${ICON.info}<span>${esc(t("dev_error", { error: why(dv.error, true) }))}${rawFold("devices", dv.error)}</span></div>`;
     const list = (group, items, chosen, cfgKey) => {
       if (!items.length) return `<div class="note warn">${ICON.info}<span>${esc(t("dev_none"))}</span></div>`;
       const hasChosen = chosen && items.some((d) => d.id === chosen);
@@ -565,7 +613,7 @@
     let status = "";
     if (sp.available === false) status = `<div class="note warn">${ICON.info}<span>${esc(t("speak_unavailable"))}</span></div>`;
     else if (sp.error === "no_voice") status = `<div class="note warn">${ICON.info}<span>${esc(t("speak_no_voice", { lang: langName(sp.lang || S.cfg.their_lang) }))}</span></div>`;
-    else if (sp.error) status = `<div class="note warn">${ICON.info}<span>${esc(t("n_speak_failed", { error: sp.error }))}</span></div>`;
+    else if (sp.error) status = `<div class="note warn">${ICON.info}<span>${esc(t("n_speak_failed", { error: why(sp.error) }))}${rawFold("speak", sp.error)}</span></div>`;
     else if (sp.voice) status = `<div class="note">${ICON.check}<span>${esc(t("speak_voice", { voice: sp.voice }))}</span></div>`;
     return `<section id="speak-section"><div><h2>${esc(t("speak_title"))}</h2><div class="sub">${esc(t("speak_hint"))}</div></div>
         ${switchRow("speak_out", t("speak_on"), t("speak_on_desc"))}
@@ -613,11 +661,11 @@
     if (!g.can) return "";
     let note = "";
     if (S.cfg.speech_device === "gpu") {
-      if (g.state === "need") note = `<div class="note warn">${ICON.info}<span>${esc(t("sgpu_need", { mb: g.mb }))}${g.error ? " " + esc(t("sgpu_error", { error: g.error })) : ""}</span>
+      if (g.state === "need") note = `<div class="note warn">${ICON.info}<span>${esc(t("sgpu_need", { mb: g.mb }))}${g.error ? " " + esc(t("sgpu_error", { error: why(g.error) })) + rawFold("sgpu", g.error) : ""}</span>
         <button class="primary small" data-act="sgpu-download">${esc(t("sgpu_download"))}</button></div>`;
       else if (g.state === "downloading") note = `<div class="note">${ICON.info}<span id="sgpu-percent">${esc(t("sgpu_downloading", { percent: g.percent || 0 }))}</span>
         <button class="ghost small" data-act="sgpu-cancel">${esc(t("cancel"))}</button></div>`;
-      else if (g.state === "failed") note = `<div class="note warn">${ICON.info}<span>${esc(t("sgpu_failed"))}${g.error ? " " + esc(t("sgpu_error", { error: g.error })) : ""}</span></div>`;
+      else if (g.state === "failed") note = `<div class="note warn">${ICON.info}<span>${esc(t("sgpu_failed"))}${g.error ? " " + esc(t("sgpu_error", { error: why(g.error) })) + rawFold("sgpu", g.error) : ""}</span></div>`;
       else if (g.state === "ready") note = `<div class="note">${ICON.info}<span>${esc(t("sgpu_ready"))}</span></div>`;
     }
     return choiceRow("speech_device", t("speech_device"), [["cpu", t("speech_cpu")], ["gpu", t("speech_gpu")]]) + note;
@@ -918,7 +966,7 @@
   function ocrResultHTML() {
     const o = S.ui.ocr;
     if (o === "reading") return `<div class="note">${ICON.info}<span>${esc(t("ocr_reading"))}</span></div>`;
-    if (o && !o.ok) return `<div class="note warn">${ICON.info}<span>${esc(o.error === "app_closed" ? t("n_region_app_closed", { app: o.app }) : t("ocr_failed", { error: o.error }))}</span></div>`;
+    if (o && !o.ok) return `<div class="note warn">${ICON.info}<span>${esc(o.error === "app_closed" ? t("n_region_app_closed", { app: o.app }) : t("ocr_failed", { error: why(o.error) }))}${o.error === "app_closed" ? "" : rawFold("ocr", o.error)}</span></div>`;
     if (o && !o.lines.length) return `<div class="note">${ICON.info}<span>${esc(t("ocr_nothing"))}</span></div>`;
     if (o) return `<div class="ocr-lines">${o.lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>`;
     return "";
@@ -968,7 +1016,7 @@
   // 區域的名字、開關、跟著哪個程式、刪除：都是把整份清單送回去存（位置和大小只有框選畫面能改）
   async function saveRegions(list, mark) {
     const r = await post("/api/config", { regions: list });
-    if (!(r && r.ok && r.saved)) toast(t("n_save_failed", { error: (r && r.error) || "" }), 8000, "error");
+    if (!(r && r.ok && r.saved)) toast(t("n_save_failed", { error: why(r && r.error) }), 8000, "error", r && r.error);
     else if (r.changed.indexOf("regions") >= 0) flashSaved(mark);
     if (r && r.config) S.cfg = r.config;
     if (S.view === "settings") renderSettingsPage();      // 沒存成（例如要跟的程式沒開）也要畫回原本的樣子
@@ -1060,7 +1108,7 @@
       const r = await post("/api/overlay", { rect, final });
       if (final && r && r.ok) {
         if (r.rect) { S.ui.screens.rect = r.rect; paintMapBox(); }
-        if (r.saved) flashSaved("overlay_map"); else toast(t("n_save_failed", { error: "" }), 8000, "error");
+        if (r.saved) flashSaved("overlay_map"); else toast(t("n_save_failed", { error: why("") }), 8000, "error");
       }
     };
     if (final || Date.now() - mapSent > 70) send(); else mapTimer = setTimeout(send, 70);
@@ -1203,6 +1251,7 @@
     const p = Object.assign({}, it);
     if (it.quality) p.quality = t("h_q_" + it.quality);
     if (it.engine) p.engine = t("h_e_" + it.engine);
+    if (it.error) p.error = why(it.error, /^(audio|mic|listen)/.test(it.code));      // 電腦回報的原文收在「詳細」裡
     return t("h_" + it.code, p);
   }
   function healthPage() {
@@ -1212,7 +1261,7 @@
     const summary = bad ? t("h_some_bad", { n: bad }) : warn ? t("h_some_warn", { n: warn }) : t("h_all_ok");
     const rows = h.items.map((it) => `<div class="setting-row health-row" data-state="${it.state}" id="health-${it.id}">
         <span class="lamp" role="img" aria-label="${esc(t("h_s_" + it.state))}"></span>
-        <div class="health-text"><div>${esc(t("h_n_" + it.id))} <span class="health-state">${esc(t("h_s_" + it.state))}</span></div><div class="desc">${esc(healthText(it))}</div></div>
+        <div class="health-text"><div>${esc(t("h_n_" + it.id))} <span class="health-state">${esc(t("h_s_" + it.state))}</span></div><div class="desc">${esc(healthText(it))}</div>${rawFold("health-" + it.id, it.error)}</div>
         ${it.state === "ok" ? "" : `<button class="ghost" data-act="nav" data-to="${it.tab}">${esc(t("h_go"))}</button>`}</div>`).join("");
     return `
       <section><div><h2>${esc(t("h_title"))}</h2><div class="sub">${esc(t("h_hint"))}</div></div>
@@ -1355,9 +1404,9 @@
   }
 
   function settingsApplied(r, key) {      // 匯入、恢復預設、復原之後：說結果、記下還能不能復原、把畫面換成新的設定
-    if (!r || !r.ok) { toast(t(r && r.error === "not_settings" ? "set_bad" : "n_save_failed", { error: "" }), 8000, "warn"); return; }
+    if (!r || !r.ok) { toast(t(r && r.error === "not_settings" ? "set_bad" : "n_save_failed", { error: why("") }), 8000, "warn"); return; }
     S.settingsBackup = r.backup || null;
-    if (!r.saved) toast(t("n_save_failed", { error: "" }), 8000, "error");
+    if (!r.saved) toast(t("n_save_failed", { error: why("") }), 8000, "error");
     else { toast(t(key, { n: r.count }), 7000); flashSaved("#set-buttons"); }
     renderSettingsPage();
   }
@@ -1584,7 +1633,7 @@
     S.ui.hotkeyRec = null;
     await post("/api/hotkeys", { pause: false });
     const r = await post("/api/config", { hotkeys: { [name]: combo } });
-    if (!(r && r.ok && r.saved)) toast(t("n_save_failed", { error: (r && r.error) || "" }), 8000, "error");
+    if (!(r && r.ok && r.saved)) toast(t("n_save_failed", { error: why(r && r.error) }), 8000, "error", r && r.error);
     else if ((r.changed || []).includes("hotkeys")) { $("toast").hidden = true; flashSaved("#hk-" + name); }      // 沒被收下（跟別的動作撞到）就不說已儲存
     if (S.view === "settings" && S.ui.tab === "general") renderSettingsPage();
   }
@@ -1607,17 +1656,17 @@
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
       <section><div><h2>${esc(t("trans_title"))}</h2><div class="sub">${esc(t("trans_hint"))}</div></div>${pairSelectHTML()}${S.cfg.their_auto ? autoLangsHTML() : ""}</section>
       <section><div><h2>${esc(t("theme_title"))}</h2><div class="sub">${esc(t("theme_hint"))}</div></div>${themeHTML()}</section>
-      <section><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
-      <section><h2>${esc(t("window_title"))}</h2>
+      <section data-kw="kw_record"><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
+      <section data-kw="kw_window"><h2>${esc(t("window_title"))}</h2>
         ${S.canWindow ? switchRow("on_top", t("on_top")) : ""}
         ${S.canWindow ? switchRow("close_to_tray", t("close_to_tray"), t("close_to_tray_desc")) : ""}
         ${switchRow("show_pronunciation", t("show_pron"))}
         ${switchRow("copy_spoken", t("copy_spoken"))}
       </section>
-      <section><div><h2>${esc(t("hk_title"))}</h2><div class="sub">${esc(t("hk_hint"))}</div></div>${hotkeysHTML()}</section>
+      <section data-kw="kw_hotkeys"><div><h2>${esc(t("hk_title"))}</h2><div class="sub">${esc(t("hk_hint"))}</div></div>${hotkeysHTML()}</section>
       <section id="phrase-section"><div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}</section>
       <section><div><h2>${esc(t("al_title"))}</h2><div class="sub">${esc(t("al_hint"))}</div></div>${alertHTML()}</section>
-      <section><div><h2>${esc(t("set_title"))}</h2><div class="sub">${esc(t("set_hint"))}</div></div>${settingsFileHTML()}</section>
+      <section data-kw="kw_backup"><div><h2>${esc(t("set_title"))}</h2><div class="sub">${esc(t("set_hint"))}</div></div>${settingsFileHTML()}</section>
       <section><div class="btn-row"><button class="ghost" data-act="rerun-setup">${esc(t("rerun_setup"))}</button></div></section>`;
   }
 
@@ -1632,7 +1681,7 @@
     const all = Object.keys(S.changes || {}).map((version) => ({ version, items: S.changes[version] }));
     const now = all.filter((v) => v.version === S.version), older = all.filter((v) => v.version !== S.version);
     if (!now.length && !older.length) return "";
-    return `<section id="about-changes"><div><h2>${esc(t("about_changes_title"))}</h2><div class="sub">${esc(t("about_version", { version: S.version }))}</div></div>
+    return `<section id="about-changes" data-titleonly><div><h2>${esc(t("about_changes_title"))}</h2><div class="sub">${esc(t("about_version", { version: S.version }))}</div></div>
         ${now.length ? `<div class="changes">${changesHTML(now, false)}</div>` : ""}
         ${older.length ? `<details class="changes-older"><summary>${esc(t("about_changes_older"))}</summary><div class="changes">${changesHTML(older, true)}</div></details>` : ""}</section>`;
   }
@@ -1673,6 +1722,22 @@
       ${aboutChangesHTML()}`;
   }
 
+  // 每一頁設定的內容：只是把 HTML 組出來，不會去讀資料、也不會改任何東西（搜尋會把每一頁都組一遍來找）
+  function pageHTML(tab) {
+    if (tab === "history") return historyPage();
+    if (tab === "learn") return learnPage();
+    if (tab === "health") return healthPage();
+    if (tab === "storage") return storagePage();
+    if (tab === "audio") return devicesHTML() + speakHTML() + voiceTuningHTML();
+    if (tab === "quality") return qualityPage();
+    if (tab === "vocab") return vocabPage();
+    if (tab === "screen") return screenPage();
+    if (tab === "overlay") return overlayPage();
+    if (tab === "about") return aboutPage();
+    if (tab === "help") return helpPage();
+    return generalPage();
+  }
+
   function renderSettingsPage() {
     const page = $("settings-page");
     const scroll = page.scrollTop;
@@ -1680,23 +1745,15 @@
     const focus = !active ? "" : active.id ? "#" + active.id : active.dataset.act
       ? `[data-act="${active.dataset.act}"]` + ["key", "value", "code", "q", "tone", "id", "pack", "exe", "work"].filter((k) => active.dataset[k] != null).map((k) => `[data-${k}="${CSS.escape(active.dataset[k])}"]`).join("") : "";
     const typed = [...page.querySelectorAll("input[id]:not([type=range]):not([type=file]), textarea[id]")].map((el) => [el.id, el.value]);
-    if (S.ui.tab === "history") page.innerHTML = historyPage();
-    else if (S.ui.tab === "learn") page.innerHTML = learnPage();
-    else if (S.ui.tab === "health") page.innerHTML = healthPage();
-    else if (S.ui.tab === "storage") page.innerHTML = storagePage();
-    else if (S.ui.tab === "audio") page.innerHTML = devicesHTML() + speakHTML() + voiceTuningHTML();
-    else if (S.ui.tab === "quality") page.innerHTML = qualityPage();
-    else if (S.ui.tab === "vocab") page.innerHTML = vocabPage();
-    else if (S.ui.tab === "screen") page.innerHTML = screenPage();
-    else if (S.ui.tab === "overlay") page.innerHTML = overlayPage();
-    else if (S.ui.tab === "about") page.innerHTML = aboutPage();
-    else if (S.ui.tab === "help") page.innerHTML = helpPage();
-    else page.innerHTML = generalPage();
+    page.innerHTML = pageHTML(S.ui.tab);
+    S.ui.sIndex = null;      // 畫面的內容變了：搜尋用的索引下次要找的時候再重做
+    $("settings-bar").hidden = !searchable(S.ui.tab);
     if (S.ui.tab !== "about" && S.ui.tab !== "help" && S.ui.tab !== "health" && S.ui.tab !== "storage") page.insertAdjacentHTML("beforeend", `<div class="autosave">${ICON.check}<span>${esc(t("autosave"))}</span></div>`);
     typed.forEach(([id, value]) => { const el = $(id); if (el && value && !el.value) el.value = value; });
     page.scrollTop = scroll;
     const again = focus && page.querySelector(focus);
     if (again && !again.disabled) again.focus({ preventScroll: true });
+    sqMark();      // 搜尋跳過來的那一區：重畫完框回去
     paintLevels();
     placeSaved();
     if (S.ui.tab === "overlay" && !S.ui.preview) refreshPreview();
@@ -1704,8 +1761,138 @@
 
   function renderSettings() { renderRail(); renderSettingsPage(); }
 
+  // ---------------------------------------------------------------- 設定頁最上面的搜尋框
+  // 搜尋的對象是「現在畫得出來的每一頁設定」：每一頁照現在的語言組一遍，把每一區（section）的標題和字都收進來，
+  // 所以以後多一頁、多一區、多一個開關，都會自己被搜得到，不用另外登記。
+  // 想讓某一區多幾個同義字（例如「備份」也要找得到匯出、匯入），在那個 <section> 上加 data-kw="某個 i18n 鍵"。
+  const SEARCH_SKIP = ["history", "learn", "help"];      // 對話記錄、學習、說明不是設定：不放搜尋框，也不收進搜尋
+  const SEARCH_MAX = 12;
+  const searchable = (tab) => !SEARCH_SKIP.includes(tab);
+  const fold = (s) => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();      // 大小寫、全形半形、重音符號都不計較
+  function squash(el) {      // 一個元素裡的字，每一段中間補一個空格（標題和說明不會黏在一起）
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), words = [];
+    while (walker.nextNode()) words.push(walker.currentNode.nodeValue.replace(/\s+/g, " ").trim());
+    return words.filter(Boolean).join(" ");
+  }
+
+  function sectionTitle(sec) {      // 一區的名字：標題；沒有標題的區，用裡面第一個開關的字或第一顆按鈕的字
+    const label = sec.querySelector("h2") || sec.querySelector(".setting-row > div > div") || sec.querySelector("button");
+    return label ? squash(label) : "";
+  }
+
+  function pageForIndex(tab) {      // 還沒載入的資料（聲音裝置、螢幕）先用空的頂著，每一區的標題才畫得出來、搜尋得到；畫完就還回去
+    const keep = { devices: S.ui.devices, screens: S.ui.screens };
+    if (!S.ui.devices) S.ui.devices = { ok: true, speakers: [], microphones: [] };
+    if (!S.ui.screens) S.ui.screens = { monitors: [{ left: 0, top: 0, width: 1920, height: 1080 }], monitor: 0, rect: [0, 0, 480, 160], min: [240, 110] };
+    try { return pageHTML(tab); } finally { S.ui.devices = keep.devices; S.ui.screens = keep.screens; }
+  }
+
+  function settingsIndex() {
+    const lang = S.cfg.ui_lang;
+    if (S.ui.sIndex && S.ui.sIndex.lang === lang) return S.ui.sIndex.items;
+    const tpl = document.createElement("template"), items = [];
+    for (const [tab, navKey] of TABS) {
+      if (!searchable(tab)) continue;
+      const where = t(navKey);
+      items.push({ tab, n: -1, title: where, where, fold: fold(where), titleFold: fold(where), rows: [] });      // 整頁也收進去：打「儲存空間」直接開那一頁
+      tpl.innerHTML = pageForIndex(tab);
+      tpl.content.querySelectorAll("option, script, style").forEach((el) => el.remove());      // 下拉選單裡一長串語言名稱不算
+      tpl.content.querySelectorAll("section").forEach((sec, n) => {
+        const title = sectionTitle(sec);
+        if (!title) return;
+        const kw = sec.dataset.kw ? t(sec.dataset.kw) : "";
+        const sub = sec.querySelector(".sub");
+        const rows = [...sec.querySelectorAll(".setting-row, .note, .dnote, .sub, .field, .btn-row button")].map(squash).filter(Boolean);
+        const body = sec.hasAttribute("data-titleonly") ? `${title} ${sub ? squash(sub) : ""}` : squash(sec);      // 每一版改了什麼：只找標題，內文是更新紀錄，不是設定
+        items.push({ tab, n, title, where, sub: sub ? squash(sub) : "", fold: fold(`${body} ${kw}`), titleFold: fold(`${title} ${kw}`), rows: rows.map((text) => ({ text, fold: fold(text) })) });
+      });
+    }
+    S.ui.sIndex = { lang, items };
+    return items;
+  }
+
+  function settingsSearch(q) {      // 每個字都要找得到（不分順序）；整頁的名字排最前面，其次是標題對得上的，最後是內文有提到的
+    const tokens = fold(q).split(" ").filter(Boolean);
+    if (!tokens.length) return { tokens, hits: [] };
+    const hits = [];
+    settingsIndex().forEach((it, at) => {
+      if (!tokens.every((k) => it.fold.includes(k))) return;
+      const score = (it.n < 0 ? 7 : 0) + (tokens.every((k) => it.titleFold.includes(k)) ? 6 : 0) + (it.titleFold.startsWith(tokens[0]) ? 1 : 0);
+      hits.push({ it, at, score });
+    });
+    hits.sort((a, b) => b.score - a.score || a.at - b.at);
+    return { tokens, hits: hits.map((h) => h.it) };
+  }
+
+  function sqRender() {
+    const input = $("settings-q"), box = $("sq-results"), page = $("settings-page"), q = input.value.trim();
+    document.querySelector(".sq-clear").hidden = !input.value;
+    if (!q) { box.hidden = true; box.innerHTML = ""; page.inert = false; return; }
+    const { tokens, hits } = settingsSearch(q), shown = hits.slice(0, SEARCH_MAX);
+    const clip = (s) => (s.length > 90 ? s.slice(0, 88) + "…" : s);
+    const snippet = (it) => {      // 標題以外對上了的那一句；標題就對上了就放這一區的說明
+      if (it.n < 0) return "";
+      const hit = it.rows.find((r) => tokens.every((k) => r.fold.includes(k)));
+      return clip(hit ? hit.text : tokens.every((k) => it.titleFold.includes(k)) ? it.sub : "");
+    };
+    const item = (it) => { const sn = snippet(it); return `<li><button class="sq-item" data-act="sq-go" data-tab="${it.tab}" data-n="${it.n}">
+        <span class="sq-title">${esc(it.title)}</span>
+        <span class="sq-meta"><b>${esc(it.n < 0 ? t("sq_page") : it.where)}</b>${sn ? " · " + esc(sn) : ""}</span></button></li>`; };
+    box.innerHTML = `<div class="sq-count" role="status">${esc(hits.length ? t("sq_count", { n: hits.length }) : "")}</div>` + (hits.length
+      ? `<ul class="sq-list">${shown.map(item).join("")}</ul>${hits.length > shown.length ? `<div class="dnote">${esc(t("sq_more", { n: hits.length - shown.length }))}</div>` : ""}`
+      : `<div class="hist-none">${esc(t("sq_none", { q }))}</div>`);
+    box.hidden = false;
+    box.scrollTop = 0;
+    page.inert = true;      // 結果開著的時候，底下那一頁不能按、Tab 也不會跑進去
+  }
+
+  function sqReset() {      // 換頁、離開設定、按清除：搜尋框清掉，結果收起來
+    const input = $("settings-q");
+    if (!input.value && $("sq-results").hidden) return;
+    input.value = "";
+    sqRender();
+  }
+
+  // 搜尋跳過去：用「這一區的名字」在現在這一頁找（不用第幾區：資料還在載入的時候，畫面上的區比索引裡少）。
+  // 資料載入完整頁會重畫，所以記在 S.ui.found 裡，每次重畫完再框回去；找到的第一次才捲過去、把焦點放進去。
+  function sqJump(it, q) {
+    const tokens = fold(q).split(" ").filter(Boolean);
+    S.ui.found = { tab: it.tab, title: it.title, tokens: tokens.every((k) => it.titleFold.includes(k)) ? [] : tokens, until: Date.now() + 8000, shownAt: 0, timer: 0 };      // 標題就對上了：框整區；是內文對上的：框那一列
+    sqMark();
+  }
+
+  function sqMark() {
+    const f = S.ui.found;
+    if (!f || f.tab !== S.ui.tab || Date.now() > f.until) return;
+    const page = $("settings-page"), sec = [...page.querySelectorAll("section")].find((el) => sectionTitle(el) === f.title);
+    if (!sec) return;      // 這一區還沒畫出來（資料還在載入）：等下一次重畫
+    const first = !f.shownAt;
+    if (first) f.shownAt = Date.now();
+    const age = Date.now() - f.shownAt;
+    if (age > 2600) return;      // 框夠久了
+    const row = f.tokens.length ? [...sec.querySelectorAll(".setting-row, .field")].find((el) => f.tokens.every((k) => fold(squash(el)).includes(k))) : null;
+    const target = row || sec;
+    target.classList.add("found");
+    clearTimeout(f.timer);
+    f.timer = setTimeout(() => page.querySelectorAll(".found").forEach((el) => el.classList.remove("found")), 2600 - age);
+    if (age < 1200) {      // 剛跳過來的一秒內（包括資料載入完重畫的那一下）：把這一區的上緣對到最上面；那一列會掉出畫面就改成讓它剛好看得到
+      const box = page.getBoundingClientRect(), sticky = page.querySelector(".ov-preview");      // 浮動留言那一頁有一張預覽圖：捲過它之後會黏在最上面，目標在它後面就要多讓開
+      const cover = sticky && (sticky.compareDocumentPosition(sec) & Node.DOCUMENT_POSITION_FOLLOWING) ? (parseFloat(getComputedStyle(page).paddingTop) || 0) + sticky.offsetHeight + 18 : 16;      // 黏住的時候它離上緣還有一個內距
+      let delta = sec.getBoundingClientRect().top - (box.top + cover);
+      if (row && row.getBoundingClientRect().bottom - delta > box.bottom - 24) delta = row.getBoundingClientRect().bottom - (box.bottom - 24);
+      page.scrollTop += delta;
+    }
+    if (first) {
+      const control = [...target.querySelectorAll(FOCUSABLE)].find(canFocus)
+        || [...page.querySelectorAll(FOCUSABLE)].find((el) => canFocus(el) && (target.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING));      // 這一區只有字：停在後面第一個可以按的東西，免得焦點掉回最上面
+      if (control) control.focus({ preventScroll: true });
+    }
+  }
+
   function openTab(tab) {
     const wasAudio = S.ui.tab === "audio";
+    sqReset();
+    S.ui.found = null;
     S.ui.tab = tab;
     renderSettings();
     renderOverlay();      // 出錯畫面的蓋板在「回報問題」那一頁會收起來，離開那一頁要再蓋回去
@@ -1733,7 +1920,7 @@
         <div class="bar"><span style="width:${percent()}%"></span></div>`;
     } else if (S.phase === "need_download") {
       el.hidden = false;
-      el.innerHTML = `<div class="line"><b>${esc(S.detail.error ? t("dl_error", { error: S.detail.error }) : t("dl_need", { gb: gb(S.detail.total_mb) }))}</b>
+      el.innerHTML = `<div class="line"><b${S.detail.error ? ` title="${esc(S.detail.error)}"` : ""}>${esc(S.detail.error ? t("dl_error", { error: why(S.detail.error) }) : t("dl_need", { gb: gb(S.detail.total_mb) }))}</b>
         <button class="link" data-act="download">${esc(S.detail.error ? t("retry") : t("dl_start"))}</button></div>`;
     } else if (S.phase === "loading" || S.phase === "starting") {
       el.hidden = false;
@@ -1867,13 +2054,13 @@
             <div class="btn-row center"><button class="ghost" data-act="update-cancel">${esc(t("cancel"))}</button></div>` : "");
       }
     } else if (S.phase === "error" && !(S.view === "settings" && S.ui.tab === "health")) {      // 在「回報問題」那一頁時蓋板先收起來，才按得到那一頁
-      html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.code ? t("err_" + d.code) : (d.message || ""))}</p>` +
+      html = `<h2>${esc(t("err_title"))}</h2><p>${esc(d.code ? t("err_" + d.code) : t("err_unknown"))}</p>${rawFold("engine", d.message)}` +
         (d.log ? `<p>${esc(t("err_log", { path: d.log }))}</p>` : "") +
         `<div class="btn-row center"><button class="primary" data-act="retry">${esc(t("retry"))}</button>
           <button class="ghost" data-act="err-report">${esc(t("rep_title"))}</button>
           ${d.log ? `<button class="ghost" data-act="err-logs">${esc(t("sto_open"))}</button>` : ""}</div>`;
     } else if (S.view !== "wizard" && S.phase === "need_download") {
-      html = `<h2>${esc(t("st_need_download"))}</h2><p>${esc(d.error ? t("dl_error", { error: d.error }) : t("dl_need", { gb: gb(d.total_mb) }))}</p>
+      html = `<h2>${esc(t("st_need_download"))}</h2><p>${esc(d.error ? t("dl_error", { error: why(d.error) }) : t("dl_need", { gb: gb(d.total_mb) }))}</p>${rawFold("download", d.error)}
         <button class="primary" data-act="download">${esc(d.error ? t("retry") : t("dl_start"))}</button>` +
         (S.cfg.quality !== "standard" && S.mode.quality === "high" ? `<button class="link" data-act="quality" data-q="standard">${esc(t("q_standard"))}</button>` : "");
     } else if (S.view !== "wizard" && S.phase === "downloading") {
@@ -1897,6 +2084,7 @@
   function showView(view) {
     S.view = view;
     app.dataset.view = view;
+    if (view !== "settings") sqReset();
     renderRail();
     if (view === "settings") { renderSettingsPage(); tabOpened(); }
     if (view === "wizard") renderWizard();
@@ -2086,14 +2274,14 @@
     "spk-open": () => { S.ui.tab = "audio"; setView("settings"); setTimeout(() => { const el = document.querySelector('[data-key="tell_speakers"]'); if (el) el.scrollIntoView({ block: "center" }); }, 60); },
     "lib-export": async () => {
       const r = await post("/api/library", { export: true });
-      toast(r.ok ? t("lib_exported", r) : t("lib_export_failed", { error: r.error || "" }), 9000, r.ok ? "info" : "warn");
+      toast(r.ok ? t("lib_exported", r) : t("lib_export_failed", { error: why(r.error) }), 9000, r.ok ? "info" : "warn", r.ok ? "" : r.error);
     },
     "lib-import": () => { const f = $("lib-file"); f.value = ""; f.click(); },
     "mem-range": (el) => { S.ui.memRange = el.dataset.value; renderSettingsPage(); const b = document.querySelector(`[data-act="mem-range"][data-value="${el.dataset.value}"]`); if (b) b.focus(); },
     "mem-with-mine": () => { S.ui.memWithMine = !S.ui.memWithMine; renderSettingsPage(); const b = document.querySelector('[data-act="mem-with-mine"]'); if (b) b.focus(); },
     "mem-export": async () => {
       const r = await post("/api/memory", { action: "export", range: S.ui.memRange || "2h", with_mine: !!S.ui.memWithMine });
-      toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: r.error || "" })), 9000, r.ok ? "info" : "warn");
+      toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: why(r.error) })), 9000, r.ok ? "info" : "warn", r.ok || r.error === "empty" ? "" : r.error);
     },
     "mem-import": () => { const f = $("mem-file"); f.value = ""; f.click(); },
     "sub-import": () => { const f = $("sub-file"); f.value = ""; f.click(); },
@@ -2118,7 +2306,7 @@
       const r = await post("/api/memory", { action: "export", work: el.dataset.work, title, with_mine: !!S.ui.memWithMine });
       S.ui.workExport = "";
       renderSettingsPage();
-      toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: r.error || "" })), 9000, r.ok ? "info" : "warn");
+      toast(r.ok ? t("mem_exported", r) : (r.error === "empty" ? t("mem_export_empty") : t("lib_export_failed", { error: why(r.error) })), 9000, r.ok ? "info" : "warn", r.ok || r.error === "empty" ? "" : r.error);
     },
     "work-own": (el) => post("/api/memory", { action: "own_only", work: el.dataset.work, on: el.getAttribute("aria-pressed") !== "true" }),
     "work-forget": (el) => post("/api/memory", { action: "forget_work", work: el.dataset.work }),
@@ -2176,7 +2364,7 @@
     "rerun-setup": () => { S.ui.wz = 0; setView("wizard"); },
     "set-export": async () => {
       const r = await post("/api/settings", { export: true });
-      toast(r && r.ok ? t("set_exported", r) : t("set_export_failed", { error: (r && r.error) || "" }), 9000, r && r.ok ? "info" : "warn");
+      toast(r && r.ok ? t("set_exported", r) : t("set_export_failed", { error: why(r && r.error) }), 9000, r && r.ok ? "info" : "warn", r && r.ok ? "" : r && r.error);
     },
     "set-import": () => { const f = $("set-file"); f.value = ""; f.click(); },
     "set-reset": () => { S.ui.resetAsk = true; renderSettingsPage(); const b = document.querySelector('[data-act="set-reset-no"]'); if (b) b.focus(); },
@@ -2231,7 +2419,7 @@
     },
     "report-save": async () => {
       const r = await post("/api/report", { save: true });
-      if (!r || !r.ok) { toast(t(r && r.error === "report_none" ? "n_report_none" : "n_report_failed", { error: (r && r.detail) || "" }), 8000, "warn"); return; }
+      if (!r || !r.ok) { toast(t(r && r.error === "report_none" ? "n_report_none" : "n_report_failed", { error: why(r && r.detail) }), 8000, "warn", r && r.detail); return; }
       if (S.ui.report) Object.assign(S.ui.report, { saved: r.name, folder: r.folder });
       renderSettingsPage();
       const note = $("rep-saved");
@@ -2244,7 +2432,7 @@
     "friend-lang": (el) => { S.ui.friendLang = el.dataset.code; S.ui.friendSaved = null; renderSettingsPage(); },
     "friend-save": async () => {
       const r = await post("/api/help", { friend: S.ui.friendLang || (S.ui.help || {}).friend_lang || S.cfg.ui_lang });
-      if (!r || !r.ok) { toast(t("n_help_failed", { error: (r && r.detail) || "" }), 8000, "warn"); return; }
+      if (!r || !r.ok) { toast(t("n_help_failed", { error: why(r && r.detail) }), 8000, "warn", r && r.detail); return; }
       S.ui.friendSaved = r;
       renderSettingsPage();
       const note = $("help-saved");
@@ -2264,7 +2452,7 @@
     "hist-export": async () => {
       const r = await post("/api/history", { export: true, q: (S.ui.hist && S.ui.hist.q) || "" });
       if (r && r.ok) toast(t("hist_exported", { n: r.count, name: r.name }), 7000);
-      else toast(t("hist_export_failed", { error: (r && r.error) || "" }), 8000, "error");
+      else toast(t("hist_export_failed", { error: why(r && r.error) }), 8000, "error", r && r.error);
     },
     "hist-clear": () => { S.ui.histConfirm = true; paintHistory(); const b = document.querySelector('[data-act="hist-clear-no"]'); if (b) b.focus(); },
     "hist-clear-no": () => { S.ui.histConfirm = false; paintHistory(); const b = document.querySelector('[data-act="hist-clear"]'); if (b) b.focus(); },
@@ -2272,10 +2460,25 @@
       const r = await post("/api/history", { clear: true });
       S.ui.histConfirm = false;
       if (r && r.ok) toast(t("hist_cleared", { n: r.removed }), 5000);
-      else toast(t("hist_clear_failed", { error: (r && r.error) || "" }), 8000, "error");
+      else toast(t("hist_clear_failed", { error: why(r && r.error) }), 8000, "error", r && r.error);
       if (S.ui.hist) S.ui.hist.q = "";
       const input = $("hist-q"); if (input) input.value = "";
       loadHistory();
+    },
+    "sq-go": (el) => {      // 搜尋結果：開那一頁、跳到那一區
+      const q = $("settings-q").value, n = Number(el.dataset.n);
+      const it = settingsIndex().find((x) => x.tab === el.dataset.tab && x.n === n);
+      sqReset();
+      openTab(el.dataset.tab);
+      if (it && n >= 0) sqJump(it, q);
+    },
+    "sq-clear": () => { sqReset(); $("settings-q").focus(); },
+    "toast-detail": () => {      // 提示上的「詳細」：把電腦回報的原文攤開（看久一點）
+      const el = $("toast");
+      el.innerHTML = `<div>${esc((el.querySelector("span") || {}).textContent)}</div><pre class="raw" tabindex="0">${esc(S.ui.toastRaw)}</pre>`;
+      el.querySelector("pre").focus();      // 按鈕被換掉了，焦點接到原文上，鍵盤才不會掉回最上面
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.hidden = true; }, 30000);
     },
     "hotkey-set": (el) => hotkeyRecord(S.ui.hotkeyRec === el.dataset.name ? null : el.dataset.name),
     "hotkey-clear": (el) => saveHotkey(el.dataset.name, ""),
@@ -2283,7 +2486,7 @@
     "phrase-add": async () => { const el = $("phrase-new"); const text = el ? el.value.trim() : ""; if (text) await phraseDo({ action: "add", text }); },
     "phrase-starters": () => phraseDo({ action: "starters" }),
     "phrase-remove": (el) => phraseDo({ action: "remove", id: el.dataset.id }),
-    "quick-try": async () => { const r = await post("/api/quick_input"); if (r && !r.ok && S.phase === "ready") toast(t("n_save_failed", { error: "" }), 5000, "warn"); },
+    "quick-try": async () => { const r = await post("/api/quick_input"); if (r && !r.ok && S.phase === "ready") toast(t("n_save_failed", { error: why("") }), 5000, "warn"); },
     "wz-begin": () => { if (S.phase === "need_download") post("/api/download"); wizardGo(1); },
     "wz-next": () => wizardGo(S.ui.wz + 1),
     "wz-prev": () => wizardGo(S.ui.wz - 1),
@@ -2454,6 +2657,7 @@
     return { [el.dataset.change]: el.dataset.sub ? { [el.dataset.sub]: value } : value };
   }
   document.addEventListener("input", (e) => {
+    if (e.target.id === "settings-q") { sqRender(); return; }      // 設定的搜尋：索引放在記憶體裡，打一個字就找一次
     if (e.target.id === "hist-q") {      // 歷史的搜尋：邊打邊找，停一下才查（摘要也一起找）
       const q = e.target.value.trim();
       clearTimeout(histTimer);
@@ -2480,14 +2684,14 @@
     if (e.target.dataset && e.target.dataset.speaker) {      // 幫說話者取名字：改完（離開輸入框或按 Enter）就存
       const input = e.target;
       post("/api/speakers", { action: "rename", id: Number(input.dataset.speaker), name: input.value }).then((r) => {
-        if (r && r.ok) { input.value = r.name; flashSaved("#" + input.id); } else toast(t("n_save_failed", { error: "" }), 6000, "error");
+        if (r && r.ok) { input.value = r.name; flashSaved("#" + input.id); } else toast(t("n_save_failed", { error: why("") }), 6000, "error");
       });
       return;
     }
     if (e.target.dataset && e.target.dataset.spkLang) {      // 這個人說的語言：主語言、副語言一起送，程式整理過再照回來的顯示
       const id = Number(e.target.dataset.spkLang), main = $("spk-lang-" + id), second = $("spk-lang2-" + id), changed = e.target;
       post("/api/speakers", { action: "language", id, lang: main ? main.value : "", lang2: second ? second.value : "" }).then((r) => {
-        if (!r || !r.ok) { toast(t("n_save_failed", { error: "" }), 6000, "error"); return; }
+        if (!r || !r.ok) { toast(t("n_save_failed", { error: why("") }), 6000, "error"); return; }
         if (main) main.value = r.lang;
         if (second) { second.value = r.lang2; second.disabled = !r.lang; }
         flashSaved("#" + changed.id);
@@ -2593,6 +2797,19 @@
     mapKeyTimer = setTimeout(() => { S.ui.mapDrag = false; mapPlace(S.ui.screens.rect, true); }, 500);
   });
 
+  $("settings-q").addEventListener("keydown", (e) => {      // 搜尋框：Esc 清掉；往下鍵跳進結果；Enter 開第一個
+    const first = $("sq-results").hidden ? null : $("sq-results").querySelector(".sq-item");
+    if (e.key === "Escape" && e.target.value) { e.preventDefault(); e.stopPropagation(); sqReset(); }
+    else if (e.key === "ArrowDown" && first) { e.preventDefault(); first.focus(); }
+    else if (e.key === "Enter" && first) { e.preventDefault(); first.click(); }
+  });
+  $("sq-results").addEventListener("keydown", (e) => {      // 結果之間用上下鍵走；Esc 回到搜尋框
+    const items = [...$("sq-results").querySelectorAll(".sq-item")], at = items.indexOf(document.activeElement);
+    if (at < 0) return;
+    if (e.key === "ArrowDown" && items[at + 1]) { e.preventDefault(); items[at + 1].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); (items[at - 1] || $("settings-q")).focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); $("settings-q").focus(); }
+  });
   document.addEventListener("keydown", (e) => {      // 句庫的輸入框：Enter 就加進去
     if (e.key === "Enter" && e.target && e.target.id === "phrase-new") { e.preventDefault(); const text = e.target.value.trim(); if (text) phraseDo({ action: "add", text }); }
   });
@@ -2640,7 +2857,7 @@
         flashSaved("#layout-" + r.index);
       }
       else if (r && r.error === "full") toast(t("lay_full", { max: 5 }), 7000, "warn");
-      else toast(t("n_save_failed", { error: "" }), 8000, "error");
+      else toast(t("n_save_failed", { error: why("") }), 8000, "error");
     } else if (form.id === "gloss-form") {
       const src = form.elements.src.value.trim(), dst = form.elements.dst.value.trim();
       if (!src || !dst) { (src ? form.elements.dst : form.elements.src).focus(); return; }
@@ -2691,7 +2908,10 @@
       renderSources();
       if (before.on !== d.on || before.error !== d.error || before.quiet !== d.quiet || before.lost !== d.lost) healthSoon();
       if (d.key === "mic" && (d.quiet || "") !== (before.quiet || "") && S.view === "settings" && S.ui.tab === "audio") renderSettingsPage();
-      if (d.error && d.error !== before.error && !d.on) toast(t("n_source_error", { name: t("src_" + d.key), error: d.error }), 7000, "error");
+      if (d.error && d.error !== before.error && !d.on) {
+        const audioKey = d.key === "mic" || d.key === "listen";
+        if (!(audioKey && S.view === "main")) toast(t("n_source_error", { name: t("src_" + d.key), error: why(d.error, audioKey) }), 7000, "error", d.error);      // 主畫面上已經有提醒了，不再疊一則
+      }
     },
     message: (m) => {
       const i = S.messages.findIndex((x) => x.id === m.id);
@@ -2781,7 +3001,11 @@
       } else S.ui.find = d;      // 換了麥克風：留在畫面上，可以按「換回去」
       renderMicViews();
     },
-    notice: (d) => toast(t("n_" + d.code, d.lang ? { ...d, lang: langName(d.lang) } : d), 7000, /failed|small/.test(d.code) ? "warn" : "info"),
+    notice: (d) => {
+      const params = d.lang ? { ...d, lang: langName(d.lang) } : { ...d };
+      if (d.error) params.error = why(d.error);      // 電腦回報的原文不直接顯示：一句白話，原文在「詳細」裡
+      toast(t("n_" + d.code, params), 7000, /failed|small/.test(d.code) ? "warn" : "info", d.error);
+    },
     overlay: (d) => {
       const before = S.overlay || {};
       S.overlay = d;

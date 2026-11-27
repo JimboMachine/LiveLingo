@@ -5,6 +5,8 @@
 只是「錄下電腦本來就在播的聲音」，不會碰 Discord 或遊戲的程式。
 """
 
+import json
+import os
 import queue
 import sys
 import threading
@@ -117,17 +119,76 @@ def portaudio_input(sd, wanted: str | None):
     raise RuntimeError("no microphone found")
 
 
+class Ways:
+    """記住「這支麥克風要用第二種收音方式」，下次開麥克風就直接用第二種，不用每次先失敗一次再換。
+
+    有些麥克風（例如 RØDE NT-USB Mini）第一種方式（soundcard）一定打不開，第二種（PortAudio）收得很好。
+    只有第二種方式真的收到聲音，才會記下那支麥克風；記的東西不會永遠有效：
+    超過 KEEP_DAYS 天、或是程式換了版本，就再讓第一種試一次（Windows 或驅動程式更新過，可能已經好了）。
+    只存裝置名稱和日期（mic_ways.json），不存任何聲音。"""
+
+    KEEP_DAYS = 30
+
+    def __init__(self, path, version: str = "", clock=time.time):
+        self.path = path
+        self.version = version
+        self.clock = clock
+        self._lock = threading.Lock()
+        self.second: dict[str, dict] = {}      # 裝置名稱 → {"at": 記下的時間, "version": 程式版本}
+        try:
+            saved = json.loads(self.path.read_text(encoding="utf-8"))
+            for name, row in (saved.get("second") or {}).items():
+                if isinstance(name, str) and isinstance(row, dict) and isinstance(row.get("at"), (int, float)):
+                    self.second[name] = {"at": float(row["at"]), "version": str(row.get("version") or "")}
+        except Exception:  # noqa: BLE001  沒有這個檔案或壞掉了：當作什麼都沒記過
+            pass
+
+    def prefers_second(self, name: str) -> bool:
+        with self._lock:
+            row = self.second.get(name)
+            return bool(name and row and row["version"] == self.version
+                        and 0 <= self.clock() - row["at"] < self.KEEP_DAYS * 86400)
+
+    def remember(self, name: str) -> None:
+        if not name:
+            return
+        with self._lock:
+            self.second[name] = {"at": self.clock(), "version": self.version}
+            self._save()
+
+    def forget(self, name: str) -> None:
+        with self._lock:
+            if self.second.pop(name, None) is not None:
+                self._save()
+
+    def _save(self) -> None:
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_name(self.path.name + ".tmp")
+            tmp.write_text(json.dumps({"second": self.second}, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(tmp, self.path)
+        except OSError as ex:      # 存不進去也沒關係：下次再失敗一次、再記一次就好
+            log(f"mic_ways.json not saved: {ex!r}")
+
+
+class _Remembered(Exception):
+    """這支麥克風之前第一種方式一定打不開、第二種才行：這次直接用第二種（Capture.run 接住）。"""
+
+
 class Capture(threading.Thread):
-    def __init__(self, kind: str, on_error=None, device: str | None = None, on_open=None):
+    def __init__(self, kind: str, on_error=None, device: str | None = None, on_open=None, ways: Ways | None = None):
         super().__init__(daemon=True)
         self.kind = kind                    # "loopback" 或 "mic"
         self.device = device                # 裝置名稱（或名稱的一部分）；None = 系統預設裝置
         self.on_error = on_error or (lambda kind, ex: None)
         self.on_open = on_open or (lambda kind, name: None)   # 成功開始收音時通知（帶裝置名稱）
+        self.ways = ways                    # 記住哪支麥克風要用第二種方式（None = 不記）
         self.q: queue.Queue = queue.Queue(maxsize=600)   # 最多積 60 秒
         self.device_name = ""
         self.backend = ""                   # 實際用哪一種方式收到聲音：soundcard 或 portaudio
         self.delivered = False              # 有沒有收到過聲音資料
+        self._sc_name = ""                  # 第一種方式選到的裝置名稱（記憶的鑰匙；第二種方式會把 device_name 換成自己的名字）
+        self._remembered = False            # 這次是照記憶直接用第二種
         self._halt = threading.Event()
 
     def stop(self):
@@ -162,10 +223,12 @@ class Capture(threading.Thread):
             except queue.Empty:
                 pass
 
-    def _run_soundcard(self) -> None:
+    def _run_soundcard(self, use_memory: bool = True) -> None:
         warnings.filterwarnings("ignore", message=".*data discontinuity.*")
         dev = self._open()
-        self.device_name = getattr(dev, "name", "")
+        self.device_name = self._sc_name = getattr(dev, "name", "")
+        if use_memory and self.kind == "mic" and self.ways is not None and self.ways.prefers_second(self._sc_name):
+            raise _Remembered()
         with dev.recorder(samplerate=SR, channels=1, blocksize=BLOCK) as rec:
             self.backend = "soundcard"
             self.on_open(self.kind, self.device_name)
@@ -187,13 +250,22 @@ class Capture(threading.Thread):
             self.device_name = name
             self.backend = "portaudio"
             self.on_open(self.kind, name)
-            while not self._halt.wait(0.2):
-                pass
+            learned = self._remembered or not self._sc_name or self.ways is None
+            while True:
+                if not learned and self.delivered:      # 第二種真的收到聲音了：記住這支麥克風，下次直接用第二種
+                    learned = True
+                    self.ways.remember(self._sc_name)
+                if self._halt.wait(0.2):
+                    break
 
     def run(self):
+        first = ""
         try:
             self._run_soundcard()
             return
+        except _Remembered:
+            self._remembered = True
+            log(f"mic ({self._sc_name}): going straight to the second way, as remembered")
         except Exception as ex:  # noqa: BLE001
             if self._halt.is_set():
                 return
@@ -204,11 +276,24 @@ class Capture(threading.Thread):
                 return
         try:
             self._run_portaudio()
+            return
         except Exception as ex:  # noqa: BLE001
-            if not self._halt.is_set():
-                second = describe(ex)
-                log(f"mic capture, second way, failed too: {second}")
-                self.on_error(self.kind, RuntimeError(f"{first} / {second}"))
+            if self._halt.is_set():
+                return
+            second = describe(ex)
+            log(f"mic capture, second way, failed too: {second}")
+        if self._remembered:      # 記住的做法這次行不通（驅動程式或 Windows 更新過）：忘掉它，讓第一種再試一次
+            self.ways.forget(self._sc_name)
+            self._remembered = False
+            try:
+                self._run_soundcard(use_memory=False)
+                return
+            except Exception as ex:  # noqa: BLE001
+                if self._halt.is_set():
+                    return
+                first = describe(ex)
+                log(f"mic capture, first way again after forgetting, failed: {first}")
+        self.on_error(self.kind, RuntimeError(f"{first} / {second}" if first else second))
 
 
 class ArrayCapture(threading.Thread):

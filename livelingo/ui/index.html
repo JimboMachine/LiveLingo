@@ -56,7 +56,20 @@
 
   <!-- 設定 -->
   <section id="view-settings" class="view">
-    <main class="page" id="settings-page"></main>
+    <!-- 每一頁設定最上面的搜尋框：打幾個字，列出哪一頁的哪一區有，按下去就跳過去 -->
+    <div class="settings-bar" id="settings-bar" role="search">
+      <div class="sq-field">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input type="search" id="settings-q" autocomplete="off" spellcheck="false" maxlength="60" data-i18n-label="sq_label" data-i18n-ph="sq_ph">
+        <button class="icon-btn sq-clear" data-act="sq-clear" data-i18n-label="sq_clear" hidden>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="settings-body">
+      <main class="page" id="settings-page"></main>
+      <div class="sq-results" id="sq-results" hidden></div>
+    </div>
   </section>
 
   <!-- 第一次設定 -->
