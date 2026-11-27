@@ -284,6 +284,9 @@
     renderScenarios();
     renderNameRow();
     renderAbbrRow();
+    renderVoiceNameRow();
+    renderSlowRow();
+    renderPausedRow();
     renderPrivate();
     const row = $("region-row");
     const live = regions().filter((x) => x.on);
@@ -433,7 +436,7 @@
       body += m.partial ? `<div class="text streaming" id="part-${m.id}">${esc(m.partial)}</div>` : `<div class="text pending" id="part-${m.id}">${esc(t("translating"))}</div>`;
     } else {
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
-      body += unsure + `<div class="text">${esc(m.translated)}</div>`;
+      body += unsure + `<div class="text">${toneHTML(m)}${esc(m.translated)}</div>`;
       if (m.notes && m.notes.length && S.cfg.slang_notes) body += `<div class="notes">${m.notes.map(([w, meaning]) => `<span class="note-item"><b>${esc(w)}</b> ${esc(meaning)}</span>`).join("")}</div>`;
       if (m.players && m.players.length) body += `<div class="players">${m.players.map(([pid, note]) => `<span class="player-item"><b>${esc(pid)}</b> ${esc(note)}</span>`).join("")}</div>`;      // 玩家備註（2.16.0）
       if (m.lost && m.lost.length) body += `<div class="lost">${ICON.info}<span>${esc(t("numbers_lost", { numbers: m.lost.join(" · ") }))}</span></div>`;
@@ -447,6 +450,14 @@
       body += repliesHTML(m.id) + wordsHTML(m);
     }
     return body;
+  }
+
+  // 語氣小圖示（2.18.0）：對方在笑、生氣、開玩笑、難過
+  const TONE_ICON = { laugh: "😄", joke: "😜", angry: "😠", sad: "😢" };
+  function toneHTML(m) {
+    if (!m.tone || !TONE_ICON[m.tone] || !S.cfg.tone_icons) return "";
+    const label = t("tf_" + m.tone);
+    return `<span class="tone" role="img" title="${esc(label)}" aria-label="${esc(label)}">${TONE_ICON[m.tone]}</span>`;
   }
 
   // 語言學習：對方的句子下面標一兩個生字和意思，按「收進單字本」或「我會了」（以後不再標）
@@ -651,6 +662,8 @@
         ${S.cfg.speak_heard ? `${switchRow("speak_heard_screen", t("heard_screen"))}
         <div class="setting-row choice"><div>${esc(t("heard_device"))}</div>
           <select id="heard-device" aria-label="${esc(t("heard_device"))}">${list.map(([v, n]) => `<option value="${esc(v)}" ${v === chosen ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
+        ${choiceRow("ear_split", t("ear_title"), [["off", t("ear_off")], ["left", t("ear_left")], ["right", t("ear_right")]])}
+        <div class="dnote">${esc(t("ear_desc"))}</div>
         <div class="dnote">${esc(t("heard_echo"))}</div>${status}` : ""}
       </section>`;
   }
@@ -744,6 +757,23 @@
         ${on ? `<div class="note warn">${ICON.info}<span>${esc(t("cs2_warn"))}</span></div>
           ${choiceRow("chat_send_open", t("cs2_open"), [["enter", "Enter"], ["slash", "/"], ["t", "T"], ["none", t("cs2_open_none")]])}
           ${switchRow("chat_send_enter", t("cs2_enter"))}` : ""}</section>`;
+  }
+  // 語音小幫手（2.18.0）：降噪、自動選設定、語氣圖示、語音指令、自我介紹、講太快提醒
+  function voiceHelpHTML() {
+    const picked = Number(S.cfg.speech_picked || 0);
+    const cmds = (S.voiceCmds || {})[S.cfg.ui_lang] || (S.voiceCmds || {}).en || {};
+    const cmdList = ["pause", "resume", "again", "clear", "overlay", "mark", "copy"].filter((c) => cmds[c])
+      .map((c) => `<li><b>「${esc(cmds[c])}」</b> ${esc(t("vc_" + c))}</li>`).join("");
+    return `<section id="voice-help-section"><div><h2>${esc(t("vh_title"))}</h2><div class="sub">${esc(t("vh_hint"))}</div></div>
+      ${switchRow("denoise", t("dn_title"), t("dn_desc"))}
+      ${switchRow("speech_autopick", t("sp_title"), t("sp_desc"))}
+      ${S.cfg.speech_autopick ? `<div class="setting-row"><div><div class="desc">${esc(picked ? t("sp_result", { s: picked.toFixed(2) }) : t("sp_none"))}</div></div>
+        <button class="ghost" data-act="speed-pick">${esc(t("sp_again"))}</button></div>` : ""}
+      ${switchRow("tone_icons", t("tn_title"), t("tn_desc"))}
+      ${switchRow("voice_commands", t("vc_title"), t("vc_desc"))}
+      ${S.cfg.voice_commands ? `<ul class="vc-list">${cmdList}</ul>` : ""}
+      ${switchRow("intro_suggest", t("vn_title"), t("vn_desc"))}
+      ${switchRow("slow_tip", t("sl_title"), t("sl_desc"))}</section>`;
   }
   function voiceFixHTML() {
     const zh = [S.cfg.their_lang, S.cfg.my_lang].some((l) => String(l || "").startsWith("zh"));
@@ -1909,7 +1939,7 @@
   let histTimer = null;
 
   // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
-  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace", "private", "clipimg", "keys"];
+  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace", "private", "clipimg", "keys", "mark"];
   const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
   function hotkeysHTML() {
     const hk = S.hotkeys || { available: false, states: {} };
@@ -2008,12 +2038,70 @@
         ${S.ui.resetAsk ? "" : `<button class="ghost" data-act="set-reset">${esc(t("set_reset"))}</button>`}</div>`;
   }
 
+  // 這一場的紀錄（2.18.0）：精華標記、通話紀錄匯出（Markdown／Word）、存成字幕檔
+  function sessionHTML() {
+    const marks = S.marks || [];
+    const key = (S.cfg.hotkeys || {}).mark;
+    const list = marks.length ? `<ul class="mark-list">${marks.map((k) => `<li><span class="mark-at">${esc(markClock(k.offset))}</span>
+        <span class="mark-text">${esc(k.translated || k.original || t("mk_empty_line"))}</span>
+        <button class="icon-btn" data-act="mark-remove" data-id="${k.id}" aria-label="${esc(t("mk_remove"))}">${ICON.x}</button></li>`).join("")}</ul>`
+      : `<div class="dnote">${esc(key ? t("mk_none_key", { key }) : t("mk_none"))}</div>`;
+    return `<section id="session-section"><div><h2>${esc(t("ss_title"))}</h2><div class="sub">${esc(t("ss_hint"))}</div></div>
+      <div class="setting-row"><div><div>${esc(t("mk_title"))}</div><div class="desc">${esc(t("mk_desc"))}</div></div>
+        <button class="ghost" data-act="mark-add">${esc(t("mk_add"))}</button></div>
+      ${list}
+      ${marks.length ? `<div class="btn-row"><button class="ghost" data-act="mark-clear">${esc(t("mk_clear"))}</button></div>` : ""}
+      <div class="btn-row">
+        <button class="ghost" data-act="session-save" data-kind="md">${esc(t("ss_md"))}</button>
+        <button class="ghost" data-act="session-save" data-kind="docx">${esc(t("ss_docx"))}</button>
+        <button class="ghost" data-act="session-save" data-kind="srt">${esc(t("ss_srt"))}</button></div>
+      <div class="dnote">${esc(t("ss_note"))}</div></section>`;
+  }
+  function markClock(sec) {
+    const n = Math.max(0, Math.floor(Number(sec) || 0)), h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), s2 = n % 60;
+    const pad = (x) => String(x).padStart(2, "0");
+    return h ? `${h}:${pad(m)}:${pad(s2)}` : `${pad(m)}:${pad(s2)}`;
+  }
+  function renderSession() {
+    const el = $("session-section");
+    if (el) el.outerHTML = sessionHTML();
+  }
+  // 對方自我介紹（2.18.0）：問要不要把這個聲音記成那個名字
+  function renderVoiceNameRow() {
+    const row = $("voice-name-row");
+    if (!row) return;
+    const ask = S.ui.voiceNameAsk;
+    row.hidden = !ask;
+    row.innerHTML = ask ? noticeHTML({ level: "info", text: t("vn_ask", { name: ask.name }), detail: t(ask.remember ? "vn_ask_desc" : "vn_ask_desc_once", { name: ask.name }),
+      buttons: `<button class="primary" data-act="voice-name-keep">${esc(t("vn_keep", { name: ask.name }))}</button>
+        <button class="ghost" data-act="voice-name-no">${esc(t("vn_no"))}</button>` }, ICON.check) : "";
+  }
+  // 對方講太快（2.18.0）：附一句請對方慢一點的現成句子，按一下複製
+  function renderSlowRow() {
+    const row = $("slow-row");
+    if (!row) return;
+    const tip = S.ui.slowTip;
+    row.hidden = !tip;
+    row.innerHTML = tip ? noticeHTML({ level: "info", text: t(tip.why === "fast" ? "sl_fast" : "sl_unclear"), detail: tip.phrase,
+      buttons: `<button class="primary" data-act="slow-copy">${esc(t("copy"))}</button>
+        <button class="ghost" data-act="slow-dismiss">${esc(t("dismiss"))}</button>` }, ICON.info) : "";
+  }
+  // 說了「暫停翻譯」（2.18.0）：一直顯示，按一下就繼續
+  function renderPausedRow() {
+    const row = $("vpause-row");
+    if (!row) return;
+    row.hidden = !S.voicePaused;
+    row.innerHTML = S.voicePaused ? noticeHTML({ level: "warn", text: t("vp_text"), detail: t("vp_desc"),
+      buttons: `<button class="primary" data-act="voice-resume">${esc(t("vp_resume"))}</button>` }, ICON.info) : "";
+  }
+
   function generalPage() {
     return `
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
       <section><div><h2>${esc(t("trans_title"))}</h2><div class="sub">${esc(t("trans_hint"))}</div></div>${pairSelectHTML()}${S.cfg.their_auto ? autoLangsHTML() : ""}</section>
       <section><div><h2>${esc(t("theme_title"))}</h2><div class="sub">${esc(t("theme_hint"))}</div></div>${themeHTML()}</section>
       <section data-kw="kw_record"><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
+      ${sessionHTML()}
       <section data-kw="kw_window"><h2>${esc(t("window_title"))}</h2>
         ${S.canWindow ? switchRow("on_top", t("on_top")) : ""}
         ${S.canWindow ? switchRow("close_to_tray", t("close_to_tray"), t("close_to_tray_desc")) : ""}
@@ -2086,7 +2174,7 @@
     if (tab === "learn") return learnPage();
     if (tab === "health") return healthPage();
     if (tab === "storage") return storagePage();
-    if (tab === "audio") return devicesHTML() + speakHTML() + voiceTuningHTML() + voiceFixHTML() + chatSendHTML();
+    if (tab === "audio") return devicesHTML() + speakHTML() + voiceTuningHTML() + voiceFixHTML() + voiceHelpHTML() + chatSendHTML();
     if (tab === "quality") return qualityPage();
     if (tab === "vocab") return vocabPage();
     if (tab === "screen") return screenPage();
@@ -2894,6 +2982,33 @@
       }, 1000);
     },
     "camera-index": (el) => saveCfg({ camera_index: Number(el.dataset.value) }, "image-section"),
+    "mark-add": () => post("/api/marks", { action: "add" }),
+    "mark-remove": (el) => post("/api/marks", { action: "remove", id: Number(el.dataset.id) }),
+    "mark-clear": () => post("/api/marks", { action: "clear" }),
+    "session-save": async (el) => {
+      const r = await post("/api/session", { kind: el.dataset.kind });
+      if (r && r.ok) {
+        S.ui.sessionSaved = r;
+        toast(t("ss_saved", { name: r.name, count: r.count }), 8000);
+        post("/api/session", { open: true });
+      } else toast(t(r && r.error === "empty" ? "ss_empty" : "ss_failed"), 6000, "warn");
+    },
+    "speed-pick": async () => { const r = await post("/api/speedpick"); if (r && r.ok) toast(t("sp_running"), 5000); },
+    "voice-name-keep": async () => {
+      const ask = S.ui.voiceNameAsk;
+      S.ui.voiceNameAsk = null; renderVoiceNameRow();
+      if (!ask) return;
+      const r = await post("/api/speakers", { action: "rename", id: Number(ask.speaker), name: ask.name });
+      toast(t(r && r.ok ? "vn_kept" : "vn_failed", { name: ask.name }), 5000, r && r.ok ? "info" : "warn");
+    },
+    "voice-name-no": () => { S.ui.voiceNameAsk = null; renderVoiceNameRow(); },
+    "slow-copy": async () => {
+      const tip = S.ui.slowTip;
+      if (tip && navigator.clipboard) { try { await navigator.clipboard.writeText(tip.phrase); toast(t("sl_copied"), 3000); } catch (e) { /* 複製不了就算了 */ } }
+      S.ui.slowTip = null; renderSlowRow();
+    },
+    "slow-dismiss": () => { S.ui.slowTip = null; renderSlowRow(); },
+    "voice-resume": () => post("/api/voicepause", { on: false }),
     "keys-card": async () => { const r = await post("/api/keys"); if (r && r.lines && !r.lines.length) toast(t("keys_none"), 5000); },
     "find-chat": async () => {
       toast(t("gt_finding"), 4000);
@@ -3436,6 +3551,10 @@
     abbr_suggest: (d) => { S.ui.abbrAsk = d.word; renderAbbrRow(); },
     gamepad: (d) => { S.gamepad = Object.assign({}, S.gamepad || {}, d); if (S.view === "settings" && S.ui.tab === "general") { const el = $("gamepad-section"); if (el) el.outerHTML = gamepadHTML(); } },
     keys_card: (d) => { S.ui.keysCard = d.lines || []; renderKeysCard(); },
+    marks: (d) => { S.marks = Array.isArray(d) ? d : []; renderSession(); },
+    slow_tip: (d) => { S.ui.slowTip = d; renderSlowRow(); },
+    voice_name: (d) => { S.ui.voiceNameAsk = d; renderVoiceNameRow(); },
+    voice_paused: (d) => { S.voicePaused = !!d; renderPausedRow(); },
     album: (d) => { S.album = d.items || []; if (S.view === "settings" && S.ui.tab === "screen") { const el = $("album-section"); if (el) el.outerHTML = albumHTML(); } },
     corrections: (d) => { S.corrections = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("wr-section"); if (el) el.outerHTML = correctionsHTML(); } },
     private: (d) => { S.private = !!d.on; renderPrivate(); },
@@ -3546,7 +3665,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.filesubs = st.filesubs || S.filesubs; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
-    S.private = !!st.private; S.quality = st.quality || {}; S.corrections = st.corrections || {}; S.album = st.album || []; S.templates = st.templates || []; S.gamepad = st.gamepad || {}; S.scenarios = st.scenarios || {};
+    S.private = !!st.private; S.quality = st.quality || {}; S.corrections = st.corrections || {}; S.album = st.album || []; S.templates = st.templates || []; S.gamepad = st.gamepad || {}; S.marks = st.marks || []; S.voicePaused = !!st.voice_paused; S.voiceCmds = st.voice_cmds || {}; S.scenarios = st.scenarios || {};
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];

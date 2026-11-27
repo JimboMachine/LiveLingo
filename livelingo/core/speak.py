@@ -212,7 +212,16 @@ def play(data: np.ndarray, rate: int, device=None) -> None:
         except Exception:  # noqa: BLE001  選的裝置不在了（拔掉了）：用預設的
             speaker = None
     speaker = speaker or sc.default_speaker()
-    speaker.play(data.reshape(-1, 1), samplerate=rate)
+    speaker.play(data if data.ndim == 2 else data.reshape(-1, 1), samplerate=rate)
+
+
+def to_ear(data: np.ndarray, ear: str) -> np.ndarray:
+    """左右耳分流（2.18.0）：ear 是 left / right 的話，做成只有那一邊有聲音的雙聲道；其他照原樣（單聲道）。"""
+    if ear not in ("left", "right"):
+        return data
+    out = np.zeros((len(data), 2), dtype=np.float32)
+    out[:, 0 if ear == "left" else 1] = data
+    return out
 
 
 class Speaker:
@@ -222,8 +231,9 @@ class Speaker:
     voice / synth / play 可以換成假的（測試用）。
     """
 
-    def __init__(self, folder: Path, device=lambda: None, on_done=None, log=lambda text: None, voice=None, player=None):
+    def __init__(self, folder: Path, device=lambda: None, on_done=None, log=lambda text: None, voice=None, player=None, ear=None):
         self.folder = Path(folder)
+        self.ear = ear or (lambda: "off")      # ear()：left / right = 只念到一邊耳朵（2.18.0）
         self.device = device
         self.on_done = on_done or (lambda result: None)
         self.log = log
@@ -282,7 +292,11 @@ class Speaker:
                     with self._lock:
                         self._recent.append((time.monotonic(), text))
                     self._until = time.monotonic() + len(data) / max(1, rate) + 1.0
-                    self.player(data, rate, self.device())
+                    try:
+                        ear = self.ear()
+                    except Exception:  # noqa: BLE001
+                        ear = "off"
+                    self.player(to_ear(data, ear), rate, self.device())
                     self._until = time.monotonic() + 1.0
                     result.update(ok=True, voice=str(got.get("voice") or ""))
             except Exception as ex:  # noqa: BLE001

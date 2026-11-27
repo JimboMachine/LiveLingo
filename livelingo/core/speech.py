@@ -295,6 +295,9 @@ class SpeechPipeline(threading.Thread):
     speaker_langs = None   # speaker_langs()：{說話者編號: [主語言, 副語言（可以沒有）]}，只有使用者設過語言的人
     _live_text = None
     _live_langs = None     # 還在說的這一句：先看過是誰了，用他的語言（None = 還沒看過，() = 看過了，不是設過語言的人）
+    denoise = None         # denoise()：True = 辨識之前先降噪（2.18.0）。None = 不降噪
+    _denoiser = None
+    _loud_avg = 0.0        # 這條收音平常一句話多大聲（語氣小圖示判斷「在大聲吼」用，2.18.0）
 
     def __init__(self, capture, recognizer: Recognizer, langs: list[str], on_text, on_state=None,
                  end_silence: float = 0.6, on_level=None, threshold: float = 0.5, gate=None, on_partial=None, live=None, busy=None, voices=None,
@@ -315,9 +318,11 @@ class SpeechPipeline(threading.Thread):
         try:      # length：這句話說了幾秒（斷句修補用，2.15.0）。只給收得下的（測試裡的假函式不一定收）
             import inspect
 
-            self._wants_length = "length" in inspect.signature(on_text).parameters
+            params = inspect.signature(on_text).parameters
+            self._wants_length = "length" in params
+            self._wants_loud = "loud" in params
         except (TypeError, ValueError):
-            self._wants_length = False
+            self._wants_length = self._wants_loud = False
         self.on_state = on_state or (lambda kind, speaking: None)
         # on_level(來源, 現在的音量 0~1, 已經連續幾秒完全沒聲音)：給介面畫音量條、提醒「麥克風沒聲音」
         self.on_level = on_level or (lambda kind, level, silent_for: None)
@@ -391,17 +396,51 @@ class SpeechPipeline(threading.Thread):
         except Exception:  # noqa: BLE001  看不出來就照平常的語言聽
             return None, None
 
+    def _denoise_on(self) -> bool:
+        try:
+            return bool(self.denoise and self.denoise())
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _clean(self, sound: np.ndarray) -> np.ndarray:
+        """降噪（有開才做）；做失敗就用原本的聲音。"""
+        if not self._denoise_on():
+            return sound
+        try:
+            from .denoise import Denoiser
+
+            self._denoiser = self._denoiser or Denoiser()
+            return self._denoiser.clean(sound)
+        except Exception:  # noqa: BLE001
+            return sound
+
+    def _loudness(self, utter: np.ndarray) -> float:
+        """這一句比這條收音平常大聲幾倍（1 = 一樣）。"""
+        rms = float(np.sqrt(np.mean(np.square(utter)))) if len(utter) else 0.0
+        avg = self._loud_avg or rms
+        self._loud_avg = 0.8 * avg + 0.2 * rms
+        return rms / avg if avg > 1e-6 else 1.0
+
     def _hear(self, audio: np.ndarray) -> None:
         """把新進來的聲音交給切句的；說完的句子送去辨識，還在說的那一句看情況先辨識一次。"""
         kind, given = self.capture.kind, False
-        for utter in self.segmenter.feed(audio):
+        utters = self.segmenter.feed(audio)
+        if not utters and not self.segmenter.speaking and self._denoise_on():
+            try:      # 沒人說話：記住現在的噪音長什麼樣子
+                from .denoise import Denoiser
+
+                self._denoiser = self._denoiser or Denoiser()
+                self._denoiser.learn(audio)
+            except Exception:  # noqa: BLE001
+                pass
+        for utter in utters:
             if self._live_text is not None:
                 self.on_partial(kind, "", None)      # 說完了：半句不用再翻，把電腦讓給整句
             t = time.time()
             own, voice = self._langs_of(utter)      # 設過語言的人：只在他的主語言、副語言裡聽
             self._live_langs = None
             try:
-                res = self.recognizer.transcribe(utter, own or self.langs, OWN_STAY if own else self.stay)
+                res = self.recognizer.transcribe(self._clean(utter), own or self.langs, OWN_STAY if own else self.stay)
             except Exception as ex:  # noqa: BLE001
                 self.on_text(kind, str(ex), "error", 0.0, False)
                 continue
@@ -409,7 +448,8 @@ class SpeechPipeline(threading.Thread):
                 given = True
                 who = self._who(utter, voice)      # 這一句是誰說的（有開「分辨說話者」才會有）
                 self.on_text(kind, res[0], res[1], time.time() - t, bool(res[2]) if len(res) > 2 else False,
-                             **({"speaker": who} if who else {}), **({"length": len(utter) / SR} if getattr(self, "_wants_length", False) else {}))
+                             **({"speaker": who} if who else {}), **({"length": len(utter) / SR} if getattr(self, "_wants_length", False) else {}),
+                             **({"loud": round(self._loudness(utter), 2)} if getattr(self, "_wants_loud", False) else {}))
                 self._live_text = None      # 先顯示的那一則已經被整句接手
                 self.pacer.reset()
         if not self.on_partial:
@@ -429,7 +469,7 @@ class SpeechPipeline(threading.Thread):
             self._live_langs = tuple(self._langs_of(so_far)[0] or ())
         own = list(self._live_langs)
         try:
-            res = self.recognizer.transcribe(so_far, own or self.langs, OWN_STAY if own else self.stay, quick=True)
+            res = self.recognizer.transcribe(self._clean(so_far), own or self.langs, OWN_STAY if own else self.stay, quick=True)
         except Exception:  # noqa: BLE001  先看一下而已，失敗就等整句
             res = None
         self.pacer.done(len(so_far) / SR, time.time(), time.time() - t)
