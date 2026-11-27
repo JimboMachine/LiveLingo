@@ -155,6 +155,7 @@ class Recognizer:
         # turn()：回傳「輪到我用處理器」的鎖，跟翻譯引擎輪流（見 Service._cpu_turn）。None = 不用輪流
         self.turn = None
         self.beam = 1          # 1 = 快；5 = 比較準、慢大約一倍（設定裡的「比較準」）
+        self.hotwords = lambda lang: ""      # hotwords(語言) → 先告訴模型的詞，用空格分開（Service 換成真的）
         self._quick = False    # 這一次是「還在說就先辨識」：一律用快的
         self._lock = threading.Lock()
         # Whisper 預設每次都把聲音補到 30 秒再算。我們一句最長 12 秒，補到 15 秒就夠，
@@ -187,10 +188,15 @@ class Recognizer:
         return self._lock.locked()
 
     def _decode(self, audio: np.ndarray, lang: str | None):
+        # 熱詞（2.14.0）：詞彙表、不翻的字裡這個語言的名字和用語先告訴模型，專有名詞比較不會聽成別的字
+        try:
+            words = self.hotwords(lang) if lang else ""
+        except Exception:  # noqa: BLE001
+            words = ""
         return self.model.transcribe(
             audio, language=lang, beam_size=1 if self._quick else self.beam, temperature=0.0, condition_on_previous_text=False,
             without_timestamps=True, chunk_length=self._now_window,
-            initial_prompt="以下是繁體中文的句子。" if lang == "zh" else None)
+            initial_prompt="以下是繁體中文的句子。" if lang == "zh" else None, **({"hotwords": words} if words else {}))
 
     def _run(self, audio: np.ndarray, langs: list[str], share_encoder: bool = True, stay: float = 1.0):
         m = self.model

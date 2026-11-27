@@ -446,10 +446,13 @@ _KO_LAUGH = [(re.compile(r"\s*[ㅋㅎ]{2,}"), {"zh-TW": " 哈哈", "zh-CN": " �
                                             "id": " T_T", "es": " T_T", "pt": " T_T", "ru": " T_T", "de": " T_T", "fr": " T_T"})]
 
 
-def tidy(out: str, target: str) -> str:
-    """模型有時把韓文的「ㅋㅋ」「ㅠㅠ」原樣留在譯文裡，換成看得懂的寫法。"""
+def tidy(out: str, target: str, keep=()) -> str:
+    """模型有時把韓文的「ㅋㅋ」「ㅠㅠ」原樣留在譯文裡，換成看得懂的寫法。
+    keep：使用者設成「不翻的字」的（2.14.0）。裡面有 ㅋㅋ 之類的，就照原樣留著不換。"""
     if LANGS[target]["family"] != "ko":
         for pattern, words in _KO_LAUGH:
+            if any(pattern.fullmatch(str(k)) for k in keep):
+                continue
             out = pattern.sub(words.get(target, ""), out)
     return out.strip()
 
@@ -664,6 +667,26 @@ def numbers_lost(original: str, out: str, target: str, source: str | None = None
     return lost
 
 
+def repair_numbers(original: str, out: str, target: str, source: str | None = None) -> str:
+    """數字保護（2.14.0）：換寫法重翻之後數字還是對不上時，最後一步直接把數字改回原文的。
+    只在「原文和譯文用阿拉伯數字寫的數一樣多」時才換，一個對一個照順序換（「3點」被翻成「30點」→ 改回 3）；
+    數量對不上（譯文把數字寫成字、或多了少了）就不動，留給畫面提醒使用者核對。改不了就回傳原本的譯文。"""
+    if not numbers_lost(original, out, target, source):
+        return out
+    want = numbers(original, source)
+    found = list(_DIGITS.finditer(unicodedata.normalize("NFKC", out)))
+    if not want or len(found) != len(want) or unicodedata.normalize("NFKC", out) != out:
+        return out
+    pieces, last = [], 0
+    for m, n in zip(found, want):
+        pieces.append(out[last:m.start()])
+        pieces.append(n)
+        last = m.end()
+    pieces.append(out[last:])
+    fixed = "".join(pieces)
+    return fixed if not numbers_lost(original, fixed, target, source) else out
+
+
 def why(ex: BaseException) -> str:
     """翻譯失敗的原因，分成幾種（介面用使用者的語言說明；電腦回報的原文只當補充）。"""
     import socket
@@ -706,6 +729,7 @@ class Translator:
         self.url = url.rstrip("/")
         self.key = ""                     # 翻譯引擎這一次啟動的金鑰（Engine.key）；空的就不帶
         self.glossary = glossary or (lambda: {})
+        self.keep = lambda: []            # 不翻的字（2.14.0）：照原樣留著，ㅋㅋ 也不換成「哈哈」
         self.hints = hints or (lambda text, source, target: [])
         self.lessons = lessons or (lambda: [])
         self.memory = memory
@@ -937,7 +961,7 @@ class Translator:
 
     def translate(self, text: str, target: str, source: str | None = None, context: list[str] | None = None,
                   on_part=None, unfinished: bool = False, stop: Stop | None = None, remember: str | None = None,
-                  work: str = "") -> str:
+                  work: str = "", fresh: bool = False) -> str:
         """target：zh-TW / zh-CN / ko / en / ja。原文已經是那個語言時不用翻，中文只做繁簡轉換。
         context：前面幾句對話的原文（最多用最後兩句），只給模型參考，不會被翻出來。
         on_part(目前的譯文)：翻的時候一邊出字一邊叫（只是先給人看；最後回傳的才是整理過、核對過的譯文）。
@@ -946,7 +970,8 @@ class Translator:
         stop：一個 Stop；別的地方呼叫它的 stop() 就馬上中斷這一次（丟出 Stopped）。
         remember：這句話從哪來的（訊息的 via）；有給的話，翻好的會記進翻過的句子（memory），下次同一句不用重翻。
         work：在看哪一部（works.work_key）；同一部翻過的先用，也記下這句是在這部看到的。
-        用了記住的翻法時，came_from() 會說是哪來的（同一條執行緒裡、下一次翻譯之前有效）。"""
+        用了記住的翻法時，came_from() 會說是哪來的（同一條執行緒裡、下一次翻譯之前有效）。
+        fresh：一定叫模型重翻（不用暫存、翻過的句子、教過的句子），翻好的也不記。翻譯自我檢查用（qualitycheck.py）。"""
         self._came.value = None
         text = text.strip()[:MAX_TEXT]
         source = source or detect_language(text) or "en"
@@ -963,14 +988,14 @@ class Translator:
             return joiner.join(o for o in outs if o)
         context = [c.strip()[:120] for c in (context or []) if c and c.strip()][-2:]
         key = (text, target, *context, *(["…"] if unfinished else []))
-        if key in self._cache:
+        if key in self._cache and not fresh:
             return self._cache[key]
-        exact, examples = self.taught(text, source, target)
+        exact, examples = self.taught(text, source, target) if not fresh else (None, [])
         if exact:
             return exact
         hints = self.hints(text, source, target)
         terms = ""
-        if self.memory is not None and not unfinished:
+        if self.memory is not None and not unfinished and not fresh:
             from ..memory import terms_print
 
             words = self.glossary()
@@ -983,14 +1008,15 @@ class Translator:
         kind = sentence_kind(text, source)
         sent = plain_zh(text) if source == "zh" else text
         sent = sent if unfinished else with_end_mark(sent, source, kind)
-        show = (lambda t: on_part(tidy(to_script(t, target), target))) if on_part else None
+        keep = self.keep()
+        show = (lambda t: on_part(tidy(to_script(t, target), target, keep))) if on_part else None
         with self._lock, self._my_turn():
             if stop is not None and stop.asked:      # 排隊等引擎的時候就被叫停了
                 raise Stopped()
             out = self._ask(sent, source, target, hints, examples, context=context, **({"on_part": show} if show else {}),
                             **({"unfinished": True} if unfinished else {}), **({"stop": stop} if stop else {}))
             if unfinished:
-                out = tidy(to_script(trim_extra(out, sent, source, target), target), target)
+                out = tidy(to_script(trim_extra(out, sent, source, target), target), target, keep)
                 self._cache[key] = out
                 return out
             out = trim_extra(out, sent, source, target)
@@ -1027,11 +1053,12 @@ class Translator:
                     if not numbers_lost(sent, again, target, source) and not _leftover(again, source, target):
                         out = again
                         break
+            out = repair_numbers(sent, out, target, source)      # 還是對不上：數字一樣多就直接改回原文的
             if meta_reply(out, sent):      # 重翻（問句、數字、留著原文）的那幾次又變成跟人說話：不翻
                 self._cache[key] = text
                 return text
         out = to_script(out, target)
-        out = tidy(out, target)
+        out = tidy(out, target, keep)
         if len(self._cache) > 500:
             self._cache.clear()
         self._cache[key] = out

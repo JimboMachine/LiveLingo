@@ -17,7 +17,7 @@ from .paths import resource_dir
 FILE = "help.json"
 DOWNLOAD = "https://github.com/JimboMachine/LiveLingo/releases/latest"
 FRIEND_SECTIONS = ("start", "typing", "keys", "privacy")
-VALUES = ("overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace", "ptt", "version", "download")
+VALUES = ("overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace", "private", "ptt", "version", "download")
 _cache: dict | None = None
 
 

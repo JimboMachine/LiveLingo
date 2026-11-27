@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "note": "翻譯自我檢查（qualitycheck.py）用的句子：以前真的翻錯過、或很容易翻錯的。has = 譯文裡至少要有其中一個；not = 一個都不能有；kind = statement（不能變問句）/ question（要是問句）；numbers = 原文的數字都要在。",
+  "cases": [
+    {"id": "ko-time", "src": "오늘 3시에 만나자", "lang": "ko", "target": "zh-TW", "numbers": true},
+    {"id": "ko-statement", "src": "나 지금 집에 가는 중이야", "lang": "ko", "target": "zh-TW", "kind": "statement"},
+    {"id": "ko-question", "src": "밥 먹었어?", "lang": "ko", "target": "zh-TW", "kind": "question"},
+    {"id": "ko-half-hour", "src": "2시 30분에 시작해", "lang": "ko", "target": "zh-TW", "numbers": true},
+    {"id": "ko-laugh", "src": "ㅋㅋㅋ 진짜 웃기다", "lang": "ko", "target": "zh-TW", "not": ["ㅋ"]},
+    {"id": "ko-never-mind", "src": "괜찮아 신경 쓰지 마", "lang": "ko", "target": "zh-TW", "kind": "statement"},
+    {"id": "ko-money", "src": "5000원 남았어", "lang": "ko", "target": "zh-TW", "numbers": true},
+    {"id": "ko-where", "src": "어디야?", "lang": "ko", "target": "zh-TW", "kind": "question"},
+    {"id": "ko-thanks", "src": "고마워 덕분에 이겼어", "lang": "ko", "target": "zh-TW", "has": ["謝", "多虧", "感謝"]},
+    {"id": "ko-come", "src": "빨리 와", "lang": "ko", "target": "zh-TW", "kind": "statement"},
+    {"id": "zh-taipei", "src": "我是台北人", "lang": "zh", "target": "ko", "has": ["타이베이"], "not": ["서울"]},
+    {"id": "zh-se", "src": "我很色", "lang": "zh", "target": "ko", "not": ["부끄", "화려", "수줍"]},
+    {"id": "zh-time", "src": "明天下午4點見", "lang": "zh", "target": "ko", "numbers": true},
+    {"id": "zh-question", "src": "你吃飯了嗎？", "lang": "zh", "target": "ko", "kind": "question"},
+    {"id": "zh-wait", "src": "我等你5分鐘", "lang": "zh", "target": "ko", "numbers": true},
+    {"id": "zh-no", "src": "我不想去", "lang": "zh", "target": "ko", "kind": "statement"},
+    {"id": "zh-en-place", "src": "我在台北", "lang": "zh", "target": "en", "has": ["Taipei"]},
+    {"id": "zh-en-time", "src": "3點開會", "lang": "zh", "target": "en", "numbers": true},
+    {"id": "en-minutes", "src": "I'll be there in 10 minutes", "lang": "en", "target": "zh-TW", "numbers": true},
+    {"id": "en-question", "src": "Are you coming?", "lang": "en", "target": "zh-TW", "kind": "question"},
+    {"id": "en-carry", "src": "Thanks for the carry", "lang": "en", "target": "zh-TW", "kind": "statement"},
+    {"id": "ja-time", "src": "明日の7時に集合", "lang": "ja", "target": "zh-TW", "numbers": true},
+    {"id": "ja-sleep", "src": "もう寝るね", "lang": "ja", "target": "zh-TW", "kind": "statement"},
+    {"id": "ja-where", "src": "どこにいるの？", "lang": "ja", "target": "zh-TW", "kind": "question"}
+  ]
+}

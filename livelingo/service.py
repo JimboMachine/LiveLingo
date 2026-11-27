@@ -28,6 +28,9 @@ from .jobs import Jobs
 from .memory import KIND as MEMORY_KIND
 from .memory import RANGES as MEMORY_RANGES
 from .memory import Memory
+from . import names as keepwords
+from .names import NameWatch
+from .qualitycheck import QualityCheck
 from .history import History
 from .learn import Wordbook, family_of
 from .recap import GAP as RECAP_GAP
@@ -70,7 +73,7 @@ SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveL
 # 不屬於「設定」的東西：視窗大小位置、第一次設定做過了沒、哪些來源現在開著、大檔案搬去哪。匯出、匯入、恢復預設都不碰
 SETTINGS_SKIP = ("window", "layout", "hotkeys_v", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
-RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir")
+RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip")
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64),
                   "stream_port": (1024, 65000)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
@@ -82,6 +85,13 @@ WHATS_NEW_FLOOR = "2.5.0"      # 沒有「上次看到哪一版」的紀錄（�
 MAX_MARKED = 60            # 最近幾則訊息的生字標記留著（介面重開也看得到）
 RECAP_RECENT = 6 * 3600     # 自動摘要只補最近這麼久之內結束的對話
 RECAP_EVERY = 30.0          # 每隔幾秒看一次有沒有剛結束、還沒摘要的對話
+# 首頁的情境卡（2.14.0）：名字 → (要改的設定, 要開或關的來源)。只碰顯示方式和來源，不碰語言、裝置、框好的區域
+SCENARIOS = {
+    "game": ({"overlay": True, "overlay_form": "float", "live_captions": True}, {"screen": True, "listen": True, "mic": False}),
+    "video": ({"overlay": True, "overlay_form": "bar", "live_captions": True}, {"screen": False, "listen": True, "mic": False}),
+    "call": ({"overlay": True, "overlay_form": "float", "drop_echo": True}, {"screen": False, "listen": True, "mic": True}),
+    "stream": ({"overlay": True, "stream": True, "live_captions": True}, {"screen": False, "listen": True, "mic": True}),
+}
 GAME_EVERY = 5.0            # 每隔幾秒看一次現在在玩哪個遊戲（遊戲用語自動切換）
 UPDATE_RECHECK = 4 * 3600   # 程式一直開著（縮在系統匣好幾天）的時候，每隔幾個小時再看一次有沒有新版本
 ENGINE_REST = (0, 10, 30, 60)    # 設定「幾分鐘沒翻譯就讓翻譯引擎休息」可以選的值，0 = 一直開著
@@ -199,10 +209,16 @@ class Service:
         self.mode = {"model": "4b", "engine": "cpu", "quality": "standard"}
         self.fallback = False          # 高品質開不起來，自動退回標準
         self.engine: Engine | None = None
-        self.translator = Translator("http://127.0.0.1:8177", glossary=lambda: self.glossary.as_dict(self._game_words()),
+        self.translator = Translator("http://127.0.0.1:8177", glossary=self._words_now,
                                      tone=self.cfg["tone"], hints=self._hints, lessons=self.lessons.list,
                                      memory=self.memory)
         self.translator.keep_tone = bool(self.cfg["tone_keep"])
+        self.translator.keep = lambda: list(self.cfg["keep_words"])
+        self.name_watch = NameWatch()          # 名字建議（2.14.0）：數對方一直提到的遊戲 ID
+        self.quality = QualityCheck(self.data, on_change=lambda st: self.hub.publish("quality", st), log=self.log)
+        self.private = False              # 隱私暫停（2.14.0）：開著的時候翻譯照常，但什麼紀錄都不留（不存設定檔，重開就回到平常）
+        self._auto_started: list[str] = []    # 開遊戲就開始翻：是我（不是使用者）打開的來源，遊戲關掉時只關這些
+        self._auto_apps: set[str] = set()     # 上一次看到開著的、會觸發自動開始的程式
         # 翻譯引擎和語音辨識都用處理器的電腦上，兩個輪流跑（見 _cpu_turn）
         self._cpu_lock = threading.Lock()
         self.translator.turn = self._cpu_turn
@@ -315,6 +331,9 @@ class Service:
         self.stream = StreamOut(self)  # 直播模式：給 OBS 的字幕頁（stream.py）
         # 念出我的譯文：Windows 內建語音念到選的播放裝置（core/speak.py）
         self.speaker = Speaker(self.data, device=lambda: self.cfg["speak_device"], on_done=self._spoke, log=self.log)
+        # 念對方的話給我聽（2.14.0）：另一條隊伍、念到我自己的耳機，跟「念我的譯文給對方」分開排隊、分開選裝置
+        self.reader = Speaker(self.data, device=lambda: self.cfg["speak_heard_device"], on_done=self._read_done, log=self.log,
+                              voice=self.speaker.voice)
         self._speak: dict = {"voice": "", "lang": "", "error": ""}
 
     # ------------------------------------------------------------------ 給介面的狀態
@@ -370,6 +389,9 @@ class Service:
             "overlay": self.overlay.state(),
             "stream": self.stream.state(),
             "speak": self.speak_state(),
+            "private": self.private,
+            "quality": self.quality.state(),
+            "scenarios": self.scenarios_state(),
             "replies": dict(self._replies),
             "words": {str(k): v for k, v in self._words.items()},
             "wordbook": self.wordbook.state(),
@@ -953,6 +975,7 @@ class Service:
         while not self.closing.wait(GAME_EVERY):
             try:
                 self.check_game()
+                self.check_auto_start()
                 if time.time() - self._recap_checked >= RECAP_EVERY:
                     self._recap_checked = time.time()
                     self.recap_check()
@@ -990,9 +1013,9 @@ class Service:
         self.hub.publish("message", msg)
         self.overlay.on_message(msg)
         self.stream.on_message(msg)
-        if self.history.add(msg):
+        if not self.private and self.history.add(msg):      # 隱私暫停的時候不記
             self.hub.publish("history", self.history.state())
-        if self.transcript.on:
+        if self.transcript.on and not self.private:
             who = self.speaker_tag(msg)      # 字幕檔只寫現在還算數的說話者（重新分辨之前標的不寫）
             self.transcript.add(dict(msg, speaker=who[0], voice=who[1]) if who else {k: v for k, v in msg.items() if k != "speaker"})
             self.hub.publish("record", self.record_state())
@@ -1145,7 +1168,8 @@ class Service:
         self._work_seen = (now, via, place, key)
         if key and key != last:
             info = self.memory.work_info(key)
-            self.memory.saw(key, title)
+            if not self.private:
+                self.memory.saw(key, title)
             if info and key not in self._work_told and (info["mine"] or (info["shared"] and self.cfg["use_shared"] and not info["own_only"])):
                 self._work_told.add(key)
                 self.notice("work_known", title=title, n=info["mine"] + info["shared"], mine=info["mine"], shared=info["shared"])
@@ -1226,6 +1250,8 @@ class Service:
             self._alert(msg)
             self._card_done(msg, out)
             self._speak_mine(msg, target, out)
+            self._read_heard(msg, target, out)
+            self._watch_names(msg)
             self._learn(msg)
             self._want_back(msg)
         except Exception as ex:  # noqa: BLE001
@@ -1259,7 +1285,7 @@ class Service:
         self.translator.model = self.mode.get("model", "")
         if "on_part" not in inspect.signature(fn).parameters:
             return fn(msg["original"], target, msg["lang"], self._context_for(msg))
-        more = {"remember": msg.get("via") or ""} if "remember" in inspect.signature(fn).parameters else {}
+        more = {"remember": msg.get("via") or ""} if "remember" in inspect.signature(fn).parameters and not self.private else {}
         if more and msg.get("work") and "work" in inspect.signature(fn).parameters:
             more["work"] = msg["work"]
         sent, shown = [0.0], msg.get("partial") or ""
@@ -1417,7 +1443,7 @@ class Service:
 
     def _count(self, msg: dict, failed: bool = False) -> None:
         """算進使用數字：一句只算一次。等多久 = 辨識的秒數 + 從這句出現到翻好的秒數。"""
-        if msg["id"] in self._counted:
+        if msg["id"] in self._counted or self.private:
             return
         self._counted.add(msg["id"])
         self.usage.add(msg["via"], wait=float(msg.get("hear") or 0.0) + max(0.0, time.time() - float(msg.get("at") or time.time())), failed=failed)
@@ -1753,7 +1779,8 @@ class Service:
                 isinstance(v, (int, float)) for v in anchor) else None
             app = str(item.get("app") or "").strip()[:120] if anchor else ""
             out.append({"id": rid, "name": " ".join(str(item.get("name") or "").split())[:30], **box,
-                        "on": bool(item.get("on", True)), "app": app, "anchor": anchor if app else None})
+                        "on": bool(item.get("on", True)), "app": app, "anchor": anchor if app else None,
+                        **({"story": True} if item.get("story") else {})})
         return out
 
     @staticmethod
@@ -2279,11 +2306,12 @@ class Service:
                 self.notice("hotkey_same")
         return keys
 
-    def _note(self, key: str) -> None:
+    def _note(self, key: str, **params) -> None:
         """按了快速鍵之後的短提示：顯示在浮動留言上（人在遊戲裡），主視窗也跳一則。"""
         table = HOTKEY_NOTES.get(self.cfg["ui_lang"], HOTKEY_NOTES["en"])
-        self.overlay.note(table[key])
-        self.hub.publish("notice", {"code": "hotkey_note", "text": table[key]})
+        text = table[key].format(**params) if params else table[key]
+        self.overlay.note(text)
+        self.hub.publish("notice", {"code": "hotkey_note", "text": text})
 
     def _hotkey(self, name: str) -> None:
         """快速鍵被按下（在快速鍵那條執行緒上）。只做很快的事，慢的另外開執行緒。"""
@@ -2316,6 +2344,9 @@ class Service:
             elif name == "inplace":
                 self.update_config({"inplace": not self.cfg["inplace"]})
                 self._note("inplace_on" if self.cfg["inplace"] else "inplace_off")
+            elif name == "private":
+                self.set_private(not self.private)
+                self._note("private_on" if self.private else "private_off")
         except Exception:  # noqa: BLE001
             self.log(traceback.format_exc())
 
@@ -2918,6 +2949,13 @@ class Service:
             changes["speak_name"] = str(changes["speak_name"] or "")[:120]
         if "alert_words" in changes:
             changes["alert_words"] = mention.clean_words(changes["alert_words"])
+        for key in ("keep_words", "name_skip"):
+            if key in changes:
+                changes[key] = keepwords.clean_words(changes[key])
+        if "speak_heard_device" in changes and not (changes["speak_heard_device"] is None or isinstance(changes["speak_heard_device"], str)):
+            changes.pop("speak_heard_device")
+        if "speak_heard_name" in changes:
+            changes["speak_heard_name"] = str(changes["speak_heard_name"] or "")[:120]
         if "term_packs" in changes:
             picked = changes["term_packs"] if isinstance(changes["term_packs"], list) else []
             changes["term_packs"] = [name for name in PACKS if name in picked]
@@ -3019,6 +3057,10 @@ class Service:
         if changed("game_terms", "game_auto"):
             threading.Thread(target=self.check_game, daemon=True).start()
             self._terms_changed()
+        if changed("game_start"):
+            self._auto_apps = set()      # 打開：現在已經開著的遊戲也算「剛打開」；關掉：之後不再自動開關
+            if not after["game_start"]:
+                self._auto_started = []
         if changed("use_shown_translation", "my_lang") and self.watcher is not None:
             self.watcher.pair_lang = self._shown_pair_lang()
         if changed("remember_translations", "use_shared"):
@@ -3026,6 +3068,8 @@ class Service:
             self.translator.clear_cache()
         if changed("term_packs"):
             self._terms_changed()
+        if changed("keep_words"):
+            self.translator.clear_cache()      # 譯文裡的字要照原樣留著了：之前翻好的不能再用
         if changed("stream", "stream_original", "stream_mine", "overlay_seconds", "overlay_font"):
             self.stream.apply()
             self.hub.publish("stream", self.stream.state())
@@ -3216,6 +3260,11 @@ class Service:
                 region["name"] = " ".join(item["name"].split())[:30]
             if "on" in item:
                 region["on"] = bool(item["on"])
+            if "story" in item:      # 劇情對話框：等字打完再翻（2.14.0）
+                if item["story"]:
+                    region["story"] = True
+                else:
+                    region.pop("story", None)
             if isinstance(item.get("app"), str) and item["app"].strip()[:120] != (old.get("app") or ""):
                 exe = item["app"].strip()[:120]
                 rect = apps.window_rect(exe) if exe else None
@@ -3480,6 +3529,7 @@ class Service:
                 self.recognizer = Recognizer(model_dir, threads=int(self.cfg["whisper_threads"]), device=device,
                                              compute_type=compute, on_fallback=self._speech_gpu_failed)
                 self.recognizer.turn = self._cpu_turn
+                self.recognizer.hotwords = lambda lang: keepwords.hotwords(lang, self._words_now())
             return self.recognizer
 
     def _start_voice(self, key: str, again: bool = False) -> None:
@@ -3886,8 +3936,9 @@ class Service:
         self._recent_voice.append({"kind": kind, "text": heard, "lang": lang, "at": time.time(), "id": msg_id})
 
     def _is_own_voice(self, text: str) -> bool:
-        """收到的是 LiveLingo 自己念出來的譯文（念到喇叭、被「聽對方」或麥克風收到）：不要再翻一次。"""
-        said = self.speaker.recent()
+        """收到的是 LiveLingo 自己念出來的譯文（念到喇叭、被「聽對方」或麥克風收到）：不要再翻一次。
+        念給我聽的對方的話（2.14.0）也算：沒戴耳機時麥克風會收到，不能被當成我說的話翻出去。"""
+        said = self.speaker.recent() + self.reader.recent()
         return bool(said) and any(similarity(t, text) >= 0.6 for t in said)
 
     # ------------------------------------------------------------------ 語言學習：生字和單字本（2.10.0）
@@ -4057,6 +4108,140 @@ class Service:
         self._recap = {"state": "off", "id": ""}
         self.hub.publish("recaps", dict(self.recaps.state(), **self._recap))
         return {"ok": True}
+
+    # ------------------------------------------------------------------ 2.14.0：不翻的字、名字建議、隱私暫停、開遊戲就開始、念給我聽、情境
+
+    def _words_now(self) -> dict[str, str]:
+        """翻譯時要照用的詞：詞彙表（通用的加上現在這個遊戲的），再加上不翻的字（原樣 = 原樣）。詞彙表裡寫了譯法的優先。"""
+        out = self.glossary.as_dict(self._game_words())
+        have = {k.lower() for k in out}
+        for word in self.cfg["keep_words"]:
+            if word.lower() not in have:
+                out[word] = word
+        return out
+
+    def _watch_names(self, msg: dict) -> None:
+        """名字建議：對方的話（畫面上的、聽到的）裡一直出現、像遊戲 ID 的字，第 3 次出現時問一次要不要固定不翻。"""
+        if not self.cfg["name_suggest"] or self.private or msg.get("who") == "me" or msg.get("via") not in ("screen", "heard"):
+            return
+        skip = [*self.cfg["keep_words"], *self.cfg["name_skip"], *self.glossary.as_dict(self._game_words())]
+        name = self.name_watch.add(msg.get("original", ""), skip)
+        if name:
+            self.hub.publish("name_suggest", {"name": name})
+
+    def name_answer(self, name: str, keep: bool) -> dict:
+        """名字建議的回答：keep = 加進不翻的字；不是名字 = 記下來不再問。"""
+        name = " ".join(str(name or "").split())[:keepwords.MAX_LEN]
+        if not name:
+            return {"ok": False}
+        key = "keep_words" if keep else "name_skip"
+        self.update_config({key: [*self.cfg[key], name]})
+        return {"ok": True, "keep_words": self.cfg["keep_words"]}
+
+    def set_private(self, on: bool) -> dict:
+        """隱私暫停：翻譯照常，但不記歷史、不記翻過的句子和看過的作品、不算使用數字、字幕記錄不寫、不數名字。
+        不存進設定檔：重開程式一定回到平常（免得忘了關，之後什麼都沒記到）。"""
+        self.private = bool(on)
+        self.log(f"private pause {'on' if self.private else 'off'}")
+        self.hub.publish("private", {"on": self.private})
+        return {"ok": True, "on": self.private}
+
+    def _auto_watch(self) -> set[str]:
+        """會觸發「開遊戲就開始翻」的程式（小寫檔名）：框選區跟著的、只聽的、認得的遊戲和加過專用詞的程式。"""
+        from .terms import GAMES
+
+        exes = {str(r.get("app") or "").lower() for r in self.cfg["regions"]}
+        exes |= {str(a).lower() for a in self.cfg["listen_apps"]}
+        exes |= {g.lower() for g in GAMES} | self.glossary.games()
+        exes.discard("")
+        return exes
+
+    def check_auto_start(self, windows: list[dict] | None = None) -> list[str]:
+        """開遊戲就開始翻：看的程式從「一個都沒開」變成「有開」就打開讀畫面（有框過區域的話）和聽對方；
+        全部關掉就把剛剛自己打開的關掉（使用者自己開的不動）。回傳這次打開或關掉的來源。"""
+        if not self.cfg["game_start"] or self.phase != "ready":
+            return []
+        watch = self._auto_watch()
+        try:
+            windows = apps.windows() if windows is None else windows
+        except Exception:  # noqa: BLE001
+            return []
+        running = {str(w.get("exe") or "").lower() for w in windows} & watch
+        was, self._auto_apps = self._auto_apps, running
+        changed: list[str] = []
+        if running and not was:
+            for key in ("screen", "listen"):
+                if key == "screen" and not self.cfg["regions"]:
+                    continue
+                if not self.sources[key]["on"] and not self.sources[key]["busy"]:
+                    self.set_source(key, True)
+                    self._auto_started.append(key)
+                    changed.append(key)
+            if changed:
+                name = apps.display_name(sorted(running)[0])
+                self.log(f"auto start {changed} because {sorted(running)} opened")
+                self._note("auto_started", app=name)
+        elif was and not running and self._auto_started:
+            for key in self._auto_started:
+                if self.sources[key]["on"]:
+                    self.set_source(key, False)
+                    changed.append(key)
+            self._auto_started = []
+            if changed:
+                self.log(f"auto stop {changed}: watched programs closed")
+                self.notice("auto_stopped")
+        return changed
+
+    def _read_heard(self, msg: dict, target: str, out: str) -> None:
+        """念對方的話給我聽：對方說的（有開「畫面上的也念」的話，畫面上讀到的聊天也算）翻成我的語言之後念到我選的裝置。"""
+        if not self.cfg["speak_heard"] or msg.get("who") == "me" or not out.strip() or target != self.cfg["my_lang"]:
+            return
+        if msg.get("via") == "heard" or (msg.get("via") == "screen" and self.cfg["speak_heard_screen"]):
+            if not self.reader.say(out, target):
+                self._speak_state(error="unavailable")
+
+    def _read_done(self, result: dict) -> None:
+        if not result.get("ok") and result.get("error") == "no_voice" and self._speak.get("heard_error") != "no_voice":
+            self.notice("speak_no_voice", lang=result.get("lang", ""))
+        self._speak_state(heard_error=result.get("error") or "", heard_voice=result.get("voice", "") if result.get("ok") else "")
+
+    def quality_action(self, action: str) -> dict:
+        """翻譯自我檢查：start 開始（在背景跑，一句一句送 quality 事件）/ stop 停下來。"""
+        if action == "stop":
+            self.quality.stop()
+            return {"ok": True}
+        if action != "start":
+            return {"ok": False, "error": "unknown"}
+        if self.phase != "ready":
+            return {"ok": False, "error": "not_ready"}
+
+        def one(case: dict) -> str:
+            self._wake_engine()
+            if not self._engine_ok.is_set():
+                self._engine_ok.wait(300)
+            self.translator.model = self.mode.get("model", "")
+            return self.translator.translate(case["src"], case["target"], case.get("lang"), fresh=True)
+
+        started = self.quality.start(one, __version__, self.mode.get("model", ""))
+        return {"ok": started, **({} if started else {"error": "running"})}
+
+    @staticmethod
+    def scenarios_state() -> dict:
+        """首頁的情境卡：每一張會改哪些設定、開哪些來源（介面照現在的設定判斷哪一張亮著）。"""
+        return {name: {"config": dict(cfg), "sources": dict(sources)} for name, (cfg, sources) in SCENARIOS.items()}
+
+    def apply_scenario(self, name: str) -> dict:
+        """情境卡：一次換好一整組設定，打開或關掉要用的來源。只改顯示方式和要開哪些來源，不碰語言、裝置、框好的區域。"""
+        if name not in SCENARIOS:
+            return {"ok": False, "error": "unknown"}
+        cfg, sources = SCENARIOS[name]
+        self.update_config(dict(cfg))
+        need_region = sources.get("screen") and not self.cfg["regions"]
+        for key, on in sources.items():
+            if bool(self.sources[key]["on"]) != on and not self.sources[key]["busy"]:
+                self.set_source(key, on)
+        self.log(f"scenario {name}")
+        return {"ok": True, "name": name, "need_region": bool(need_region)}
 
     # ------------------------------------------------------------------ 念出我的譯文（2.9.0）
 

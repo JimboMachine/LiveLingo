@@ -1,4 +1,136 @@
 {
+  "2.14.0": {
+    "zh-TW": [
+      "新增「不翻的字」（詞彙與記憶頁）：gg、ㅋㅋ、朋友的遊戲 ID 照原樣留著。對方的話裡一直出現、像遊戲 ID 的字，出現第 3 次會問你一次要不要固定不翻；說「不是名字」就不再問。",
+      "數字保護：譯文裡的數字跟原文對不上（3 點被翻成 30 點），重翻還是不對時，直接把原文的數字放回去。",
+      "語音辨識會優先聽出你的詞彙表和不翻的字（遊戲 ID、名字），比較不會聽成別的字。",
+      "新增「開遊戲就開始翻」（螢幕讀取頁）：框過的程式、只聽的程式或認得的遊戲一打開，就自動開始讀畫面和聽對方；遊戲關掉只關掉它自己打開的。",
+      "框選區域可以設成「劇情對話框」：字一個一個跳出來的 RPG 對話框，會等字打完、連續兩次讀到一樣的字才翻，不會翻到半句。",
+      "新增「念對方的話給我聽」（朗讀設定）：對方說的話翻好後，用 Windows 的聲音念到你選的耳機或喇叭；畫面上的聊天也可以念。麥克風收到念出來的聲音不會再翻一次。",
+      "首頁新增情境卡（遊戲、影片、通話、直播）：一鍵換好顯示方式和要開的來源。新增隱私暫停（右上角的鎖，或 Ctrl+Shift+H）：翻譯照常，但不記任何紀錄，重開程式會自動恢復。",
+      "翻譯品質頁新增「翻譯自我檢查」：用一組以前翻錯過的真實句子重翻、打分，告訴你哪幾句這次比上次差。只在這台電腦上跑。"
+    ],
+    "zh-CN": [
+      "新增“不翻的字”（词汇与记忆页）：gg、ㅋㅋ、朋友的游戏 ID 原样保留。对方的话里一直出现、像游戏 ID 的字，出现第 3 次会问你一次要不要固定不翻；说“不是名字”就不再问。",
+      "数字保护：译文里的数字跟原文对不上（3 点被翻成 30 点），重翻还是不对时，直接把原文的数字放回去。",
+      "语音识别会优先听出你的词汇表和不翻的字（游戏 ID、名字），比较不会听成别的字。",
+      "新增“打开游戏就开始翻”（屏幕读取页）：框过的程序、只听的程序或认得的游戏一打开，就自动开始读屏幕和听对方；游戏关掉只关掉它自己打开的。",
+      "框选区域可以设成“剧情对话框”：字一个一个跳出来的 RPG 对话框，会等字打完、连续两次读到一样的字才翻，不会翻到半句。",
+      "新增“念对方的话给我听”（朗读设置）：对方说的话翻好后，用 Windows 的声音念到你选的耳机或音箱；屏幕上的聊天也可以念。麦克风收到念出来的声音不会再翻一次。",
+      "首页新增情境卡（游戏、视频、通话、直播）：一键换好显示方式和要开的来源。新增隐私暂停（右上角的锁，或 Ctrl+Shift+H）：翻译照常，但不记任何记录，重开程序会自动恢复。",
+      "翻译质量页新增“翻译自我检查”：用一组以前翻错过的真实句子重翻、打分，告诉你哪几句这次比上次差。只在这台电脑上运行。"
+    ],
+    "en": [
+      "New \"Words to keep\" (Words and memory page): gg, ㅋㅋ and friends' game IDs stay as they are. A word that keeps showing up and looks like a game ID is offered after its 3rd time; say \"not a name\" and it never asks again.",
+      "Number protection: if a translation still has the wrong numbers after a retry (3 o'clock became 30), the original numbers are put back.",
+      "Speech recognition now listens for your glossary and kept words (game IDs, names) first, so it mishears them less.",
+      "New \"Start when a game opens\" (Screen page): when a program you capture or listen to, or a known game, opens, screen reading and listening start; when it closes, only what it started is turned off.",
+      "A screen area can now be a \"Story box\": for RPG text that types itself out, LiveLingo waits until the text stops and reads the same words twice before translating, so you never get half a sentence.",
+      "New \"Read their words to me\" (Read aloud settings): their translated words are spoken with a Windows voice on the headset or speaker you pick, screen chat too if you like. The mic will not translate that voice again.",
+      "Scenario cards on the home page (Game, Video, Call, Stream) set the display and sources in one click. New privacy pause (lock at the top right, or Ctrl+Shift+H): keeps translating but saves nothing, and is off again after a restart.",
+      "New \"Translation self-check\" on the Quality page: re-translates a set of real sentences that went wrong before, scores them, and tells you which ones got worse since last time. Runs only on this PC."
+    ],
+    "ko": [
+      "\"번역하지 않을 단어\" 추가(단어와 기억 페이지): gg, ㅋㅋ, 친구 게임 ID를 그대로 둡니다. 상대 말에 자주 나오는 게임 ID 같은 단어는 세 번째에 한 번 물어보고, \"이름 아님\"을 고르면 다시 묻지 않습니다.",
+      "숫자 보호: 다시 번역해도 숫자가 원문과 다르면(3시가 30시로) 원문의 숫자를 그대로 되돌려 넣습니다.",
+      "음성 인식이 단어장과 번역하지 않을 단어(게임 ID, 이름)를 먼저 알아듣도록 해서 잘못 듣는 일이 줄었습니다.",
+      "\"게임을 켜면 번역 시작\" 추가(화면 페이지): 영역을 지정한 프로그램, 듣는 프로그램, 알려진 게임이 켜지면 화면 읽기와 듣기를 시작하고, 꺼지면 자동으로 켠 것만 끕니다.",
+      "화면 영역을 \"스토리 대화창\"으로 지정할 수 있습니다. 글자가 한 자씩 나오는 RPG 대화창은 다 나온 뒤 같은 글자를 두 번 읽어야 번역해서 반쪽 문장이 나오지 않습니다.",
+      "\"상대 말 읽어 주기\" 추가(읽어 주기 설정): 상대 말을 번역한 뒤 Windows 음성으로 고른 헤드셋이나 스피커에 읽어 줍니다. 화면 채팅도 가능합니다. 마이크가 그 소리를 다시 번역하지 않습니다.",
+      "홈에 상황 카드(게임, 영상, 통화, 방송) 추가: 한 번에 표시 방식과 소스를 바꿉니다. 기록 일시 중지 추가(오른쪽 위 자물쇠 또는 Ctrl+Shift+H): 번역은 계속하되 아무것도 저장하지 않고, 다시 켜면 해제됩니다.",
+      "번역 품질 페이지에 \"번역 자가 점검\" 추가: 예전에 틀렸던 실제 문장을 다시 번역해 채점하고, 지난번보다 나빠진 문장을 알려 줍니다. 이 PC에서만 실행됩니다."
+    ],
+    "ja": [
+      "「訳さない言葉」を追加（単語と記憶ページ）：gg、ㅋㅋ、友達のゲーム ID をそのまま残します。相手の発言に何度も出るゲーム ID らしい言葉は 3 回目に一度だけ確認し、「名前ではない」を選ぶと二度と聞きません。",
+      "数字の保護：言い直しても訳文の数字が原文と合わない（3 時が 30 時になる）とき、原文の数字を戻します。",
+      "音声認識が単語帳と訳さない言葉（ゲーム ID、名前）を優先して聞き取るので、聞き間違いが減りました。",
+      "「ゲームを開いたら翻訳開始」を追加（画面ページ）：範囲を指定したプログラム、聞くプログラム、既知のゲームが開くと画面読み取りと聞き取りを始め、閉じると自分で始めたものだけ止めます。",
+      "画面の範囲を「ストーリー枠」に設定できます。一文字ずつ表示される RPG の会話枠は、表示が終わり同じ文字を 2 回読んでから翻訳するので、途中の文を訳しません。",
+      "「相手の言葉を読み上げ」を追加（読み上げ設定）：相手の発言を訳したあと Windows の音声で選んだヘッドセットやスピーカーに読み上げます。画面のチャットも可。マイクがその声を再翻訳しません。",
+      "ホームにシーンカード（ゲーム、動画、通話、配信）を追加：表示と入力元をワンクリックで切り替えます。プライバシー一時停止（右上の鍵か Ctrl+Shift+H）：翻訳は続け、記録は残さず、再起動で解除。",
+      "翻訳品質ページに「翻訳セルフチェック」を追加：以前誤訳した実際の文を訳し直して採点し、前回より悪くなった文を知らせます。この PC だけで実行します。"
+    ],
+    "vi": [
+      "Thêm \"Từ không dịch\" (trang Từ vựng và ghi nhớ): gg, ㅋㅋ, ID game của bạn bè được giữ nguyên. Từ trông như ID game xuất hiện lần thứ 3 sẽ được hỏi một lần; chọn \"không phải tên\" thì không hỏi lại.",
+      "Bảo vệ số: nếu dịch lại vẫn sai số so với bản gốc (3 giờ thành 30 giờ), LiveLingo đặt lại số của bản gốc.",
+      "Nhận dạng giọng nói ưu tiên nghe ra từ điển của bạn và các từ không dịch (ID game, tên), nên ít nghe nhầm hơn.",
+      "Thêm \"Bắt đầu khi mở game\" (trang Màn hình): khi chương trình bạn khoanh vùng, chương trình đang nghe hoặc game quen thuộc mở ra, tự bắt đầu đọc màn hình và nghe; khi đóng, chỉ tắt những gì nó đã bật.",
+      "Vùng màn hình có thể đặt là \"Khung cốt truyện\": với hội thoại RPG hiện từng chữ, LiveLingo đợi chữ hiện hết và đọc giống nhau hai lần mới dịch, không dịch nửa câu.",
+      "Thêm \"Đọc lời đối phương cho tôi\" (cài đặt Đọc to): lời đối phương sau khi dịch được đọc bằng giọng Windows ra tai nghe hoặc loa bạn chọn, cả chat trên màn hình. Micro không dịch lại giọng đó.",
+      "Trang chủ có thẻ tình huống (Game, Video, Gọi, Phát trực tiếp) đổi hiển thị và nguồn bằng một nhấp. Tạm dừng riêng tư (ổ khóa góc phải hoặc Ctrl+Shift+H): vẫn dịch nhưng không lưu gì, khởi động lại sẽ tắt.",
+      "Trang Chất lượng có \"Tự kiểm tra bản dịch\": dịch lại các câu thật từng dịch sai, chấm điểm và cho biết câu nào kém hơn lần trước. Chỉ chạy trên máy này."
+    ],
+    "th": [
+      "เพิ่ม \"คำที่ไม่แปล\" (หน้าคำศัพท์และความจำ): gg, ㅋㅋ และ ID เกมของเพื่อนจะคงไว้ตามเดิม คำที่ดูเหมือน ID เกมและโผล่ซ้ำจะถามหนึ่งครั้งในครั้งที่ 3 ถ้าเลือก \"ไม่ใช่ชื่อ\" จะไม่ถามอีก",
+      "ป้องกันตัวเลข: ถ้าแปลใหม่แล้วตัวเลขยังไม่ตรงกับต้นฉบับ (3 โมงกลายเป็น 30) จะใส่ตัวเลขจากต้นฉบับกลับไป",
+      "การรู้จำเสียงจะฟังคำในอภิธานศัพท์และคำที่ไม่แปล (ID เกม ชื่อ) ก่อน จึงฟังผิดน้อยลง",
+      "เพิ่ม \"เริ่มแปลเมื่อเปิดเกม\" (หน้าหน้าจอ): เมื่อโปรแกรมที่ตีกรอบไว้ โปรแกรมที่ฟัง หรือเกมที่รู้จักเปิดขึ้น จะเริ่มอ่านหน้าจอและฟังเอง เมื่อปิดจะปิดเฉพาะสิ่งที่มันเปิดเอง",
+      "ตั้งพื้นที่หน้าจอเป็น \"กล่องเนื้อเรื่อง\" ได้: กล่องข้อความ RPG ที่พิมพ์ทีละตัวจะรอจนพิมพ์จบและอ่านได้เหมือนกันสองครั้งก่อนแปล จึงไม่แปลครึ่งประโยค",
+      "เพิ่ม \"อ่านคำของอีกฝ่ายให้ฟัง\" (ตั้งค่าการอ่านออกเสียง): แปลคำของอีกฝ่ายแล้วอ่านด้วยเสียง Windows ไปยังหูฟังหรือลำโพงที่เลือก รวมแชทบนจอได้ ไมค์จะไม่แปลเสียงนั้นซ้ำ",
+      "หน้าแรกมีการ์ดสถานการณ์ (เกม วิดีโอ โทร สตรีม) เปลี่ยนการแสดงผลและแหล่งเสียงในคลิกเดียว พักความเป็นส่วนตัว (แม่กุญแจมุมขวาบนหรือ Ctrl+Shift+H): แปลต่อแต่ไม่บันทึกอะไร เปิดใหม่จะกลับเป็นปกติ",
+      "หน้าคุณภาพมี \"ตรวจคำแปลด้วยตัวเอง\": แปลประโยคจริงที่เคยแปลผิดอีกครั้ง ให้คะแนน และบอกว่าประโยคไหนแย่ลงจากครั้งก่อน ทำงานบนเครื่องนี้เท่านั้น"
+    ],
+    "id": [
+      "Baru \"Kata yang tidak diterjemahkan\" (halaman Kata dan memori): gg, ㅋㅋ, dan ID game teman tetap apa adanya. Kata mirip ID game yang terus muncul ditanyakan sekali pada kali ke-3; pilih \"bukan nama\" agar tidak ditanya lagi.",
+      "Perlindungan angka: jika setelah diulang angkanya masih beda dari aslinya (jam 3 jadi 30), angka aslinya dikembalikan.",
+      "Pengenalan suara kini mendahulukan glosarium dan kata yang tidak diterjemahkan (ID game, nama), jadi lebih jarang salah dengar.",
+      "Baru \"Mulai saat game dibuka\" (halaman Layar): saat program yang Anda tandai, program yang didengar, atau game yang dikenal terbuka, baca layar dan mendengar dimulai; saat ditutup, hanya yang ia nyalakan yang dimatikan.",
+      "Area layar bisa diatur sebagai \"Kotak cerita\": untuk teks RPG yang muncul huruf demi huruf, LiveLingo menunggu teks selesai dan terbaca sama dua kali sebelum menerjemahkan, jadi tidak setengah kalimat.",
+      "Baru \"Bacakan kata mereka untuk saya\" (pengaturan Bacakan): kata lawan bicara yang sudah diterjemahkan dibacakan dengan suara Windows ke headset atau speaker pilihan, chat layar juga bisa. Mikrofon tidak menerjemahkannya lagi.",
+      "Kartu situasi di beranda (Game, Video, Panggilan, Siaran) mengganti tampilan dan sumber sekali klik. Jeda privasi (gembok kanan atas atau Ctrl+Shift+H): tetap menerjemahkan tanpa menyimpan apa pun, mati lagi setelah restart.",
+      "Baru \"Cek mandiri terjemahan\" di halaman Kualitas: menerjemahkan ulang kalimat nyata yang dulu salah, memberi nilai, dan memberi tahu mana yang memburuk sejak terakhir. Hanya berjalan di PC ini."
+    ],
+    "es": [
+      "Nuevo \"Palabras que no se traducen\" (página Palabras y memoria): gg, ㅋㅋ y los ID de tus amigos quedan tal cual. Una palabra con pinta de ID que se repite se ofrece a la 3.ª vez; elige \"no es un nombre\" y no vuelve a preguntar.",
+      "Protección de números: si tras reintentar la traducción sigue con números distintos (las 3 pasan a 30), se vuelven a poner los del original.",
+      "El reconocimiento de voz ahora busca primero tu glosario y las palabras que no se traducen (ID, nombres), así que las confunde menos.",
+      "Nuevo \"Empezar al abrir un juego\" (página Pantalla): cuando se abre un programa que capturas o escuchas, o un juego conocido, empieza a leer la pantalla y escuchar; al cerrarlo apaga solo lo que encendió.",
+      "Un área de pantalla puede ser \"Cuadro de historia\": en textos de RPG que aparecen letra a letra, LiveLingo espera a que terminen y lee lo mismo dos veces antes de traducir, así no traduce media frase.",
+      "Nuevo \"Léeme lo que dicen\" (ajustes de Leer en voz alta): sus palabras traducidas se leen con una voz de Windows en los auriculares o altavoces que elijas, también el chat de pantalla. El micro no vuelve a traducir esa voz.",
+      "Tarjetas de escena en el inicio (Juego, Vídeo, Llamada, Directo) cambian vista y fuentes de un clic. Pausa privada (candado arriba a la derecha o Ctrl+Shift+H): sigue traduciendo sin guardar nada y se quita al reiniciar.",
+      "Nueva \"Autoprueba de traducción\" en la página Calidad: retraduce frases reales que antes salieron mal, las puntúa y te dice cuáles empeoraron desde la última vez. Solo en este PC."
+    ],
+    "pt": [
+      "Novo \"Palavras que não se traduzem\" (página Palavras e memória): gg, ㅋㅋ e IDs de amigos ficam como estão. Uma palavra com cara de ID que se repete é oferecida na 3.ª vez; escolha \"não é nome\" e ela não pergunta mais.",
+      "Proteção de números: se após nova tentativa os números ainda não batem com o original (3 horas virou 30), os números originais são recolocados.",
+      "O reconhecimento de voz agora procura primeiro seu glossário e as palavras que não se traduzem (IDs, nomes), errando menos.",
+      "Novo \"Começar ao abrir um jogo\" (página Tela): quando abre um programa que você captura ou ouve, ou um jogo conhecido, a leitura de tela e a escuta começam; ao fechar, só desliga o que ele ligou.",
+      "Uma área da tela pode ser \"Caixa de história\": em textos de RPG que aparecem letra por letra, o LiveLingo espera terminar e ler igual duas vezes antes de traduzir, sem meia frase.",
+      "Novo \"Ler as falas deles para mim\" (ajustes de Ler em voz alta): as falas traduzidas são lidas com uma voz do Windows no fone ou alto-falante escolhido, o chat da tela também. O microfone não traduz essa voz de novo.",
+      "Cartões de cena no início (Jogo, Vídeo, Chamada, Live) trocam exibição e fontes num clique. Pausa privada (cadeado no canto ou Ctrl+Shift+H): continua traduzindo sem salvar nada e desliga ao reiniciar.",
+      "Novo \"Autoteste de tradução\" na página Qualidade: retraduz frases reais que já deram errado, dá nota e mostra quais pioraram desde a última vez. Roda só neste PC."
+    ],
+    "ru": [
+      "Новое: «Слова без перевода» (страница «Слова и память»): gg, ㅋㅋ и игровые ID друзей остаются как есть. Слово, похожее на ID и часто встречающееся, предлагается на 3-й раз; «не имя» — и больше не спросит.",
+      "Защита чисел: если после повтора числа в переводе всё ещё не совпадают (3 часа стали 30), подставляются числа из оригинала.",
+      "Распознавание речи теперь в первую очередь ищет ваш словарь и слова без перевода (ID, имена) и реже их путает.",
+      "Новое: «Начинать при запуске игры» (страница «Экран»): когда открывается программа с областью захвата, прослушиваемая программа или известная игра, включаются чтение экрана и прослушивание; при закрытии выключается только включённое ею.",
+      "Область экрана можно сделать «Окном сюжета»: для текста RPG, печатающегося по буквам, LiveLingo ждёт конца и дважды читает одно и то же, прежде чем переводить, без полуфраз.",
+      "Новое: «Читать мне их слова» (настройки озвучки): переведённые слова собеседника читаются голосом Windows в выбранные наушники или колонки, можно и чат с экрана. Микрофон не переводит этот голос снова.",
+      "Карточки сценариев на главной (Игра, Видео, Звонок, Стрим) меняют вид и источники в один клик. Приватная пауза (замок справа вверху или Ctrl+Shift+H): перевод идёт, но ничего не сохраняется; после перезапуска выключена.",
+      "Новое: «Самопроверка перевода» на странице «Качество»: заново переводит реальные фразы, где раньше были ошибки, ставит оценки и показывает, что стало хуже. Работает только на этом ПК."
+    ],
+    "de": [
+      "Neu: „Nicht übersetzen“ (Seite Wörter und Gedächtnis): gg, ㅋㅋ und Spieler-IDs von Freunden bleiben, wie sie sind. Ein Wort, das wie eine ID aussieht und oft vorkommt, wird beim 3. Mal angeboten; „kein Name“ fragt nie wieder.",
+      "Zahlenschutz: Stimmen die Zahlen auch nach einem neuen Versuch nicht (aus 3 Uhr wurde 30), werden die Zahlen aus dem Original eingesetzt.",
+      "Die Spracherkennung achtet jetzt zuerst auf dein Glossar und nicht übersetzte Wörter (IDs, Namen) und verhört sich seltener.",
+      "Neu: „Starten, wenn ein Spiel öffnet“ (Seite Bildschirm): Öffnet sich ein erfasstes oder gehörtes Programm oder ein bekanntes Spiel, starten Bildschirmlesen und Zuhören; beim Schließen wird nur abgeschaltet, was es selbst gestartet hat.",
+      "Ein Bildschirmbereich kann eine „Story-Box“ sein: Bei RPG-Text, der Buchstabe für Buchstabe erscheint, wartet LiveLingo, bis er fertig ist und zweimal gleich gelesen wird, und übersetzt keinen halben Satz.",
+      "Neu: „Ihre Worte vorlesen“ (Vorlese-Einstellungen): Übersetzte Worte der anderen werden mit einer Windows-Stimme auf Headset oder Lautsprecher deiner Wahl gelesen, auch Bildschirm-Chat. Das Mikro übersetzt diese Stimme nicht erneut.",
+      "Szenenkarten auf der Startseite (Spiel, Video, Anruf, Stream) stellen Anzeige und Quellen mit einem Klick um. Privatpause (Schloss oben rechts oder Ctrl+Shift+H): übersetzt weiter, speichert nichts, nach Neustart aus.",
+      "Neu: „Übersetzungs-Selbsttest“ auf der Seite Qualität: übersetzt echte, früher falsch übersetzte Sätze neu, bewertet sie und zeigt, welche seit dem letzten Mal schlechter wurden. Läuft nur auf diesem PC."
+    ],
+    "fr": [
+      "Nouveau « Mots à garder » (page Mots et mémoire) : gg, ㅋㅋ et les ID de vos amis restent tels quels. Un mot qui ressemble à un ID et revient souvent est proposé à la 3e fois ; « pas un nom » et il ne redemande plus.",
+      "Protection des nombres : si après un nouvel essai les nombres ne correspondent toujours pas (3 h devient 30), ceux de l'original sont remis.",
+      "La reconnaissance vocale cherche d'abord votre glossaire et les mots à garder (ID, noms), et se trompe moins.",
+      "Nouveau « Démarrer à l'ouverture d'un jeu » (page Écran) : quand un programme capturé ou écouté, ou un jeu connu, s'ouvre, la lecture d'écran et l'écoute démarrent ; à la fermeture, seul ce qu'il a lancé s'arrête.",
+      "Une zone d'écran peut devenir « Boîte d'histoire » : pour un texte de RPG qui s'écrit lettre par lettre, LiveLingo attend la fin et deux lectures identiques avant de traduire, sans demi-phrase.",
+      "Nouveau « Me lire leurs paroles » (réglages Lecture à voix haute) : leurs paroles traduites sont lues avec une voix Windows sur le casque ou haut-parleur choisi, le chat à l'écran aussi. Le micro ne retraduit pas cette voix.",
+      "Cartes de scène à l'accueil (Jeu, Vidéo, Appel, Stream) : affichage et sources en un clic. Pause privée (cadenas en haut à droite ou Ctrl+Shift+H) : traduit toujours sans rien enregistrer, désactivée au redémarrage.",
+      "Nouveau « Autotest de traduction » sur la page Qualité : retraduit de vraies phrases déjà mal traduites, les note et indique celles qui se sont dégradées depuis la dernière fois. Seulement sur ce PC."
+    ]
+  },
   "2.13.1": {
     "zh-TW": [
       "出錯訊息改成一句白話：不再直接跳出「RuntimeError…」這類原文，而是說發生了什麼、可以怎麼做（磁碟滿了、被別的程式用著、沒有權限、找不到裝置、網路不通…）。電腦回報的原文收進「詳細」，回報問題時再展開。",

@@ -505,6 +505,16 @@
 
 自動把關：測試會擋：解聲音（有 PyAV 就真的解一個 wav）、字幕檔的格式和時間、三種內容、不蓋掉舊檔、唯讀資料夾改存別處、重複句只留一個、聊天排隊時先等、取消會存已做好的、各種錯誤代碼、翻好的記進作品。真的影片和語音模型，在雲端用過 tiny 模型跑過一次；實際速度和 Windows 的選檔視窗要在你的電腦上試。
 
+### 不翻的字、名字建議、數字修正、隱私暫停、遊戲自動開、劇情框、念出來、情境卡、翻譯健檢（2.14.0）
+
+1. `names.py`、`translate.py`：clean_words、candidates、NameWatch.add、hotwords；repair_numbers、tidy(keep)、translate(fresh)
+2. `service.py`、`server.py`、`config.py`：keep_words/name_skip/name_suggest/game_start/speak_heard* 在 DEFAULTS 和 EDITABLE；RESET_KEEP；/api/names /api/private /api/scenario /api/quality；private 不寫 history、transcript、memory
+3. `watcher.py`、`speech.py`、`core/speak.py`：STORY_WAIT 和 story_text；hotwords 只在不是空的時候帶；reader.recent() 算進 _is_own_voice
+4. `qualitycheck.py`：quality_cases.json 的檢查種類；quality.json 只留 10 次
+5. `hotkeys.py`、`app.js`、`i18n.js`、`style.css`、`index.html`：private 熱鍵 Ctrl+Shift+H 和 NOTES 13 種語言；i18n 新字 13 種語言都有
+
+自動把關：測試會擋：數字修正、tidy 留下不翻的字、名字候選和第三次才問、熱詞、健檢的打分、自動開關只關自己開的、隱私暫停不寫紀錄、念出來的聲音不被當成對方、劇情框等字停、情境卡、各個 /api。真的遊戲畫面、語音熱詞效果、Windows 念出來的聲音要在你的電腦上試。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -550,6 +560,8 @@
 | 對話摘要：切出一段段對話、存摘要、搜尋 | `livelingo/recap.py` | `service.py`：切出對話（sessions、worth、GAP）、存摘要、搜尋（改壞會報錯） |
 | 框選翻譯：把辨識出的一列列字接成一段段 | `livelingo/snap.py` | `service.py`：框選翻譯把辨識出的字接成段（paragraphs）（改壞會報錯）<br>`inplace.py`：一段一段的方框（blocks）（改壞會報錯） |
 | 喊我名字提醒：名字和關鍵字的整理、比對 | `livelingo/mention.py` | `service.py`：名字、關鍵字的整理（clean_words）和比對（find）；訊息的 mention 欄位（改壞會報錯） |
+| 不翻的字和名字建議：整理、像不像遊戲 ID、出現三次就問；語音辨識的熱詞 | `livelingo/names.py` | `service.py`：keep_words 和 name_skip 的整理（clean_words）、NameWatch 名字建議、hotwords 給語音辨識（改壞會報錯） |
+| 翻譯健檢：拿固定的真實句子重翻、打分、跟上一次比 | `livelingo/qualitycheck.py`<br>`livelingo/data/quality_cases.json` | `service.py`：QualityCheck：/api/quality 開始、停止；用 translator.translate(fresh=True)（改壞會報錯） |
 | 常用句庫：存句子和各語言的譯文（phrases.json） | `livelingo/phrases.py` | `service.py`：常用句庫（Phrasebook：add、remove、set_translation、missing、listing、state）（改壞會報錯） |
 | 原地覆蓋翻譯：把譯文畫在畫面上原文的位置 | `livelingo/inplace.py` | `service.py`：原地覆蓋翻譯（InPlace：set_on、update、reset、keep_only、clear_cache、close）（改壞會報錯）<br>`watcher.py`：每辨識一次畫面就交過去（on_frame）；接手的區域不再送去浮動留言（改壞不會報錯） |
 | 影片、音訊檔做雙語字幕：解聲音、切句、寫 .srt | `livelingo/filesubs.py` | `service.py`：影片字幕的工作（Job、decode、EXTS、MODES、MAX_SECONDS、is_media）（改壞會報錯） |
@@ -581,11 +593,11 @@
 | 看螢幕 | `livelingo/core/watcher.py` | `inplace.py`：normalize（同一段字的比對用）（改壞會報錯）<br>`service.py`：看螢幕（文字、語言、辨識分數）（改壞會報錯） |
 | 文字辨識 | `livelingo/core/ocr.py` | `snap.py`：辨識出的每一列（Line：text、x、y、h、w、score）（改壞不會報錯）<br>`service.py`：文字辨識；對方的語言用哪一個辨識模型（model_of），讀螢幕自動偵測時同一個模型的語言都會一起讀（改壞會報錯）<br>`watcher.py`：辨識結果（改壞會報錯） |
 | 收音 | `livelingo/core/audio.py` | `core/speak.py`：播到選的播放裝置（_soundcard，跟「對方的聲音從哪個裝置出來」同一份清單）（改壞會報錯）<br>`service.py`：收音、裝置清單（改壞會報錯）<br>`procaudio.py`：取樣率、每段長度（對外的樣子要跟 Capture 一樣）（改壞會報錯）<br>`speech.py`：取樣率（改壞會報錯）<br>`voices.py`：取樣率（改壞會報錯） |
-| 語音辨識 | `livelingo/core/speech.py` | `filesubs.py`：一句一句辨識（Service 把 Recognizer.transcribe 傳進來）（改壞不會報錯）<br>`service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯） |
+| 語音辨識 | `livelingo/core/speech.py` | `filesubs.py`：一句一句辨識（Service 把 Recognizer.transcribe 傳進來）（改壞不會報錯）<br>`service.py`：語音辨識（文字、語言、有沒有把握）、自動偵測語言；還在說就先辨識（on_partial：文字／空字串＝說完了／None＝收回）（改壞會報錯）<br>`meters.py`：音量算法（改壞會報錯）<br>`names.py`：hotwords 字串交給 faster-whisper 的 hotwords（空的就不帶）（改壞不會報錯） |
 | 分辨說話者（聲紋） | `livelingo/core/voices.py` | `service.py`：每一句是第幾個說話者；分出來的人和名字平常只在記憶體裡（改壞會報錯）<br>`voicebook.py`：聲紋的長度和模型（MODEL、DIM）要跟聲紋模型一致；換模型舊檔就作廢（改壞不會報錯）<br>`speech.py`：每一句說完問一次是誰（who），交給 on_text 的 speaker（改壞不會報錯） |
 | 只收指定程式的聲音 | `livelingo/core/procaudio.py` | `__main__.py`：試收模式（--probe-app-audio）（改壞會報錯）<br>`service.py`：只聽指定程式（可多選），不行就退回整台電腦（改壞會報錯） |
 | 音量 | `livelingo/meters.py` | `service.py`：音量條（改壞會報錯） |
-| 翻譯 | `livelingo/core/translate.py` | `core/assist.py`：語言名稱（LANGS）、韓日文的說法（REGISTER）、繁簡轉換；用 Translator.ask_free 送給模型（改壞會報錯）<br>`service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言；拉丁字母的語言（LATIN）分不清時歸給唯一在讀的那一種（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯） |
+| 翻譯 | `livelingo/core/translate.py` | `core/assist.py`：語言名稱（LANGS）、韓日文的說法（REGISTER）、繁簡轉換；用 Translator.ask_free 送給模型（改壞會報錯）<br>`service.py`：翻譯（可以帶前面兩句當前文；on_part 讓譯文邊翻邊出）、語言清單（LANGS）、翻完核對數字（numbers_lost）、一則最長幾個字（MAX_TEXT）（改壞會報錯）<br>`config.py`：介面語言要等於翻譯語言（改壞不會報錯）<br>`watcher.py`：判斷語言；拉丁字母的語言（LATIN）分不清時歸給唯一在讀的那一種（改壞會報錯）<br>`terms.py`：繁簡轉換（改壞會報錯）<br>`qualitycheck.py`：_leftover、meta_reply、numbers_lost：健檢用翻譯那邊同一套判斷（改壞會報錯）<br>`names.py`：不翻的字當成 word = word 的詞彙；tidy 的 keep 不把 ㅋㅋ 換掉（改壞不會報錯） |
 | 翻譯引擎 | `livelingo/core/engine.py` | `service.py`：翻譯引擎；用到一半停了會自動重開（engine-stopped.log 留一份給問題報告）；每次啟動把新的網址和金鑰交給翻譯（改壞會報錯）<br>`translate.py`：引擎每次啟動的金鑰（環境變數 LLAMA_API_KEY；請求要帶 Authorization: Bearer）（改壞不會報錯） |
 | 用語包（可多選） | `livelingo/terms.py`<br>`livelingo/data/terms_lol.json`<br>`livelingo/data/terms_chat.json` | `service.py`：現在在玩哪個遊戲（find_game）、照遊戲挑用語包（packs_for）、遊戲名字（game_name）（改壞會報錯）<br>`service.py`：遊戲用語（改壞會報錯） |
 | 韓文唸法 | `livelingo/core/romanize.py` | `service.py`：韓文唸法（改壞會報錯） |

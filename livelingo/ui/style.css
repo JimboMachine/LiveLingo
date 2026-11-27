@@ -700,3 +700,12 @@ pre.raw { margin: 4px 0 0; max-height: 140px; overflow: auto; padding: 8px 10px;
 .fs-live .fs-name, .fs-path { overflow-wrap: anywhere; }
 .fs-live .fs-last { overflow-wrap: anywhere; }
 .fs-path { display: block; margin-top: 2px; }
+
+/* 2.14.0：首頁情境卡、劇情對話框開關、翻譯自我檢查 */
+.scen-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 10px; }
+.scen-row .pill.scen { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; }
+.scen-row .pill.scen svg { width: 16px; height: 16px; }
+.region-card .rstory { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.region-card .rstory > span { display: flex; flex-direction: column; gap: 2px; }
+.qc-list { display: flex; flex-direction: column; gap: 6px; }
+#btn-private[aria-pressed="true"] { color: var(--accent); }
