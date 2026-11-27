@@ -33,7 +33,8 @@ from .names import NameWatch
 from .qualitycheck import QualityCheck
 from . import textfix
 from .corrections import Corrections
-from . import gametools
+from . import cheatsheet, gametools, imagetext
+from . import gamepad as gamepad_mod
 from .album import Album
 from .storybook import StoryBook
 from .history import History
@@ -79,6 +80,9 @@ SETTINGS_KIND = "livelingo-settings"      # 匯出檔裡用來認「這是 LiveL
 SETTINGS_SKIP = ("window", "layout", "hotkeys_v", "setup_done", "tray_hint_shown", "seen_version", "region", "sources", "store_dir", "store_leftover", "stream_key")
 # 恢復預設時留著不動的：語言、框好的聊天區、自己存的版面、字幕資料夾（這些是花力氣弄好的，不是「調壞了的設定」）
 RESET_KEEP = ("ui_lang", "my_lang", "their_lang", "regions", "overlay_layouts", "transcript_dir", "keep_words", "name_skip", "abbr_skip", "game_profiles", "player_notes")
+MAX_PINS = 3                                   # 浮動字幕最上面最多釘幾句（2.17.0）
+KEYS_SECONDS = 10.0                            # 快捷鍵一覽小卡停幾秒
+CHAT_OPEN_KEYS = ("enter", "slash", "t", "none")      # 說話送進遊戲聊天：先按哪個鍵打開聊天框
 ADVANCED_RANGE = {"interval": (0.2, 5.0), "ocr_scale": (1.0, 3.0), "whisper_threads": (1, 32), "threads": (0, 64),
                   "stream_port": (1024, 65000)}
 LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLingo 的詞彙檔」
@@ -226,6 +230,8 @@ class Service:
         self.album = Album(self.data)               # 框選翻譯相簿（2.16.0）
         self._profile_game = ""                     # 遊戲專屬版面：上一次套用的是哪個遊戲
         self._fullscreen_told = False               # 獨佔全螢幕提醒：這次開遊戲說過了
+        self.pins: list[int] = []                   # 釘在浮動字幕最上面的句子（2.17.0，最多 MAX_PINS 句）
+        self.gamepad = gamepad_mod.Gamepad(self._pad_action)      # 手把快捷鍵（2.17.0，預設關）
         self.quality = QualityCheck(self.data, on_change=lambda st: self.hub.publish("quality", st), log=self.log)
         self.private = False              # 隱私暫停（2.14.0）：開著的時候翻譯照常，但什麼紀錄都不留（不存設定檔，重開就回到平常）
         self._auto_started: list[str] = []    # 開遊戲就開始翻：是我（不是使用者）打開的來源，遊戲關掉時只關這些
@@ -405,6 +411,8 @@ class Service:
             "corrections": self.corrections.report(),
             "album": self.album.list()[:60],
             "templates": sorted(gametools.templates()),
+            "pins": list(self.pins),
+            "gamepad": {"available": self.gamepad.available, "buttons": list(gamepad_mod.BUTTONS), "defaults": dict(gamepad_mod.DEFAULTS)},
             "scenarios": self.scenarios_state(),
             "replies": dict(self._replies),
             "words": {str(k): v for k, v in self._words.items()},
@@ -469,6 +477,7 @@ class Service:
             self.overlay.apply()
             self.stream.apply()
             self.start_hotkeys()
+            self._apply_gamepad()
             self._storage_cleanup()
             self.gpu = gpu.detect()
             self._speech_engine()      # 先把「語音辨識用顯示卡」現在的狀態算好，介面才知道要不要顯示下載
@@ -1047,7 +1056,10 @@ class Service:
             for old in list(self.messages):
                 if old["id"] == msg_id:
                     self.messages.remove(old)
+            unpin = msg_id in self.pins
         self.hub.publish("message_removed", {"id": msg_id})
+        if unpin:
+            self._unpin_gone(msg_id)
         self.overlay.on_removed(msg_id)
         self.stream.on_removed(msg_id)
         self.transcript.drop(msg_id)
@@ -1280,6 +1292,7 @@ class Service:
             self._alert(msg)
             self._card_done(msg, out)
             self._speak_mine(msg, target, out)
+            self._chat_send(msg, out)
             self._read_heard(msg, target, out)
             self._watch_names(msg)
             self._watch_abbr(msg)
@@ -2390,6 +2403,10 @@ class Service:
             self.snap_text()        # 同上：框選畫面要能跑到遊戲前面
         elif name == "pick":
             threading.Thread(target=self.pick_text, daemon=True, name="pick").start()      # 可能要等一下 Ctrl+C
+        elif name == "clipimg":
+            threading.Thread(target=self.clipboard_translate, daemon=True, name="clipimg").start()
+        elif name == "keys":
+            self.show_keys()
         else:
             threading.Thread(target=self._hotkey_work, args=(name,), daemon=True, name="hotkey").start()
 
@@ -2744,19 +2761,25 @@ class Service:
         covers = self.capture_mask()
         if covers:
             bgr = blank_covers(bgr, region, covers)
+        self._read_image(bgr, card=True)
+
+    def _read_image(self, bgr, card: bool = False) -> int:
+        """讀一張圖裡的字，一段一段送去翻（框選翻譯、拖進來的圖、剪貼簿的圖、攝影機都走這裡）。
+        card：結果顯示在滑鼠旁邊的小卡（人在遊戲裡）；不然只出現在主視窗的對話裡。回傳送出去幾段。"""
         groups = snap.paragraphs(self._load_ocr().read(bgr))
         if not groups:
             self._note("snap_nothing")
-            return
+            return 0
         shown: list[tuple[int, str]] = []
         with self._card_gate:
             for text in groups:
                 mid = self.submit("screen", text[:MAX_TEXT], None, asked=True)
                 if mid is not None:
                     shown.append((mid, text[:MAX_TEXT]))
-            if shown:
+            if shown and card:
                 self._card_show(shown)
         self._album_keep(bgr, shown)
+        return len(shown)
 
     # ------------------------------------------------------------------ 影片、音訊檔產生雙語字幕（2.13.0）
 
@@ -2977,8 +3000,10 @@ class Service:
         with self._lock:
             self.messages.clear()
             self._live.clear()
+            self.pins = []
         self.hub.publish("cleared", {})
         self.overlay.clear()
+        self.overlay.set_pins([])
         self.stream.clear()
 
     # ------------------------------------------------------------------ 設定
@@ -3015,6 +3040,13 @@ class Service:
             changes["speak_name"] = str(changes["speak_name"] or "")[:120]
         if "alert_words" in changes:
             changes["alert_words"] = mention.clean_words(changes["alert_words"])
+        if "gamepad_keys" in changes:
+            changes["gamepad_keys"] = gamepad_mod.clean(changes["gamepad_keys"], HOTKEY_ACTIONS)
+        if changes.get("chat_send_open") not in (None, *CHAT_OPEN_KEYS):
+            changes.pop("chat_send_open")
+        if "camera_index" in changes and not (isinstance(changes["camera_index"], int) and not isinstance(changes["camera_index"], bool)
+                                              and 0 <= changes["camera_index"] < 10):
+            changes.pop("camera_index")
         if "player_notes" in changes:
             changes["player_notes"] = gametools.clean_players(changes["player_notes"])
         if "wall_monitor" in changes and not (isinstance(changes["wall_monitor"], int) and not isinstance(changes["wall_monitor"], bool)
@@ -3162,6 +3194,10 @@ class Service:
             self._their_run = self._new_run()      # 語言是使用者改的：之前聽到一半的不再算
         if changed("hotkeys"):
             self.hotkeys.set(after["hotkeys"])
+        if changed("gamepad_on", "gamepad_keys"):
+            self._apply_gamepad()
+        if changed("overlay_hover_fade"):
+            self.overlay.wake()
         if changed("history_keep", "history_days"):
             self.history.configure(after["history_keep"], after["history_days"])
         if changed("usage_keep"):
@@ -3342,11 +3378,12 @@ class Service:
                 region["name"] = " ".join(item["name"].split())[:30]
             if "on" in item:
                 region["on"] = bool(item["on"])
-            if "story" in item:      # 劇情對話框：等字打完再翻（2.14.0）
-                if item["story"]:
-                    region["story"] = True
-                else:
-                    region.pop("story", None)
+            for flag in ("story", "comic"):      # 劇情對話框：等字打完再翻（2.14.0）；條漫長圖：一個對話框翻一則（2.17.0）
+                if flag in item:
+                    if item[flag]:
+                        region[flag] = True
+                    else:
+                        region.pop(flag, None)
             if isinstance(item.get("app"), str) and item["app"].strip()[:120] != (old.get("app") or ""):
                 exe = item["app"].strip()[:120]
                 rect = apps.window_rect(exe) if exe else None
@@ -3382,6 +3419,7 @@ class Service:
                 self.watcher.pair_lang = self._shown_pair_lang()
                 self.watcher.on_frame = self._on_frame
                 self.watcher.colors = bool(self.cfg["channel_colors"])
+                self.watcher.grouper = snap.paragraphs      # 條漫長圖模式（2.17.0）：一個對話框一則
                 self.watcher.slow_busy = bool(self.cfg["combat_slow"])
                 self.watcher.set_regions(self._regions_on())
                 self.watcher.start()
@@ -4236,6 +4274,121 @@ class Service:
                 out[word] = word
         return out
 
+    # ------------------------------------------------------------------ 2.17.0：圖片、手把、快捷鍵一覽、釘選、送進遊戲聊天
+
+    def image_translate(self, data_url: str) -> dict:
+        """拖進主視窗的圖片（介面讀成 data URL 送來）：讀字、一段一段翻，結果出現在對話裡。"""
+        if self.phase != "ready":
+            return {"ok": False, "error": "not_ready"}
+        bgr = imagetext.from_data_url(data_url)
+        if bgr is None:
+            return {"ok": False, "error": "bad_image"}
+        n = self._read_image(bgr)
+        return {"ok": True, "n": n} if n else {"ok": False, "error": "no_text"}
+
+    def clipboard_translate(self) -> dict:
+        """剪貼簿裡的圖（Win+Shift+S 截完按快速鍵）：讀字翻譯，結果在滑鼠旁邊的小卡上。"""
+        if self.phase != "ready":
+            self._note("not_ready")
+            return {"ok": False, "error": "not_ready"}
+        bgr = imagetext.clipboard_image()
+        if bgr is None:
+            self._note("clip_empty")
+            return {"ok": False, "error": "clip_empty"}
+        n = self._read_image(bgr, card=True)
+        return {"ok": True, "n": n} if n else {"ok": False, "error": "no_text"}
+
+    def camera_translate(self) -> dict:
+        """網路攝影機拍一張（菜單、說明書、包裝），讀字翻譯。拍完攝影機馬上關掉；照片只有開著相簿時才留。"""
+        if self.phase != "ready":
+            return {"ok": False, "error": "not_ready"}
+        bgr = imagetext.camera_frame(int(self.cfg["camera_index"]))
+        if bgr is None:
+            self._note("camera_failed")
+            return {"ok": False, "error": "camera_failed"}
+        n = self._read_image(bgr)
+        return {"ok": True, "n": n} if n else {"ok": False, "error": "no_text"}
+
+    def _apply_gamepad(self) -> None:
+        self.gamepad.set(gamepad_mod.clean(self.cfg["gamepad_keys"], HOTKEY_ACTIONS))
+        if self.cfg["gamepad_on"]:
+            if not self.gamepad.start():
+                self.log("gamepad: XInput is not available on this computer")
+        else:
+            self.gamepad.stop()
+        self.hub.publish("gamepad", {"available": self.gamepad.available, "on": bool(self.cfg["gamepad_on"])})
+
+    def _pad_action(self, name: str) -> None:
+        """手把組合按下去：跟按鍵盤快速鍵一樣。"""
+        if name in HOTKEY_ACTIONS:
+            self._hotkey(name)
+
+    def show_keys(self) -> list[str]:
+        """快捷鍵一覽：浮動字幕上跳一張小卡（停 KEYS_SECONDS 秒），主視窗也顯示一份。"""
+        pads = gamepad_mod.clean(self.cfg["gamepad_keys"], HOTKEY_ACTIONS) if self.cfg["gamepad_on"] else {}
+        lines = cheatsheet.lines(dict(self.cfg["hotkeys"]), pads, self.cfg["ui_lang"])
+        if not lines:
+            self._note("keys_none")
+            return []
+        self.overlay.on_removed("note")
+        self.overlay.push("note", "  ·  ".join(lines), key="note", life=KEYS_SECONDS)
+        self.hub.publish("keys_card", {"lines": lines})
+        return lines
+
+    def pin_action(self, mid, on: bool = True) -> dict:
+        """把一句釘在浮動字幕最上面（不會被新的洗掉），最多 MAX_PINS 句；再釘一句會把最早釘的拿掉。"""
+        try:
+            mid = int(mid)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "unknown"}
+        changed = []
+        with self._lock:
+            have = {m["id"]: m for m in self.messages}
+            msg = have.get(mid)
+            if msg is None or (on and (msg.get("pending") or msg.get("error") or not msg.get("translated"))):
+                return {"ok": False, "error": "unknown"}
+            self.pins = [p for p in self.pins if p in have and p != mid]
+            if on:
+                self.pins.append(mid)
+                for old in self.pins[:-MAX_PINS]:
+                    have[old].pop("pinned", None)
+                    changed.append(dict(have[old]))
+                self.pins = self.pins[-MAX_PINS:]
+                msg["pinned"] = True
+            else:
+                msg.pop("pinned", None)
+            changed.append(dict(msg))
+            pinned = [dict(have[p]) for p in self.pins]
+        for m in changed:
+            self.hub.publish("message", m)
+        self.overlay.set_pins(pinned)
+        return {"ok": True, "pins": list(self.pins)}
+
+    def _unpin_gone(self, msg_id: int) -> None:
+        """釘選的句子被拿掉了（對話裡刪了）：浮動字幕上也拿掉。"""
+        with self._lock:
+            self.pins = [p for p in self.pins if p != msg_id]
+            have = {m["id"]: m for m in self.messages}
+            pinned = [dict(have[p]) for p in self.pins if p in have]
+        self.overlay.set_pins(pinned)
+
+    def _chat_send(self, msg: dict, out: str) -> None:
+        """說話直接送進遊戲聊天（預設關）：我用麥克風說的話翻好後，替我按開聊天框的鍵、貼上、按 Enter。
+        LiveLingo 自己的視窗在最前面時不送（會貼到自己身上）。"""
+        if not self.cfg["chat_send"] or msg.get("who") != "me" or msg.get("via") != "spoken" or not out.strip():
+            return
+        if oswin.foreground_is_self():
+            return
+        open_key, submit = self.cfg["chat_send_open"], bool(self.cfg["chat_send_enter"])
+
+        def work():
+            if oswin.send_chat(out, open_key, submit):
+                self._note("chat_sent")
+            else:
+                self.log("chat send: could not type into the game")
+
+        threading.Thread(target=work, daemon=True, name="chat-send").start()
+
     # ------------------------------------------------------------------ 2.16.0：遊戲和畫面
 
     def _screen_extra(self, color: str, region: dict | None) -> dict:
@@ -4876,6 +5029,7 @@ class Service:
             return
         self.tray.stop()
         self.hotkeys.stop()
+        self.gamepad.stop()
         self.stream.stop()
         self.speaker.stop()
         for child in (self._quick, self._reply_child, self._phrase_child, self._card_child):

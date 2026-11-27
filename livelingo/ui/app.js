@@ -442,7 +442,8 @@
       if (m.copied) body += `<div class="copied">${ICON.check}<span>${esc(t("copied_hint"))}</span></div>`;
       body += `<div class="actions"><button data-act="fix" data-id="${m.id}">${esc(t("wrong"))}</button>` +
         `<button data-act="copy" data-id="${m.id}">${esc(t("copy"))}</button>` +
-        (m.who === "them" ? `<button data-act="replies" data-id="${m.id}">${esc(t("reply_ideas"))}</button>` : "") + `</div>`;
+        (m.who === "them" ? `<button data-act="replies" data-id="${m.id}">${esc(t("reply_ideas"))}</button>` : "") +
+        `<button data-act="pin" data-id="${m.id}" aria-pressed="${m.pinned ? "true" : "false"}">${esc(t(m.pinned ? "pin_off" : "pin_on"))}</button></div>`;
       body += repliesHTML(m.id) + wordsHTML(m);
     }
     return body;
@@ -735,6 +736,15 @@
 
   // 聲音設定頁下半：辨識要快還是準、多小聲算說話、停多久算說完、回音、按住才說話（第一次設定的精靈不放這些）
   // 聽到的句子先整理（2.15.0）：切成兩半的接回去、只有語助詞的不出、粵語
+  // 說話直接送進遊戲聊天（2.17.0，預設關）
+  function chatSendHTML() {
+    const on = !!S.cfg.chat_send;
+    return `<section id="chat-send-section"><div><h2>${esc(t("cs2_title"))}</h2><div class="sub">${esc(t("cs2_hint"))}</div></div>
+        ${switchRow("chat_send", t("cs2_on"), t("cs2_on_desc"))}
+        ${on ? `<div class="note warn">${ICON.info}<span>${esc(t("cs2_warn"))}</span></div>
+          ${choiceRow("chat_send_open", t("cs2_open"), [["enter", "Enter"], ["slash", "/"], ["t", "T"], ["none", t("cs2_open_none")]])}
+          ${switchRow("chat_send_enter", t("cs2_enter"))}` : ""}</section>`;
+  }
   function voiceFixHTML() {
     const zh = [S.cfg.their_lang, S.cfg.my_lang].some((l) => String(l || "").startsWith("zh"));
     return `<section id="voice-fix-section"><div><h2>${esc(t("vf_title"))}</h2><div class="sub">${esc(t("vf_hint"))}</div></div>
@@ -1138,6 +1148,8 @@
           <select id="rapp-${esc(r.id)}" data-change="region-app" data-id="${esc(r.id)}">${options.map((o) => `<option value="${esc(o[0])}" ${o[0].toLowerCase() === (r.app || "").toLowerCase() ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select></div>
         <div class="rstory"><span>${esc(t("story_title"))}<span class="dnote">${esc(t("story_desc"))}</span></span>
           <button class="switch" role="switch" data-act="region-story" data-id="${esc(r.id)}" aria-checked="${r.story ? "true" : "false"}" aria-label="${esc(t("story_title"))}：${esc(label)}"><span></span></button></div>
+        <div class="rstory"><span>${esc(t("comic_title"))}<span class="dnote">${esc(t("comic_desc"))}</span></span>
+          <button class="switch" role="switch" data-act="region-comic" data-id="${esc(r.id)}" aria-checked="${r.comic ? "true" : "false"}" aria-label="${esc(t("comic_title"))}：${esc(label)}"><span></span></button></div>
         <div class="dnote" id="rstat-${esc(r.id)}">${esc(regionStats(r.id))}</div>
         <div class="btn-row">
           <button class="ghost small" data-act="region" data-id="${esc(r.id)}" data-keep="1">${esc(t("region_change"))}</button>
@@ -1212,7 +1224,46 @@
         <div class="dnote">${esc(t("inplace_note"))}</div></section>
       <section>${switchRow("also_english", t("also_english"))}</section>
       <section id="game-start-section">${switchRow("game_start", t("gs_title"), t("gs_desc"))}</section>
-      <section id="ocr-fix-section">${switchRow("ocr_fix", t("ocrfix_title"), t("ocrfix_desc"))}</section>` + gameToolsHTML() + profileHTML() + albumHTML();
+      <section id="ocr-fix-section">${switchRow("ocr_fix", t("ocrfix_title"), t("ocrfix_desc"))}</section>` + imageHTML() + gameToolsHTML() + profileHTML() + albumHTML();
+  }
+
+  // 2.17.0：圖片翻譯（拖進來、選檔案、剪貼簿、攝影機）
+  function imageHTML() {
+    const cam = Number(S.cfg.camera_index) || 0, wait = S.ui.camCount;
+    return `<section id="image-section"><div><h2>${esc(t("img_title"))}</h2><div class="sub">${esc(t("img_hint"))}</div></div>
+        <div class="btn-row"><label class="ghost file-btn">${esc(t("img_choose"))}<input type="file" id="img-file" accept="image/*" hidden></label>
+          <button class="ghost" data-act="clip-image">${esc(t("img_clip"))}</button>
+          <button class="ghost" data-act="camera" ${wait ? "disabled" : ""}>${esc(wait ? t("cam_count", { n: wait }) : t("cam_shoot"))}</button></div>
+        <div class="setting-row choice"><div>${esc(t("cam_which"))}</div><div class="pills">${[0, 1, 2].map((n) =>
+          `<button class="pill" data-act="camera-index" data-value="${n}" aria-pressed="${cam === n}">${esc(t("cam_n", { n: n + 1 }))}</button>`).join("")}</div></div>
+        <div class="dnote">${esc(t("img_note"))}</div></section>`;
+  }
+  // 圖片送去翻之前先縮小（最寬 2400、JPEG），伺服器一次只收 8 MB
+  function imageToData(file) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 2400 / img.naturalWidth);
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.naturalWidth * scale)); c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL("image/jpeg", 0.92));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(""); };
+      img.src = url;
+    });
+  }
+  function imageResult(r) {
+    if (r && r.ok) toast(t("img_sent", { n: r.n }), 5000);
+    else toast(t("img_err_" + ((r && ["not_ready", "bad_image", "no_text", "clip_empty", "camera_failed"].indexOf(r.error) >= 0) ? r.error : "bad_image")), 8000, "warn");
+  }
+  async function sendImageFile(file) {
+    if (!file || !/^image\//.test(file.type || "")) { toast(t("img_err_bad_image"), 6000, "warn"); return; }
+    const data = await imageToData(file);
+    if (!data) { toast(t("img_err_bad_image"), 6000, "warn"); return; }
+    toast(t("img_reading"), 3000);
+    imageResult(await post("/api/image", { data }));
   }
 
   // 2.16.0：自動找聊天框、常見遊戲範本、頻道分色、打架時讀慢一點、全螢幕提醒
@@ -1388,6 +1439,7 @@
         <div class="btn-row"><button class="ghost" data-act="overlay-test" ${on ? "" : "disabled"}>${esc(t("ov_test"))}</button></div>
         ${on ? `<div class="note">${ICON.info}<span>${esc(t("ov_game_note"))}</span></div>` : ""}
         ${switchRow("share_visible", t("share_visible"), t("share_visible_desc"))}
+        ${switchRow("overlay_hover_fade", t("hover_title"), t("hover_desc"))}
       </section>
       ${streamHTML()}
       ${wallHTML()}
@@ -1857,7 +1909,7 @@
   let histTimer = null;
 
   // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
-  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace", "private"];
+  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace", "private", "clipimg", "keys"];
   const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
   function hotkeysHTML() {
     const hk = S.hotkeys || { available: false, states: {} };
@@ -1879,6 +1931,31 @@
       + switchRow("pick_copy", t("pick_copy"), t("pick_copy_desc"))
       + `<div class="btn-row"><button class="ghost" data-act="quick-try">${esc(t("hk_try"))}</button>
           <button class="ghost" data-act="hotkey-reset">${esc(t("hk_reset"))}</button></div>`;
+  }
+
+  // 手把快捷鍵（2.17.0）：按住 Back（或 LB＋RB）再按一顆鍵
+  const PAD_COMBOS = ["Back+A", "Back+B", "Back+X", "Back+Y", "Back+Start", "Back+LB", "Back+RB", "Back+Up", "Back+Down", "Back+Left", "Back+Right", "LB+RB+A", "LB+RB+B", "LB+RB+X", "LB+RB+Y"];
+  function gamepadHTML() {
+    const on = !!S.cfg.gamepad_on, keys = S.cfg.gamepad_keys || {}, pad = S.gamepad || {};
+    const rows = on ? HOTKEYS.map((name) => `<div class="setting-row choice"><label for="pad-${name}">${esc(t("hk_" + name))}</label>
+        <select id="pad-${name}" data-pad="${name}"><option value="">${esc(t("hk_none"))}</option>${PAD_COMBOS.map((c) =>
+          `<option value="${c}" ${keys[name] === c ? "selected" : ""} ${keys[name] !== c && Object.values(keys).indexOf(c) >= 0 ? "disabled" : ""}>${esc(c)}</option>`).join("")}</select></div>`).join("") : "";
+    return `<section id="gamepad-section" data-kw="kw_hotkeys"><div><h2>${esc(t("pad_title"))}</h2><div class="sub">${esc(t("pad_hint"))}</div></div>
+        ${switchRow("gamepad_on", t("pad_on"), t("pad_on_desc"))}
+        ${on && pad.available === false ? `<div class="note warn">${ICON.info}<span>${esc(t("pad_none"))}</span></div>` : ""}
+        ${rows}
+        <div class="btn-row"><button class="ghost" data-act="keys-card">${esc(t("keys_show"))}</button></div></section>`;
+  }
+  // 快捷鍵一覽（主視窗那一份）：按了快速鍵或按鈕，畫面下方跳一張小卡，10 秒後收起來
+  let keysTimer = null;
+  function renderKeysCard() {
+    let box = $("keys-card");
+    if (!box) { box = document.createElement("div"); box.id = "keys-card"; box.className = "keys-card"; box.setAttribute("role", "status"); document.body.appendChild(box); }
+    const lines = S.ui.keysCard || [];
+    box.innerHTML = lines.length ? `<b>${esc(t("keys_title"))}</b><ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>` : "";
+    box.hidden = !lines.length;
+    clearTimeout(keysTimer);
+    keysTimer = setTimeout(() => { S.ui.keysCard = []; box.hidden = true; }, 10000);
   }
 
   // 常用句庫：事先存好常說的話，每一句已經翻成對方的語言（改了對方的語言會在背景補翻）
@@ -1944,6 +2021,7 @@
         ${switchRow("copy_spoken", t("copy_spoken"))}
       </section>
       <section data-kw="kw_hotkeys"><div><h2>${esc(t("hk_title"))}</h2><div class="sub">${esc(t("hk_hint"))}</div></div>${hotkeysHTML()}</section>
+      ${gamepadHTML()}
       <section id="phrase-section"><div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}</section>
       <section><div><h2>${esc(t("al_title"))}</h2><div class="sub">${esc(t("al_hint"))}</div></div>${alertHTML()}</section>
       <section data-kw="kw_backup"><div><h2>${esc(t("set_title"))}</h2><div class="sub">${esc(t("set_hint"))}</div></div>${settingsFileHTML()}</section>
@@ -2008,7 +2086,7 @@
     if (tab === "learn") return learnPage();
     if (tab === "health") return healthPage();
     if (tab === "storage") return storagePage();
-    if (tab === "audio") return devicesHTML() + speakHTML() + voiceTuningHTML() + voiceFixHTML();
+    if (tab === "audio") return devicesHTML() + speakHTML() + voiceTuningHTML() + voiceFixHTML() + chatSendHTML();
     if (tab === "quality") return qualityPage();
     if (tab === "vocab") return vocabPage();
     if (tab === "screen") return screenPage();
@@ -2422,6 +2500,7 @@
     region: (el) => post("/api/region", { enable: !el.dataset.keep, id: el.dataset.id || undefined }),
     "region-add": () => post("/api/region", { enable: false, new: true }),
     "region-story": (el) => saveRegions(regions().map((r) => (r.id === el.dataset.id ? Object.assign({}, r, { story: !r.story }) : r)), "#region-" + el.dataset.id),
+    "region-comic": (el) => saveRegions(regions().map((r) => (r.id === el.dataset.id ? Object.assign({}, r, { comic: !r.comic }) : r)), "#region-" + el.dataset.id),
     "region-on": (el) => saveRegions(regions().map((r) => (r.id === el.dataset.id ? Object.assign({}, r, { on: !r.on }) : r)), "#region-" + el.dataset.id),
     "region-remove": (el) => saveRegions(regions().filter((r) => r.id !== el.dataset.id), "#regions-section"),
     clear: () => post("/api/clear"),
@@ -2796,6 +2875,26 @@
     "abbr-skip-clear": () => saveCfg({ abbr_skip: [] }, "#keep-section"),
     "lesson-undo": async (el) => { const r = await post("/api/lessons/undo", { src: el.dataset.src, target: el.dataset.target }); if (r && r.ok) toast(t("lv_undone", { text: r.dst }), 5000); },
     "wr-clear": () => post("/api/corrections", { action: "clear" }),
+    "pin": async (el) => {
+      const m = S.messages.find((x) => String(x.id) === el.dataset.id);
+      const r = await post("/api/pin", { id: Number(el.dataset.id), on: !(m && m.pinned) });
+      if (r && r.ok && m && !m.pinned) toast(t("pin_done"), 4000);
+    },
+    "clip-image": async () => imageResult(await post("/api/clipimage")),
+    "camera": () => {      // 倒數 3 秒，讓人把東西拿到攝影機前面
+      if (S.ui.camCount) return;
+      S.ui.camCount = 3;
+      const paint = () => { const el = $("image-section"); if (el && S.view === "settings" && S.ui.tab === "screen") el.outerHTML = imageHTML(); };
+      paint();
+      const tick = setInterval(async () => {
+        S.ui.camCount -= 1; paint();
+        if (S.ui.camCount > 0) return;
+        clearInterval(tick); S.ui.camCount = 0; paint();
+        imageResult(await post("/api/camera"));
+      }, 1000);
+    },
+    "camera-index": (el) => saveCfg({ camera_index: Number(el.dataset.value) }, "image-section"),
+    "keys-card": async () => { const r = await post("/api/keys"); if (r && r.lines && !r.lines.length) toast(t("keys_none"), 5000); },
     "find-chat": async () => {
       toast(t("gt_finding"), 4000);
       const r = await post("/api/find_chat");
@@ -3024,6 +3123,18 @@
     if (!liveTimer) liveTimer = setTimeout(() => { liveTimer = null; if (livePatch) post("/api/config", livePatch); livePatch = null; }, 90);
   });
 
+  // 拖圖片進主視窗就翻（2.17.0）
+  document.addEventListener("dragover", (e) => {
+    if (e.dataTransfer && [...(e.dataTransfer.items || [])].some((i) => i.kind === "file")) { e.preventDefault(); document.body.classList.add("drop-on"); }
+  });
+  document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("drop-on"); });
+  document.addEventListener("drop", (e) => {
+    document.body.classList.remove("drop-on");
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    e.preventDefault();
+    sendImageFile(file);
+  });
   document.addEventListener("change", (e) => {
     if (e.target.dataset && e.target.dataset.speaker) {      // 幫說話者取名字：改完（離開輸入框或按 Enter）就存
       const input = e.target;
@@ -3043,6 +3154,13 @@
       return;
     }
     if (e.target.id === "story-game") { loadStory(e.target.value, 0); return; }      // 劇情書：換一本
+    if (e.target.id === "img-file") { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) sendImageFile(f); return; }
+    if (e.target.dataset && e.target.dataset.pad) {      // 手把快捷鍵：每個動作選一組
+      const keys = Object.assign({}, S.cfg.gamepad_keys || {});
+      if (e.target.value) keys[e.target.dataset.pad] = e.target.value; else delete keys[e.target.dataset.pad];
+      saveCfg({ gamepad_keys: keys }, "gamepad-section");
+      return;
+    }
     if (e.target.dataset && e.target.dataset.fs) { fsForm()[e.target.dataset.fs] = e.target.value; return; }      // 影片字幕的欄位：記在畫面上，換頁回來還在
     if (e.target.id === "set-file") {      // 匯入設定檔：在這裡讀檔，內容交給程式檢查
       const file = e.target.files && e.target.files[0];
@@ -3316,6 +3434,8 @@
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
     name_suggest: (d) => { S.ui.nameAsk = d.name; renderNameRow(); },
     abbr_suggest: (d) => { S.ui.abbrAsk = d.word; renderAbbrRow(); },
+    gamepad: (d) => { S.gamepad = Object.assign({}, S.gamepad || {}, d); if (S.view === "settings" && S.ui.tab === "general") { const el = $("gamepad-section"); if (el) el.outerHTML = gamepadHTML(); } },
+    keys_card: (d) => { S.ui.keysCard = d.lines || []; renderKeysCard(); },
     album: (d) => { S.album = d.items || []; if (S.view === "settings" && S.ui.tab === "screen") { const el = $("album-section"); if (el) el.outerHTML = albumHTML(); } },
     corrections: (d) => { S.corrections = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("wr-section"); if (el) el.outerHTML = correctionsHTML(); } },
     private: (d) => { S.private = !!d.on; renderPrivate(); },
@@ -3426,7 +3546,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.filesubs = st.filesubs || S.filesubs; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
-    S.private = !!st.private; S.quality = st.quality || {}; S.corrections = st.corrections || {}; S.album = st.album || []; S.templates = st.templates || []; S.scenarios = st.scenarios || {};
+    S.private = !!st.private; S.quality = st.quality || {}; S.corrections = st.corrections || {}; S.album = st.album || []; S.templates = st.templates || []; S.gamepad = st.gamepad || {}; S.scenarios = st.scenarios || {};
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];

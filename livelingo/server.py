@@ -304,6 +304,16 @@ class Server:
                         if action == "open":
                             return self._json(service.filesubs_open())
                         return self._json({"ok": False, "error": "unknown"})
+                    if route == "/api/image":       # 拖進來的圖片（data URL，介面先縮小）：讀字翻譯（2.17.0）
+                        return self._json(service.image_translate(str(body.get("data") or "")))
+                    if route == "/api/clipimage":   # 剪貼簿裡的圖
+                        return self._json(service.clipboard_translate())
+                    if route == "/api/camera":      # 攝影機拍一張
+                        return self._json(service.camera_translate())
+                    if route == "/api/pin":         # 釘選句子：id、on
+                        return self._json(service.pin_action(body.get("id"), bool(body.get("on", True))))
+                    if route == "/api/keys":        # 快捷鍵一覽小卡
+                        return self._json({"ok": True, "lines": service.show_keys()})
                     if route == "/api/profile":     # 遊戲專屬版面：save / remove / apply（exe 沒給 = 現在的遊戲）
                         return self._json(service.profile_action(str(body.get("action") or ""), str(body.get("exe") or "")))
                     if route == "/api/template":    # 常見遊戲範本：照開著的遊戲加一個聊天區

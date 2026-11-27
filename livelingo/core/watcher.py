@@ -176,6 +176,7 @@ def wanted(text: str, source_langs: set[str]) -> str | None:
 BUSY_MOVE = 18.0       # 縮圖平均變動超過這麼多：整塊畫面都在動（戰鬥、轉鏡頭）
 BUSY_AFTER = 3.0       # 連續這麼多秒都這樣才算戰鬥中
 BUSY_SLOW = 3          # 戰鬥中每隔幾倍的時間才讀一次
+COMIC_KEEP = 400       # 條漫長圖：記得最近讀過幾個對話框（捲回去看不重翻）
 STORY_WAIT = 12.0      # 劇情對話框：畫面一直在動時最多等幾秒（一般區域是 3 秒）
 
 
@@ -210,6 +211,7 @@ class _Slot:
         self.dark_since = None         # 從什麼時候開始抓到的畫面是全黑的
         self.black = False             # 已經黑了好幾秒：多半是遊戲用「全螢幕」，Windows 不讓別的程式看到畫面
         self.story_text = None         # 劇情對話框（2.14.0）：上一次讀到的字；跟這次一樣才算打完了
+        self.comic_seen: dict[str, None] = {}      # 條漫長圖（2.17.0）：讀過的對話框（照順序，最多 COMIC_KEEP 個）
         # scans 辨識了幾次；lines 讀到幾行 = sent 拿去翻的 + repeat 讀過的 + other 不是要翻的語言 + old 一開始就在畫面上的
         self.stats = {"scans": 0, "lines": 0, "sent": 0, "repeat": 0, "other": 0, "old": 0}
 
@@ -266,6 +268,8 @@ class ScreenWatcher(threading.Thread):
         self.colors = False
         # 戰鬥中降低讀取（2.16.0）：畫面一直大幅變動（打架、轉鏡頭）時，等久一點再讀，不跟遊戲搶電腦
         self.slow_busy = False
+        # 條漫長圖模式（2.17.0）：區域設成 comic 時，一個對話框（一段）翻一則；分段的函式由外面給（snap.paragraphs）
+        self.grouper = None
         self._busy_since: float | None = None
         self._busy_seen = 0.0
         self._halt = threading.Event()
@@ -423,6 +427,9 @@ class ScreenWatcher(threading.Thread):
         if self.on_frame and self.on_frame(slot.region, place, bgr, raw):
             slot.stats["scans"] += 1      # 譯文直接蓋在原處，不進浮動留言
             return
+        if slot.region.get("comic") and self.grouper:
+            self._comic(slot, raw)
+            return
         rows = message_lines(raw)
         slot.edge, edge = text_edge(rows, bgr.shape[1], slot.edge)
         lines = join_wrapped(rows, slot.seen, edge)      # 換行的訊息接回一則
@@ -463,6 +470,25 @@ class ScreenWatcher(threading.Thread):
                 self.on_message(text, lang, score, slot.region, shown, **more)
             else:
                 self.on_message(text, lang, score, slot.region, **more)
+
+    def _comic(self, slot: "_Slot", raw) -> None:
+        """條漫長圖：捲動停下來就讀一次，畫面上每個對話框（一段字）各翻一則；捲回去看過的不再翻。"""
+        slot.stats["scans"] += 1
+        for text in self.grouper(raw):
+            key = normalize(text)
+            slot.stats["lines"] += 1
+            if not key or key in slot.comic_seen:
+                slot.stats["repeat"] += 1
+                continue
+            lang = wanted(text, self.source_langs)
+            if not lang:
+                slot.stats["other"] += 1
+                continue
+            slot.comic_seen[key] = None
+            while len(slot.comic_seen) > COMIC_KEEP:
+                slot.comic_seen.pop(next(iter(slot.comic_seen)))
+            slot.stats["sent"] += 1
+            self.on_message(text, lang, 1.0, slot.region)
 
     def _pairs(self, lines) -> dict[int, int]:
         """雙語字幕：{要翻的那一行: 緊鄰的我的語言那一行}。沒開（pair_lang 是 None）就是空的。

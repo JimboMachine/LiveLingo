@@ -536,6 +536,16 @@
 
 自動把關：測試會擋：範本算出的區域、找聊天框、顏色歸類、玩家備註的整理和比對、劇情書和相簿的存取上限、版面存和套用、全螢幕只提醒一次、字幕牆網址、各個 /api。範本位置、真的遊戲字色、獨佔全螢幕偵測、字幕牆視窗要在你的電腦上試。
 
+### 手把快捷鍵、條漫長圖模式、拖圖片進來翻、剪貼簿圖片翻譯、說話送進遊戲聊天、滑鼠靠近變淡、釘選句子、快捷鍵一覽、攝影機翻實物（2.17.0）
+
+1. `hotkeys.py`、`config.py`、`guide.py`：ACTIONS 加了 clipimg、keys：DEFAULTS 的 hotkeys、help.json 的 keys 段（13 種語言都要有 {clipimg} {keys}）、guide.VALUES、介面的 HOTKEYS；hotkeys.py 不能出現 clipboard 這個字
+2. `watcher.py`、`service.py`：grouper 由 service 給（core 不 import snap）；comic 區域在 on_frame 之後才分段
+3. `overlay.py`、`chatpaint.py`：compose(pinned=) 釘選的最多佔一半高；HOVER_POLL 只在開著變淡時才縮短重畫間隔
+4. `service.py`、`oswin.py`：chat_send 預設 False；只送 via spoken、who me；前景是自己就不送
+5. `app.js`、`i18n.js`、`style.css`：gamepad、keys_card 事件；拖放（dragover/drop）；#image-section、#gamepad-section、#chat-send-section；pin 按鈕
+
+自動把關：測試會擋：手把組合的整理和觸發、快捷鍵一覽的文字、圖片解碼和太大的擋下、讀圖走 _read_image、條漫一個對話框一則且不重翻、釘選最多 3 句和浮動字幕的位置、滑鼠在上面時變淡、送進聊天只送麥克風且預設關、各個 /api。真的手把、剪貼簿、攝影機、送進遊戲聊天要在你的電腦上試。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -558,7 +568,7 @@
 | --- | --- | --- |
 | 畫面骨架 | `livelingo/ui/index.html` | `app.js`：區塊的 id、按鈕的 data-act（改壞不會報錯）<br>`server.py`：介面檔案（改壞不會報錯）<br>`livelingo.spec`：ui 和 data 資料夾（改壞不會報錯） |
 | 畫面行為 | `livelingo/ui/app.js` | `window.py`：標題列顏色、畫面模式（/api/chrome、/api/view）（改壞不會報錯） |
-| 每種介面語言的文字 | `livelingo/ui/i18n.js` | `app.js`：每一句文字的 key（改壞不會報錯） |
+| 每種介面語言的文字 | `livelingo/ui/i18n.js` | `app.js`：每一句文字的 key（改壞不會報錯）<br>`cheatsheet.py`：讀 i18n.js 裡 hk_ 開頭的動作名字（改了 key 的名字，小卡就拿不到）（改壞不會報錯） |
 | 樣式與主題 | `livelingo/ui/style.css` | `app.js`：class 名稱、主題顏色（改壞不會報錯）<br>`index.html`：class 名稱（改壞不會報錯） |
 | 標誌與圖示檔 | `livelingo/ui/brand.js`<br>`packaging/livelingo.ico`<br>`packaging/livelingo.png`<br>`livelingo/data/tray.png` | `app.js`：標誌（window.BRAND）（改壞不會報錯）<br>`index.html`：標誌的位置、載入順序（改壞不會報錯）<br>`style.css`：標誌的樣式（.mark）（改壞不會報錯）<br>`tray.py`：圖示 tray.png（改壞不會報錯）<br>`guide.py`：給朋友的那一頁用同一個標誌（從 brand.js 讀 markSmall）（改壞不會報錯）<br>`livelingo.spec`：程式圖示（改壞不會報錯）<br>`installer.iss`：安裝程式圖示（改壞不會報錯） |
 
@@ -572,7 +582,7 @@
 | 直播字幕（給 OBS 的網頁） | `livelingo/stream.py` | `service.py`：直播字幕：每則留言、翻到一半的譯文、刪掉、清空（on_message、on_partial、on_removed、clear）（改壞會報錯）<br>`service.py`：wall_on、url(wall=True)：副螢幕字幕牆用直播字幕頁（改壞不會報錯） |
 | 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯）<br>`inplace.py`：換行排字（_wrap）、字型、han_kind（改壞會報錯） |
 | 框選聊天區 | `livelingo/region.py` | `quickbox.py`：顏色和字型（改壞會報錯）<br>`__main__.py`：框選模式（改壞會報錯）<br>`__main__.py`：框選翻譯用同一個框選程式（--mode snap）（改壞不會報錯）<br>`service.py`：框選結果（另開一個程式）（改壞不會報錯） |
-| 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼；程式自己的短提示（略過幾則、引擎重開）也用 NOTES，介面那邊要有同名的 n_ 文字（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯）<br>`guide.py`：四個全域快速鍵的名稱（overlay、mic、copy、quick）（改壞不會報錯） |
+| 全域快速鍵 | `livelingo/hotkeys.py` | `service.py`：登記、狀態（ok／taken／off）、按下時做什麼；程式自己的短提示（略過幾則、引擎重開）也用 NOTES，介面那邊要有同名的 n_ 文字（改壞會報錯）<br>`app.js`：能用哪些鍵、動作名稱要一樣（改壞不會報錯）<br>`guide.py`：四個全域快速鍵的名稱（overlay、mic、copy、quick）（改壞不會報錯）<br>`gamepad.py`：動作名字跟 hotkeys.ACTIONS 一樣（service 用 HOTKEY_ACTIONS 過濾）（改壞不會報錯） |
 | 快速輸入框 | `livelingo/quickbox.py` | `service.py`：打的字（另開一個程式）（改壞不會報錯）<br>`__main__.py`：快速輸入模式（--quick-input）（改壞會報錯） |
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
 | 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
@@ -588,6 +598,9 @@
 | 遊戲小工具：常見遊戲範本、自動找聊天框、頻道顏色歸類、玩家備註 | `livelingo/gametools.py`<br>`livelingo/data/game_templates.json` | `service.py`：template_region（範本）、find_chat_box（自動找聊天框）、channel_of（頻道色）、clean_players/players_in（玩家備註）（改壞會報錯） |
 | 劇情書：劇情對話框讀到的句子照遊戲分本記下來、匯出 | `livelingo/storybook.py` | `service.py`：StoryBook：劇情對話框翻好的句子 add；/api/story 讀、匯出、清掉（改壞會報錯） |
 | 框選翻譯相簿：截圖和翻好的句子一起存 | `livelingo/album.py` | `service.py`：Album：框選翻譯翻好後 add；/api/album、/api/album_image（改壞會報錯） |
+| 圖片來源：拖進來的圖片、剪貼簿的圖、攝影機拍一張，變成給讀字用的影像 | `livelingo/imagetext.py` | `service.py`：from_data_url（/api/image）、clipboard_image（clipimg 快速鍵）、camera_frame（/api/camera），讀字走 _read_image（改壞會報錯） |
+| 手把快捷鍵：讀 XInput 按鈕，Back＋鍵觸發跟鍵盤快速鍵一樣的動作 | `livelingo/gamepad.py` | `service.py`：Gamepad(_pad_action)、clean(gamepad_keys)、BUTTONS/DEFAULTS 給介面（改壞會報錯） |
+| 快捷鍵一覽小卡：動作名字從 i18n.js 的 hk_ 拿 | `livelingo/cheatsheet.py` | `service.py`：show_keys：lines(hotkeys, 手把, 介面語言)（改壞會報錯） |
 | 常用句庫：存句子和各語言的譯文（phrases.json） | `livelingo/phrases.py` | `service.py`：常用句庫（Phrasebook：add、remove、set_translation、missing、listing、state）（改壞會報錯） |
 | 原地覆蓋翻譯：把譯文畫在畫面上原文的位置 | `livelingo/inplace.py` | `service.py`：原地覆蓋翻譯（InPlace：set_on、update、reset、keep_only、clear_cache、close）（改壞會報錯）<br>`watcher.py`：每辨識一次畫面就交過去（on_frame）；接手的區域不再送去浮動留言（改壞不會報錯） |
 | 影片、音訊檔做雙語字幕：解聲音、切句、寫 .srt | `livelingo/filesubs.py` | `service.py`：影片字幕的工作（Job、decode、EXTS、MODES、MAX_SECONDS、is_media）（改壞會報錯） |
@@ -633,7 +646,7 @@
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
 | 路徑 | `livelingo/paths.py` | `tray.py`：圖示檔的位置（改壞會報錯）<br>`changes.py`：changes.json 放在哪（改壞會報錯）<br>`guide.py`：help.json 和品牌標誌放在哪（改壞會報錯）<br>`__main__.py`：資料夾（改壞會報錯）<br>`server.py`：ui 資料夾（改壞會報錯）<br>`service.py`：重新啟動自己的指令（改壞會報錯） |
-| Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、接著哪些螢幕和各自的大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯）<br>`service.py`：exclusive_fullscreen：獨佔全螢幕提醒（改壞不會報錯） |
+| Windows 功能 | `livelingo/oswin.py` | `window.py`：標題列顏色、WebView2（改壞會報錯）<br>`overlay.py`：透明視窗、接著哪些螢幕和各自的大小（改壞會報錯）<br>`__main__.py`：只開一個、WebView2（改壞會報錯）<br>`service.py`：剪貼簿、開資料夾、按住才說話的按鍵（PTT_KEYS）（改壞會報錯）<br>`overlay.py`：cursor_pos：滑鼠靠近變淡（改壞不會報錯）<br>`service.py`：send_chat、foreground_is_self：說話送進遊戲聊天（預設關）（改壞不會報錯）<br>`service.py`：exclusive_fullscreen：獨佔全螢幕提醒（改壞不會報錯） |
 | 開著哪些程式 | `livelingo/apps.py` | `works.py`：apps.windows() 的欄位（exe、title、rect、minimized）（改壞不會報錯）<br>`service.py`：開著的程式清單、程式的最上層程序、視窗在螢幕上的位置（改壞會報錯）<br>`app.js`：程式清單的欄位（exe、name、title）（改壞不會報錯） |
 | 模型下載 | `livelingo/assets.py` | `storage.py`：模型和引擎的檔名、資料夾（改壞會報錯）<br>`service.py`：缺哪些模型、下載（含語音辨識用顯示卡的 cuDNN、分辨說話者的聲紋模型）（改壞會報錯）<br>`voices.py`：聲紋模型的檔案（打開功能時才下載）（改壞不會報錯）<br>`gpu.py`：模型名稱（改壞不會報錯）<br>`engine.py`：翻譯引擎的檔案（改壞不會報錯）<br>`ocr.py`：辨識模型的檔案（改壞不會報錯）<br>`speech.py`：語音模型的檔案；用顯示卡時要 CUDA 和 cuDNN 的 DLL（改壞不會報錯）<br>`updater.py`：下載（改壞會報錯）<br>`README.md`：第一次下載大約幾 GB（要和實際的檔案大小對得上）（改壞不會報錯） |
 | 顯示卡判斷 | `livelingo/gpu.py` | `service.py`：選模式（改壞會報錯） |

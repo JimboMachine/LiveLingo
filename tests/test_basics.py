@@ -2930,8 +2930,13 @@ def test_display_mode_screens_and_saved_layouts(tmp_path, monkeypatch):
         result = service.update_config({"overlay_form": "bar"})
         assert result["saved"] and ov.bar and ov.rect == overlay.bar_rect(screens[1], service.cfg["overlay_font"])
         ov.push("heard", "你好")
-        ov._last = None
-        assert ov.frame()[0] is not None
+        drawn = None
+        for _ in range(5):      # 背景的重畫迴圈可能剛好先畫了同一張（滑鼠靠近變淡會讓它更常醒來）：再要一次
+            ov._last = None
+            drawn = ov.frame()[0]
+            if drawn is not None:
+                break
+        assert drawn is not None
         assert seen["grow"] == "up" and seen["lines"] == 2 and seen["size"] == (ov.rect[2], ov.rect[3])
         assert service.cfg["overlay_align"] == "right" and service.cfg["overlay_lines"] == 6      # 自己的設定沒有被改掉
         ov.set_edit(True)
@@ -3027,7 +3032,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     try:
         service.start_hotkeys()
         state = service.state()["hotkeys"]
-        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok", "inplace": "ok", "private": "ok"}
+        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok", "inplace": "ok", "private": "ok", "clipimg": "ok", "keys": "ok"}
         assert state["defaults"] == DEFAULTS["hotkeys"]
 
         # 開關字幕
@@ -3151,7 +3156,7 @@ def test_hotkey_defaults_are_ctrl_shift_and_own_settings_stay(tmp_path, monkeypa
     from livelingo.service import SETTINGS_SKIP, Service
 
     new, old = DEFAULTS["hotkeys"], OLD_HOTKEYS
-    assert set(new) == set(hotkeys.ACTIONS) and set(old) == set(new) - {"inplace", "private"} and DEFAULTS["hotkeys_v"] == HOTKEYS_V == 2      # 「原地覆蓋」（2.13.0）、「隱私暫停」（2.14.0）一開始就是 Ctrl+Shift，沒有舊預設要換
+    assert set(new) == set(hotkeys.ACTIONS) and set(old) == set(new) - {"inplace", "private", "clipimg", "keys"} and DEFAULTS["hotkeys_v"] == HOTKEYS_V == 2      # 「原地覆蓋」（2.13.0）、「隱私暫停」（2.14.0）一開始就是 Ctrl+Shift，沒有舊預設要換
     new8 = {k: v for k, v in new.items() if k in old}      # 有舊預設的那八個動作
     assert all(c.startswith("Ctrl+Shift+") for c in new.values()) and all(c.startswith("Ctrl+Alt+") for c in old.values())
     assert all(hotkeys.normalize(c) == c for c in (*new.values(), *old.values()))
@@ -3403,7 +3408,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "麥克風 (HyperX)")
         assert (light("listen")["code"], light("listen")["name"]) == ("listen_found", "耳機 (HyperX)")
         assert (light("screen")["state"], light("screen")["code"]) == ("off", "screen_none")
-        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 10)
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 12)
         assert (light("saving")["state"], light("saving")["folder"]) == ("ok", str(tmp_path))
         assert first["worst"] == "warn"
 
