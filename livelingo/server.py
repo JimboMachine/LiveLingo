@@ -115,6 +115,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.storage_state())
+                if url.path in ("/api/recommend", "/api/timeline"):      # 依電腦推薦的設定、歷史時間軸（2.20.0）
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.recommend_state() if url.path == "/api/recommend" else service.timeline_data())
                 if url.path in ("/api/study", "/api/practice"):      # 學習工具（2.19.0）：統計和收藏的句子／對話回放練習的清單
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -366,6 +370,12 @@ class Server:
                         return self._json(service.word_action(str(body.get("action") or ""), str(body.get("w") or ""),
                                                               str(body.get("lang") or ""), str(body.get("meaning") or ""),
                                                               msg_id if isinstance(msg_id, int) else None, bool(body.get("remembered"))))
+                    if route == "/api/tips":        # 看過「新」標記的設定頁：tab
+                        return self._json(service.tip_seen(str(body.get("tab") or "")))
+                    if route == "/api/recommend":   # 套用推薦的設定
+                        return self._json(service.recommend_apply())
+                    if route == "/api/profiles":    # 多份設定檔：action = save / apply / remove，name
+                        return self._json(service.settings_profile(str(body.get("action") or ""), str(body.get("name") or "")))
                     if route == "/api/study":       # 學習工具（2.19.0）：quiz / explain / shadow / anki / sentence / say
                         act = str(body.get("action") or "")
                         msg_id = body.get("id") if isinstance(body.get("id"), int) else None

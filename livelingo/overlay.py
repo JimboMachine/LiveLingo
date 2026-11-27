@@ -858,8 +858,10 @@ class Overlay:
         need = READ_START + 1.5 * read_seconds(str(item.get("text") or ""))
         return max(life, min(need, 3 * life + 5))
 
-    def _alpha(self, item: dict, now: float, life: float) -> float:
+    def _alpha(self, item: dict, now: float, life: float, reduce: bool = False) -> float:
         age = now - item["at"]
+        if reduce:      # 減少動畫（2.20.0）：不淡入淡出，時間到就直接消失
+            return 0.0 if life > 0 and age >= life else 1.0
         if age < FADE_IN:
             return max(0.05, age / FADE_IN)
         if life <= 0:
@@ -908,7 +910,8 @@ class Overlay:
             lang = cfg["ui_lang"] or "en"
             items = [{"key": f"sample{n}", "kind": kind, "text": text, "original": "", "at": now - 5, "version": 0}
                      for n, (kind, text) in enumerate(chatpaint.SAMPLES.get(lang, chatpaint.SAMPLES["en"]))]
-        alphas = [1.0 if self.editing else self._alpha(i, now, self._life(i, life)) for i in items]
+        reduce = bool(cfg["reduce_motion"])
+        alphas = [1.0 if self.editing else self._alpha(i, now, self._life(i, life), reduce) for i in items]
         moving = any(a < 0.999 for a in alphas)
         wait = 0.04 if moving else 1.0
         # 滑鼠移到浮動字幕上：整塊變很淡（本來就點得穿），看得到下面的遊戲按鈕（2.17.0）
@@ -916,7 +919,7 @@ class Overlay:
         pins = [] if self.editing else list(self.pins)
         if cfg["overlay_hover_fade"] and not self.editing:
             wait = min(wait, HOVER_POLL)
-        ends = [self._life(i, life) - FADE_OUT - (now - i["at"]) for i in items if self._life(i, life)]
+        ends = [self._life(i, life) - (0.0 if reduce else FADE_OUT) - (now - i["at"]) for i in items if self._life(i, life)]
         if ends and not moving:
             wait = max(0.04, min(1.0, min(ends)))
         signature = (tuple((i["key"], i["version"], round(a, 2)) for i, a in zip(items, alphas)), tuple(self.rect), fade,

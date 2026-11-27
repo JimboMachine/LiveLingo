@@ -1,4 +1,136 @@
 {
+  "2.20.0": {
+    "zh-TW": [
+      "新功能亮點：更新之後，有新功能的設定頁在左邊導覽上標一個「新」，點進去看過就消失，一個頁面只標一次。全新安裝的人不會看到。",
+      "迷你模式：視窗縮成小小一條，只留對話和輸入框，放在遊戲旁邊用。語言與一般頁可以開，對話頁右上角的按鈕也能切換，回到正常大小會回到原來的位置。",
+      "介面文字大小：90%、100%、115%、130%、150% 五種，整個介面一起放大縮小（語言與一般頁「外觀」）。",
+      "色盲友善配色：綠色和紅色換成藍色和橘色，健康檢查等狀態另外用形狀和符號（✓ ▲ ✖）區分，不只靠顏色。",
+      "減少動畫：關掉閃爍、淡入淡出和轉場，浮動字幕也直接出現、直接消失；系統設定要求減少動畫時會自動跟著。",
+      "依這台電腦推薦設定：看顯示卡、記憶體和 CPU 核心數，建議翻譯品質、語音「比較快／比較準」和即時字幕，說明原因。按「套用」才會改，之前的設定會留一份，可以在「設定的備份和還原」復原。",
+      "多份設定檔：把現在的設定存成一個名字（打遊戲、看影片、開會），之後一鍵換過去，最多 8 份。語言、聊天區、顯示、語音、品質會存；介面語言、字幕資料夾、詞彙、玩家備註不會動。",
+      "歷史時間軸：歷史照時間切成一段一段，最新的在前面，點一段展開整段對話。工具列圖示角落寫著「韓→中」這樣的小字，滑鼠移上去也會顯示，不用開視窗就知道在翻哪兩個語言（可以關）。真正縮小視窗、工具列小字和色盲配色的觀感，要在你的電腦上看過才算數。"
+    ],
+    "zh-CN": [
+      "新功能亮点：更新之后，有新功能的设置页在左边导航上标一个“新”，点进去看过就消失，一个页面只标一次。全新安装的人不会看到。",
+      "迷你模式：窗口缩成小小一条，只留对话和输入框，放在游戏旁边用。语言与常规页可以开，对话页右上角的按钮也能切换，回到正常大小会回到原来的位置。",
+      "界面文字大小：90%、100%、115%、130%、150% 五种，整个界面一起放大缩小（语言与常规页“外观”）。",
+      "色盲友好配色：绿色和红色换成蓝色和橙色，健康检查等状态另外用形状和符号（✓ ▲ ✖）区分，不只靠颜色。",
+      "减少动画：关掉闪烁、淡入淡出和转场，悬浮字幕也直接出现、直接消失；系统设置要求减少动画时会自动跟着。",
+      "按这台电脑推荐设置：看显卡、内存和 CPU 核数，建议翻译质量、语音“比较快／比较准”和实时字幕，并说明原因。点“应用”才会改，之前的设置会留一份，可以在“设置的备份和还原”恢复。",
+      "多份配置文件：把现在的设置存成一个名字（打游戏、看视频、开会），之后一键换过去，最多 8 份。语言、聊天区、显示、语音、质量会存；界面语言、字幕文件夹、词汇、玩家备注不会动。",
+      "历史时间轴：历史按时间切成一段一段，最新的在前面，点一段展开整段对话。任务栏图标角落写着“韩→中”这样的小字，鼠标移上去也会显示，不用开窗口就知道在翻哪两个语言（可以关）。真正缩小窗口、任务栏小字和色盲配色的观感，要在你的电脑上看过才算数。"
+    ],
+    "en": [
+      "New-feature highlights: after an update, settings pages with something new get a “New” tag in the left navigation. It disappears once you open the page, and each page is tagged only once. Fresh installs see none.",
+      "Mini mode: the window shrinks to just the chat and input box so it fits beside a game. Turn it on in Language & General, or with the button at the top right of the chat page; going back restores the original size and position.",
+      "Interface text size: 90%, 100%, 115%, 130% or 150%, scaling the whole interface together (Language & General, Appearance).",
+      "Color-blind friendly colors: green and red become blue and orange, and states such as the health check also use shapes and symbols (✓ ▲ ✖), not just color.",
+      "Reduce motion: turns off blinking, fades and transitions; floating subtitles appear and disappear instantly. Follows the system “reduce motion” setting automatically.",
+      "Settings recommended for this PC: from your graphics card, memory and CPU cores, with the reason. Nothing changes until you press Apply, and the old settings are kept so you can undo in the settings backup section.",
+      "Settings profiles: save the current settings under a name (Gaming, Video, Meeting) and switch in one click, up to 8. Languages, chat regions, display, voice and quality are saved; interface language, folders and vocabulary are not touched.",
+      "History timeline: sessions, newest first, click to expand. The tray icon shows a label like “KO→ZH” (can be turned off). Window shrinking, the tray label and the color-blind palette still need a look on your own PC."
+    ],
+    "ko": [
+      "새 기능 표시: 업데이트 후 새 기능이 있는 설정 페이지에 왼쪽 메뉴에서 '새 기능' 표시가 붙고, 페이지를 열면 사라집니다. 한 페이지에 한 번만 표시되며 새로 설치한 경우엔 나타나지 않습니다.",
+      "미니 모드: 창을 작게 줄여 대화와 입력란만 남겨 게임 옆에 둘 수 있습니다. 언어 및 일반 페이지나 대화 페이지 오른쪽 위 버튼으로 전환하며, 돌아가면 원래 크기와 위치로 복원됩니다.",
+      "화면 글자 크기: 90%, 100%, 115%, 130%, 150% 중에서 고르면 전체 화면이 함께 커지거나 작아집니다 (언어 및 일반 > 모양).",
+      "색약 친화 색상: 초록과 빨강을 파랑과 주황으로 바꾸고, 상태 점검 등은 모양과 기호(✓ ▲ ✖)로도 구분합니다.",
+      "애니메이션 줄이기: 깜빡임, 페이드, 전환 효과를 끄고 떠 있는 자막도 바로 나타났다 사라집니다. 시스템의 애니메이션 줄이기 설정도 자동으로 따릅니다.",
+      "이 PC에 맞는 추천 설정: 그래픽 카드, 메모리, CPU 코어를 보고 번역 품질, 음성 빠르게/정확하게, 실시간 자막을 이유와 함께 제안합니다. '적용'을 눌러야 바뀌며 이전 설정은 설정 백업에서 복구할 수 있습니다.",
+      "설정 프로필: 현재 설정을 이름(게임, 영상, 회의)으로 저장하고 한 번에 전환합니다(최대 8개). 언어, 채팅 영역, 표시, 음성, 품질이 저장되며 화면 언어, 자막 폴더, 단어, 플레이어 메모는 바뀌지 않습니다.",
+      "기록 타임라인: 기록을 구간별로 나눠 최신 순으로 보여 주고, 누르면 전체 대화가 펼쳐집니다. 트레이 아이콘에 '韓→中' 같은 작은 글자가 표시되어 창을 열지 않고도 언어 쌍을 알 수 있습니다(끌 수 있음). 실제 창 축소, 트레이 글자, 색상은 사용자 PC에서 직접 확인해야 합니다."
+    ],
+    "ja": [
+      "新機能のお知らせ：アップデート後、新機能のある設定ページに左のナビで「新」マークが付き、ページを開くと消えます。1ページにつき1回だけで、新規インストールでは表示されません。",
+      "ミニモード：ウィンドウを小さくして会話と入力欄だけにし、ゲームの横に置けます。「言語と一般」ページか会話ページ右上のボタンで切り替え、戻すと元のサイズと位置に戻ります。",
+      "画面の文字サイズ：90%・100%・115%・130%・150% から選ぶと、画面全体がまとめて拡大・縮小します（「言語と一般」の外観）。",
+      "色覚に配慮した配色：緑と赤を青とオレンジに変え、ヘルスチェックなどの状態は色だけでなく形と記号（✓ ▲ ✖）でも区別します。",
+      "アニメーションを減らす：点滅・フェード・切り替え効果をオフにし、フローティング字幕も即座に出入りします。システムの「視覚効果を減らす」設定にも自動で従います。",
+      "このPCに合わせた推奨設定：グラフィックカード・メモリ・CPUコア数を見て、翻訳品質・音声の速さ/精度・リアルタイム字幕を理由付きで提案します。「適用」を押すまで変わらず、元の設定は設定のバックアップから戻せます。",
+      "設定プロファイル：現在の設定に名前（ゲーム、動画、会議）を付けて保存し、ワンクリックで切り替えます（最大8件）。言語・チャット領域・表示・音声・品質が保存され、表示言語・字幕フォルダ・用語・プレイヤーメモは変わりません。",
+      "履歴タイムライン：履歴を時間で区切って新しい順に表示し、クリックで会話全体を開きます。トレイアイコンに「韓→中」のような小さな文字が出て、ウィンドウを開かなくても言語の組み合わせがわかります（オフにできます）。実際のウィンドウ縮小・トレイの文字・配色は、お使いのPCで確認が必要です。"
+    ],
+    "vi": [
+      "Đánh dấu tính năng mới: sau khi cập nhật, trang cài đặt có tính năng mới được gắn nhãn “Mới” ở thanh điều hướng bên trái, mở trang là biến mất, mỗi trang chỉ gắn một lần. Cài mới sẽ không thấy.",
+      "Chế độ thu nhỏ: cửa sổ thu nhỏ chỉ còn hội thoại và ô nhập để đặt cạnh game. Bật ở trang Ngôn ngữ & Chung hoặc bằng nút ở góc trên phải trang hội thoại; quay lại sẽ khôi phục kích thước và vị trí cũ.",
+      "Cỡ chữ giao diện: 90%, 100%, 115%, 130% hoặc 150%, phóng to/thu nhỏ toàn bộ giao diện (Ngôn ngữ & Chung, Giao diện).",
+      "Màu thân thiện với người mù màu: xanh lá và đỏ đổi thành xanh dương và cam, các trạng thái như kiểm tra sức khỏe còn dùng hình dạng và ký hiệu (✓ ▲ ✖), không chỉ màu.",
+      "Giảm chuyển động: tắt nhấp nháy, mờ dần và chuyển cảnh; phụ đề nổi hiện và biến mất ngay. Tự theo cài đặt “giảm chuyển động” của hệ thống.",
+      "Cài đặt đề xuất cho máy này: xem card đồ họa, RAM và số nhân CPU để đề xuất chất lượng dịch, giọng nói nhanh/chính xác và phụ đề trực tiếp, kèm lý do. Chỉ đổi khi bạn bấm Áp dụng, cài đặt cũ được giữ để hoàn tác ở mục sao lưu cài đặt.",
+      "Hồ sơ cài đặt: lưu cài đặt hiện tại với một tên (Chơi game, Xem video, Họp), chuyển bằng một cú nhấp, tối đa 8. Lưu ngôn ngữ, vùng chat, hiển thị, giọng nói, chất lượng; không đụng đến ngôn ngữ giao diện, thư mục, từ vựng.",
+      "Dòng thời gian lịch sử: chia theo đoạn, mới nhất ở trên, bấm để mở. Biểu tượng khay hiện nhãn như “KO→ZH” (tắt được). Thu nhỏ cửa sổ, nhãn khay và bảng màu cần xem trên máy của bạn."
+    ],
+    "th": [
+      "ไฮไลต์ฟีเจอร์ใหม่: หลังอัปเดต หน้าตั้งค่าที่มีของใหม่จะมีป้าย “ใหม่” ที่เมนูซ้าย หายไปเมื่อเปิดหน้านั้น และแสดงแค่ครั้งเดียวต่อหน้า ผู้ติดตั้งใหม่จะไม่เห็น",
+      "โหมดมินิ: ย่อหน้าต่างให้เหลือแค่บทสนทนาและช่องพิมพ์ วางไว้ข้างเกมได้ เปิดในหน้าภาษาและทั่วไป หรือกดปุ่มมุมขวาบนของหน้าบทสนทนา เมื่อกลับจะคืนขนาดและตำแหน่งเดิม",
+      "ขนาดตัวอักษรของหน้าจอ: 90%, 100%, 115%, 130% หรือ 150% ขยาย/ย่อทั้งหน้าจอพร้อมกัน (ภาษาและทั่วไป > รูปลักษณ์)",
+      "สีที่เป็นมิตรกับผู้ตาบอดสี: เปลี่ยนเขียวและแดงเป็นน้ำเงินและส้ม และสถานะอย่างการตรวจสุขภาพยังใช้รูปทรงและสัญลักษณ์ (✓ ▲ ✖) ไม่ใช้สีอย่างเดียว",
+      "ลดแอนิเมชัน: ปิดการกะพริบ การจาง และการเปลี่ยนฉาก คำบรรยายลอยจะปรากฏและหายไปทันที และทำตามการตั้งค่าลดแอนิเมชันของระบบอัตโนมัติ",
+      "การตั้งค่าที่แนะนำสำหรับเครื่องนี้: ดูการ์ดจอ หน่วยความจำ และคอร์ CPU แล้วแนะนำคุณภาพการแปล เสียงแบบเร็ว/แม่น และคำบรรยายสด พร้อมเหตุผล จะเปลี่ยนเมื่อกด “ใช้” เท่านั้น และย้อนกลับได้ในส่วนสำรองการตั้งค่า",
+      "โปรไฟล์การตั้งค่า: บันทึกการตั้งค่าปัจจุบันเป็นชื่อ (เล่นเกม ดูวิดีโอ ประชุม) แล้วสลับในคลิกเดียว สูงสุด 8 รายการ บันทึกภาษา พื้นที่แชต การแสดงผล เสียง คุณภาพ ไม่แตะภาษาหน้าจอ โฟลเดอร์ซับ คำศัพท์ และโน้ตผู้เล่น",
+      "ไทม์ไลน์ประวัติ: แบ่งประวัติเป็นช่วงๆ ใหม่สุดอยู่บน คลิกเพื่อขยายบทสนทนาทั้งหมด ไอคอนถาดระบบมีข้อความเล็กๆ เช่น “KO→ZH” (แสดงตอนชี้เมาส์ด้วย) ปิดได้ การย่อหน้าต่างจริง ข้อความบนไอคอน และสี ต้องลองดูบนคอมพิวเตอร์ของคุณเอง"
+    ],
+    "id": [
+      "Sorotan fitur baru: setelah pembaruan, halaman pengaturan dengan fitur baru diberi tanda “Baru” di navigasi kiri, hilang setelah dibuka, dan hanya sekali per halaman. Instalasi baru tidak melihatnya.",
+      "Mode mini: jendela mengecil hingga hanya obrolan dan kotak input agar muat di samping game. Aktifkan di Bahasa & Umum atau dengan tombol di kanan atas halaman percakapan; kembali akan memulihkan ukuran dan posisi semula.",
+      "Ukuran teks antarmuka: 90%, 100%, 115%, 130%, atau 150%, memperbesar/memperkecil seluruh antarmuka (Bahasa & Umum, Tampilan).",
+      "Warna ramah buta warna: hijau dan merah menjadi biru dan oranye, status seperti pemeriksaan kesehatan juga memakai bentuk dan simbol (✓ ▲ ✖), bukan hanya warna.",
+      "Kurangi animasi: mematikan kedipan, pudar, dan transisi; subtitel melayang muncul dan hilang seketika. Mengikuti pengaturan “kurangi animasi” sistem secara otomatis.",
+      "Pengaturan yang disarankan untuk PC ini: dari kartu grafis, memori, dan inti CPU, beserta alasannya. Berubah hanya setelah Anda menekan Terapkan; pengaturan lama disimpan agar bisa dibatalkan di cadangan pengaturan.",
+      "Profil pengaturan: simpan pengaturan saat ini dengan nama (Gaming, Video, Rapat), beralih sekali klik, maks. 8. Bahasa, area obrolan, tampilan, suara, kualitas disimpan; bahasa antarmuka, folder, kosakata tidak diubah.",
+      "Lini masa riwayat: per sesi, terbaru di atas, klik untuk membuka. Ikon tray menampilkan label seperti “KO→ZH” (bisa dimatikan). Pengecilan jendela, label tray, dan palet warna perlu dicoba di PC Anda."
+    ],
+    "es": [
+      "Novedades resaltadas: tras una actualización, las páginas de ajustes con algo nuevo llevan una etiqueta «Nuevo» en la navegación izquierda; desaparece al abrir la página y solo se marca una vez. Las instalaciones nuevas no la ven.",
+      "Modo mini: la ventana se reduce a la charla y el cuadro de texto para ponerla junto al juego. Actívalo en Idioma y General o con el botón de arriba a la derecha de la conversación; al volver recupera su tamaño y posición.",
+      "Tamaño del texto: 90 %, 100 %, 115 %, 130 % o 150 %, que escala toda la interfaz a la vez (Idioma y General, Apariencia).",
+      "Colores para daltonismo: el verde y el rojo pasan a azul y naranja, y estados como la comprobación de salud usan también formas y símbolos (✓ ▲ ✖), no solo color.",
+      "Reducir animaciones: desactiva parpadeos, fundidos y transiciones; los subtítulos flotantes aparecen y desaparecen al instante. Sigue automáticamente el ajuste de reducir movimiento del sistema.",
+      "Ajustes recomendados para este PC: según tarjeta gráfica, memoria y núcleos de CPU, con el motivo. No cambia nada hasta pulsar Aplicar, y se guarda una copia para deshacer en la copia de ajustes.",
+      "Perfiles de ajustes: guarda los ajustes con un nombre (Juego, Vídeo, Reunión) y cambia con un clic, hasta 8. Se guardan idiomas, zonas de chat, pantalla, voz y calidad; no se tocan idioma de la interfaz, carpetas ni vocabulario.",
+      "Línea de tiempo del historial: sesiones, las más recientes primero, pulsa para ver. El icono de la bandeja muestra «KO→ZH» (se puede quitar). Reducir la ventana, la etiqueta y la paleta hay que probarlas en tu PC."
+    ],
+    "pt": [
+      "Destaque de novidades: após uma atualização, as páginas de configurações com algo novo ganham uma etiqueta «Novo» na navegação à esquerda; some ao abrir a página e só aparece uma vez por página. Instalações novas não veem.",
+      "Modo mini: a janela encolhe para só a conversa e a caixa de texto, para ficar ao lado do jogo. Ative em Idioma e Geral ou pelo botão no canto superior direito da conversa; ao voltar recupera o tamanho e a posição.",
+      "Tamanho do texto: 90%, 100%, 115%, 130% ou 150%, ampliando toda a interface junto (Idioma e Geral, Aparência).",
+      "Cores para daltonismo: verde e vermelho viram azul e laranja, e estados como a verificação de saúde usam também formas e símbolos (✓ ▲ ✖), não só cor.",
+      "Reduzir animações: desativa piscadelas, desvanecimentos e transições; as legendas flutuantes aparecem e somem na hora. Segue automaticamente a configuração de reduzir movimento do sistema.",
+      "Configurações recomendadas para este PC: conforme placa de vídeo, memória e núcleos da CPU, com o motivo. Nada muda até tocar em Aplicar, e uma cópia fica guardada para desfazer na cópia de configurações.",
+      "Perfis de configurações: salve as configurações com um nome (Jogo, Vídeo, Reunião) e troque com um clique, até 8. Salvam-se idiomas, áreas de chat, exibição, voz e qualidade; idioma da interface, pastas e vocabulário não mudam.",
+      "Linha do tempo do histórico: sessões, as mais recentes primeiro, clique para abrir. O ícone da bandeja mostra «KO→ZH» (dá para desligar). Reduzir a janela, a etiqueta e a paleta precisam ser testados no seu PC."
+    ],
+    "ru": [
+      "Метки новых функций: после обновления у страниц настроек с новинками слева появляется метка «Новое»; она исчезает после открытия страницы и ставится один раз. При чистой установке меток нет.",
+      "Мини-режим: окно сжимается до диалога и поля ввода, чтобы стоять рядом с игрой. Включается на странице «Язык и общее» или кнопкой в правом верхнем углу страницы диалога; при возврате восстанавливаются размер и положение.",
+      "Размер текста интерфейса: 90%, 100%, 115%, 130% или 150% — масштабируется весь интерфейс сразу («Язык и общее», «Оформление»).",
+      "Цвета для дальтоников: зелёный и красный заменяются синим и оранжевым, а состояния (например, проверка состояния) отличаются ещё и формой и символами (✓ ▲ ✖).",
+      "Меньше анимации: отключает мигание, затухание и переходы; плавающие субтитры появляются и исчезают мгновенно. Автоматически учитывает системную настройку уменьшения анимации.",
+      "Рекомендуемые настройки для этого ПК: по видеокарте, памяти и ядрам процессора, с причиной. Ничего не меняется, пока не нажмёте «Применить»; прежние настройки сохраняются для отмены в резервной копии.",
+      "Профили настроек: сохраните настройки под именем (Игра, Видео, Встреча) и переключайтесь одним щелчком, до 8. Сохраняются языки, области чата, отображение, голос и качество; язык интерфейса, папки и словарь не меняются.",
+      "Лента истории: сеансы, новые сверху, нажмите, чтобы раскрыть. На значке в трее подпись «KO→ZH» (можно отключить). Сжатие окна, подпись и палитру нужно проверить на вашем ПК."
+    ],
+    "de": [
+      "Neu-Hinweise: Nach einem Update bekommen Einstellungsseiten mit Neuem links in der Navigation ein „Neu“-Etikett; es verschwindet nach dem Öffnen und erscheint pro Seite nur einmal. Neuinstallationen sehen keines.",
+      "Mini-Modus: Das Fenster schrumpft auf Chat und Eingabefeld, damit es neben ein Spiel passt. Einschalten unter Sprache & Allgemein oder per Knopf oben rechts auf der Gesprächsseite; zurück stellt Größe und Position wieder her.",
+      "Textgröße der Oberfläche: 90 %, 100 %, 115 %, 130 % oder 150 % – die ganze Oberfläche skaliert gemeinsam (Sprache & Allgemein, Aussehen).",
+      "Farben für Farbsehschwäche: Grün und Rot werden zu Blau und Orange, und Zustände wie der Gesundheitscheck nutzen zusätzlich Formen und Symbole (✓ ▲ ✖), nicht nur Farbe.",
+      "Weniger Animationen: schaltet Blinken, Überblendungen und Übergänge aus; schwebende Untertitel erscheinen und verschwinden sofort. Folgt automatisch der Systemeinstellung für weniger Bewegung.",
+      "Empfohlene Einstellungen für diesen PC: nach Grafikkarte, Speicher und CPU-Kernen, mit Begründung. Erst „Anwenden“ ändert etwas; die alten Einstellungen bleiben zum Rückgängigmachen in der Einstellungssicherung.",
+      "Einstellungsprofile: Einstellungen unter einem Namen speichern (Spiel, Video, Meeting), per Klick wechseln, bis zu 8. Gesichert: Sprachen, Chatbereiche, Anzeige, Stimme, Qualität; Oberflächensprache, Ordner, Vokabular nicht.",
+      "Verlauf-Zeitleiste: Abschnitte, neueste zuerst, Klick zum Öffnen. Das Tray-Symbol zeigt „KO→ZH“ (abschaltbar). Fenster verkleinern, Tray-Beschriftung und Farbpalette müssen auf deinem PC geprüft werden."
+    ],
+    "fr": [
+      "Nouveautés signalées : après une mise à jour, les pages de réglages avec du nouveau reçoivent une étiquette « Nouveau » à gauche ; elle disparaît à l'ouverture et n'apparaît qu'une fois par page. Pas pour les nouvelles installations.",
+      "Mode mini : la fenêtre se réduit à la conversation et au champ de saisie, à côté d'un jeu. À activer dans Langue et Général ou avec le bouton en haut à droite de la conversation ; le retour restaure taille et position.",
+      "Taille du texte : 90 %, 100 %, 115 %, 130 % ou 150 %, qui agrandit toute l'interface (Langue et Général, Apparence).",
+      "Couleurs pour daltoniens : le vert et le rouge deviennent bleu et orange, et des états comme le bilan de santé utilisent aussi des formes et symboles (✓ ▲ ✖), pas seulement la couleur.",
+      "Réduire les animations : désactive clignotements, fondus et transitions ; les sous-titres flottants apparaissent et disparaissent instantanément. Suit automatiquement le réglage système de réduction des animations.",
+      "Réglages recommandés pour ce PC : selon la carte graphique, la mémoire et les cœurs du processeur, avec la raison. Rien ne change avant d'appuyer sur Appliquer ; les anciens réglages sont conservés pour annuler dans la sauvegarde.",
+      "Profils de réglages : enregistrez les réglages sous un nom (Jeu, Vidéo, Réunion), changez en un clic, jusqu'à 8. Sauvegardés : langues, zones de chat, affichage, voix, qualité ; pas la langue de l'interface, les dossiers ni le vocabulaire.",
+      "Chronologie de l'historique : sessions, les plus récentes d'abord, un clic pour ouvrir. L'icône de la zone de notification affiche « KO→ZH » (désactivable). Réduction de la fenêtre, étiquette et palette sont à essayer sur votre PC."
+    ]
+  },
   "2.19.0": {
     "zh-TW": [
       "每日複習提醒：一天一次，有該複習的字就在工具列跳出通知（學習頁可關）。",

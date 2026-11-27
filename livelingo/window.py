@@ -13,6 +13,7 @@ import time
 from . import oswin
 
 MAIN_MIN = (380, 150)
+MINI_SIZE = (420, 620)      # 迷你模式的視窗大小（2.20.0）
 SETTINGS_SIZE = (900, 800)
 NORMAL_VIEWS = ("main", "settings")      # 這兩個畫面共用同一個視窗大小
 
@@ -26,6 +27,7 @@ class WindowCtl:
         self.win = win
         self.service = service
         self.main_geom = None       # 離開主畫面時記住的大小和位置
+        self.mini_geom = None       # 進迷你模式之前的大小和位置
 
     def _safe(self, fn, *args):
         try:
@@ -87,8 +89,22 @@ class WindowCtl:
             self._safe(self.win.resize, w, h)
             self._safe(self.win.move, x, y)
 
+    def mini(self, on: bool) -> None:
+        """迷你模式（2.20.0）：視窗縮成小小一條，離開時回到原本的大小和位置。"""
+        if on:
+            geom = self.geometry()
+            if geom and self.mini_geom is None:
+                self.mini_geom = geom
+            sx, sy, sw, sh = self._screen()
+            self._safe(self.win.resize, min(MINI_SIZE[0], sw - 40), min(MINI_SIZE[1], sh - 80))
+        elif self.mini_geom:
+            w, h, x, y = self.mini_geom
+            self.mini_geom = None
+            self._safe(self.win.resize, w, h)
+            self._safe(self.win.move, x, y)
+
     def save_geometry(self) -> None:
-        geom = self.geometry() if self.service.view in NORMAL_VIEWS else self.main_geom
+        geom = self.mini_geom if self.mini_geom else (self.geometry() if self.service.view in NORMAL_VIEWS else self.main_geom)
         if geom and geom[0] >= MAIN_MIN[0] and geom[1] >= 300 and geom[2] > -30000:
             self.service.cfg.set(window={"w": geom[0], "h": geom[1], "x": geom[2], "y": geom[3]})
 
