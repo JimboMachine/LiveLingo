@@ -665,14 +665,14 @@ def test_microphone_remembers_second_way(monkeypatch, tmp_path):
         cap.join(3)
         return cap, errors
 
-    cap, errors = listen(audio.Ways(path, "2.12.1", clock=lambda: now[0]))      # 第一次：第一種失敗一次，第二種收到聲音 → 記住
+    cap, errors = listen(audio.Ways(path, "2.13.1", clock=lambda: now[0]))      # 第一次：第一種失敗一次，第二種收到聲音 → 記住
     assert cap.backend == "portaudio" and not errors and calls["recorder"] == 1
     assert any("failed" in line for line in logged)
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert list(saved["second"]) == [name] and "audio" not in path.read_text(encoding="utf-8")      # 只有裝置名稱和日期
 
     logged.clear()
-    cap, errors = listen(audio.Ways(path, "2.12.1", clock=lambda: now[0]))      # 重開程式：從檔案讀回來，直接用第二種
+    cap, errors = listen(audio.Ways(path, "2.13.1", clock=lambda: now[0]))      # 重開程式：從檔案讀回來，直接用第二種
     assert cap.backend == "portaudio" and not errors and calls["recorder"] == 1      # 第一種完全沒再試
     assert not any("failed" in line for line in logged) and any("as remembered" in line for line in logged)
 
@@ -695,8 +695,8 @@ def test_microphone_remembers_second_way(monkeypatch, tmp_path):
     assert json.loads(path.read_text(encoding="utf-8"))["second"] == {}
 
     path.write_text("{ not json", encoding="utf-8")      # 檔案壞了：當作什麼都沒記過，不會出錯
-    assert audio.Ways(path, "2.12.1").second == {}
-    nowhere = audio.Ways(tmp_path / "never" / "mic_ways.json", "2.12.1")
+    assert audio.Ways(path, "2.13.1").second == {}
+    nowhere = audio.Ways(tmp_path / "never" / "mic_ways.json", "2.13.1")
     nowhere.remember("")      # 沒有名稱的不記
     nowhere.forget("沒記過的")
     assert nowhere.second == {} and not (tmp_path / "never").exists()

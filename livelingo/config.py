@@ -84,7 +84,7 @@ DEFAULTS = {
     # 快速輸入框用 Q 不用 T：Ctrl+Shift+T 是所有瀏覽器的「重開剛關掉的分頁」，全域快速鍵會把它搶走。
     "hotkeys": {"overlay": "Ctrl+Shift+S", "mic": "Ctrl+Shift+M", "copy": "Ctrl+Shift+C", "quick": "Ctrl+Shift+Q", "reply": "Ctrl+Shift+R",
                 "pick": "Ctrl+Shift+X", "snap": "Ctrl+Shift+F", "phrase": "Ctrl+Shift+P", "inplace": "Ctrl+Shift+O"},
-    "hotkeys_v": 2,              # 快速鍵預設的版本：2 = Ctrl+Shift+字母（2.12.1 起）；舊設定檔沒有這個值，載入時只換掉還是舊預設的那幾個
+    "hotkeys_v": 2,              # 快速鍵預設的版本：2 = Ctrl+Shift+字母（2.13.1 起）；舊設定檔沒有這個值，載入時只換掉還是舊預設的那幾個
     "window": {"w": 980, "h": 720, "x": None, "y": None},
     "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
     "accent": "mint",            # 強調色：mint / blue / violet / rose / cyan
