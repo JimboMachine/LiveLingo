@@ -115,6 +115,10 @@ class Server:
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
                     return self._json(service.storage_state())
+                if url.path in ("/api/study", "/api/practice"):      # 學習工具（2.19.0）：統計和收藏的句子／對話回放練習的清單
+                    if not self._authorized(query):
+                        return self._json({"error": "unauthorized"}, 401)
+                    return self._json(service.learn_data() if url.path == "/api/study" else service.practice_list())
                 if url.path in ("/api/words", "/api/recaps"):      # 單字本（review=1：該複習的）、對話摘要；q 搜尋的字
                     if not self._authorized(query):
                         return self._json({"error": "unauthorized"}, 401)
@@ -362,6 +366,23 @@ class Server:
                         return self._json(service.word_action(str(body.get("action") or ""), str(body.get("w") or ""),
                                                               str(body.get("lang") or ""), str(body.get("meaning") or ""),
                                                               msg_id if isinstance(msg_id, int) else None, bool(body.get("remembered"))))
+                    if route == "/api/study":       # 學習工具（2.19.0）：quiz / explain / shadow / anki / sentence / say
+                        act = str(body.get("action") or "")
+                        msg_id = body.get("id") if isinstance(body.get("id"), int) else None
+                        if act == "quiz":
+                            return self._json(service.study_quiz(int(body.get("n") or 10) if str(body.get("n") or "10").isdigit() else 10))
+                        if act == "explain":
+                            return self._json(service.explain(msg_id))
+                        if act == "shadow":
+                            return self._json(service.shadow(str(body.get("audio") or ""), str(body.get("text") or ""), str(body.get("lang") or "")))
+                        if act == "anki":
+                            return self._json(service.anki_export())
+                        if act == "say":
+                            return self._json(service.practice_say(str(body.get("text") or ""), str(body.get("lang") or "")))
+                        if act in ("save", "note", "remove"):
+                            return self._json(service.sentence_action(act, msg_id, str(body.get("note") or ""), str(body.get("sid") or ""),
+                                                                      str(body.get("text") or ""), str(body.get("lang") or "")))
+                        return self._json({"ok": False, "error": "unknown"})
                     if route == "/api/recaps":      # 對話摘要：now（現在摘要）/ remove
                         if body.get("action") == "remove":
                             return self._json(service.recap_remove(str(body.get("id") or "")))

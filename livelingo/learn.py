@@ -19,6 +19,9 @@ MAX_WORD = 40                       # 一個生字最長幾個字（選取一大
 PER_LINE = 2                        # 一句最多標幾個
 STEPS = (1, 3, 7, 21, 60)           # 記得了：下一次複習在幾天後（第幾次記得就用第幾格）
 AUTO = ("ko", "ja", "en", "es", "pt", "de", "fr", "id", "vi", "ru")      # 會自動標生字的語言
+LEVELS = ("beginner", "middle", "advanced")      # 程度（2.19.0）：初級只標短的常用字、一句一個；進階只標長的難字
+MAX_SENTENCES = 500                 # 收藏的整句最多幾句（2.19.0）
+MAX_LOG = 400                       # 複習紀錄留幾天份（學習統計用）
 
 _LATIN = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*")
 _HANGUL = re.compile(r"[가-힣]+")
@@ -79,7 +82,8 @@ def _clean(word: str) -> str:
 
 
 class Wordbook:
-    """{"words": [{w, lang, meaning, example, example_tr, added, step, due}], "known": {語言: [我說已經會的字]}}"""
+    """{"words": [{w, lang, meaning, example, example_tr, added, step, due, seen}], "known": {語言: [我說已經會的字]},
+    "sentences": [{id, text, lang, tr, note, added}]（收藏的整句，2.19.0）, "log": {日期: [複習幾個, 記得幾個]}}"""
 
     def __init__(self, folder: Path, now=time.time):
         self.path = folder / FILE
@@ -87,6 +91,8 @@ class Wordbook:
         self._lock = threading.RLock()
         self.words: list[dict] = []
         self.known: dict[str, list[str]] = {}
+        self.sentences: list[dict] = []
+        self.log: dict[str, list[int]] = {}
         self.error = ""
         self._load()
 
@@ -105,18 +111,32 @@ class Wordbook:
                     self.words.append({"w": w, "lang": lang, "meaning": str(row.get("meaning") or "")[:200],
                                        "example": str(row.get("example") or "")[:300], "example_tr": str(row.get("example_tr") or "")[:300],
                                        "added": float(row.get("added") or 0), "step": max(0, int(row.get("step") or 0)),
-                                       "due": float(row.get("due") or 0)})
+                                       "due": float(row.get("due") or 0), "seen": max(0, int(row.get("seen") or 0)),
+                                       "hanja": str(row.get("hanja") or "")[:20]})
             except (KeyError, TypeError, ValueError):
                 continue
         known = data.get("known", {}) if isinstance(data, dict) else {}
         if isinstance(known, dict):
             self.known = {family_of(k): [str(w).lower() for w in v][:MAX_WORDS] for k, v in known.items() if isinstance(v, list)}
+        for row in data.get("sentences", []) if isinstance(data, dict) else []:
+            try:
+                text = str(row["text"]).strip()[:300]
+                if text:
+                    self.sentences.append({"id": str(row.get("id") or len(self.sentences)), "text": text, "lang": family_of(row.get("lang") or ""),
+                                           "tr": str(row.get("tr") or "")[:300], "note": str(row.get("note") or "")[:300],
+                                           "added": float(row.get("added") or 0)})
+            except (KeyError, TypeError, ValueError):
+                continue
+        log = data.get("log", {}) if isinstance(data, dict) else {}
+        if isinstance(log, dict):
+            self.log = {str(k): [int(v[0]), int(v[1])] for k, v in log.items() if isinstance(v, list) and len(v) == 2}
 
     def _save(self) -> bool:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_name(self.path.name + ".tmp")
-            tmp.write_text(json.dumps({"words": self.words, "known": self.known}, ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp.write_text(json.dumps({"words": self.words, "known": self.known, "sentences": self.sentences, "log": self.log},
+                                      ensure_ascii=False, indent=1), encoding="utf-8")
             tmp.replace(self.path)
             self.error = ""
             return True
@@ -133,11 +153,78 @@ class Wordbook:
         with self._lock:
             return self._find(w, lang) is not None or _clean(w).lower() in self.known.get(family_of(lang), [])
 
-    def fresh(self, text: str, lang: str, n: int = PER_LINE) -> list[str]:
-        """這句話裡還沒收過、也不是已經會的生字，最多 n 個。"""
-        return [w for w in candidates(text, lang) if not self.has(w, lang)][:n]
+    def fresh(self, text: str, lang: str, n: int = PER_LINE, level: str = "middle") -> list[str]:
+        """這句話裡還沒收過、也不是已經會的生字，最多 n 個。
+        level（2.19.0）：beginner 只挑短的（多半是常用字）、一句一個；advanced 只挑長的（多半是少見的難字）。"""
+        words = [w for w in candidates(text, lang) if not self.has(w, lang)]
+        cjk = family_of(lang) in ("ko", "ja")
+        if level == "beginner":
+            short = 3 if cjk else 7
+            return sorted([w for w in words if len(w) <= short], key=len)[:1]
+        if level == "advanced":
+            long = 3 if cjk else 8
+            return [w for w in words if len(w) >= long][:n]
+        return words[:n]
 
-    def add(self, w: str, lang: str, meaning: str = "", example: str = "", example_tr: str = "") -> dict | None:
+    def seen_again(self, text: str, lang: str) -> int:
+        """字幕裡又遇到單字本裡的字：記一次（學習統計的「最常遇到」）。回傳記了幾個。"""
+        lang = family_of(lang)
+        found = {w.lower() for w in candidates(text, lang)}
+        if not found:
+            return 0
+        n = 0
+        with self._lock:
+            for row in self.words:
+                if row["lang"] == lang and row["w"].lower() in found:
+                    row["seen"] = row.get("seen", 0) + 1
+                    n += 1
+            if n:
+                self._save()
+        return n
+
+    def add_sentence(self, text: str, lang: str, tr: str = "", note: str = "") -> dict | None:
+        """收藏整句（2.19.0），可以附一行文法說明。同一句再收就更新說明。"""
+        text = " ".join(str(text or "").split())[:300]
+        if not text:
+            return None
+        with self._lock:
+            row = next((x for x in self.sentences if x["text"] == text), None)
+            if row is None:
+                row = {"id": f"s{int(self._now() * 1000)}", "text": text, "lang": family_of(lang), "tr": str(tr or "")[:300],
+                       "note": "", "added": self._now()}
+                self.sentences.append(row)
+                del self.sentences[:-MAX_SENTENCES]
+            if note:
+                row["note"] = str(note).strip()[:300]
+            if tr:
+                row["tr"] = str(tr)[:300]
+            self._save()
+            return dict(row)
+
+    def remove_sentence(self, sid: str) -> bool:
+        with self._lock:
+            row = next((x for x in self.sentences if x["id"] == sid), None)
+            if row is None:
+                return False
+            self.sentences.remove(row)
+            self._save()
+            return True
+
+    def stats(self, days: int = 7) -> dict:
+        """學習統計（2.19.0）：最近幾天新收幾個字、複習幾次、記得幾次，最常遇到的字。"""
+        now = self._now()
+        since = now - days * 86400
+        dates = {time.strftime("%Y-%m-%d", time.localtime(now - d * 86400)) for d in range(days)}
+        with self._lock:
+            new = sum(1 for x in self.words if x["added"] >= since)
+            reviewed = sum(self.log.get(d, [0, 0])[0] for d in dates)
+            remembered = sum(self.log.get(d, [0, 0])[1] for d in dates)
+            top = sorted((x for x in self.words if x.get("seen")), key=lambda x: -x["seen"])[:5]
+            daily = [[d, self.log.get(d, [0, 0])[0]] for d in sorted(dates)]
+            return {"new": new, "reviewed": reviewed, "remembered": remembered, "sentences": len(self.sentences),
+                    "top": [{"w": x["w"], "lang": x["lang"], "meaning": x["meaning"], "seen": x["seen"]} for x in top], "daily": daily}
+
+    def add(self, w: str, lang: str, meaning: str = "", example: str = "", example_tr: str = "", hanja: str = "") -> dict | None:
         """收進單字本（已經有就更新意思）。回傳那一筆；字是空的回傳 None。"""
         w, lang = _clean(w), family_of(lang)
         if not w:
@@ -147,7 +234,7 @@ class Wordbook:
             if row is None:
                 now = self._now()
                 row = {"w": w, "lang": lang, "meaning": "", "example": str(example)[:300], "example_tr": str(example_tr)[:300],
-                       "added": now, "step": 0, "due": now}
+                       "added": now, "step": 0, "due": now, "seen": 0, "hanja": ""}
                 self.words.append(row)
                 if lang in self.known and w.lower() in self.known[lang]:
                     self.known[lang].remove(w.lower())
@@ -155,6 +242,8 @@ class Wordbook:
                     self.words = self.words[-MAX_WORDS:]
             if meaning:
                 row["meaning"] = str(meaning).strip()[:200]
+            if hanja:
+                row["hanja"] = str(hanja).strip()[:20]      # 韓文漢字詞（2.19.0）
             self._save()
             return dict(row)
 
@@ -190,6 +279,12 @@ class Wordbook:
                 return None
             row["step"] = min(row["step"] + 1, len(STEPS)) if remembered else 0
             row["due"] = self._now() + STEPS[max(0, row["step"] - 1)] * 86400 if remembered else self._now() + 86400
+            day = time.strftime("%Y-%m-%d", time.localtime(self._now()))
+            count = self.log.setdefault(day, [0, 0])
+            count[0] += 1
+            count[1] += 1 if remembered else 0
+            for old in sorted(self.log)[:-MAX_LOG]:
+                del self.log[old]
             self._save()
             return dict(row)
 
@@ -211,7 +306,7 @@ class Wordbook:
     def clear(self) -> int:
         with self._lock:
             n = len(self.words)
-            self.words, self.known = [], {}
+            self.words, self.known, self.sentences, self.log = [], {}, [], {}
             try:
                 self.path.unlink(missing_ok=True)
                 self.error = ""
@@ -222,4 +317,5 @@ class Wordbook:
     def state(self) -> dict:
         now = self._now()
         with self._lock:
-            return {"count": len(self.words), "due": sum(1 for x in self.words if x["due"] <= now), "error": self.error}
+            return {"count": len(self.words), "due": sum(1 for x in self.words if x["due"] <= now), "sentences": len(self.sentences),
+                    "error": self.error}

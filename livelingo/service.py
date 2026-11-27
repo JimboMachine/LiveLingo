@@ -34,11 +34,12 @@ from .qualitycheck import QualityCheck
 from . import textfix
 from .corrections import Corrections
 from . import cheatsheet, gametools, imagetext
-from . import introduce, pace, sessionlog, tone as tone_mod, voicecmd
+from . import introduce, pace, sessionlog, study, tone as tone_mod, voicecmd
 from . import gamepad as gamepad_mod
 from .album import Album
 from .storybook import StoryBook
 from .history import History
+from .learn import LEVELS as LEARN_LEVELS
 from .learn import Wordbook, family_of
 from .recap import GAP as RECAP_GAP
 from .recap import Recaps, sessions, worth
@@ -105,6 +106,7 @@ LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLin
 REVIVE_TIMES = 3            # 翻譯引擎自己停掉時，最多自動重開幾次……
 REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
 WHATS_NEW_FLOOR = "2.5.0"      # 沒有「上次看到哪一版」的紀錄（這個功能出現以前就裝好的）：把這一版以後錯過的改動一次說完
+REMIND_EVERY = 1800        # 每日複習提醒：多久看一次有沒有該複習的字（2.19.0）
 MAX_MARKED = 60            # 最近幾則訊息的生字標記留著（介面重開也看得到）
 RECAP_RECENT = 6 * 3600     # 自動摘要只補最近這麼久之內結束的對話
 RECAP_EVERY = 30.0          # 每隔幾秒看一次有沒有剛結束、還沒摘要的對話
@@ -311,6 +313,7 @@ class Service:
         self._recap_checked = 0.0
         self._all_terms = None      # 查生字意思用的全部用語包（第一次用到才讀）
         self._words: dict[int, list[dict]] = {}      # 訊息 id → 標出來的生字 [{w, lang, meaning}]（只留最近的）
+        self._explained: dict[int, str] = {}      # 訊息 id → 「為什麼這樣說」的說明（2.19.0，只留最近的）
         self.usage = Usage(self.data, bool(self.cfg["usage_keep"]))      # 每天幾句、失敗幾次、平均等多久（只有數字）
         self._counted: set[int] = set()      # 已經算進使用數字的訊息（重翻不再算）
         self.tray = Tray(self)
@@ -491,6 +494,7 @@ class Service:
         threading.Thread(target=self._boot, daemon=True, name="boot").start()
         threading.Thread(target=self._game_watch, daemon=True, name="game-watch").start()
         threading.Thread(target=self._update_watch, daemon=True, name="update-watch").start()
+        threading.Thread(target=self._review_remind, daemon=True, name="review-remind").start()
 
     def _boot(self) -> None:
         try:
@@ -3078,6 +3082,8 @@ class Service:
             changes.pop("chat_send_open")
         if changes.get("ear_split") not in (None, *EAR_SPLITS):
             changes.pop("ear_split")
+        if changes.get("learn_level") not in (None, *LEARN_LEVELS):
+            changes.pop("learn_level")
         if "camera_index" in changes and not (isinstance(changes["camera_index"], int) and not isinstance(changes["camera_index"], bool)
                                               and 0 <= changes["camera_index"] < 10):
             changes.pop("camera_index")
@@ -4158,7 +4164,9 @@ class Service:
         lang = family_of(msg.get("lang") or "")
         if not lang or lang == family_of(self.cfg["my_lang"]):
             return
-        words = self.wordbook.fresh(msg.get("original", ""), lang)
+        self.wordbook.seen_again(msg.get("original", ""), lang)      # 學習統計：又遇到單字本裡的字（2.19.0）
+        level = self.cfg["learn_level"] if self.cfg["learn_level"] in LEARN_LEVELS else "middle"
+        words = self.wordbook.fresh(msg.get("original", ""), lang, level=level)
         if not words:
             return
 
@@ -4169,7 +4177,10 @@ class Service:
                     break
                 meaning = self._gloss(w, lang, msg.get("original", ""))
                 if meaning:
-                    items.append({"w": w, "lang": lang, "meaning": meaning})
+                    item = {"w": w, "lang": lang, "meaning": meaning}
+                    if self._hanja_on(lang):
+                        item["hanja"] = study.hanja_of(w)
+                    items.append(item)
             if items:
                 with self._lock:
                     self._words[msg["id"]] = items
@@ -4220,12 +4231,12 @@ class Service:
                 def work():
                     found = self._gloss(word, lang, example)
                     if found:
-                        self.wordbook.add(word, lang, found)
+                        self.wordbook.add(word, lang, found, hanja=self._hanja(word, lang))
                     self.hub.publish("wordbook", self.wordbook.state())
 
                 threading.Thread(target=work, daemon=True, name="gloss").start()
             else:
-                row = self.wordbook.add(word, lang, meaning, example, example_tr)
+                row = self.wordbook.add(word, lang, meaning, example, example_tr, hanja=study.hanja_of(word) if self._hanja_on(lang) else "")
             if row is None:
                 return {"ok": False, "error": "nothing"}
         elif action == "remove":
@@ -4241,6 +4252,8 @@ class Service:
         elif action == "review":
             if self.wordbook.review(word, lang, bool(remembered)) is None:
                 return {"ok": False, "error": "nothing"}
+        elif action == "say":      # 單字發音（2.19.0）：用 Windows 的語音念出來
+            return {"ok": bool(self.reader.say(word, lang))}
         elif action == "meaning":
             if self.wordbook.add(word, lang, str(meaning or "")[:200]) is None:
                 return {"ok": False, "error": "nothing"}
@@ -4252,6 +4265,162 @@ class Service:
 
     def words_list(self, q: str = "", review: bool = False) -> dict:
         return {"items": self.wordbook.due() if review else self.wordbook.listing(q), **self.wordbook.state()}
+
+    # ------------------------------------------------------------------ 學習工具（2.19.0）
+
+    def _hanja_on(self, lang: str) -> bool:
+        return lang == "ko" and bool(self.cfg["hanja"]) and family_of(self.cfg["my_lang"]) in ("zh", "ja")
+
+    def _hanja(self, word: str, lang: str) -> str:
+        """韓文字的漢字：表裡有就用表的；沒有才問模型，答案要每個字都對得上才收。"""
+        if not self._hanja_on(lang):
+            return ""
+        found = study.hanja_of(word)
+        if found or self.phase != "ready":
+            return found
+        try:
+            answer = self.translator.ask_free(study.hanja_prompt(word), 16).strip().splitlines()
+        except Exception:  # noqa: BLE001
+            self.log(traceback.format_exc())
+            return ""
+        answer = answer[0].strip().strip("\"'「」") if answer else ""
+        return answer if study.hanja_ok(word, answer) else ""
+
+    def learn_data(self) -> dict:
+        """學習頁的資料：統計、收藏的句子。"""
+        with self.wordbook._lock:
+            sentences = [dict(x) for x in reversed(self.wordbook.sentences)]
+        return {**self.wordbook.state(), "stats": self.wordbook.stats(), "sentences": sentences}
+
+    def study_quiz(self, n: int = 10) -> dict:
+        """用自己的單字本出題（59）。"""
+        items = study.quiz(self.wordbook.listing(), max(1, min(20, int(n or 10))))
+        return {"ok": bool(items), "items": items, "error": "" if items else "few"}
+
+    def sentence_action(self, action: str, msg_id=None, note: str = "", sid: str = "", text: str = "", lang: str = "") -> dict:
+        """收藏整句（61）：save（從一句字幕收，或直接給 text）/ note（改說明）/ remove。"""
+        if action == "remove":
+            ok = self.wordbook.remove_sentence(str(sid))
+        elif action in ("save", "note"):
+            tr = ""
+            if msg_id is not None:
+                with self._lock:
+                    msg = next((m for m in self.messages if m["id"] == msg_id), None)
+                if not msg:
+                    return {"ok": False, "error": "nothing"}
+                text, lang, tr = msg.get("original", ""), msg.get("lang", ""), msg.get("translated", "")
+                if not note:
+                    note = self._explained.get(msg_id, "").split("\n")[0]
+            ok = self.wordbook.add_sentence(text, lang, tr, note) is not None
+        else:
+            return {"ok": False, "error": "unknown"}
+        self.hub.publish("wordbook", self.wordbook.state())
+        return {"ok": bool(ok), **self.learn_data()}
+
+    def explain(self, msg_id) -> dict:
+        """問「為什麼這樣說」（66）：在背景問翻譯模型，好了送 explain 事件。"""
+        with self._lock:
+            msg = next((m for m in self.messages if m["id"] == msg_id), None)
+        if not msg or not msg.get("original"):
+            return {"ok": False, "error": "nothing"}
+        if self.phase != "ready":
+            return {"ok": False, "error": "not_ready"}
+        if msg_id in self._explained:
+            self.hub.publish("explain", {"id": msg_id, "text": self._explained[msg_id]})
+            return {"ok": True}
+
+        def work():
+            text = ""
+            try:
+                self._wake_engine()
+                text = study.parse_explain(self.translator.ask_free(
+                    study.explain_prompt(msg["original"], msg.get("translated", ""), self.cfg["my_lang"]), 160))
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+            if text:
+                self._explained[msg_id] = text
+                for old in list(self._explained)[:-MAX_MARKED]:
+                    self._explained.pop(old, None)
+            self.hub.publish("explain", {"id": msg_id, "text": text})
+
+        threading.Thread(target=work, daemon=True, name="explain").start()
+        return {"ok": True}
+
+    def shadow(self, audio: str, text: str, lang: str) -> dict:
+        """跟讀打分（60）：介面錄好的聲音（data URL）→ 語音辨識 → 跟原句比。"""
+        import base64
+        import tempfile
+
+        text, lang = str(text or "").strip(), str(lang or "")
+        raw = str(audio or "")
+        if not text or not raw:
+            return {"ok": False, "error": "nothing"}
+        try:
+            data = base64.b64decode(raw.split(",", 1)[-1])
+        except ValueError:
+            return {"ok": False, "error": "audio"}
+        if not data or len(data) > 8_000_000:
+            return {"ok": False, "error": "audio"}
+        path = Path(tempfile.gettempdir()) / f"livelingo-shadow-{os.getpid()}.webm"
+        try:
+            path.write_bytes(data)
+            sound = filesubs.decode(str(path))
+            heard = self._ensure_recognizer().transcribe(sound, [family_of(lang) or "en"]) if len(sound) else None
+        except Exception:  # noqa: BLE001
+            self.log(traceback.format_exc())
+            return {"ok": False, "error": "audio"}
+        finally:
+            path.unlink(missing_ok=True)
+        said = heard[0] if heard else ""
+        return {"ok": True, "heard": said, **study.shadow_score(text, said, lang)}
+
+    def anki_export(self) -> dict:
+        """匯出到 Anki（64）：存成 Anki「匯入檔案」看得懂的文字檔，打開資料夾。"""
+        words = self.wordbook.listing()
+        with self.wordbook._lock:
+            sentences = [dict(x) for x in self.wordbook.sentences]
+        if not words and not sentences:
+            return {"ok": False, "error": "empty"}
+        try:
+            path = study.save_anki(self.transcript_dir(), words, sentences)
+        except OSError as ex:
+            self.log(f"anki export failed: {ex!r}")
+            return {"ok": False, "error": "save"}
+        oswin.open_path(path.parent)
+        return {"ok": True, "path": str(path), "name": path.name, "count": len(words) + len(sentences)}
+
+    def practice_list(self) -> dict:
+        """對話回放練習（68）：歷史裡對方說的話，一段一段。"""
+        if not self.history.keep:
+            return {"ok": False, "error": "history_off", "items": []}
+        rows = self.history._matching()
+        items = study.practice_sessions(rows, RECAP_GAP, family_of(self.cfg["my_lang"]))
+        return {"ok": True, "items": items, "error": "" if items else "empty"}
+
+    def practice_say(self, text: str, lang: str) -> dict:
+        """念一句給我聽（用 Windows 的語音）。"""
+        text = str(text or "").strip()[:300]
+        return {"ok": bool(text) and bool(self.reader.say(text, str(lang or "")))}
+
+    def _review_remind(self) -> None:
+        """每日複習提醒（57）：一天一次，有該複習的字就在工具列跳通知，主視窗也跳一則。"""
+        while not self.closing.wait(REMIND_EVERY):
+            try:
+                self._review_remind_once()
+            except Exception:  # noqa: BLE001
+                self.log(traceback.format_exc())
+
+    def _review_remind_once(self) -> bool:
+        if not self.cfg["review_remind"]:
+            return False
+        today = time.strftime("%Y-%m-%d")
+        due = self.wordbook.state()["due"]
+        if not due or self.cfg["review_reminded"] == today:
+            return False
+        self.cfg.set(review_reminded=today)
+        self.tray.notify(study.remind_text(self.cfg["ui_lang"], due))
+        self.notice("review_due", count=due)
+        return True
 
     # ------------------------------------------------------------------ 對話摘要（2.10.0）
 
