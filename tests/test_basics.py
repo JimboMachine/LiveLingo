@@ -7163,7 +7163,7 @@ def test_inplace_translation_covers_the_original(tmp_path, monkeypatch):
     service.hub.publish = lambda *a, **k: None
     service.phase = "ready"
     service.sources["screen"]["on"] = True
-    assert service.inplace.window_class is MemoryWindow
+    service.inplace.window_class = MemoryWindow      # Windows 上預設是真的視窗，測試一律用記憶體裡的
 
     def wait(test, seconds=5):
         end = _time.time() + seconds
