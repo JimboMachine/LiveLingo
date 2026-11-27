@@ -2930,8 +2930,13 @@ def test_display_mode_screens_and_saved_layouts(tmp_path, monkeypatch):
         result = service.update_config({"overlay_form": "bar"})
         assert result["saved"] and ov.bar and ov.rect == overlay.bar_rect(screens[1], service.cfg["overlay_font"])
         ov.push("heard", "你好")
-        ov._last = None
-        assert ov.frame()[0] is not None
+        drawn = None
+        for _ in range(5):      # 背景的重畫迴圈可能剛好先畫了同一張（滑鼠靠近變淡會讓它更常醒來）：再要一次
+            ov._last = None
+            drawn = ov.frame()[0]
+            if drawn is not None:
+                break
+        assert drawn is not None
         assert seen["grow"] == "up" and seen["lines"] == 2 and seen["size"] == (ov.rect[2], ov.rect[3])
         assert service.cfg["overlay_align"] == "right" and service.cfg["overlay_lines"] == 6      # 自己的設定沒有被改掉
         ov.set_edit(True)
