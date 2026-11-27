@@ -3758,6 +3758,7 @@ def test_error_messages_are_plain_and_the_raw_text_stays_in_detail():
     for m in re.finditer(r"\{ error: ([^,}]*)", js):
         assert m.group(1).startswith(("why(", '""')), m.group(0)
     assert "RuntimeError" not in js
+    assert "detail: why(detail)" in js and 'rawFold("fs", res.detail)' in js and 'toast(fsError(r.error, r.detail), 7000, "warn", r.detail)' in js      # 影片字幕頁的失敗也一樣：句子說原因，原文在「詳細」
     assert js.count("rawFold(") >= 10 and '"toast-detail"' in js and "toast(text, ms, level, raw)" in js
     # 「詳細」是按鈕/摺疊，鍵盤到得了；原文用等寬字、會換行、不超出框
     assert "<details class=\"raw-fold\"" in js and "<summary id=" in js and 'class="raw" tabindex="0"' in js

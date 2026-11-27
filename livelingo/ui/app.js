@@ -1000,7 +1000,7 @@
   // 影片、音訊檔做雙語字幕：選檔、選語言、看進度、看結果
   const FS_LANGS = ["ko", "zh", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr"];
   function fsForm() { return (S.ui.fs = S.ui.fs || { path: "", lang: "", target: "", mode: "both" }); }
-  const fsError = (code, detail) => t("fs_err_" + String(code || "failed").replace(/^fs_/, ""), { detail: detail || "", hours: (S.filesubs && S.filesubs.max_hours) || 3 });
+  const fsError = (code, detail) => t("fs_err_" + String(code || "failed").replace(/^fs_/, ""), { detail: why(detail), hours: (S.filesubs && S.filesubs.max_hours) || 3 });      // 原文不放進句子裡：句子只說一句白話的原因，原文收進「詳細」
   function fsLiveHTML() {
     const v = S.filesubs || {}, job = v.job, res = v.result;
     if (v.busy && job) {
@@ -1012,7 +1012,7 @@
         <div class="btn-row"><button class="ghost" data-act="fs-cancel">${esc(t("fs_cancel"))}</button></div></div>`;
     }
     if (!res) return "";
-    if (!res.ok) return `<div class="note warn">${ICON.info}<span>${esc(fsError(res.error, res.detail))}</span></div>`;
+    if (!res.ok) return `<div class="note warn">${ICON.info}<span>${esc(fsError(res.error, res.detail))}${rawFold("fs", res.detail)}</span></div>`;
     return `<div class="note">${ICON.check}<span>${esc(t(res.partial ? "fs_partial" : "fs_done", { n: res.cues }))}${res.unsure ? " " + esc(t("fs_unsure", { n: res.unsure })) : ""}
         <span class="fs-path dim small">${esc(res.path)}</span></span></div>
       <div class="btn-row"><button class="ghost" data-act="fs-open">${esc(t("fs_show"))}</button></div>`;
@@ -1039,7 +1039,7 @@
   }
   async function fsRun(body) {
     const r = await post("/api/filesubs", body);
-    if (r && r.ok === false && r.error) toast(fsError(r.error), 7000, "warn");
+    if (r && r.ok === false && r.error) toast(fsError(r.error, r.detail), 7000, "warn", r.detail);
     return r;
   }
 
