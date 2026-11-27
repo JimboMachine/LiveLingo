@@ -289,6 +289,14 @@ class Server:
                         if action == "open":
                             return self._json(service.filesubs_open())
                         return self._json({"ok": False, "error": "unknown"})
+                    if route == "/api/names":      # 名字建議的回答：name、keep（true = 加進不翻的字，false = 不是名字）
+                        return self._json(service.name_answer(str(body.get("name") or ""), bool(body.get("keep"))))
+                    if route == "/api/private":    # 隱私暫停：on
+                        return self._json(service.set_private(bool(body.get("on"))))
+                    if route == "/api/scenario":   # 首頁的情境卡：name
+                        return self._json(service.apply_scenario(str(body.get("name") or "")))
+                    if route == "/api/quality":    # 翻譯自我檢查：start / stop
+                        return self._json(service.quality_action(str(body.get("action") or "")))
                     if route == "/api/speak":      # 念出我的譯文：試聽、列出裝好的語音
                         if body.get("action") == "voices":
                             return self._json(service.speak_voices())

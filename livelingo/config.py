@@ -59,6 +59,14 @@ DEFAULTS = {
     "learn_mode": False,         # 語言學習：字幕旁邊標出一兩個生字，可以收進單字本（learn.py）
     "inplace": False,            # 原地覆蓋翻譯：把譯文蓋在畫面上原文的位置（inplace.py）
     "pick_copy": False,          # 按「翻選取的字」時，LiveLingo 先替你按一下 Ctrl+C（預設關：玩遊戲時替人按鍵可能被防作弊程式當成外掛）
+    "keep_words": [],            # 不翻的字（names.py）：gg、lol、ㅋㅋ、朋友的遊戲 ID…翻譯時照原樣留著；空的 = 沒有
+    "name_suggest": True,        # 對方一直提到、像遊戲 ID 的字，問我要不要加進「不翻的字」（names.NameWatch）
+    "name_skip": [],             # 問過、我說「不是名字」的字：不再問
+    "game_start": False,         # 開遊戲就開始翻：我選過的程式（框選區跟著的、只聽的、認得的遊戲）一打開就開始讀畫面、聽對方，全部關掉就停
+    "speak_heard": False,        # 把對方的話（翻成我的語言之後）用 Windows 內建語音念給我聽（core/speak.py）
+    "speak_heard_screen": False, # 畫面上讀到的聊天也念（關掉 = 只念聽到的語音）
+    "speak_heard_device": None,  # 念到哪個播放裝置（我的耳機），None = Windows 預設
+    "speak_heard_name": "",
     "alert_words": [],           # 喊我名字提醒：對方的話裡出現這些字就標出來、響一聲（mention.py），空的 = 不提醒
     "alert_sound": True,         # 提醒的時候響一聲
     "recap_auto": True,          # 一段對話結束（安靜 10 分鐘）自動整理重點（recap.py）
@@ -81,7 +89,8 @@ DEFAULTS = {
     "store_leftover": [],        # 搬完之後還刪不掉的舊資料夾（當時檔案還開著），下次開程式再刪
     # 全域快速鍵（hotkeys.ACTIONS）：開關字幕、開關麥克風、複製我上一句的翻譯、叫出快速輸入框、回話建議。空字串 = 不用
     "hotkeys": {"overlay": "Ctrl+Alt+S", "mic": "Ctrl+Alt+M", "copy": "Ctrl+Alt+C", "quick": "Ctrl+Alt+T", "reply": "Ctrl+Alt+R",
-                "pick": "Ctrl+Alt+X", "snap": "Ctrl+Alt+F", "phrase": "Ctrl+Alt+P", "inplace": "Ctrl+Shift+O"},
+                "pick": "Ctrl+Alt+X", "snap": "Ctrl+Alt+F", "phrase": "Ctrl+Alt+P", "inplace": "Ctrl+Shift+O",
+                "private": "Ctrl+Shift+H"},
     "window": {"w": 980, "h": 720, "x": None, "y": None},
     "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
     "accent": "mint",            # 強調色：mint / blue / violet / rose / cyan
@@ -119,7 +128,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

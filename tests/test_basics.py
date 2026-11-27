@@ -1841,8 +1841,11 @@ def test_translation_memory_and_share_files(tmp_path):
     tr.translate("沒有記的", "ko", "zh")                                          # 沒說要記（例如回譯）：不記
     assert mem.lookup("沒有記的", "zh", "ko", "casual", "4b", "") is None
     tr.answers = "3시에 봐."
-    tr.translate("5點見", "ko", "zh", remember="heard")                          # 數字對不上的不記，下次再翻
-    assert mem.lookup("5點見", "zh", "ko", "casual", "4b", "") is None
+    tr.translate("5點見", "ko", "zh", remember="heard")                          # 數字被換掉：補回原來的數字（2.14.0），補好才記
+    assert mem.lookup("5點見", "zh", "ko", "casual", "4b", "") == "5시에 봐."
+    tr.answers = "3시랑 4시에 봐."
+    tr.translate("5點見吧", "ko", "zh", remember="heard")                        # 數字個數對不上：補不回來，不記
+    assert mem.lookup("5點見吧", "zh", "ko", "casual", "4b", "") is None
     tr.translate("還在說", "ko", "zh", remember="heard", unfinished=True)        # 還沒說完的半句不記
     assert mem.lookup("還在說", "zh", "ko", "casual", "4b", "") is None
     assert terms_print([]) == "" and terms_print([("a", "b")]) == terms_print([("a", "b"), ("a", "b")]) != ""
@@ -2931,7 +2934,7 @@ def test_global_hotkeys_and_quick_input(tmp_path, monkeypatch):
     try:
         service.start_hotkeys()
         state = service.state()["hotkeys"]
-        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok", "inplace": "ok"}
+        assert state["available"] and state["states"] == {"overlay": "ok", "mic": "ok", "copy": "taken", "quick": "ok", "reply": "ok", "pick": "ok", "snap": "ok", "phrase": "ok", "inplace": "ok", "private": "ok"}
         assert state["defaults"] == DEFAULTS["hotkeys"]
 
         # 開關字幕
@@ -3227,7 +3230,7 @@ def test_health_check_lights(tmp_path, monkeypatch):
         assert (light("mic")["code"], light("mic")["name"]) == ("mic_found", "麥克風 (HyperX)")
         assert (light("listen")["code"], light("listen")["name"]) == ("listen_found", "耳機 (HyperX)")
         assert (light("screen")["state"], light("screen")["code"]) == ("off", "screen_none")
-        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 9)
+        assert (light("hotkeys")["state"], light("hotkeys")["n"]) == ("ok", 10)
         assert (light("saving")["state"], light("saving")["folder"]) == ("ok", str(tmp_path))
         assert first["worst"] == "warn"
 

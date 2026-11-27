@@ -19,6 +19,9 @@
       <div class="status" id="status"><span class="dot"></span><span id="status-text"></span></div>
       <button class="quality-chip" id="quality-chip" data-act="nav" data-to="quality" hidden></button>
       <div class="grow"></div>
+      <button class="icon-btn" id="btn-private" data-act="private" aria-pressed="false">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      </button>
       <button class="rec-btn" id="btn-record" data-act="record" aria-pressed="false"></button>
       <button class="icon-btn" data-act="overlay-toggle" data-i18n-label="overlay_toggle" id="btn-overlay" aria-pressed="false">
         <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h3M10 7h10M4 12h3M10 12h7M4 17h3M10 17h9"/></svg>
@@ -37,7 +40,10 @@
         </button>
       </div>
       <div class="lang-picker" id="lang-picker" hidden></div>
+      <div class="scen-row" id="scen-row" hidden></div>
       <div class="cards" id="source-cards"></div>
+      <div class="mic-row" id="priv-row" hidden></div>
+      <div class="mic-row" id="name-row" hidden></div>
       <div class="mic-row" id="mic-row" hidden></div>
       <div class="mic-row" id="rec-row" hidden></div>
       <div class="region-row dim small" id="region-row" hidden></div>

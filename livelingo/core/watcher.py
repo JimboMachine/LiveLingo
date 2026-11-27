@@ -173,6 +173,9 @@ def wanted(text: str, source_langs: set[str]) -> str | None:
     return None
 
 
+STORY_WAIT = 12.0      # 劇情對話框：畫面一直在動時最多等幾秒（一般區域是 3 秒）
+
+
 class _Slot:
     """一個區域目前讀到哪裡：上一張畫面、看過的句子、統計數字。"""
 
@@ -185,6 +188,7 @@ class _Slot:
         self.edge = 0.0                # 這個區域裡看過的文字最右邊到哪裡（判斷換行用）
         self.dark_since = None         # 從什麼時候開始抓到的畫面是全黑的
         self.black = False             # 已經黑了好幾秒：多半是遊戲用「全螢幕」，Windows 不讓別的程式看到畫面
+        self.story_text = None         # 劇情對話框（2.14.0）：上一次讀到的字；跟這次一樣才算打完了
         # scans 辨識了幾次；lines 讀到幾行 = sent 拿去翻的 + repeat 讀過的 + other 不是要翻的語言 + old 一開始就在畫面上的
         self.stats = {"scans": 0, "lines": 0, "sent": 0, "repeat": 0, "other": 0, "old": 0}
 
@@ -357,17 +361,27 @@ class ScreenWatcher(threading.Thread):
         slot.prev = th
         now = time.monotonic()
         # 等畫面停下來（捲動、動畫結束）再辨識，避免讀到一半的字；
-        # 如果畫面一直在動（動態貼圖之類），最多等 3 秒就照樣辨識
-        if not changed:
+        # 如果畫面一直在動（動態貼圖之類），最多等 3 秒就照樣辨識。
+        # 劇情對話框（區域設成 story，2.14.0）：字是一個一個跳出來的，最多等 STORY_WAIT 秒，
+        # 而且要連續兩次讀到一樣的字才算打完（不然會翻到半句）
+        story = bool(slot.region.get("story"))
+        waiting = story and slot.story_text is not None
+        if not changed and not waiting:
             slot.moving_since = None
             return
         if not stable:
             slot.moving_since = slot.moving_since or now
-            if now - slot.moving_since < 3.0:
+            if now - slot.moving_since < (STORY_WAIT if story else 3.0):
                 return
         slot.moving_since = None
         slot.last_done = th
         raw = self.ocr.read(bgr)
+        if story:
+            text = " ".join(normalize(str(getattr(r, "text", r))) for r in raw)
+            if text and text != slot.story_text:
+                slot.story_text = text      # 字還在變（或剛出現）：下一輪再讀一次，一樣才翻
+                return
+            slot.story_text = None
         if self.on_frame and self.on_frame(slot.region, place, bgr, raw):
             slot.stats["scans"] += 1      # 譯文直接蓋在原處，不進浮動留言
             return

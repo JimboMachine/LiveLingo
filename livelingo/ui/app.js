@@ -125,6 +125,7 @@
     help: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8M12 16.6h.01"/></svg>',
     back: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    lock: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
     up: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16V8M8.5 11.5L12 8l3.5 3.5"/></svg>',
     book: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5M9 8h7M9 12h5"/></svg>',
     clock: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
@@ -244,6 +245,9 @@
     $("source-cards").innerHTML = html;
     paintVu();
     renderMicRow();
+    renderScenarios();
+    renderNameRow();
+    renderPrivate();
     const row = $("region-row");
     const live = regions().filter((x) => x.on);
     const r = live[0];
@@ -574,7 +578,54 @@
           <select id="speak-device" data-change="speak-device" aria-label="${esc(t("speak_device"))}">${opts.map(([v, n]) => `<option value="${esc(v)}" ${v === chosen ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
         <div class="dnote">${esc(t(cable ? "speak_cable_found" : "speak_cable_how"))}</div>
         <div class="btn-row"><button class="ghost" data-act="speak-test">${esc(t("speak_test"))}</button></div>${status}` : ""}
+      </section>` + heardHTML(opts);
+  }
+
+  // 念對方的話給我聽（2.14.0）：對方說的翻成我的語言後，念到我的耳機（跟上面「念給對方聽」分開選裝置）
+  function heardHTML(opts) {
+    const sp = S.speak || {}, chosen = S.cfg.speak_heard_device || "";
+    const list = opts.slice();
+    if (chosen && !list.some((o) => o[0] === chosen)) list.push([chosen, S.cfg.speak_heard_name || chosen]);
+    const status = sp.available === false ? `<div class="note warn">${ICON.info}<span>${esc(t("speak_unavailable"))}</span></div>`
+      : sp.heard_error === "no_voice" ? `<div class="note warn">${ICON.info}<span>${esc(t("speak_no_voice", { lang: langName(S.cfg.my_lang) }))}</span></div>`
+      : sp.heard_error ? `<div class="note warn">${ICON.info}<span>${esc(t("n_speak_failed", { error: sp.heard_error }))}</span></div>` : "";
+    return `<section id="heard-section"><div><h2>${esc(t("heard_title"))}</h2><div class="sub">${esc(t("heard_hint"))}</div></div>
+        ${switchRow("speak_heard", t("heard_on"), t("heard_on_desc"))}
+        ${S.cfg.speak_heard ? `${switchRow("speak_heard_screen", t("heard_screen"))}
+        <div class="setting-row choice"><div>${esc(t("heard_device"))}</div>
+          <select id="heard-device" aria-label="${esc(t("heard_device"))}">${list.map(([v, n]) => `<option value="${esc(v)}" ${v === chosen ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
+        <div class="dnote">${esc(t("heard_echo"))}</div>${status}` : ""}
       </section>`;
+  }
+
+  // 不翻的字（2.14.0）：照原樣留著的字；對方一直提到的遊戲 ID 也會問要不要加進來
+  function keepWordsHTML() {
+    return `<section id="keep-section"><div><h2>${esc(t("keep_title"))}</h2><div class="sub">${esc(t("keep_hint"))}</div></div>
+        <div class="setting-row choice"><input type="text" id="keep-words" class="hist-q" maxlength="600" data-change="keep_words" value="${esc((S.cfg.keep_words || []).join(", "))}"
+          placeholder="${esc(t("keep_placeholder"))}" aria-label="${esc(t("keep_title"))}"></div>
+        ${switchRow("name_suggest", t("name_suggest"), t("name_suggest_desc"))}
+        ${(S.cfg.name_skip || []).length ? `<div class="dnote">${esc(t("name_skipped", { words: S.cfg.name_skip.join(", ") }))} <button class="ghost small" data-act="name-skip-clear">${esc(t("name_skip_clear"))}</button></div>` : ""}
+      </section>`;
+  }
+
+  // 翻譯自我檢查（2.14.0）：用一組以前翻錯過的句子重翻、打分，跟上一次比
+  function qualityCheckHTML() {
+    const q = S.quality || {}, last = q.last;
+    let body = "";
+    if (q.running) body = `<div class="note">${ICON.info}<span>${esc(t("qc_running", { done: q.done || 0, total: q.total || 0 }))}</span></div>
+        <div class="btn-row"><button class="ghost" data-act="quality-check" data-value="stop">${esc(t("qc_stop"))}</button></div>`;
+    else {
+      if (last) {
+        const when = new Date(last.at * 1000).toLocaleString();
+        const prev = q.previous ? " " + t("qc_previous", { passed: q.previous.passed, total: q.previous.total, version: q.previous.version }) : "";
+        const bad = (last.results || []).filter((r) => !r.ok);
+        body += `<div class="note ${bad.length ? "warn" : ""}">${bad.length ? ICON.info : ICON.check}<span>${esc(t("qc_result", { passed: last.passed, total: last.total, version: last.version, when }) + prev)}</span></div>`;
+        if ((q.worse || []).length) body += `<div class="note warn">${ICON.info}<span>${esc(t("qc_worse", { n: q.worse.length }))}</span></div>`;
+        if (bad.length) body += `<div class="qc-list">${bad.map((r) => `<div class="grow-row"><span>${esc(r.src)}</span><span>${esc(r.out || "—")}<span class="dnote"> ${esc(r.failed.map((f) => t("qc_f_" + f)).join("、"))}</span></span></div>`).join("")}</div>`;
+      }
+      body += `<div class="btn-row"><button class="${last ? "ghost" : "primary"}" data-act="quality-check" data-value="start" ${S.phase === "ready" ? "" : "disabled"}>${esc(t(last ? "qc_again" : "qc_start"))}</button></div>`;
+    }
+    return `<section id="qc-section"><div><h2>${esc(t("qc_title"))}</h2><div class="sub">${esc(t("qc_hint"))}</div></div>${body}</section>`;
   }
 
   function keyName(key) { return ["Mouse4", "Mouse5", "RightCtrl", "RightAlt"].indexOf(key) >= 0 ? t("key_" + key.toLowerCase()) : key; }
@@ -713,6 +764,42 @@
       ${item("about", "nav_about", "info")}`;
   }
 
+  // 首頁的情境卡（2.14.0）：一次換好一整組設定；跟現在的設定和來源一樣的那一張亮著
+  const SCEN_ICON = { game: "screen", video: "film", call: "mic", stream: "bubble" };
+  function renderScenarios() {
+    const row = $("scen-row");
+    if (!row) return;
+    const defs = S.scenarios || {}, names = Object.keys(defs);
+    row.hidden = !names.length || !S.cfg;
+    const now = (name) => {
+      const d = defs[name];
+      return Object.keys(d.config).every((k) => S.cfg[k] === d.config[k]) && Object.keys(d.sources).every((k) => !!(S.sources[k] || {}).on === d.sources[k]);
+    };
+    row.innerHTML = `<span class="dim small">${esc(t("scen_label"))}</span>` + names.map((n) => `<button class="pill scen" data-act="scenario" data-value="${n}" aria-pressed="${now(n)}" title="${esc(t("scen_" + n + "_desc"))}">${ICON[SCEN_ICON[n]] || ""}<span>${esc(t("scen_" + n))}</span></button>`).join("");
+  }
+
+  // 名字建議：對方一直提到的遊戲 ID，問一次要不要固定不翻
+  function renderNameRow() {
+    const row = $("name-row");
+    if (!row) return;
+    const name = S.ui.nameAsk;
+    row.hidden = !name;
+    row.innerHTML = name ? noticeHTML({ level: "info", text: t("name_ask", { name }), detail: t("name_ask_desc"),
+      buttons: `<button class="primary" data-act="name-keep" data-value="${esc(name)}">${esc(t("name_keep"))}</button>
+        <button class="ghost" data-act="name-no" data-value="${esc(name)}">${esc(t("name_no"))}</button>
+        <button class="ghost" data-act="name-later">${esc(t("name_later"))}</button>` }, ICON.vocab) : "";
+  }
+
+  // 隱私暫停：右上角的按鈕，開著的時候來源下面一直顯示一行說明
+  function renderPrivate() {
+    const btn = $("btn-private"), row = $("priv-row");
+    if (btn) { btn.setAttribute("aria-pressed", S.private ? "true" : "false"); btn.title = t(S.private ? "priv_off_btn" : "priv_on_btn"); btn.setAttribute("aria-label", btn.title); }
+    if (!row) return;
+    row.hidden = !S.private;
+    row.innerHTML = S.private ? noticeHTML({ level: "info", text: t("priv_now"), detail: t("priv_now_desc"),
+      buttons: `<button class="primary" data-act="private">${esc(t("priv_off_btn"))}</button>` }, ICON.lock) : "";
+  }
+
   function switchRow(key, label, desc) {
     return `<div class="setting-row"><div><div>${esc(label)}</div>${desc ? `<div class="desc">${esc(desc)}</div>` : ""}</div>
       <button class="switch" role="switch" data-act="toggle" data-key="${key}" aria-checked="${S.cfg[key] ? "true" : "false"}" aria-label="${esc(label)}"><span></span></button></div>`;
@@ -758,7 +845,7 @@
         <div class="dnote">${esc(t(S.cfg.tone_keep ? "tone_keep_on_desc" : "tone_keep_off_desc"))}</div>
       </section>
       <section>${switchRow("use_context", t("use_context"), t("use_context_desc"))}
-        ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>`;
+        ${switchRow("back_translate", t("back_translate"), t("back_translate_desc"))}</section>` + qualityCheckHTML();
   }
 
   // 詞彙與記憶（2.12.0 從「翻譯品質」拆出來）：遊戲和聊天用語、我的詞彙表、教過的句子、翻過的句子、備份和分享。
@@ -785,7 +872,7 @@
       ? S.lessons.slice().reverse().map((l) => `<div class="grow-row"><span>${esc(l.src)}</span><span>${esc(l.dst)}</span>
           <button data-act="lesson-remove" data-src="${esc(l.src)}" data-target="${esc(l.target)}" aria-label="${esc(t("remove", { word: l.src }))}">${ICON.x}</button></div>`).join("")
       : `<div class="none">${esc(t("lessons_empty"))}</div>`;
-    return `
+    return keepWordsHTML() + `
       <section>${switchRow("game_terms", t("terms_title"), t("terms_desc"))}
         ${S.cfg.game_terms ? `<div class="packs">${["lol", "chat"].map((p) => `<button class="pack" id="pack-${p}" data-act="pack" data-pack="${p}" aria-pressed="${(S.cfg.term_packs || []).indexOf(p) >= 0}">
           <span class="name">${ICON.check}${esc(t("pack_" + p))}</span><span class="desc">${esc(t("pack_" + p + "_desc"))}</span></button>`).join("")}</div>
@@ -939,6 +1026,8 @@
         <div class="dnote">${esc(t("region_size", { w: r.width, h: r.height, x: r.left, y: r.top }))}</div>
         <div class="rfollow"><label for="rapp-${esc(r.id)}">${esc(t("region_follow"))}</label>
           <select id="rapp-${esc(r.id)}" data-change="region-app" data-id="${esc(r.id)}">${options.map((o) => `<option value="${esc(o[0])}" ${o[0].toLowerCase() === (r.app || "").toLowerCase() ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select></div>
+        <div class="rstory"><span>${esc(t("story_title"))}<span class="dnote">${esc(t("story_desc"))}</span></span>
+          <button class="switch" role="switch" data-act="region-story" data-id="${esc(r.id)}" aria-checked="${r.story ? "true" : "false"}" aria-label="${esc(t("story_title"))}：${esc(label)}"><span></span></button></div>
         <div class="dnote" id="rstat-${esc(r.id)}">${esc(regionStats(r.id))}</div>
         <div class="btn-row">
           <button class="ghost small" data-act="region" data-id="${esc(r.id)}" data-keep="1">${esc(t("region_change"))}</button>
@@ -1011,7 +1100,8 @@
       </section>
       <section id="inplace-section">${switchRow("inplace", t("inplace_title"), t("inplace_desc"))}
         <div class="dnote">${esc(t("inplace_note"))}</div></section>
-      <section>${switchRow("also_english", t("also_english"))}</section>`;
+      <section>${switchRow("also_english", t("also_english"))}</section>
+      <section id="game-start-section">${switchRow("game_start", t("gs_title"), t("gs_desc"))}</section>`;
   }
 
   // 區域的名字、開關、跟著哪個程式、刪除：都是把整份清單送回去存（位置和大小只有框選畫面能改）
@@ -1577,7 +1667,7 @@
   let histTimer = null;
 
   // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
-  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace"];
+  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace", "private"];
   const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
   function hotkeysHTML() {
     const hk = S.hotkeys || { available: false, states: {} };
@@ -2002,6 +2092,7 @@
     // 主畫面和「還沒框過」的按鈕：框好就開始讀；設定頁裡各區域的「重新框選」：只換位置，開關不動
     region: (el) => post("/api/region", { enable: !el.dataset.keep, id: el.dataset.id || undefined }),
     "region-add": () => post("/api/region", { enable: false, new: true }),
+    "region-story": (el) => saveRegions(regions().map((r) => (r.id === el.dataset.id ? Object.assign({}, r, { story: !r.story }) : r)), "#region-" + el.dataset.id),
     "region-on": (el) => saveRegions(regions().map((r) => (r.id === el.dataset.id ? Object.assign({}, r, { on: !r.on }) : r)), "#region-" + el.dataset.id),
     "region-remove": (el) => saveRegions(regions().filter((r) => r.id !== el.dataset.id), "#regions-section"),
     clear: () => post("/api/clear"),
@@ -2348,6 +2439,19 @@
       setView("main");
       if (regions().length) post("/api/source", { key: "screen", on: true });
     },
+    "name-keep": async (el) => { await post("/api/names", { name: el.dataset.value, keep: true }); S.ui.nameAsk = null; renderNameRow(); toast(t("name_kept", { name: el.dataset.value }), 5000); },
+    "name-no": async (el) => { await post("/api/names", { name: el.dataset.value, keep: false }); S.ui.nameAsk = null; renderNameRow(); },
+    "name-later": () => { S.ui.nameAsk = null; renderNameRow(); },
+    "name-skip-clear": () => saveCfg({ name_skip: [] }, "#keep-section"),
+    "private": () => post("/api/private", { on: !S.private }),
+    "scenario": async (el) => {
+      const r = await post("/api/scenario", { name: el.dataset.value });
+      if (r && r.ok) toast(t(r.need_region ? "scen_need_region" : "scen_done", { name: t("scen_" + r.name) }), 6000);
+    },
+    "quality-check": async (el) => {
+      const r = await post("/api/quality", { action: el.dataset.value });
+      if (r && !r.ok && r.error === "not_ready") toast(t("n_not_ready"), 5000, "warn");
+    },
     "overlay-toggle": async () => {
       const on = !S.cfg.overlay;
       await post("/api/config", { overlay: on });
@@ -2567,6 +2671,11 @@
       return;
     }
     if (e.target.id === "gloss-game") { S.ui.glossGame = e.target.value; return; }      // 只記下來，加詞的時候才用
+    if (e.target.id === "heard-device") {
+      const sel = e.target, name = sel.value ? sel.options[sel.selectedIndex].text : "";
+      saveCfg({ speak_heard_device: sel.value || null, speak_heard_name: name }, "#heard-device");
+      return;
+    }
     if (e.target.id === "speak-device") {
       const sel = e.target, name = sel.value ? sel.options[sel.selectedIndex].text : "";
       saveCfg({ speak_device: sel.value || null, speak_name: name }, "#speak-device");
@@ -2799,6 +2908,9 @@
     },
     glossary: (items) => { S.glossary = items; if (S.view === "settings" && S.ui.tab === "vocab") renderSettingsPage(); },
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
+    name_suggest: (d) => { S.ui.nameAsk = d.name; renderNameRow(); },
+    private: (d) => { S.private = !!d.on; renderPrivate(); },
+    quality: (d) => { S.quality = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("qc-section"); if (el) el.outerHTML = qualityCheckHTML(); } },
     replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
     words: (d) => { S.words[d.id] = d.items; const m = S.messages.find((x) => x.id === d.id); if (m) upsertMessage(m); },
     filesubs: (st) => {
@@ -2901,6 +3013,7 @@
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
     S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.filesubs = st.filesubs || S.filesubs; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
+    S.private = !!st.private; S.quality = st.quality || {}; S.scenarios = st.scenarios || {};
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];
