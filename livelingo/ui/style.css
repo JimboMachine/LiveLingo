@@ -694,3 +694,9 @@ pre.raw { margin: 4px 0 0; max-height: 140px; overflow: auto; padding: 8px 10px;
 .phrase-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .phrase-tr { width: 100%; }
 .msg .mention-tag { display: inline-block; align-self: flex-start; margin-bottom: 2px; padding: 1px 8px; border: 1px solid var(--danger); border-radius: 10px; color: var(--danger); font-size: 12px; font-weight: 700; }
+
+/* 影片字幕 */
+.fs-live { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.fs-live .fs-name, .fs-path { overflow-wrap: anywhere; }
+.fs-live .fs-last { overflow-wrap: anywhere; }
+.fs-path { display: block; margin-top: 2px; }

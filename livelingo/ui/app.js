@@ -12,7 +12,7 @@
     record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
     hotkeys: { available: false, states: {}, defaults: {} },
     history: { count: 0, bytes: 0 },
-    words: {}, wordbook: { count: 0, due: 0 }, recaps: { count: 0, state: "off" },
+    words: {}, wordbook: { count: 0, due: 0 }, recaps: { count: 0, state: "off" }, filesubs: { busy: false, job: null, result: null },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -147,6 +147,7 @@
   }, true);
 
   const ICON = {
+    film: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></svg>',
     screen: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
     listen: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg>',
     mic: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
@@ -740,7 +741,7 @@
 
   // ---------------------------------------------------------------- 設定
 
-  const TABS = [["history", "nav_history", "clock"], ["learn", "nav_learn", "book"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["vocab", "nav_vocab", "vocab"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["help", "nav_help", "help"], ["about", "nav_about", "info"]];
+  const TABS = [["history", "nav_history", "clock"], ["learn", "nav_learn", "book"], ["overlay", "nav_overlay", "chat"], ["audio", "nav_audio", "listen"], ["quality", "nav_quality", "quality"], ["vocab", "nav_vocab", "vocab"], ["screen", "nav_screen", "screen"], ["general", "nav_general", "globe"], ["filesubs", "nav_filesubs", "film"], ["storage", "nav_storage", "disk"], ["health", "nav_health", "shield"], ["help", "nav_help", "help"], ["about", "nav_about", "info"]];
 
   // 固定在左邊的導覽：對話和每一頁設定都在同一層，視窗不用為了設定變大變小
   function renderRail() {
@@ -996,6 +997,52 @@
       </div>`;
   }
 
+  // 影片、音訊檔做雙語字幕：選檔、選語言、看進度、看結果
+  const FS_LANGS = ["ko", "zh", "en", "ja", "vi", "th", "id", "es", "pt", "ru", "de", "fr"];
+  function fsForm() { return (S.ui.fs = S.ui.fs || { path: "", lang: "", target: "", mode: "both" }); }
+  const fsError = (code, detail) => t("fs_err_" + String(code || "failed").replace(/^fs_/, ""), { detail: detail || "", hours: (S.filesubs && S.filesubs.max_hours) || 3 });
+  function fsLiveHTML() {
+    const v = S.filesubs || {}, job = v.job, res = v.result;
+    if (v.busy && job) {
+      const pct = job.total ? Math.round(job.done * 100 / job.total) : 0;
+      const stage = job.stage === "working" ? t("fs_stage_working", { done: job.done, total: job.total }) : t("fs_stage_" + job.stage);
+      return `<div class="fs-live"><div class="fs-name">${esc(job.name || "")}</div><div class="bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>
+        <div class="dim small">${esc(stage)}${job.eta != null ? " · " + esc(t("fs_eta", { min: Math.max(1, Math.round(job.eta / 60)) })) : ""}</div>
+        ${job.last ? `<div class="dim small fs-last">${esc(t("fs_last", { text: job.last }))}</div>` : ""}
+        <div class="btn-row"><button class="ghost" data-act="fs-cancel">${esc(t("fs_cancel"))}</button></div></div>`;
+    }
+    if (!res) return "";
+    if (!res.ok) return `<div class="note warn">${ICON.info}<span>${esc(fsError(res.error, res.detail))}</span></div>`;
+    return `<div class="note">${ICON.check}<span>${esc(t(res.partial ? "fs_partial" : "fs_done", { n: res.cues }))}${res.unsure ? " " + esc(t("fs_unsure", { n: res.unsure })) : ""}
+        <span class="fs-path dim small">${esc(res.path)}</span></span></div>
+      <div class="btn-row"><button class="ghost" data-act="fs-open">${esc(t("fs_show"))}</button></div>`;
+  }
+  function filesubsPage() {
+    const f = fsForm(), v = S.filesubs || {}, busy = !!v.busy;
+    const opt = (value, name, current) => `<option value="${esc(value)}" ${value === current ? "selected" : ""}>${esc(name)}</option>`;
+    const langs = [["", t("fs_lang_default", { lang: langName(S.cfg.their_lang) })], ["auto", t("auto_detect")], ...FS_LANGS.map((c) => [c, c === "zh" ? t("short_zh") : langName(c)])];
+    const target = f.target || S.cfg.my_lang;
+    return `<section id="filesubs-section">
+        <div><h2>${esc(t("fs_title"))}</h2><div class="sub">${esc(t("fs_hint"))}</div></div>
+        <div class="phrase-add"><input type="text" id="fs-path" data-fs="path" value="${esc(f.path)}" placeholder="${esc(t("fs_path_placeholder"))}" aria-label="${esc(t("fs_path_placeholder"))}" ${busy ? "disabled" : ""}>
+          ${v.can_pick ? `<button class="ghost" data-act="fs-pick" ${busy ? "disabled" : ""}>${esc(t("fs_choose"))}</button>` : ""}</div>
+        <div class="pair-select">
+          <div class="field"><label for="fs-lang">${esc(t("fs_lang"))}</label><select id="fs-lang" data-fs="lang" ${busy ? "disabled" : ""}>${langs.map(([c, n]) => opt(c, n, f.lang)).join("")}</select></div>
+          <div class="field"><label for="fs-target">${esc(t("fs_target"))}</label><select id="fs-target" data-fs="target" ${busy ? "disabled" : ""}>${PAIR_LANGS.map((c) => opt(c, langName(c), target)).join("")}</select></div>
+        </div>
+        <div class="setting-row choice"><div>${esc(t("fs_mode"))}</div><div class="pills">${["both", "tr", "src"].map((m) =>
+          `<button class="pill" data-act="fs-mode" data-value="${m}" aria-pressed="${f.mode === m}" ${busy ? "disabled" : ""}>${esc(t("fs_mode_" + m))}</button>`).join("")}</div></div>
+        <div class="btn-row"><button class="primary big" data-act="fs-start" ${busy ? "disabled" : ""}>${ICON.film}${esc(t("fs_start"))}</button></div>
+        <div id="fs-live">${fsLiveHTML()}</div>
+        <div class="dnote">${esc(t("fs_note", { hours: v.max_hours || 3 }))}</div>
+      </section>`;
+  }
+  async function fsRun(body) {
+    const r = await post("/api/filesubs", body);
+    if (r && r.ok === false && r.error) toast(fsError(r.error), 7000, "warn");
+    return r;
+  }
+
   function screenPage() {
     const list = regions();
     const full = list.length >= 6;
@@ -1010,6 +1057,8 @@
         : `<div class="note">${ICON.info}<span>${esc(t("region_none"))}</span></div>
           <div class="btn-row"><button class="primary big" data-act="region">${ICON.frame}${esc(t("region_pick"))}</button></div>`}
       </section>
+      <section id="inplace-section">${switchRow("inplace", t("inplace_title"), t("inplace_desc"))}
+        <div class="dnote">${esc(t("inplace_note"))}</div></section>
       <section>${switchRow("also_english", t("also_english"))}</section>`;
   }
 
@@ -1577,7 +1626,7 @@
   let histTimer = null;
 
   // 全域快速鍵：按一下那顆鍵帽就開始等新的組合；等的時候先請背景把登記的放掉，免得按到現在那一組直接觸發
-  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase"];
+  const HOTKEYS = ["overlay", "mic", "copy", "quick", "reply", "pick", "snap", "phrase", "inplace"];
   const comboHTML = (combo) => combo.split("+").map((k) => `<kbd>${esc(k)}</kbd>`).join("");
   function hotkeysHTML() {
     const hk = S.hotkeys || { available: false, states: {} };
@@ -1732,6 +1781,7 @@
     if (tab === "quality") return qualityPage();
     if (tab === "vocab") return vocabPage();
     if (tab === "screen") return screenPage();
+    if (tab === "filesubs") return filesubsPage();
     if (tab === "overlay") return overlayPage();
     if (tab === "about") return aboutPage();
     if (tab === "help") return helpPage();
@@ -2483,6 +2533,11 @@
     "hotkey-set": (el) => hotkeyRecord(S.ui.hotkeyRec === el.dataset.name ? null : el.dataset.name),
     "hotkey-clear": (el) => saveHotkey(el.dataset.name, ""),
     "hotkey-reset": () => saveCfg({ hotkeys: S.hotkeys.defaults || {} }),
+    "fs-pick": async () => { const r = await fsRun({ action: "pick" }); if (r && r.path) { fsForm().path = r.path; const el = $("fs-path"); if (el) el.value = r.path; } },
+    "fs-mode": (el) => { fsForm().mode = el.dataset.value; renderSettingsPage(); },
+    "fs-start": async () => { const f = fsForm(), el = $("fs-path"); if (el) f.path = el.value.trim(); await fsRun({ action: "start", path: f.path, lang: f.lang, target: f.target || S.cfg.my_lang, mode: f.mode }); },
+    "fs-cancel": () => fsRun({ action: "cancel" }),
+    "fs-open": () => fsRun({ action: "open" }),
     "phrase-add": async () => { const el = $("phrase-new"); const text = el ? el.value.trim() : ""; if (text) await phraseDo({ action: "add", text }); },
     "phrase-starters": () => phraseDo({ action: "starters" }),
     "phrase-remove": (el) => phraseDo({ action: "remove", id: el.dataset.id }),
@@ -2698,6 +2753,7 @@
       });
       return;
     }
+    if (e.target.dataset && e.target.dataset.fs) { fsForm()[e.target.dataset.fs] = e.target.value; return; }      // 影片字幕的欄位：記在畫面上，換頁回來還在
     if (e.target.id === "set-file") {      // 匯入設定檔：在這裡讀檔，內容交給程式檢查
       const file = e.target.files && e.target.files[0];
       if (!file) return;
@@ -2965,6 +3021,14 @@
     speak: (sp) => { S.speak = sp; if (S.view === "settings" && S.ui.tab === "audio") renderSettingsPage(); },
     replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
     words: (d) => { S.words[d.id] = d.items; const m = S.messages.find((x) => x.id === d.id); if (m) upsertMessage(m); },
+    filesubs: (st) => {
+      const was = S.filesubs || {};
+      S.filesubs = st;
+      if (S.view !== "settings" || S.ui.tab !== "filesubs") return;
+      const live = $("fs-live");
+      if (!live || was.busy !== st.busy || JSON.stringify(was.result) !== JSON.stringify(st.result)) renderSettingsPage();      // 開始、做完：整頁換（按鈕、欄位開關）
+      else live.innerHTML = fsLiveHTML();                                                       // 只是進度：只換進度那一塊
+    },
     phrases: (st) => { S.phrases = st; if (S.view === "settings" && S.ui.tab === "general" && !(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.phraseEdit)) { const sec = $("phrase-section"); if (sec) sec.innerHTML = `<div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}`; } },
     wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") loadWords(); },
     recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
@@ -3060,7 +3124,7 @@
     const st = await get("/api/state");
     if (!st || st.error) { setTimeout(load, 1000); return false; }
     S.cfg = st.config; S.phase = st.phase; S.detail = st.detail || {}; S.gpu = st.gpu; S.mode = st.mode;
-    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
+    S.fallback = st.fallback; S.sources = st.sources; S.messages = st.messages; S.glossary = st.glossary; S.game = st.game || {}; S.stream = st.stream || {}; S.speak = st.speak || {}; S.replies = st.replies || {}; S.words = st.words || {}; S.langs = st.langs || {}; S.wordbook = st.wordbook || S.wordbook; S.phrases = st.phrases || S.phrases; S.filesubs = st.filesubs || S.filesubs; S.recaps = st.recaps || S.recaps; S.lessons = st.lessons || []; S.memory = st.memory || S.memory;
     S.speakers = st.speakers || {}; S.speechGpu = st.speech_gpu || {}; S.delay = st.delay || null; S.pttKeys = st.ptt_keys || []; S.screenStats = st.screen_stats || {};
     S.changes = st.changes || {};
     S.whatsNew = st.whats_new || [];

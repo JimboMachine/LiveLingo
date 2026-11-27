@@ -397,6 +397,19 @@ def open_path(path) -> bool:
         return False
 
 
+def reveal(path) -> bool:
+    """在檔案總管裡把這個檔案選起來。"""
+    if not IS_WIN:
+        return False
+    import subprocess
+
+    try:
+        subprocess.Popen(["explorer", f"/select,{path}"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)      # noqa: S603, S607
+        return True
+    except OSError:
+        return False
+
+
 def open_mic_settings() -> bool:
     """打開 Windows 設定裡的「麥克風隱私權」那一頁。"""
     if not IS_WIN:

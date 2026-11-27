@@ -57,6 +57,7 @@ DEFAULTS = {
     "show_pronunciation": True,  # 韓文下面顯示唸法
     "copy_spoken": True,
     "learn_mode": False,         # 語言學習：字幕旁邊標出一兩個生字，可以收進單字本（learn.py）
+    "inplace": False,            # 原地覆蓋翻譯：把譯文蓋在畫面上原文的位置（inplace.py）
     "pick_copy": False,          # 按「翻選取的字」時，LiveLingo 先替你按一下 Ctrl+C（預設關：玩遊戲時替人按鍵可能被防作弊程式當成外掛）
     "alert_words": [],           # 喊我名字提醒：對方的話裡出現這些字就標出來、響一聲（mention.py），空的 = 不提醒
     "alert_sound": True,         # 提醒的時候響一聲
@@ -82,7 +83,7 @@ DEFAULTS = {
     # 預設用 Ctrl+Shift+字母：Ctrl+Alt 在德文、法文、西班牙文等鍵盤上就是 AltGr，會跟打字（@、€、µ、{ }）撞。
     # 快速輸入框用 Q 不用 T：Ctrl+Shift+T 是所有瀏覽器的「重開剛關掉的分頁」，全域快速鍵會把它搶走。
     "hotkeys": {"overlay": "Ctrl+Shift+S", "mic": "Ctrl+Shift+M", "copy": "Ctrl+Shift+C", "quick": "Ctrl+Shift+Q", "reply": "Ctrl+Shift+R",
-                "pick": "Ctrl+Shift+X", "snap": "Ctrl+Shift+F", "phrase": "Ctrl+Shift+P"},
+                "pick": "Ctrl+Shift+X", "snap": "Ctrl+Shift+F", "phrase": "Ctrl+Shift+P", "inplace": "Ctrl+Shift+O"},
     "hotkeys_v": 2,              # 快速鍵預設的版本：2 = Ctrl+Shift+字母（2.12.1 起）；舊設定檔沒有這個值，載入時只換掉還是舊預設的那幾個
     "window": {"w": 980, "h": 720, "x": None, "y": None},
     "theme": "dark",             # 介面主題：dark / light / system（跟隨 Windows）
@@ -121,7 +122,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}

@@ -18,9 +18,9 @@ def _join(a: str, b: str) -> str:
     return f"{a} {b}"
 
 
-def paragraphs(lines: list, min_score: float = MIN_SCORE, limit: int = MAX_GROUPS) -> list[str]:
+def groups_of(lines: list, min_score: float = MIN_SCORE) -> list[list]:
     """lines：core.ocr.Line 的清單（有 text、x、y、h、score）。上下緊貼、左邊差不多對齊的接成一段；
-    同一橫列上離得遠的（選單的兩欄）、中間隔了空白的，各自一段。只有符號、數字的不要。"""
+    同一橫列上離得遠的（選單的兩欄）、中間隔了空白的，各自一段。回傳每一段裡的列（由上到下）。"""
     rows = sorted((l for l in lines if l.score >= min_score and l.text.strip()), key=lambda l: (l.y, l.x))
     groups: list[list] = []
     for row in rows:
@@ -35,11 +35,34 @@ def paragraphs(lines: list, min_score: float = MIN_SCORE, limit: int = MAX_GROUP
                 break
         else:
             groups.append([row])
-    out: list[str] = []
-    for group in groups:
-        text = ""
-        for row in group:
-            text = _join(text, row.text.strip()) if text else row.text.strip()
-        if _LETTER.search(text):
-            out.append(text)
+    return groups
+
+
+def text_of(group: list) -> str:
+    text = ""
+    for row in group:
+        text = _join(text, row.text.strip()) if text else row.text.strip()
+    return text
+
+
+def paragraphs(lines: list, min_score: float = MIN_SCORE, limit: int = MAX_GROUPS) -> list[str]:
+    """一段一段的文字（只有符號、數字的不要）。"""
+    out = [text_of(g) for g in groups_of(lines, min_score)]
+    return [t for t in out if _LETTER.search(t)][:limit]
+
+
+def blocks(lines: list, min_score: float = MIN_SCORE, limit: int = 60) -> list[dict]:
+    """原地覆蓋翻譯用：每一段的文字，加上它在畫面（這個區域）裡佔的方框和字的大小。
+    {"text", "x", "y", "w", "h", "size"}；size 是這一段每一列高度的中間值。"""
+    out = []
+    for group in groups_of(lines, min_score):
+        text = text_of(group)
+        if not _LETTER.search(text):
+            continue
+        x0 = min(r.x for r in group)
+        y0 = min(r.y for r in group)
+        x1 = max(r.x + max(r.w, 0) for r in group)
+        y1 = max(r.y + r.h for r in group)
+        heights = sorted(r.h for r in group)
+        out.append({"text": text, "x": x0, "y": y0, "w": max(1, x1 - x0), "h": max(1, y1 - y0), "size": heights[len(heights) // 2]})
     return out[:limit]

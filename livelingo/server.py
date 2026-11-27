@@ -277,6 +277,18 @@ class Server:
                     if route == "/api/phrases":      # 常用句庫：add / starters / remove / edit（id、text）
                         return self._json(service.phrase_action(str(body.get("action") or ""), str(body.get("id") or "")[:20],
                                                                 str(body.get("text") or "")[:200]))
+                    if route == "/api/filesubs":      # 影片字幕：pick（選檔）/ start（path、lang、target、mode）/ cancel / open
+                        action = str(body.get("action") or "")
+                        if action == "pick":
+                            return self._json(service.filesubs_pick())
+                        if action == "start":
+                            return self._json(service.filesubs_start(str(body.get("path") or "")[:1000], str(body.get("lang") or "")[:8],
+                                                                     str(body.get("target") or "")[:8], str(body.get("mode") or "")[:8]))
+                        if action == "cancel":
+                            return self._json(service.filesubs_cancel())
+                        if action == "open":
+                            return self._json(service.filesubs_open())
+                        return self._json({"ok": False, "error": "unknown"})
                     if route == "/api/speak":      # 念出我的譯文：試聽、列出裝好的語音
                         if body.get("action") == "voices":
                             return self._json(service.speak_voices())

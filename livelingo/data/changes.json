@@ -1,5 +1,5 @@
 {
-  "2.12.1": {
+  "2.13.1": {
     "zh-TW": [
       "出錯訊息改成一句白話：不再直接跳出「RuntimeError…」這類原文，而是說發生了什麼、可以怎麼做（磁碟滿了、被別的程式用著、沒有權限、找不到裝置、網路不通…）。電腦回報的原文收進「詳細」，回報問題時再展開。",
       "麥克風和電腦播放的聲音因為同一個原因都打不開時，只出現一則提醒，不再兩則疊在一起。",
@@ -90,6 +90,86 @@
       "Les réglages ont une zone de recherche en haut : tapez « raccourcis », « sauvegarde » ou « micro » pour voir la page et la section, cliquez pour y aller. Entrée ouvre le premier résultat, Échap efface.",
       "Les raccourcis par défaut sont désormais Ctrl+Shift+lettre au lieu de Ctrl+Alt+lettre (sur les claviers allemand et français, Ctrl+Alt est AltGr). Ceux restés par défaut changent seuls, les vôtres restent. La saisie rapide passe de T à Q.",
       "Les micros dont la première méthode de capture échoue toujours n’échouent plus à chaque démarrage : si la méthode de secours capte du son, LiveLingo le retient. Seuls nom et date sont gardés ; nouvel essai après 30 jours ou mise à jour."
+    ]
+  },
+  "2.13.0": {
+    "zh-TW": [
+      "新增「原地覆蓋翻譯」：譯文直接蓋在畫面上原文的位置，選單、任務說明、別人的聊天不用移開視線。在「螢幕讀取」打開，或按 Ctrl+Shift+O。",
+      "原地覆蓋的譯文只有你自己看得到（分享螢幕、截圖都拍不到），所以讀畫面時不會把它讀回來。需要 Windows 10 2004 以上；畫面沒變就不會重新辨識。",
+      "新增「影片字幕」頁：選一個影片或音訊檔，LiveLingo 把人聲一句一句聽出來、翻成你的語言，存成 .srt 放在影片旁邊（原文在上、譯文在下）。全部在這台電腦上做。",
+      "影片字幕翻好的句子也記進「作品」，之後用 LiveLingo 看同一部會直接用。做的時候聊天和語音的翻譯會先讓路，可以邊玩邊做，只是比較慢。"
+    ],
+    "zh-CN": [
+      "新增“原地覆盖翻译”：译文直接盖在画面上原文的位置，菜单、任务说明、别人的聊天不用移开视线。在“屏幕读取”打开，或按 Ctrl+Shift+O。",
+      "原地覆盖的译文只有你自己看得到（共享屏幕、截图都拍不到），所以读画面时不会把它读回来。需要 Windows 10 2004 以上；画面没变就不会重新识别。",
+      "新增“视频字幕”页：选一个视频或音频文件，LiveLingo 把人声一句一句听出来、翻成你的语言，存成 .srt 放在视频旁边（原文在上、译文在下）。全部在这台电脑上做。",
+      "视频字幕翻好的句子也记进“作品”，之后用 LiveLingo 看同一部会直接用。做的时候聊天和语音的翻译会先让路，可以边玩边做，只是比较慢。"
+    ],
+    "en": [
+      "New “Translate in place”: the translation is drawn right over the original text on screen, so menus, quest text and other people's chat need no glance away. Turn it on in Screen reading or press Ctrl+Shift+O.",
+      "The in-place translation is visible only to you (screen sharing and screenshots don't capture it), so it is never read back. Needs Windows 10 2004 or later; an unchanged screen isn't re-read.",
+      "New “Video subtitles” page: pick a video or audio file and LiveLingo listens sentence by sentence, translates into your language and saves an .srt next to it (original on top, translation below). All on this computer.",
+      "Sentences translated for video subtitles are also saved under “works”, so watching the same title later reuses them. Chat and voice translation take priority meanwhile, so you can keep playing, just slower."
+    ],
+    "ko": [
+      "새 기능 '제자리 덮어쓰기 번역': 번역이 화면의 원문 위치에 그대로 겹쳐 표시되어 메뉴, 퀘스트 설명, 다른 사람의 채팅을 볼 때 시선을 옮기지 않아도 됩니다. '화면 읽기'에서 켜거나 Ctrl+Shift+O를 누르세요.",
+      "제자리 번역은 본인에게만 보이므로(화면 공유와 스크린샷에는 찍히지 않음) 다시 읽히지 않습니다. Windows 10 2004 이상이 필요하며, 화면이 바뀌지 않으면 다시 인식하지 않습니다.",
+      "새 '영상 자막' 페이지: 영상이나 오디오 파일을 고르면 LiveLingo가 음성을 문장 단위로 듣고 내 언어로 번역해 영상 옆에 .srt로 저장합니다(원문이 위, 번역이 아래). 모두 이 컴퓨터에서 처리됩니다.",
+      "영상 자막용으로 번역한 문장은 '작품'에도 저장되어 나중에 같은 작품을 볼 때 그대로 쓰입니다. 작업 중에는 채팅과 음성 번역이 우선하므로 게임을 하면서도 할 수 있지만 더 느려집니다."
+    ],
+    "ja": [
+      "新機能「その場に重ねて翻訳」：翻訳が画面の原文の位置にそのまま重なるので、メニューやクエストの説明、他の人のチャットも視線を動かさずに読めます。「画面の読み取り」でオン、または Ctrl+Shift+O。",
+      "重ねた翻訳は自分にしか見えない（画面共有やスクリーンショットには映らない）ので、読み戻されることはありません。Windows 10 2004 以降が必要で、画面が変わらなければ読み直しません。",
+      "新しい「動画の字幕」ページ：動画や音声ファイルを選ぶと、LiveLingo が一文ずつ聞き取ってあなたの言語に翻訳し、そばに .srt として保存します（上が原文、下が翻訳）。すべてこのパソコン内で処理します。",
+      "動画字幕で翻訳した文は「作品」にも保存され、後で同じ作品を見るときにそのまま使われます。作業中はチャットと音声の翻訳が優先されるので、ゲームをしながらでもできますが遅くなります。"
+    ],
+    "vi": [
+      "Mới: “Dịch đè tại chỗ”: bản dịch được vẽ ngay trên chữ gốc, nên menu, mô tả nhiệm vụ, chat của người khác không cần dời mắt. Bật ở mục Đọc màn hình hoặc bấm Ctrl+Shift+O.",
+      "Bản dịch đè chỉ mình bạn thấy (chia sẻ màn hình, ảnh chụp không thấy) nên không bị đọc ngược lại. Cần Windows 10 2004 trở lên; màn hình không đổi thì không đọc lại.",
+      "Mới: trang “Phụ đề video”: chọn video hoặc tệp âm thanh, LiveLingo nghe từng câu, dịch sang ngôn ngữ của bạn và lưu .srt cạnh video (gốc ở trên, dịch ở dưới). Tất cả diễn ra trên máy này.",
+      "Câu đã dịch cho phụ đề video cũng được lưu vào “tác phẩm”, lần sau xem cùng tựa sẽ dùng lại. Khi đang làm, dịch chat và giọng nói được ưu tiên nên vẫn chơi được, chỉ chậm hơn."
+    ],
+    "th": [
+      "ใหม่: “แปลทับตำแหน่งเดิม” วาดคำแปลทับข้อความต้นฉบับบนหน้าจอ เมนู คำอธิบายเควสต์ แชตของคนอื่น ไม่ต้องละสายตา เปิดในหน้าการอ่านหน้าจอ หรือกด Ctrl+Shift+O",
+      "คำแปลที่วาดทับมีแต่คุณที่เห็น (การแชร์หน้าจอและภาพหน้าจอไม่เห็น) จึงไม่ถูกอ่านกลับมา ต้องใช้ Windows 10 2004 ขึ้นไป หน้าจอไม่เปลี่ยนก็ไม่อ่านใหม่",
+      "ใหม่: หน้า “คำบรรยายวิดีโอ” เลือกไฟล์วิดีโอหรือเสียง LiveLingo จะฟังทีละประโยค แปลเป็นภาษาของคุณ แล้วบันทึกเป็น .srt ไว้ข้างไฟล์ (ต้นฉบับบน คำแปลล่าง) ทำในเครื่องนี้ทั้งหมด",
+      "ประโยคที่แปลสำหรับคำบรรยายจะถูกบันทึกใน “ผลงาน” ด้วย ครั้งหน้าดูเรื่องเดิมจะใช้ซ้ำ ระหว่างทำ การแปลแชตและเสียงได้ลำดับก่อน เล่นเกมไปด้วยได้ แต่จะช้าลง"
+    ],
+    "id": [
+      "Baru: “Terjemahan di tempat”: terjemahan digambar tepat di atas teks asli, jadi menu, deskripsi misi, dan obrolan orang lain tak perlu menoleh. Aktifkan di Pembacaan layar atau tekan Ctrl+Shift+O.",
+      "Terjemahan di tempat hanya terlihat oleh Anda (berbagi layar dan tangkapan layar tidak menangkapnya), jadi tidak terbaca ulang. Butuh Windows 10 2004+; layar yang tak berubah tidak dibaca ulang.",
+      "Baru: halaman “Subtitel video”: pilih video atau file audio, LiveLingo mendengarkan kalimat demi kalimat, menerjemahkan ke bahasa Anda, dan menyimpan .srt di sampingnya (asli di atas, terjemahan di bawah). Semua di komputer ini.",
+      "Kalimat yang diterjemahkan untuk subtitel video juga disimpan di “karya”, jadi judul yang sama nanti memakainya. Selama berjalan, terjemahan obrolan dan suara didahulukan; tetap bisa bermain, hanya lebih lambat."
+    ],
+    "es": [
+      "Nuevo «Traducir sobre el original»: la traducción se dibuja justo encima del texto original, así que menús, misiones y el chat de otros no obligan a apartar la vista. Actívalo en Lectura de pantalla o con Ctrl+Shift+O.",
+      "La traducción superpuesta solo la ves tú (compartir pantalla y capturas no la recogen), así que nunca se vuelve a leer. Requiere Windows 10 2004 o posterior; una pantalla sin cambios no se relee.",
+      "Nueva página «Subtítulos de vídeo»: elige un vídeo o audio y LiveLingo escucha frase a frase, traduce a tu idioma y guarda un .srt al lado (original arriba, traducción abajo). Todo en este equipo.",
+      "Las frases traducidas para los subtítulos también se guardan en «obras», y al ver el mismo título más tarde se reutilizan. Mientras trabaja, el chat y la voz tienen prioridad; puedes jugar, pero más lento."
+    ],
+    "pt": [
+      "Novo «Traduzir sobre o original»: a tradução é desenhada bem sobre o texto original, então menus, missões e o chat de outros não exigem desviar o olhar. Ative em Leitura de tela ou use Ctrl+Shift+O.",
+      "A tradução sobreposta só você vê (compartilhamento de tela e capturas não a mostram), então nunca é lida de volta. Requer Windows 10 2004 ou posterior; tela sem mudança não é relida.",
+      "Nova página «Legendas de vídeo»: escolha um vídeo ou áudio e o LiveLingo ouve frase por frase, traduz para o seu idioma e salva um .srt ao lado (original em cima, tradução embaixo). Tudo neste computador.",
+      "As frases traduzidas para as legendas também são salvas em «obras» e reaproveitadas ao assistir ao mesmo título depois. Enquanto trabalha, chat e voz têm prioridade; dá para jogar, só mais devagar."
+    ],
+    "ru": [
+      "Новое: «Перевод поверх текста» — перевод рисуется прямо поверх исходного текста, так что меню, задания и чужой чат читаются без отведения взгляда. Включите в «Чтении экрана» или нажмите Ctrl+Shift+O.",
+      "Такой перевод виден только вам (демонстрация экрана и скриншоты его не захватывают), поэтому он не читается обратно. Нужна Windows 10 2004 или новее; неизменный экран не перечитывается.",
+      "Новая страница «Субтитры к видео»: выберите видео- или аудиофайл — LiveLingo послушает речь по фразам, переведёт на ваш язык и сохранит .srt рядом (оригинал сверху, перевод снизу). Всё на этом компьютере.",
+      "Фразы, переведённые для субтитров, сохраняются и в «произведениях» и используются при просмотре того же названия. Пока идёт работа, перевод чата и голоса в приоритете: играть можно, но медленнее."
+    ],
+    "de": [
+      "Neu: „Übersetzung an Ort und Stelle“: Die Übersetzung wird direkt über den Originaltext gezeichnet, sodass Menüs, Questtexte und fremder Chat kein Wegschauen erfordern. Unter Bildschirmlesen einschalten oder Ctrl+Shift+O.",
+      "Die eingeblendete Übersetzung sieht nur du (Bildschirmfreigabe und Screenshots erfassen sie nicht), sie wird also nie zurückgelesen. Erfordert Windows 10 ab 2004; unveränderte Bilder werden nicht neu gelesen.",
+      "Neue Seite „Video-Untertitel“: Video- oder Audiodatei wählen, LiveLingo hört Satz für Satz ab, übersetzt in deine Sprache und speichert eine .srt daneben (Original oben, Übersetzung unten). Alles auf diesem Computer.",
+      "Für Untertitel übersetzte Sätze landen auch unter „Werke“ und werden beim späteren Ansehen desselben Titels genutzt. Währenddessen haben Chat- und Sprachübersetzung Vorrang: Weiterspielen geht, nur langsamer."
+    ],
+    "fr": [
+      "Nouveau « Traduction sur place » : la traduction se dessine directement sur le texte d'origine, donc menus, quêtes et chat des autres se lisent sans détourner le regard. À activer dans Lecture d'écran ou avec Ctrl+Shift+O.",
+      "Cette traduction n'est visible que par vous (partage d'écran et captures ne la montrent pas) et n'est donc jamais relue. Nécessite Windows 10 2004 ou ultérieur ; un écran inchangé n'est pas relu.",
+      "Nouvelle page « Sous-titres vidéo » : choisissez une vidéo ou un fichier audio, LiveLingo écoute phrase par phrase, traduit dans votre langue et enregistre un .srt à côté (original en haut, traduction en bas). Tout sur cet ordinateur.",
+      "Les phrases traduites pour les sous-titres sont aussi enregistrées dans « œuvres » et réutilisées en regardant le même titre. Pendant ce temps, le chat et la voix sont prioritaires : on peut jouer, en plus lent."
     ]
   },
   "2.12.0": {
