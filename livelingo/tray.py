@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 
+from . import trayicon
 from .paths import resource_dir
 
 IS_WIN = sys.platform == "win32"
@@ -48,6 +49,8 @@ class Tray:
         self.running = False
         self.error = ""
         self._sig = None
+        self.base = None        # 沒有語言小字的原圖
+        self.label = ""         # 現在圖示上的語言（「韓→中」）
 
     def _menu(self):
         import pystray
@@ -77,7 +80,9 @@ class Tray:
             from PIL import Image
 
             image = Image.open(resource_dir() / "data" / "tray.png")
-            self.icon = pystray.Icon("LiveLingo", image, "LiveLingo", self._menu())
+            self.base = image.copy()
+            self.label = self._pair()
+            self.icon = pystray.Icon("LiveLingo", self._image(), self._title(), self._menu())
             self.icon.run_detached()
             self.running = True
             threading.Thread(target=self._watch, daemon=True, name="tray-watch").start()
@@ -87,9 +92,34 @@ class Tray:
             self.running = False
         return self.running
 
+    def _pair(self) -> str:
+        c = self.service.cfg
+        return trayicon.label(c["their_lang"], c["my_lang"], c["ui_lang"])
+
+    def _title(self) -> str:
+        return f"LiveLingo {self.label}" if self.label else "LiveLingo"
+
+    def _image(self):
+        """圖示：開著「工具列圖示顯示語言」就在角落寫「韓→中」；畫不出來就用原圖。"""
+        if self.base is None or not self.service.cfg["tray_lang"]:
+            return self.base
+        try:
+            return trayicon.render(self.base, self.label)
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"tray label failed: {ex!r}")
+            return self.base
+
+    def _refresh_icon(self) -> None:
+        self.label = self._pair()
+        if self.icon is not None:
+            self.icon.title = self._title()
+            image = self._image()
+            if image is not None:
+                self.icon.icon = image
+
     def _signature(self):
         s = self.service
-        return (s.cfg["ui_lang"], s.cfg["overlay"], s.transcript.on, s.transcript.closing,
+        return (s.cfg["ui_lang"], s.cfg["their_lang"], s.cfg["my_lang"], s.cfg["tray_lang"], s.cfg["overlay"], s.transcript.on, s.transcript.closing,
                 tuple((k, v["on"], v["busy"]) for k, v in sorted(s.sources.items())))
 
     def _watch(self) -> None:
@@ -99,6 +129,7 @@ class Tray:
                 sig = self._signature()
                 if sig != self._sig and self.icon is not None:
                     self._sig = sig
+                    self._refresh_icon()
                     self.icon.update_menu()
             except Exception as ex:  # noqa: BLE001
                 self.error = repr(ex)

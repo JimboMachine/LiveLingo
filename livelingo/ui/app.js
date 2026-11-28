@@ -12,7 +12,7 @@
     record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
     hotkeys: { available: false, states: {}, defaults: {} },
     history: { count: 0, bytes: 0 },
-    words: {}, wordbook: { count: 0, due: 0 }, recaps: { count: 0, state: "off" }, filesubs: { busy: false, job: null, result: null },
+    tips: [], profiles: [], words: {}, wordbook: { count: 0, due: 0 }, recaps: { count: 0, state: "off" }, filesubs: { busy: false, job: null, result: null },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -197,6 +197,13 @@
     const root = document.documentElement, dark = isDark();
     root.dataset.theme = dark ? "dark" : "light";
     if (S.cfg.accent && S.cfg.accent !== "mint") root.dataset.accent = S.cfg.accent; else delete root.dataset.accent;
+    // 外觀選項（2.20.0）：色盲友善配色、減少動畫、字體縮放、迷你模式
+    if (S.cfg.colorblind) root.dataset.cb = "1"; else delete root.dataset.cb;
+    if (S.cfg.reduce_motion) root.dataset.motion = "reduce"; else delete root.dataset.motion;
+    const scale = Number(S.cfg.ui_scale) || 100;
+    root.style.zoom = scale === 100 ? "" : String(scale / 100);
+    const appEl = document.getElementById("app");
+    if (appEl) { if (S.cfg.mini) appEl.dataset.mini = "1"; else delete appEl.dataset.mini; }
     // Windows 的標題列也換成同一個顏色
     const css = getComputedStyle(root), hex = (name) => css.getPropertyValue(name).trim();
     const chrome = { caption: hex("--surface"), text: hex("--text"), dark };
@@ -210,7 +217,79 @@
     const swatch = (id, n) => `<button class="swatch" data-act="accent" data-code="${id}" style="--sw:${ACCENTS[id][dark ? 0 : 1]}" aria-pressed="${(S.cfg.accent || "mint") === id}" aria-label="${esc(t("accent_title"))} ${n + 1}" title="${esc(t("accent_title"))} ${n + 1}"></button>`;
     return `<div class="pills">${["dark", "light", "system"].map(pill).join("")}</div>
       <div class="sub">${esc(t("accent_title"))}</div>
-      <div class="swatches">${Object.keys(ACCENTS).map(swatch).join("")}</div>`;
+      <div class="swatches">${Object.keys(ACCENTS).map(swatch).join("")}</div>
+      ${choiceRow("ui_scale", t("lk_scale"), [["90", "90%"], ["100", "100%"], ["115", "115%"], ["130", "130%"], ["150", "150%"]])}
+      ${switchRow("colorblind", t("lk_cb"), t("lk_cb_desc"))}
+      ${switchRow("reduce_motion", t("lk_motion"), t("lk_motion_desc"))}
+      ${S.canWindow ? switchRow("mini", t("lk_mini"), t("lk_mini_desc")) : ""}
+      ${S.canWindow ? switchRow("tray_lang", t("lk_tray"), t("lk_tray_desc")) : ""}`;
+  }
+
+  // 依這台電腦推薦設定（2.20.0）
+  async function loadRecommend() {
+    const r = await get("/api/recommend");
+    if (!r || r.error) return;
+    S.ui.recommend = r;
+    paintRecommend();
+  }
+  function paintRecommend() {
+    const box = $("recommend-section");
+    if (box && S.view === "settings" && S.ui.tab === "general") box.innerHTML = recommendHTML();
+  }
+  function recommendHTML() {
+    const r = S.ui.recommend;
+    const head = `<div><h2>${esc(t("rc_title"))}</h2><div class="sub">${esc(t("rc_hint"))}</div></div>`;
+    if (!r) return head;
+    const val = (k, v) => k === "live_captions" ? t(v ? "rc_on" : "rc_off") : t((k === "quality" ? "rc_q_" : "rc_s_") + v);
+    const names = { quality: "rc_quality", speech_mode: "rc_speech", live_captions: "rc_live" };
+    const pc = r.pc.gpu ? t("rc_pc", { gpu: r.pc.gpu, gb: r.pc.vram_gb, ram: r.pc.ram_gb, cores: r.pc.cores }) : t("rc_pc_nogpu", { ram: r.pc.ram_gb, cores: r.pc.cores });
+    return head + `<div class="dnote">${esc(pc)}</div>
+      <ul class="rc-list">${Object.keys(names).map((k) => `<li><span>${esc(t(names[k]))}</span><b>${esc(val(k, r.changes[k]))}</b>${r.differ.includes(k) ? `<span class="dim small">← ${esc(val(k, r.current[k]))}</span>` : ""}</li>`).join("")}</ul>
+      <div class="dnote">${r.why.map((w) => esc(t("rc_why_" + w))).join(" ")}</div>
+      <div class="btn-row">${r.differ.length ? `<button class="primary" data-act="rc-apply">${esc(t("rc_apply"))}</button>` : `<span class="dim">${ICON.check} ${esc(t("rc_same"))}</span>`}</div>`;
+  }
+
+  // 多份設定檔（2.20.0）
+  function profilesHTML() {
+    const names = S.profiles || [];
+    const list = names.length ? `<ul class="pf-list">${names.map((n) => `<li><span>${esc(n)}</span>
+        <button class="ghost small" data-act="pf-apply" data-name="${esc(n)}">${esc(t("pf_apply"))}</button>
+        <button class="icon-btn" data-act="pf-remove" data-name="${esc(n)}" aria-label="${esc(t("pf_remove", { name: n }))}" title="${esc(t("pf_remove", { name: n }))}">${ICON.x}</button></li>`).join("")}</ul>`
+      : `<div class="dnote">${esc(t("pf_none"))}</div>`;
+    return `${list}<div class="setting-row"><input type="text" id="pf-name" maxlength="30" placeholder="${esc(t("pf_name_ph"))}" aria-label="${esc(t("pf_name_ph"))}">
+      <button class="ghost" data-act="pf-save">${esc(t("pf_save"))}</button></div>`;
+  }
+  function paintProfiles() {
+    const box = $("profile-list");
+    if (box && S.view === "settings" && S.ui.tab === "general") box.innerHTML = profilesHTML();
+  }
+
+  // 歷史時間軸（2.20.0）：一段一段的對話，點一段展開
+  async function loadTimeline() {
+    const r = await get("/api/timeline");
+    if (!r) return;
+    S.ui.timeline = { items: r.items || [], error: r.error || "", open: (S.ui.timeline && S.ui.timeline.open) || null };
+    paintTimeline();
+  }
+  function paintTimeline() {
+    const box = $("timeline-list");
+    if (box && S.view === "settings" && S.ui.tab === "history") box.innerHTML = timelineHTML();
+  }
+  function timelineHTML() {
+    const tl = S.ui.timeline;
+    if (!tl) return "";
+    if (tl.error === "history_off") return `<div class="note">${ICON.info}<span>${esc(t("tl_history_off"))}</span></div>`;
+    if (!tl.items.length) return `<div class="hist-none">${esc(t("tl_empty"))}</div>`;
+    const clock = (at) => new Date(at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const day = (at) => new Date(at * 1000).toLocaleDateString();
+    return tl.items.map((x) => {
+      const open = tl.open === x.id;
+      return `<div class="tl-item"><button class="tl-head" data-act="tl-open" data-id="${esc(x.id)}" aria-expanded="${open}">
+          <span class="tl-time">${esc(day(x.start))} ${esc(clock(x.start))}–${esc(clock(x.end))}</span>
+          <span class="dim">${esc(t("tl_count", { n: x.count, them: x.them, me: x.me }))}</span>
+          <span class="tl-preview">${esc(x.preview)}</span></button>
+        ${open ? `<div class="tl-lines">${x.lines.map((l) => `<div class="tl-line" data-who="${esc(l.who)}"><span class="dim small">${esc(clock(l.at))} ${esc(t("who_" + l.who))}</span> ${esc(l.translated || l.original)}${l.translated && l.original && l.original !== l.translated ? `<div class="dim small">${esc(l.original)}</div>` : ""}</div>`).join("")}</div>` : ""}</div>`;
+    }).join("");
   }
 
   // ---------------------------------------------------------------- 主畫面
@@ -842,10 +921,17 @@
 
   // 打開某個設定分頁時要另外去拿的資料：聲音頁要裝置和音量，聲音頁和螢幕頁都要開著的程式清單
   function tabOpened() {
+    if ((S.tips || []).includes(S.ui.tab)) {      // 看過了：這一頁的「新」標記消失
+      const tab = S.ui.tab;
+      S.tips = S.tips.filter((x) => x !== tab);
+      renderRail();
+      post("/api/tips", { tab });
+    }
+    if (S.ui.tab === "general") { loadRecommend(); }
     if (S.ui.tab === "audio") openDevices();
     if (S.ui.tab === "screen" || S.ui.tab === "vocab") loadApps();      // 詞彙表的「用在」要列出現在開著的程式
     if (S.ui.tab === "overlay") loadScreens();
-    if (S.ui.tab === "history") { S.ui.hist = null; S.ui.recapList = null; loadHistory(); loadRecaps(); loadStory((S.ui.story || {}).game || "", 0); }
+    if (S.ui.tab === "history") { S.ui.hist = null; S.ui.recapList = null; S.ui.timeline = null; loadTimeline(); loadHistory(); loadRecaps(); loadStory((S.ui.story || {}).game || "", 0); }
     if (S.ui.tab === "learn") { S.ui.review = null; loadWords(); loadStudy(); }
     if (S.ui.tab === "health") { S.ui.useAsk = false; loadHealth(); loadUsage(); }
     if (S.ui.tab === "storage") { S.ui.storeAsk = ""; loadStorage(); }
@@ -870,7 +956,8 @@
   function renderRail() {
     const item = (to, key, icon) => {
       const here = to === "main" ? S.view === "main" : (S.view === "settings" && S.ui.tab === to);
-      return `<button class="rail-item" data-act="nav" data-to="${to}" ${here ? 'aria-current="page"' : ""} title="${esc(t(key))}">${ICON[icon]}<span>${esc(t(key))}</span></button>`;
+      const fresh = (S.tips || []).includes(to) ? `<em class="new-tag">${esc(t("nw_tag"))}</em>` : "";      // 有新功能、還沒點進去看過（2.20.0）
+      return `<button class="rail-item" data-act="nav" data-to="${to}" ${here ? 'aria-current="page"' : ""} title="${esc(t(key))}">${ICON[icon]}<span>${esc(t(key))}</span>${fresh}</button>`;
     };
     $("rail").innerHTML = `
       <div class="rail-brand">${MARK}<div class="wordmark">${WORDMARK}</div></div>
@@ -1815,6 +1902,7 @@
         ${switchRow("history_keep", t("hist_keep"), t("hist_keep_desc"))}
         ${S.cfg.history_keep ? choiceRow("history_days", t("hist_days"), [["7", t("hist_d7")], ["30", t("hist_d30")], ["90", t("hist_d90")], ["0", t("hist_d0")]]) : ""}
       </section>
+      <section id="timeline-section"><div><h2>${esc(t("tl_title"))}</h2><div class="sub">${esc(t("tl_hint"))}</div></div><div id="timeline-list">${timelineHTML()}</div></section>
       ${storyHTML()}
       <section id="recap-section"><div><h2>${esc(t("recap_title"))}</h2><div class="sub">${esc(t("recap_hint"))}</div></div>
         ${switchRow("recap_auto", t("recap_auto"), t("recap_auto_desc"))}
@@ -2158,7 +2246,7 @@
 
   function settingsFileHTML() {      // 設定的匯出、匯入、恢復預設；做完留一份可以復原
     const b = S.settingsBackup;
-    const undo = b ? `<div class="note" id="set-undo">${ICON.info}<span>${esc(t(b.reason === "import" ? "set_undo_import" : "set_undo_reset"))}</span>
+    const undo = b ? `<div class="note" id="set-undo">${ICON.info}<span>${esc(t(b.reason === "import" ? "set_undo_import" : (b.reason === "reset" ? "set_undo_reset" : "set_undo_other")))}</span>
         <button data-act="set-undo">${esc(t("set_undo"))}</button><button class="ghost" data-act="set-forget">${esc(t("set_keep"))}</button></div>` : "";
     const ask = S.ui.resetAsk ? `<div class="note warn" id="set-ask">${ICON.info}<span>${esc(t("set_reset_ask"))}</span>
         <button class="danger" data-act="set-reset-yes">${esc(t("set_reset_yes"))}</button><button class="ghost" data-act="set-reset-no">${esc(t("cancel"))}</button></div>` : "";
@@ -2231,6 +2319,8 @@
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
       <section><div><h2>${esc(t("trans_title"))}</h2><div class="sub">${esc(t("trans_hint"))}</div></div>${pairSelectHTML()}${S.cfg.their_auto ? autoLangsHTML() : ""}</section>
       <section><div><h2>${esc(t("theme_title"))}</h2><div class="sub">${esc(t("theme_hint"))}</div></div>${themeHTML()}</section>
+      <section id="recommend-section">${recommendHTML()}</section>
+      <section id="profile-section"><div><h2>${esc(t("pf_title"))}</h2><div class="sub">${esc(t("pf_hint"))}</div></div><div id="profile-list">${profilesHTML()}</div></section>
       <section data-kw="kw_record"><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
       ${sessionHTML()}
       <section data-kw="kw_window"><h2>${esc(t("window_title"))}</h2>
@@ -2815,6 +2905,26 @@
       const r = await post("/api/words", { action: "add", w: pick.w, lang: pick.lang, id: pick.id });
       toast(r && r.ok ? t("learn_added", { w: pick.w }) : t(r && r.error === "not_ready" ? "n_not_ready" : "learn_add_failed"), 4200, r && r.ok ? "info" : "warn");
     },
+    "mini-toggle": () => saveCfg({ mini: !S.cfg.mini }),
+    "rc-apply": async () => {
+      const r = await post("/api/recommend");
+      if (r && r.ok) { S.ui.recommend = r; S.settingsBackup = r.backup || S.settingsBackup; paintRecommend(); toast(t("rc_applied"), 6000); }
+    },
+    "pf-save": async () => {
+      const input = $("pf-name"), name = input ? input.value.trim() : "";
+      const r = await post("/api/profiles", { action: "save", name });
+      if (r && r.ok) { S.profiles = r.names; paintProfiles(); toast(t("pf_saved", { name }), 4000); }
+      else toast(t(r && r.error === "full" ? "pf_full" : "pf_name_needed"), 5000, "warn");
+    },
+    "pf-apply": async (el) => {
+      const r = await post("/api/profiles", { action: "apply", name: el.dataset.name });
+      if (r && r.ok) { S.settingsBackup = r.backup || S.settingsBackup; toast(t("pf_applied", { name: el.dataset.name }), 6000); renderAll(); }
+    },
+    "pf-remove": async (el) => {
+      const r = await post("/api/profiles", { action: "remove", name: el.dataset.name });
+      if (r && r.ok) { S.profiles = r.names; paintProfiles(); }
+    },
+    "tl-open": (el) => { const tl = S.ui.timeline; if (tl) { tl.open = tl.open === el.dataset.id ? null : el.dataset.id; paintTimeline(); } },
     "word-say": async (el) => { const r = await post("/api/words", { action: "say", w: el.dataset.w, lang: el.dataset.lang }); if (!r || !r.ok) toast(t("wd_say_failed"), 5000, "warn"); },
     "reveal": (el) => { S.ui.revealed = Object.assign(S.ui.revealed || {}, { [el.dataset.id]: true }); upsertMessage(S.messages.find((m) => m.id === Number(el.dataset.id)) || { id: 0 }); },
     "explain": async (el) => {
@@ -3705,7 +3815,7 @@
     config: (cfg) => {
       const before = S.cfg;
       S.cfg = cfg;
-      if (before.theme !== cfg.theme || before.accent !== cfg.accent) applyTheme();
+      if (["theme", "accent", "colorblind", "reduce_motion", "ui_scale", "mini"].some((k) => before[k] !== cfg[k])) applyTheme();
       if (S.ui.help && (before.ui_lang !== cfg.ui_lang || before.ptt_key !== cfg.ptt_key || JSON.stringify(before.hotkeys) !== JSON.stringify(cfg.hotkeys))) {
         S.ui.help = null;      // 說明裡寫著快速鍵，而且是照介面語言給的：改了就要重拿
         if (S.view === "settings" && S.ui.tab === "help") loadHelp();
@@ -3745,6 +3855,7 @@
       else live.innerHTML = fsLiveHTML();                                                       // 只是進度：只換進度那一塊
     },
     phrases: (st) => { S.phrases = st; if (S.view === "settings" && S.ui.tab === "general" && !(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.phraseEdit)) { const sec = $("phrase-section"); if (sec) sec.innerHTML = `<div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}`; } },
+    profiles: (names) => { S.profiles = Array.isArray(names) ? names : []; paintProfiles(); },
     wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") { loadWords(); loadStudy(); } },
     recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
@@ -3851,7 +3962,7 @@
       post("/api/seen", { update: true });
     }
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
-    S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history; S.settingsBackup = st.settings_backup || null;
+    S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history; S.settingsBackup = st.settings_backup || null; S.tips = st.tips || []; S.profiles = st.profiles || [];
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
     renderAll();

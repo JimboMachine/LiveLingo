@@ -771,3 +771,46 @@ body.drop-on::after { content: ""; position: fixed; inset: 8px; border: 2px dash
 .shadow-score b { font-size: 32px; }
 .practice-pick { display: flex; justify-content: space-between; width: 100%; text-align: left; cursor: pointer; }
 .sn-note { color: var(--accent, #5ad1a5); }
+
+/* 2.20.0 介面選項 */
+.new-tag { margin-left: auto; padding: 1px 7px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-style: normal; font-weight: 700; }
+.rc-list, .pf-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rc-list li { display: flex; align-items: baseline; gap: 10px; }
+.rc-list li > span:first-child { min-width: 96px; color: var(--dim); }
+.pf-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.pf-list li > span { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pf-name { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border-radius: 8px; }
+.tl-item { border-bottom: 1px solid var(--line); }
+.tl-head { width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 8px 4px; border: 0; background: transparent; text-align: left; }
+.tl-time { font-weight: 600; }
+.tl-preview { flex-basis: 100%; color: var(--dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-lines { padding: 0 4px 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.tl-line[data-who="me"] { color: var(--me-dim); }
+
+/* 迷你模式：只留對話和輸入框 */
+#app[data-mini="1"][data-view="main"] .rail,
+#app[data-mini="1"] .sources-head, #app[data-mini="1"] .scen-row, #app[data-mini="1"] .region-row,
+#app[data-mini="1"] .view-title, #app[data-mini="1"] .quality-chip, #app[data-mini="1"] .card .hint { display: none; }
+#app[data-mini="1"] .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#app[data-mini="1"] .card { min-height: 44px; padding: 6px 8px; }
+#app[data-mini="1"] .sources { padding: 8px 10px; gap: 6px; }
+#app[data-mini="1"] .saybar { padding: 8px 10px 10px; }
+
+/* 色盲友善配色：綠換成藍、紅換成橘；狀態另外用形狀和符號區分，不靠顏色 */
+:root[data-cb] { --ok: #6CB6FF; --danger: #FFB347; }
+:root[data-theme="light"][data-cb] { --ok: #175DB3; --danger: #A85400; }
+:root[data-cb] .health-row[data-state="warn"] .lamp { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); box-shadow: none; }
+:root[data-cb] .health-row[data-state="bad"] .lamp { border-radius: 2px; transform: rotate(45deg) scale(0.8); box-shadow: none; }
+:root[data-cb] .health-row[data-state="ok"] .health-state::before { content: "✓ "; }
+:root[data-cb] .health-row[data-state="warn"] .health-state::before { content: "▲ "; }
+:root[data-cb] .health-row[data-state="bad"] .health-state::before { content: "✖ "; }
+:root[data-cb] .status[data-phase="error"] .dot { border-radius: 2px; transform: rotate(45deg); }
+:root[data-cb] .quiz-choices .pill.right::after { content: " ✓"; }
+:root[data-cb] .quiz-choices .pill.wrong::after { content: " ✖"; }
+:root[data-cb] .quiz-choices .pill.right { outline-color: var(--ok); }
+:root[data-cb] .quiz-choices .pill.wrong { outline-color: var(--danger); }
+:root[data-cb] .hk-state.taken::before { content: "✖ "; }
+
+/* 減少動畫：關掉所有動畫和轉場（也跟著系統的「減少動畫」設定） */
+:root[data-motion="reduce"] *, :root[data-motion="reduce"] *::before, :root[data-motion="reduce"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }

@@ -34,7 +34,8 @@ from .qualitycheck import QualityCheck
 from . import textfix
 from .corrections import Corrections
 from . import cheatsheet, gametools, imagetext
-from . import introduce, pace, sessionlog, study, tone as tone_mod, voicecmd
+from . import highlights, introduce, pace, recommend, sessionlog, study, timeline, tone as tone_mod, voicecmd
+from . import profiles as profiles_mod
 from . import gamepad as gamepad_mod
 from .album import Album
 from .storybook import StoryBook
@@ -106,6 +107,7 @@ LIBRARY_KIND = "livelingo-library"      # 匯出檔裡用來認「這是 LiveLin
 REVIVE_TIMES = 3            # 翻譯引擎自己停掉時，最多自動重開幾次……
 REVIVE_WINDOW = 600.0       # ……在這麼多秒之內；超過就不再試
 WHATS_NEW_FLOOR = "2.5.0"      # 沒有「上次看到哪一版」的紀錄（這個功能出現以前就裝好的）：把這一版以後錯過的改動一次說完
+UI_SCALES = (90, 100, 115, 130, 150)      # 全介面字體縮放可以選的比例（%，2.20.0）
 REMIND_EVERY = 1800        # 每日複習提醒：多久看一次有沒有該複習的字（2.19.0）
 MAX_MARKED = 60            # 最近幾則訊息的生字標記留著（介面重開也看得到）
 RECAP_RECENT = 6 * 3600     # 自動摘要只補最近這麼久之內結束的對話
@@ -309,6 +311,7 @@ class Service:
         self.history = History(self.data, bool(self.cfg["history_keep"]), int(self.cfg["history_days"]))
         self.wordbook = Wordbook(self.data)      # 語言學習的單字本（learn.py）
         self.recaps = Recaps(self.data)          # 對話摘要（recap.py）
+        self.profiles = profiles_mod.Profiles(self.data / "profiles.json")      # 多份設定檔（profiles.py，2.20.0）
         self._recap = {"state": "off", "id": ""}      # 正在整理的摘要（給介面）
         self._recap_checked = 0.0
         self._all_terms = None      # 查生字意思用的全部用語包（第一次用到才讀）
@@ -443,6 +446,8 @@ class Service:
             "replies": dict(self._replies),
             "words": {str(k): v for k, v in self._words.items()},
             "wordbook": self.wordbook.state(),
+            "tips": highlights.new_tabs(self.cfg["tips_seen"], __version__),      # 有新功能、還沒點進去看過的設定頁（2.20.0）
+            "profiles": self.profiles.names(),
             "phrases": self.phrases_state(),
             "filesubs": self.filesubs_state(),
             "recaps": dict(self.recaps.state(), **self._recap),
@@ -503,6 +508,8 @@ class Service:
                 return
             self.overlay.apply()
             self.stream.apply()
+            if self.cfg["mini"] and self.window and hasattr(self.window, "mini"):
+                self.window.mini(True)
             self.start_hotkeys()
             self._apply_gamepad()
             self._storage_cleanup()
@@ -523,7 +530,7 @@ class Service:
         if seen == __version__:
             return []
         if not seen and not self.cfg["setup_done"]:      # 全新安裝：第一次設定的畫面就是說明
-            self.cfg.set(seen_version=__version__)
+            self.cfg.set(seen_version=__version__, tips_seen=highlights.all_tabs())
             return []
         previous = seen or self.updated_from or ""
         try:
@@ -3082,6 +3089,15 @@ class Service:
             changes.pop("chat_send_open")
         if changes.get("ear_split") not in (None, *EAR_SPLITS):
             changes.pop("ear_split")
+        if "ui_scale" in changes:
+            try:
+                scale = int(changes["ui_scale"])
+            except (TypeError, ValueError):
+                scale = 0
+            if scale in UI_SCALES and not isinstance(changes["ui_scale"], bool):
+                changes["ui_scale"] = scale
+            else:
+                changes.pop("ui_scale")
         if changes.get("learn_level") not in (None, *LEARN_LEVELS):
             changes.pop("learn_level")
         if "camera_index" in changes and not (isinstance(changes["camera_index"], int) and not isinstance(changes["camera_index"], bool)
@@ -3222,6 +3238,8 @@ class Service:
             self.hub.publish("stream", self.stream.state())
         if changed("on_top") and self.window:
             self.window.set_on_top(after["on_top"])
+        if changed("mini") and self.window and hasattr(self.window, "mini"):
+            self.window.mini(bool(after["mini"]))
         if changed("share_visible"):
             self.overlay.apply_share()
             if self.main_hwnd:
@@ -4401,6 +4419,61 @@ class Service:
         """念一句給我聽（用 Windows 的語音）。"""
         text = str(text or "").strip()[:300]
         return {"ok": bool(text) and bool(self.reader.say(text, str(lang or "")))}
+
+    # ------------------------------------------------------------------ 介面和設定檔（2.20.0）
+
+    def tip_seen(self, tab: str) -> dict:
+        """點進有「新」標記的設定頁：這一頁以後不再標。"""
+        tab = str(tab or "")
+        if tab not in highlights.all_tabs():
+            return {"ok": False, "tips": highlights.new_tabs(self.cfg["tips_seen"], __version__)}
+        seen = list(self.cfg["tips_seen"] or [])
+        if tab not in seen:
+            self.cfg.set(tips_seen=seen + [tab])
+        return {"ok": True, "tips": highlights.new_tabs(self.cfg["tips_seen"], __version__)}
+
+    def recommend_state(self) -> dict:
+        """依這台電腦推薦的設定（recommend.py）。"""
+        return recommend.state(self.gpu or {}, self.cfg.snapshot())
+
+    def recommend_apply(self) -> dict:
+        """套用推薦的設定：只改跟現在不一樣的，改之前先留一份，可以在設定頁復原。"""
+        info = self.recommend_state()
+        if not info["differ"]:
+            return {"ok": True, "changed": [], **info}
+        self._keep_backup("recommend")
+        self.update_config({k: info["changes"][k] for k in info["differ"]})
+        return {"ok": True, "changed": list(info["differ"]), "backup": self.settings_backup(), **self.recommend_state()}
+
+    def settings_profile(self, action: str, name: str = "") -> dict:
+        """多份設定檔：save（存現在的設定）/ apply（換成那一份，之前的先留一份可以復原）/ remove。"""
+        name = profiles_mod.clean_name(name)
+        if action == "save":
+            saved = self.profiles.save(name, self._settings_now())
+            if saved is None:
+                return {"ok": False, "error": "full" if name else "name", "names": self.profiles.names()}
+            name = saved
+        elif action == "apply":
+            values = self.profiles.get(name)
+            if values is None:
+                return {"ok": False, "error": "nothing", "names": self.profiles.names()}
+            self._keep_backup("profile")
+            changed = self._apply_settings({k: v for k, v in values.items() if k in DEFAULTS and k not in profiles_mod.SKIP})
+            self.hub.publish("config", self.cfg.snapshot())
+            return {"ok": True, "names": self.profiles.names(), "changed": len(changed), "backup": self.settings_backup()}
+        elif action == "remove":
+            if not self.profiles.remove(name):
+                return {"ok": False, "error": "nothing", "names": self.profiles.names()}
+        else:
+            return {"ok": False, "error": "unknown", "names": self.profiles.names()}
+        self.hub.publish("profiles", self.profiles.names())
+        return {"ok": True, "names": self.profiles.names()}
+
+    def timeline_data(self) -> dict:
+        """歷史時間軸：歷史照時間切成一段一段。"""
+        if not self.history.keep:
+            return {"ok": False, "error": "history_off", "items": []}
+        return {"ok": True, "items": timeline.build(self.history._matching(), RECAP_GAP), "error": ""}
 
     def _review_remind(self) -> None:
         """每日複習提醒（57）：一天一次，有該複習的字就在工具列跳通知，主視窗也跳一則。"""
