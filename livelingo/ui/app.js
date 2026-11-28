@@ -436,7 +436,10 @@
       body += m.partial ? `<div class="text streaming" id="part-${m.id}">${esc(m.partial)}</div>` : `<div class="text pending" id="part-${m.id}">${esc(t("translating"))}</div>`;
     } else {
       if (m.translated === m.original) body = "";      // 兩邊同一種語言時原文和譯文一樣，顯示一次就好
-      body += unsure + `<div class="text">${toneHTML(m)}${esc(m.translated)}</div>`;
+      // 沉浸字幕（2.19.0）：學習模式下對方的話先只看原文和生字註解，翻譯收起來，按了才看
+      const immerse = S.cfg.learn_mode && S.cfg.immerse && m.who === "them" && body && !(S.ui.revealed || {})[m.id];
+      body += unsure + (immerse ? `<button class="ghost small reveal" data-act="reveal" data-id="${m.id}">${esc(t("im_show"))}</button>`
+        : `<div class="text">${toneHTML(m)}${esc(m.translated)}</div>`);
       if (m.notes && m.notes.length && S.cfg.slang_notes) body += `<div class="notes">${m.notes.map(([w, meaning]) => `<span class="note-item"><b>${esc(w)}</b> ${esc(meaning)}</span>`).join("")}</div>`;
       if (m.players && m.players.length) body += `<div class="players">${m.players.map(([pid, note]) => `<span class="player-item"><b>${esc(pid)}</b> ${esc(note)}</span>`).join("")}</div>`;      // 玩家備註（2.16.0）
       if (m.lost && m.lost.length) body += `<div class="lost">${ICON.info}<span>${esc(t("numbers_lost", { numbers: m.lost.join(" · ") }))}</span></div>`;
@@ -446,8 +449,9 @@
       body += `<div class="actions"><button data-act="fix" data-id="${m.id}">${esc(t("wrong"))}</button>` +
         `<button data-act="copy" data-id="${m.id}">${esc(t("copy"))}</button>` +
         (m.who === "them" ? `<button data-act="replies" data-id="${m.id}">${esc(t("reply_ideas"))}</button>` : "") +
+        (m.who === "them" && S.cfg.learn_mode ? `<button data-act="explain" data-id="${m.id}">${esc(t("ex_why"))}</button><button data-act="sentence-save" data-id="${m.id}" ${(S.ui.sentSaved || {})[m.id] ? "disabled" : ""}>${esc(t((S.ui.sentSaved || {})[m.id] ? "se_saved" : "se_save"))}</button>` : "") +
         `<button data-act="pin" data-id="${m.id}" aria-pressed="${m.pinned ? "true" : "false"}">${esc(t(m.pinned ? "pin_off" : "pin_on"))}</button></div>`;
-      body += repliesHTML(m.id) + wordsHTML(m);
+      body += repliesHTML(m.id) + explainHTML(m) + wordsHTML(m);
     }
     return body;
   }
@@ -467,9 +471,18 @@
     if (!S.cfg.learn_mode || m.who === "me" || !items || !items.length) return "";
     const saved = S.ui.wordSaved || {};
     return `<div class="words"><div class="words-head">${esc(t("learn_new"))}</div>${items.map((w, i) => `<div class="word">
-      <span class="word-w">${esc(w.w)}</span><span class="word-m">${esc(w.meaning)}</span>
+      <span class="word-w">${esc(w.w)}</span>${w.hanja ? `<span class="word-hanja">${esc(w.hanja)}</span>` : ""}<span class="word-m">${esc(w.meaning)}</span>
+      <button class="icon-btn" data-act="word-say" data-w="${esc(w.w)}" data-lang="${esc(w.lang)}" aria-label="${esc(t("wd_say", { w: w.w }))}" title="${esc(t("wd_say", { w: w.w }))}">${ICON.speaker || "🔊"}</button>
       <button class="ghost" data-act="word-add" data-id="${m.id}" data-n="${i}" ${saved[wordKey(w)] ? "disabled" : ""}>${esc(t(saved[wordKey(w)] ? "learn_saved" : "learn_save"))}</button>
       <button class="ghost" data-act="word-know" data-id="${m.id}" data-n="${i}" title="${esc(t("learn_know_desc"))}">${esc(t("learn_know"))}</button></div>`).join("")}</div>`;
+  }
+
+  // 問「為什麼這樣說」（2.19.0）：翻譯模型用我的語言說明文法、語尾、客不客氣
+  function explainHTML(m) {
+    const ex = (S.explain || {})[m.id];
+    if (ex === undefined) return "";
+    if (ex === null) return `<div class="explain pending">${esc(t("ex_thinking"))}</div>`;
+    return `<div class="explain">${ex ? ex.split("\n").map((l) => `<div>${esc(l)}</div>`).join("") : esc(t("ex_none"))}</div>`;
   }
 
   // 回話建議：對方那句下面列 3 句（對方的語言 + 我的語言的意思），按一下複製
@@ -833,7 +846,7 @@
     if (S.ui.tab === "screen" || S.ui.tab === "vocab") loadApps();      // 詞彙表的「用在」要列出現在開著的程式
     if (S.ui.tab === "overlay") loadScreens();
     if (S.ui.tab === "history") { S.ui.hist = null; S.ui.recapList = null; loadHistory(); loadRecaps(); loadStory((S.ui.story || {}).game || "", 0); }
-    if (S.ui.tab === "learn") { S.ui.review = null; loadWords(); }
+    if (S.ui.tab === "learn") { S.ui.review = null; loadWords(); loadStudy(); }
     if (S.ui.tab === "health") { S.ui.useAsk = false; loadHealth(); loadUsage(); }
     if (S.ui.tab === "storage") { S.ui.storeAsk = ""; loadStorage(); }
     if (S.ui.tab === "help") { S.ui.friendSaved = null; loadHelp(); }
@@ -1879,12 +1892,95 @@
     return `
       <section><div><h2>${esc(t("learn_title"))}</h2><div class="sub">${esc(t("learn_hint"))}</div></div>
         ${switchRow("learn_mode", t("learn_mode"), t("learn_mode_desc"))}
+        ${choiceRow("learn_level", t("lv_title"), [["beginner", t("lv_beginner")], ["middle", t("lv_middle")], ["advanced", t("lv_advanced")]])}
+        ${switchRow("immerse", t("im_title"), t("im_desc"))}
+        ${switchRow("hanja", t("hj_title"), t("hj_desc"))}
+        ${switchRow("review_remind", t("rm_title"), t("rm_desc"))}
       </section>
       <section id="review-section"><div><h2>${esc(t("learn_review"))}</h2></div>${reviewHTML(wb)}</section>
+      <section id="stats-section"><div><h2>${esc(t("lst_title"))}</h2></div>${statsHTML()}</section>
+      <section id="quiz-section"><div><h2>${esc(t("qz_title"))}</h2><div class="sub">${esc(t("qz_hint"))}</div></div>${quizHTML()}</section>
+      <section id="practice-section"><div><h2>${esc(t("pr_title"))}</h2><div class="sub">${esc(t("pr_hint"))}</div></div>${practiceHTML()}</section>
+      <section id="sent-section"><div><h2>${esc(t("se_title"))}</h2><div class="sub">${esc(t("se_hint"))}</div></div>${sentencesHTML()}</section>
       <section><div><h2>${esc(t("learn_book"))}</h2><div class="sub">${esc(t("learn_book_hint"))}</div></div>
         <input type="text" id="word-q" class="hist-q" maxlength="40" placeholder="${esc(t("learn_search"))}" aria-label="${esc(t("learn_search"))}" value="${esc((S.ui.words && S.ui.words.q) || "")}">
         <div class="hist-list" id="word-list" aria-live="polite">${wordListHTML()}</div>
+        <div class="btn-row"><button class="ghost" data-act="anki-export">${esc(t("ak_export"))}</button></div><div class="dim small">${esc(t("ak_hint"))}</div>
       </section>`;
+  }
+  // 學習統計（2.19.0）：最近 7 天
+  function statsHTML() {
+    const st = (S.ui.study || {}).stats;
+    if (!st) return "";
+    const max = Math.max(1, ...st.daily.map((d) => d[1]));
+    const bars = `<div class="lst-bars" role="img" aria-label="${esc(t("lst_bars"))}">${st.daily.map((d) =>
+      `<div class="lst-bar" title="${esc(d[0])} · ${d[1]}"><span style="height:${Math.round(100 * d[1] / max)}%"></span><em>${esc(d[0].slice(5))}</em></div>`).join("")}</div>`;
+    return `<div class="lst-nums"><div><b>${st.new}</b><span>${esc(t("lst_new"))}</span></div><div><b>${st.reviewed}</b><span>${esc(t("lst_reviewed"))}</span></div>
+      <div><b>${st.reviewed ? Math.round(100 * st.remembered / st.reviewed) : 0}%</b><span>${esc(t("lst_rate"))}</span></div><div><b>${st.sentences}</b><span>${esc(t("lst_sentences"))}</span></div></div>${bars}
+      ${st.top.length ? `<div class="dim small">${esc(t("lst_top"))} ${st.top.map((x) => `<b>${esc(x.w)}</b> ×${x.seen}`).join(" · ")}</div>` : ""}`;
+  }
+  // 用自己的對話出題（2.19.0）
+  function quizHTML() {
+    const qz = S.ui.quiz;
+    if (!qz) return `<div class="btn-row"><button class="primary" data-act="quiz-start">${esc(t("qz_start"))}</button></div>`;
+    if (qz.few) return `<div class="note">${ICON.info}<span>${esc(t("qz_few"))}</span></div>`;
+    const it = qz.items[qz.i];
+    if (!it) return `<div class="note">${ICON.check}<span>${esc(t("qz_done", { n: qz.right, total: qz.items.length }))}</span></div>
+      <div class="btn-row"><button class="primary" data-act="quiz-start">${esc(t("qz_again"))}</button></div>`;
+    return `<div class="card-word"><div class="card-count">${qz.i + 1} / ${qz.items.length}</div>
+      <div class="card-w quiz-q">${esc(it.prompt)}</div>${it.hint ? `<div class="card-ex">${esc(it.hint)}</div>` : ""}
+      <div class="dim small">${esc(t(it.kind === "fill" ? "qz_fill" : "qz_meaning"))}</div>
+      <div class="quiz-choices">${it.choices.map((c, i) => {
+        const state = qz.picked == null ? "" : (c === it.answer ? " right" : (i === qz.picked ? " wrong" : ""));
+        return `<button class="pill${state}" data-act="quiz-pick" data-n="${i}" ${qz.picked != null ? "disabled" : ""}>${esc(c)}</button>`;
+      }).join("")}</div>
+      ${qz.picked != null ? `<div class="btn-row"><button class="primary" data-act="quiz-next">${esc(t("qz_next"))}</button></div>` : ""}</div>`;
+  }
+  // 對話回放練習 + 跟讀打分（2.19.0）：挑一段以前的真實對話，一句一句聽、看、跟著念
+  function practiceHTML() {
+    const pr = S.ui.practice;
+    if (!pr) return `<div class="btn-row"><button class="primary" data-act="practice-load">${esc(t("pr_load"))}</button></div>`;
+    if (pr.error === "history_off") return `<div class="note">${ICON.info}<span>${esc(t("pr_history_off"))}</span></div>`;
+    if (!pr.items.length) return `<div class="note">${ICON.info}<span>${esc(t("pr_empty"))}</span></div>`;
+    const ses = pr.items[pr.s];
+    if (!ses) return `<div class="hist-list">${pr.items.map((x, i) => `<button class="hist-row practice-pick" data-act="practice-open" data-n="${i}">
+      <span>${esc(new Date(x.at * 1000).toLocaleString())}</span><span class="dim">${esc(t("pr_lines", { n: x.count }))}</span></button>`).join("")}</div>`;
+    const line = ses.lines[pr.i];
+    if (!line) return `<div class="note">${ICON.check}<span>${esc(t("pr_done"))}</span></div><div class="btn-row"><button class="ghost" data-act="practice-back">${esc(t("pr_back"))}</button></div>`;
+    const sc = pr.score;
+    return `<div class="card-word"><div class="card-count">${pr.i + 1} / ${ses.lines.length}</div>
+      ${pr.show ? `<div class="card-w practice-line">${esc(line.original)}</div><div class="card-ex">${esc(line.translated)}</div>` : `<div class="dim">${esc(t("pr_listen"))}</div>`}
+      <div class="btn-row"><button class="ghost" data-act="practice-say">${esc(t("pr_play"))}</button>
+        ${pr.show ? "" : `<button class="ghost" data-act="practice-show">${esc(t("pr_show"))}</button>`}
+        <button class="ghost${pr.rec ? " rec" : ""}" data-act="shadow-rec">${esc(t(pr.rec ? "sh_stop" : "sh_rec"))}</button>
+        <button class="primary" data-act="practice-next">${esc(t("pr_next"))}</button></div>
+      ${pr.rec ? `<div class="dim small">${esc(t("sh_recording"))}</div>` : ""}
+      ${sc === null ? `<div class="dim small">${esc(t("sh_scoring"))}</div>` : ""}
+      ${sc && sc.ok ? `<div class="shadow-score"><b>${sc.score}</b><span>${esc(t("sh_heard", { text: sc.heard || "—" }))}</span>${sc.missed.length ? `<span>${esc(t("sh_missed", { words: sc.missed.join(" · ") }))}</span>` : ""}</div>` : ""}
+      ${sc && !sc.ok ? `<div class="note warn">${ICON.info}<span>${esc(t("sh_failed"))}</span></div>` : ""}
+      <div class="btn-row"><button class="ghost small" data-act="practice-back">${esc(t("pr_back"))}</button></div></div>`;
+  }
+  // 收藏的整句（2.19.0）
+  function sentencesHTML() {
+    const items = (S.ui.study || {}).sentences || [];
+    if (!items.length) return `<div class="hist-none">${esc(t("se_empty"))}</div>`;
+    return `<div class="hist-list">${items.map((x) => `<div class="hist-row word-row"><div><span class="word-w">${esc(x.text)}</span>
+      <div class="hist-meta">${esc(x.tr)}</div>${x.note ? `<div class="hist-meta sn-note">${esc(x.note)}</div>` : ""}</div>
+      <button class="icon-btn" data-act="sentence-remove" data-sid="${esc(x.id)}" aria-label="${esc(t("se_remove"))}" title="${esc(t("se_remove"))}">${ICON.x}</button></div>`).join("")}</div>`;
+  }
+  async function loadStudy() {
+    const r = await get("/api/study");
+    if (!r || r.error) return;
+    S.ui.study = r;
+    paintStudy();
+  }
+  function paintStudy() {
+    if (S.view !== "settings" || S.ui.tab !== "learn") return;
+    const put = (id, title, html, hint) => { const el = $(id); if (el) el.innerHTML = `<div><h2>${esc(t(title))}</h2>${hint ? `<div class="sub">${esc(t(hint))}</div>` : ""}</div>${html}`; };
+    put("stats-section", "lst_title", statsHTML());
+    put("quiz-section", "qz_title", quizHTML(), "qz_hint");
+    put("practice-section", "pr_title", practiceHTML(), "pr_hint");
+    put("sent-section", "se_title", sentencesHTML(), "se_hint");
   }
   function reviewHTML(wb) {
     const rv = S.ui.review;
@@ -1904,8 +2000,9 @@
     const ws = S.ui.words;
     if (!ws) return "";
     if (!ws.items.length) return `<div class="hist-none">${esc(t(ws.q ? "learn_none_found" : "learn_empty"))}</div>`;
-    return ws.items.map((w) => `<div class="hist-row word-row"><div><span class="word-w">${esc(w.w)}</span> <span class="word-m">${esc(w.meaning || t("learn_looking"))}</span>
+    return ws.items.map((w) => `<div class="hist-row word-row"><div><span class="word-w">${esc(w.w)}</span>${w.hanja ? ` <span class="word-hanja">${esc(w.hanja)}</span>` : ""} <span class="word-m">${esc(w.meaning || t("learn_looking"))}</span>
       ${w.example ? `<div class="hist-meta">${esc(w.example)}</div>` : ""}</div>
+      <button class="icon-btn" data-act="word-say" data-w="${esc(w.w)}" data-lang="${esc(w.lang)}" aria-label="${esc(t("wd_say", { w: w.w }))}" title="${esc(t("wd_say", { w: w.w }))}">${ICON.speaker || "🔊"}</button>
       <button class="icon-btn" data-act="word-remove" data-w="${esc(w.w)}" data-lang="${esc(w.lang)}" aria-label="${esc(t("learn_remove", { w: w.w }))}" title="${esc(t("learn_remove", { w: w.w }))}">${ICON.x}</button></div>`).join("");
   }
   let wordSeq = 0;
@@ -1925,6 +2022,40 @@
     if (rv) rv.innerHTML = `<div><h2>${esc(t("learn_review"))}</h2></div>${reviewHTML(S.wordbook)}`;
   }
   let wordTimer = null;
+  function practiceLine() {
+    const pr = S.ui.practice, ses = pr && pr.items[pr.s];
+    return ses ? ses.lines[pr.i] : null;
+  }
+  function practiceSay() {
+    const line = practiceLine();
+    if (line) post("/api/study", { action: "say", text: line.original, lang: line.lang }).then((r) => { if (!r || !r.ok) toast(t("wd_say_failed"), 5000, "warn"); });
+  }
+  // 跟讀：用瀏覽器的麥克風錄下來（最多 15 秒），送給後台辨識打分
+  let shadowRec = null;
+  function stopShadow() { if (shadowRec && shadowRec.state === "recording") shadowRec.stop(); }
+  async function toggleShadow() {
+    const pr = S.ui.practice, line = practiceLine();
+    if (!pr || !line) return;
+    if (pr.rec) { stopShadow(); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { toast(t("sh_no_mic"), 6000, "warn"); return; }
+    const chunks = [], rec = new MediaRecorder(stream);
+    shadowRec = rec;
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      stream.getTracks().forEach((x) => x.stop());
+      pr.rec = false; pr.score = null; paintStudy();
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const r = await post("/api/study", { action: "shadow", audio: reader.result, text: line.original, lang: line.lang });
+        if (S.ui.practice === pr) { pr.score = r || { ok: false }; paintStudy(); }
+      };
+      reader.readAsDataURL(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+    };
+    rec.start();
+    pr.rec = true; pr.score = undefined; paintStudy();
+    setTimeout(() => { if (shadowRec === rec) stopShadow(); }, 15000);
+  }
 
   let histSeq = 0;
   async function loadHistory(more) {
@@ -2684,6 +2815,49 @@
       const r = await post("/api/words", { action: "add", w: pick.w, lang: pick.lang, id: pick.id });
       toast(r && r.ok ? t("learn_added", { w: pick.w }) : t(r && r.error === "not_ready" ? "n_not_ready" : "learn_add_failed"), 4200, r && r.ok ? "info" : "warn");
     },
+    "word-say": async (el) => { const r = await post("/api/words", { action: "say", w: el.dataset.w, lang: el.dataset.lang }); if (!r || !r.ok) toast(t("wd_say_failed"), 5000, "warn"); },
+    "reveal": (el) => { S.ui.revealed = Object.assign(S.ui.revealed || {}, { [el.dataset.id]: true }); upsertMessage(S.messages.find((m) => m.id === Number(el.dataset.id)) || { id: 0 }); },
+    "explain": async (el) => {
+      const id = Number(el.dataset.id);
+      S.explain = Object.assign(S.explain || {}, { [id]: null });
+      upsertMessage(S.messages.find((m) => m.id === id) || { id: 0 });
+      const r = await post("/api/study", { action: "explain", id });
+      if (!r || !r.ok) { delete S.explain[id]; upsertMessage(S.messages.find((m) => m.id === id) || { id: 0 }); toast(t(r && r.error === "not_ready" ? "n_not_ready" : "ex_none"), 5000, "warn"); }
+    },
+    "sentence-save": async (el) => {
+      const id = Number(el.dataset.id);
+      const r = await post("/api/study", { action: "save", id });
+      if (r && r.ok) { S.ui.sentSaved = Object.assign(S.ui.sentSaved || {}, { [id]: true }); S.ui.study = r; upsertMessage(S.messages.find((m) => m.id === id) || { id: 0 }); toast(t("se_saved"), 3000); }
+    },
+    "sentence-remove": async (el) => { const r = await post("/api/study", { action: "remove", sid: el.dataset.sid }); if (r && r.ok) { S.ui.study = r; paintStudy(); } },
+    "anki-export": async () => {
+      const r = await post("/api/study", { action: "anki" });
+      toast(r && r.ok ? t("ak_saved", { name: r.name, count: r.count }) : t(r && r.error === "empty" ? "ak_empty" : "ak_failed"), 8000, r && r.ok ? "info" : "warn");
+    },
+    "quiz-start": async () => {
+      const r = await post("/api/study", { action: "quiz", n: 10 });
+      S.ui.quiz = r && r.ok ? { items: r.items, i: 0, picked: null, right: 0 } : { few: true, items: [] };
+      paintStudy();
+    },
+    "quiz-pick": (el) => {
+      const qz = S.ui.quiz, it = qz && qz.items[qz.i];
+      if (!it || qz.picked != null) return;
+      qz.picked = Number(el.dataset.n);
+      if (it.choices[qz.picked] === it.answer) qz.right += 1;
+      paintStudy();
+    },
+    "quiz-next": () => { const qz = S.ui.quiz; if (qz) { qz.i += 1; qz.picked = null; paintStudy(); if (qz.i >= qz.items.length) loadStudy(); } },
+    "practice-load": async () => {
+      const r = await get("/api/practice");
+      S.ui.practice = { items: (r && r.items) || [], error: (r && r.error) || "", s: -1, i: 0, show: false, score: undefined, rec: false };
+      paintStudy();
+    },
+    "practice-open": (el) => { const pr = S.ui.practice; if (pr) { Object.assign(pr, { s: Number(el.dataset.n), i: 0, show: false, score: undefined }); paintStudy(); practiceSay(); } },
+    "practice-back": () => { const pr = S.ui.practice; if (pr) { stopShadow(); Object.assign(pr, { s: -1, i: 0, show: false, score: undefined }); paintStudy(); } },
+    "practice-show": () => { const pr = S.ui.practice; if (pr) { pr.show = true; paintStudy(); } },
+    "practice-next": () => { const pr = S.ui.practice; if (pr) { stopShadow(); Object.assign(pr, { i: pr.i + 1, show: false, score: undefined }); paintStudy(); practiceSay(); } },
+    "practice-say": () => practiceSay(),
+    "shadow-rec": () => toggleShadow(),
     "word-remove": async (el) => { const r = await post("/api/words", { action: "remove", w: el.dataset.w, lang: el.dataset.lang }); if (r && r.ok) loadWords(); },
     "review-start": async () => {
       const r = await get("/api/words?review=1");
@@ -3560,6 +3734,7 @@
     private: (d) => { S.private = !!d.on; renderPrivate(); },
     quality: (d) => { S.quality = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("qc-section"); if (el) el.outerHTML = qualityCheckHTML(); } },
     replies: (r) => { S.replies = r; S.ui.replyCopied = null; renderMessages(); },
+    explain: (d) => { S.explain = Object.assign(S.explain || {}, { [d.id]: d.text || "" }); const m = S.messages.find((x) => x.id === d.id); if (m) upsertMessage(m); },
     words: (d) => { S.words[d.id] = d.items; const m = S.messages.find((x) => x.id === d.id); if (m) upsertMessage(m); },
     filesubs: (st) => {
       const was = S.filesubs || {};
@@ -3570,7 +3745,7 @@
       else live.innerHTML = fsLiveHTML();                                                       // 只是進度：只換進度那一塊
     },
     phrases: (st) => { S.phrases = st; if (S.view === "settings" && S.ui.tab === "general" && !(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.phraseEdit)) { const sec = $("phrase-section"); if (sec) sec.innerHTML = `<div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}`; } },
-    wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") loadWords(); },
+    wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") { loadWords(); loadStudy(); } },
     recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
     game: (g) => { S.game = g; if (S.view === "settings" && (S.ui.tab === "vocab" || S.ui.tab === "screen")) renderSettingsPage(); },

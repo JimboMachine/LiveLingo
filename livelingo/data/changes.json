@@ -1,4 +1,136 @@
 {
+  "2.19.0": {
+    "zh-TW": [
+      "每日複習提醒：一天一次，有該複習的字就在工具列跳出通知（學習頁可關）。",
+      "單字發音：字幕旁和單字本的字都有小喇叭，用 Windows 的語音念出來。新增「生字程度」：初學只標短的常用字，進階只標長的難字。",
+      "沉浸字幕（學習頁，預設關）：對方的話先只顯示原文和生字註解，翻譯收起來，按「看翻譯」才展開。",
+      "問「為什麼這樣說」：對方的句子下面按一下，用你的語言用最多 3 行說明文法、語尾和客不客氣。",
+      "韓文漢字詞對照：韓文生字如果是漢字詞，旁邊標出漢字（學校＝학교）。常見的直接查表，不常見的請翻譯模型回答，字數對得上才採用。",
+      "用自己的對話出題（10 題，填空或選意思），以及跟讀打分：錄下你念的，辨識後跟原句比，給 0 到 100 分並標出沒念到的地方。",
+      "收藏整句（可附一行文法說明），單字本和收藏的句子可以匯出成 Anki 看得懂的文字檔，在 Anki 選「匯入檔案」就能用。",
+      "對話回放練習：從歷史挑一段真實對話，一句一句聽、看原文、跟著念。學習頁新增最近 7 天統計：新字、複習次數、記得率、最常遇到的字。跟讀要在你的電腦上實際錄音試過才算數。"
+    ],
+    "zh-CN": [
+      "每日复习提醒：一天一次，有该复习的词就在任务栏弹出通知（学习页可关）。",
+      "单词发音：字幕旁和单词本的词都有小喇叭，用 Windows 的语音念出来。新增“生词程度”：初学只标短的常用词，进阶只标长的难词。",
+      "沉浸字幕（学习页，默认关）：对方的话先只显示原文和生词注释，翻译收起来，点“看翻译”才展开。",
+      "问“为什么这样说”：对方的句子下面点一下，用你的语言用最多 3 行说明语法、语尾和客不客气。",
+      "韩文汉字词对照：韩文生词如果是汉字词，旁边标出汉字（学校＝학교）。常见的直接查表，不常见的请翻译模型回答，字数对得上才采用。",
+      "用自己的对话出题（10 题，填空或选意思），以及跟读打分：录下你念的，识别后跟原句比，给 0 到 100 分并标出没念到的地方。",
+      "收藏整句（可附一行语法说明），单词本和收藏的句子可以导出成 Anki 看得懂的文本文件，在 Anki 选“导入文件”就能用。",
+      "对话回放练习：从历史挑一段真实对话，一句一句听、看原文、跟着念。学习页新增最近 7 天统计：新词、复习次数、记得率、最常遇到的词。跟读要在你的电脑上实际录音试过才算数。"
+    ],
+    "en": [
+      "Daily review reminder: once a day, a tray notification appears if words are due (can be turned off on the Learn page).",
+      "Word pronunciation: a small speaker button next to subtitle words and in the wordbook reads them with the Windows voice. New word level: beginner marks only short common words, advanced only long hard ones.",
+      "Immersion subtitles (Learn page, off by default): their lines show only the original and word glosses; the translation stays hidden until you tap “Show translation”.",
+      "Ask “why this way?”: tap it under their sentence and get up to 3 short lines in your language on the grammar, ending and politeness.",
+      "Korean Hanja hints: when a Korean word comes from Chinese characters, they are shown next to it (학교 = 學校). Common words come from a table; others are asked of the model and used only if the length matches.",
+      "Quiz from your own chats (10 questions: fill the blank or pick the meaning), and shadowing score: record yourself, it is recognized and compared with the sentence for a 0–100 score with the missed parts marked.",
+      "Save whole sentences (with a one-line grammar note). Wordbook and saved sentences export to a text file Anki understands: choose “Import File” in Anki.",
+      "Replay practice: pick a real past conversation and go line by line: listen, read, repeat. The Learn page also shows 7-day stats: new words, reviews, recall rate, most-seen words. Recording needs to be tried on your own PC."
+    ],
+    "ko": [
+      "매일 복습 알림: 하루에 한 번, 복습할 단어가 있으면 트레이 알림을 띄웁니다 (학습 페이지에서 끌 수 있음).",
+      "단어 발음: 자막 옆과 단어장의 단어에 스피커 버튼이 생겨 Windows 음성으로 읽어 줍니다. 새 '단어 수준': 초급은 짧은 흔한 단어만, 고급은 긴 어려운 단어만 표시합니다.",
+      "몰입 자막(학습 페이지, 기본 꺼짐): 상대의 말은 원문과 단어 주석만 보이고, '번역 보기'를 눌러야 번역이 펼쳐집니다.",
+      "'왜 이렇게 말해?': 상대 문장 아래에서 누르면 내 언어로 문법, 어미, 공손함을 최대 3줄로 설명합니다.",
+      "한국어 한자어 표시: 한자어인 단어 옆에 한자를 표시합니다 (학교 = 學校). 흔한 단어는 표에서, 나머지는 번역 모델에 물어 글자 수가 맞을 때만 씁니다.",
+      "내 대화로 퀴즈(10문제, 빈칸 채우기 또는 뜻 고르기)와 따라 말하기 채점: 녹음한 소리를 인식해 원문과 비교해 0~100점과 빠진 부분을 보여 줍니다.",
+      "문장 저장(한 줄 문법 설명 포함). 단어장과 저장한 문장을 Anki가 읽는 텍스트 파일로 내보냅니다. Anki에서 '파일 가져오기'를 선택하세요.",
+      "대화 다시 듣기 연습: 기록에서 실제 대화를 골라 한 문장씩 듣고, 읽고, 따라 합니다. 학습 페이지에 7일 통계도 추가. 녹음은 사용자 PC에서 직접 시험해 봐야 합니다."
+    ],
+    "ja": [
+      "毎日の復習リマインダー：1日1回、復習する単語があればトレイに通知します（学習ページでオフにできます）。",
+      "単語の発音：字幕の横と単語帳の単語にスピーカーボタンが付き、Windows の音声で読み上げます。新しい「単語レベル」：初級は短い常用語だけ、上級は長い難語だけを表示します。",
+      "没入字幕（学習ページ、初期はオフ）：相手の発言は原文と単語の注釈だけを表示し、「翻訳を見る」を押すまで翻訳は隠れます。",
+      "「なぜこう言う？」：相手の文の下で押すと、あなたの言語で文法・語尾・丁寧さを最大3行で説明します。",
+      "韓国語の漢字語表示：漢字語の単語の横に漢字を表示します（학교＝學校）。よく使う語は表から、それ以外は翻訳モデルに尋ね、文字数が合う場合だけ採用します。",
+      "自分の会話からクイズ（10問、穴埋めか意味選び）と、シャドーイング採点：録音を認識して原文と比べ、0〜100点と抜けた部分を表示します。",
+      "文の保存（一行の文法メモ付き）。単語帳と保存した文を Anki で読めるテキストファイルに書き出せます。Anki で「ファイルをインポート」を選びます。",
+      "会話リプレイ練習：履歴から実際の会話を選び、1文ずつ聞く・読む・真似する。学習ページに直近7日の統計も追加。録音はお使いの PC で実際に試す必要があります。"
+    ],
+    "vi": [
+      "Nhắc ôn tập hằng ngày: mỗi ngày một lần, nếu có từ cần ôn sẽ hiện thông báo ở khay hệ thống (có thể tắt ở trang Học).",
+      "Phát âm từ: có nút loa cạnh từ trên phụ đề và trong sổ từ, đọc bằng giọng Windows. Thêm “Trình độ từ”: mới học chỉ đánh dấu từ ngắn thông dụng, nâng cao chỉ từ dài khó.",
+      "Phụ đề đắm chìm (trang Học, mặc định tắt): lời đối phương chỉ hiện bản gốc và chú thích từ, bản dịch ẩn cho đến khi bạn bấm “Xem bản dịch”.",
+      "Hỏi “vì sao nói vậy?”: bấm dưới câu của họ để nhận tối đa 3 dòng giải thích ngữ pháp, đuôi câu và mức lịch sự bằng ngôn ngữ của bạn.",
+      "Gợi ý Hán tự tiếng Hàn: từ gốc Hán sẽ hiện chữ Hán bên cạnh (학교 = 學校). Từ thông dụng tra bảng; từ khác hỏi mô hình dịch và chỉ dùng khi số chữ khớp.",
+      "Đố vui từ hội thoại của bạn (10 câu, điền chỗ trống hoặc chọn nghĩa) và chấm điểm nhắc lại: ghi âm, nhận dạng rồi so với câu gốc, cho 0–100 điểm và đánh dấu phần thiếu.",
+      "Lưu cả câu (kèm ghi chú ngữ pháp một dòng). Sổ từ và câu đã lưu xuất ra tệp văn bản mà Anki đọc được: trong Anki chọn “Import File”.",
+      "Luyện nghe lại hội thoại: chọn một cuộc hội thoại thật trước đây, nghe, đọc, nhắc lại từng câu. Trang Học có thêm thống kê 7 ngày. Ghi âm cần được thử trên máy của bạn."
+    ],
+    "th": [
+      "เตือนทบทวนทุกวัน: วันละครั้ง ถ้ามีคำที่ต้องทบทวนจะแจ้งเตือนที่ถาดระบบ (ปิดได้ในหน้าเรียน)",
+      "ออกเสียงคำศัพท์: มีปุ่มลำโพงข้างคำบนคำบรรยายและในสมุดคำศัพท์ อ่านด้วยเสียงของ Windows เพิ่ม “ระดับคำศัพท์”: เริ่มต้นแสดงเฉพาะคำสั้นที่พบบ่อย ขั้นสูงเฉพาะคำยาวที่ยาก",
+      "ซับไตเติลแบบอิมเมอร์ชัน (หน้าเรียน ปิดไว้ก่อน): คำพูดของอีกฝ่ายแสดงแค่ต้นฉบับกับคำอธิบายคำ คำแปลซ่อนไว้จนกว่าจะกด “ดูคำแปล”",
+      "ถาม “ทำไมพูดแบบนี้”: กดใต้ประโยคของอีกฝ่าย จะได้คำอธิบายไวยากรณ์ ท้ายประโยค และความสุภาพ สูงสุด 3 บรรทัดในภาษาของคุณ",
+      "แสดงอักษรฮันจาของเกาหลี: คำที่มาจากอักษรจีนจะแสดงอักษรจีนข้างๆ (학교 = 學校) คำทั่วไปดูจากตาราง คำอื่นถามโมเดลแปลและใช้เมื่อจำนวนตัวอักษรตรงกัน",
+      "ควิซจากบทสนทนาของคุณ (10 ข้อ เติมคำหรือเลือกความหมาย) และให้คะแนนการพูดตาม: อัดเสียง จดจำ แล้วเทียบกับประโยคเดิม ให้ 0–100 คะแนนพร้อมระบุส่วนที่ตกหล่น",
+      "บันทึกทั้งประโยค (พร้อมโน้ตไวยากรณ์หนึ่งบรรทัด) ส่งออกสมุดคำศัพท์และประโยคเป็นไฟล์ข้อความที่ Anki อ่านได้ ใน Anki เลือก “Import File”",
+      "ฝึกจากบทสนทนาเก่า: เลือกบทสนทนาจริงจากประวัติ ฟัง อ่าน และพูดตามทีละประโยค หน้าเรียนมีสถิติ 7 วันเพิ่มด้วย การอัดเสียงต้องลองบนคอมพิวเตอร์ของคุณเอง"
+    ],
+    "id": [
+      "Pengingat ulasan harian: sekali sehari, notifikasi tray muncul jika ada kata yang perlu diulang (bisa dimatikan di halaman Belajar).",
+      "Pengucapan kata: tombol speaker di samping kata pada subtitel dan di buku kata, dibacakan dengan suara Windows. Tingkat kata baru: pemula hanya kata pendek umum, lanjut hanya kata panjang yang sulit.",
+      "Subtitel imersi (halaman Belajar, default mati): ucapan lawan hanya menampilkan teks asli dan arti kata; terjemahan tersembunyi sampai Anda ketuk “Lihat terjemahan”.",
+      "Tanya “mengapa begitu?”: ketuk di bawah kalimat mereka untuk penjelasan maksimal 3 baris tentang tata bahasa, akhiran, dan tingkat kesopanan.",
+      "Petunjuk Hanja Korea: kata Korea dari aksara Cina diberi aksara tersebut di sebelahnya (학교 = 學校). Kata umum dari tabel; lainnya ditanyakan ke model dan dipakai bila jumlah hurufnya cocok.",
+      "Kuis dari obrolan Anda (10 soal, isi kosong atau pilih arti) dan penilaian mengulang: rekam, dikenali, dibandingkan dengan kalimat asli, nilai 0–100 dengan bagian yang terlewat ditandai.",
+      "Simpan kalimat utuh (dengan catatan tata bahasa satu baris). Buku kata dan kalimat tersimpan dapat diekspor ke berkas teks untuk Anki: pilih “Import File”.",
+      "Latihan ulang percakapan: pilih percakapan nyata dari riwayat, dengar, baca, ulangi per kalimat. Halaman Belajar juga punya statistik 7 hari. Perekaman perlu dicoba di PC Anda."
+    ],
+    "es": [
+      "Recordatorio diario de repaso: una vez al día aparece una notificación en la bandeja si hay palabras por repasar (se puede desactivar en Aprender).",
+      "Pronunciación: un botón de altavoz junto a las palabras de los subtítulos y de la libreta las lee con la voz de Windows. Nuevo nivel de palabras: principiante solo marca palabras cortas y comunes, avanzado solo largas y difíciles.",
+      "Subtítulos de inmersión (página Aprender, desactivado): lo que dicen solo muestra el original y glosas; la traducción queda oculta hasta pulsar «Ver traducción».",
+      "Preguntar «¿por qué se dice así?»: púlsalo bajo su frase y recibe hasta 3 líneas en tu idioma sobre gramática, terminación y cortesía.",
+      "Pistas de Hanja coreano: si una palabra viene de caracteres chinos, se muestran al lado (학교 = 學校). Las comunes salen de una tabla; el resto se pregunta al modelo y solo se usa si el número de caracteres coincide.",
+      "Quiz con tus propias charlas (10 preguntas: completar o elegir el significado) y puntuación de repetición: grabas, se reconoce y se compara con la frase, de 0 a 100 con lo omitido marcado.",
+      "Guarda frases enteras (con nota de gramática de una línea). La libreta y las frases se exportan a un texto que Anki entiende: elige «Importar archivo».",
+      "Práctica con charlas pasadas: elige una conversación real del historial, escucha, lee y repite frase a frase. Aprender muestra además estadísticas de 7 días. La grabación hay que probarla en tu PC."
+    ],
+    "pt": [
+      "Lembrete diário de revisão: uma vez por dia aparece uma notificação na bandeja se houver palavras para revisar (pode desligar em Aprender).",
+      "Pronúncia: um botão de altifalante junto às palavras das legendas e do caderno lê-as com a voz do Windows. Novo nível de palavras: iniciante só marca palavras curtas e comuns, avançado só longas e difíceis.",
+      "Legendas de imersão (página Aprender, desligado): as falas deles mostram só o original e glosas; a tradução fica oculta até tocar em «Ver tradução».",
+      "Perguntar «por que se diz assim?»: toque sob a frase deles e receba até 3 linhas no seu idioma sobre gramática, terminação e cortesia.",
+      "Dicas de Hanja coreano: se uma palavra vem de caracteres chineses, eles aparecem ao lado (학교 = 學校). As comuns vêm de uma tabela; as outras são perguntadas ao modelo e só usadas se o número de caracteres bater.",
+      "Quiz com as suas conversas (10 perguntas: completar ou escolher o significado) e pontuação de repetição: grava, reconhece e compara com a frase, de 0 a 100 com o que faltou marcado.",
+      "Guarde frases inteiras (com nota de gramática de uma linha). O caderno e as frases exportam para um texto que o Anki entende: escolha «Importar ficheiro».",
+      "Prática com conversas passadas: escolha uma conversa real do histórico, ouça, leia e repita frase a frase. Aprender mostra também estatísticas de 7 dias. A gravação precisa ser testada no seu PC."
+    ],
+    "ru": [
+      "Ежедневное напоминание о повторении: раз в день в трее появляется уведомление, если есть слова для повторения (отключается на странице «Учёба»).",
+      "Произношение слов: кнопка динамика рядом со словами в субтитрах и в словаре читает их голосом Windows. Новый «Уровень слов»: начальный отмечает только короткие частые слова, продвинутый — только длинные сложные.",
+      "Субтитры-погружение (страница «Учёба», по умолчанию выкл.): реплики собеседника показывают только оригинал и пояснения слов; перевод скрыт, пока не нажмёте «Показать перевод».",
+      "«Почему так говорят?»: нажмите под фразой собеседника и получите до 3 коротких строк на вашем языке о грамматике, окончании и вежливости.",
+      "Подсказки ханча: если корейское слово происходит от китайских иероглифов, рядом показываются они (학교 = 學校). Частые слова берутся из таблицы, остальные запрашиваются у модели и принимаются при совпадении длины.",
+      "Викторина по вашим диалогам (10 вопросов: вставить слово или выбрать значение) и оценка повторения: запись распознаётся и сравнивается с фразой, оценка 0–100 с отмеченными пропусками.",
+      "Сохранение целых фраз (с однострочным пояснением по грамматике). Словарь и фразы экспортируются в текстовый файл для Anki: выберите «Импортировать файл».",
+      "Практика по старым диалогам: выберите реальный диалог из истории, слушайте, читайте и повторяйте по фразам. На странице «Учёба» теперь статистика за 7 дней. Запись нужно проверить на вашем ПК."
+    ],
+    "de": [
+      "Tägliche Wiederholungserinnerung: Einmal am Tag erscheint eine Benachrichtigung im Infobereich, wenn Wörter fällig sind (auf der Seite Lernen abschaltbar).",
+      "Aussprache: Ein Lautsprecher-Knopf neben Wörtern in den Untertiteln und im Wortbuch liest sie mit der Windows-Stimme vor. Neues Wortniveau: Anfänger markiert nur kurze, häufige Wörter, Fortgeschrittene nur lange, schwere.",
+      "Immersions-Untertitel (Seite Lernen, standardmäßig aus): Ihre Sätze zeigen nur das Original und Worterklärungen; die Übersetzung bleibt verborgen, bis du „Übersetzung zeigen“ tippst.",
+      "„Warum sagt man das so?“: Unter ihrem Satz tippen und bis zu 3 kurze Zeilen in deiner Sprache zu Grammatik, Endung und Höflichkeit erhalten.",
+      "Hanja-Hinweise für Koreanisch: Stammt ein Wort aus chinesischen Zeichen, werden sie daneben gezeigt (학교 = 學校). Häufige Wörter aus einer Tabelle, andere beim Modell erfragt und nur bei passender Zeichenzahl genutzt.",
+      "Quiz aus deinen Gesprächen (10 Fragen: Lückentext oder Bedeutung) und Nachsprech-Bewertung: Aufnahme wird erkannt und mit dem Satz verglichen, 0–100 Punkte mit markierten Auslassungen.",
+      "Ganze Sätze speichern (mit einzeiliger Grammatiknotiz). Wortbuch und Sätze lassen sich als Textdatei für Anki exportieren: dort „Datei importieren“ wählen.",
+      "Übung mit alten Gesprächen: ein echtes Gespräch aus dem Verlauf wählen, Satz für Satz hören, lesen, nachsprechen. Die Seite Lernen zeigt jetzt 7-Tage-Statistiken. Die Aufnahme muss auf deinem PC getestet werden."
+    ],
+    "fr": [
+      "Rappel quotidien de révision : une fois par jour, une notification apparaît dans la zone de notification s'il y a des mots à réviser (désactivable dans Apprendre).",
+      "Prononciation : un bouton haut-parleur à côté des mots des sous-titres et du carnet les lit avec la voix Windows. Nouveau niveau de mots : débutant ne marque que les mots courts et courants, avancé que les longs et difficiles.",
+      "Sous-titres immersifs (page Apprendre, désactivé par défaut) : ses phrases n'affichent que l'original et les gloses ; la traduction reste masquée jusqu'à « Voir la traduction ».",
+      "Demander « pourquoi dit-on ça ? » : appuyez sous sa phrase pour obtenir jusqu'à 3 lignes dans votre langue sur la grammaire, la terminaison et la politesse.",
+      "Indices Hanja coréens : si un mot vient de caractères chinois, ils s'affichent à côté (학교 = 學校). Les mots courants viennent d'une table ; les autres sont demandés au modèle et gardés si le nombre de caractères correspond.",
+      "Quiz tiré de vos conversations (10 questions : texte à trous ou sens) et note de répétition : l'enregistrement est reconnu et comparé à la phrase, de 0 à 100 avec les oublis signalés.",
+      "Enregistrez des phrases entières (avec une note de grammaire d'une ligne). Le carnet et les phrases s'exportent en fichier texte pour Anki : choisissez « Importer un fichier ».",
+      "Entraînement sur d'anciennes conversations : choisissez une vraie conversation de l'historique, écoutez, lisez, répétez phrase par phrase. Apprendre affiche aussi des statistiques sur 7 jours. L'enregistrement doit être essayé sur votre PC."
+    ]
+  },
   "2.18.0": {
     "zh-TW": [
       "背景降噪（聲音裝置頁「語音小幫手」，預設關）：辨識之前先壓掉遊戲音樂、風扇、鍵盤聲，吵的場景比較聽得準。",

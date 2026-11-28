@@ -7072,7 +7072,7 @@ def test_seven_features_part_three(tmp_path, monkeypatch):
     assert wb.fresh("Honestly that flank was insane", "en") == ["Honestly", "insane"]
     wb.add("insane", "en", "瘋狂", "that flank was insane")
     wb.know("Honestly", "en")
-    assert wb.fresh("Honestly that flank was insane", "en") == ["flank"] and wb.state() == {"count": 1, "due": 1, "error": ""}
+    assert wb.fresh("Honestly that flank was insane", "en") == ["flank"] and wb.state() == {"count": 1, "due": 1, "sentences": 0, "error": ""}
     assert wb.review("insane", "en", True)["due"] == 1000.0 + 86400 and wb.review("insane", "en", True)["due"] == 1000.0 + 3 * 86400
     assert wb.review("insane", "en", False)["step"] == 0 and wb.due() == []
     now[0] += 86400

@@ -555,6 +555,14 @@
 
 自動把關：測試會擋：降噪真的把噪音壓低又不改長度、語氣的判斷、語音指令只認整句、自我介紹的名字、講太快的提醒和冷卻、Word／Markdown／.srt 的內容、精華標記、暫停翻譯、單邊耳朵、自動選設定。真的吵雜遊戲聲、真的耳機分流要在你的電腦上試。
 
+### 每日複習提醒、單字發音、生字程度、沉浸字幕、問為什麼這樣說、韓文漢字詞、用自己的對話出題、跟讀打分、收藏整句、Anki 匯出、對話回放練習、學習統計（2.19.0）
+
+1. `learn.py`、`service.py`、`study.py`：wordbook.state 的 sentences 是數字，learn_data 回的 sentences 是清單（順序不能讓前者蓋掉後者）；改單字本欄位要同步 study.quiz、anki_text、介面單字列
+2. `app.js`、`i18n.js`、`style.css`：事件 explain；#stats-section、#quiz-section、#practice-section、#sent-section；按鈕 data-act 都有處理函式
+3. `config.py`、`tray.py`：learn_level、review_remind、immerse、hanja 在 DEFAULTS 和 EDITABLE，review_reminded 不能在介面改
+
+自動把關：測試會擋：程度挑字、統計和收藏句子存檔後還在、出題（要 4 個字、填空和選意思）、跟讀分數、Anki 檔格式、漢字詞表和模型答案的檢查、練習只挑對方的外語、每日提醒一天一次、explain 事件。真的錄音跟讀、真的工具列通知、Windows 語音念單字要在你的電腦上試。
+
 ## 每個部分牽動誰
 
 ### 打包與發佈（把程式變成安裝檔、送到使用者電腦）
@@ -586,7 +594,7 @@
 | 部分 | 檔案 | 改了它，要回去檢查 |
 | --- | --- | --- |
 | 視窗 | `livelingo/window.py` | `__main__.py`：開視窗（改壞會報錯）<br>`service.py`：open_wall/close_wall：字幕牆的無邊框視窗（改壞不會報錯） |
-| 系統匣 | `livelingo/tray.py` | `window.py`：系統匣有沒有開起來（改壞不會報錯）<br>`service.py`：系統匣（改壞會報錯） |
+| 系統匣 | `livelingo/tray.py` | `window.py`：系統匣有沒有開起來（改壞不會報錯）<br>`service.py`：系統匣（改壞會報錯）<br>`service.py`：_review_remind_once：tray.notify 跳每日複習提醒（圖示沒開起來回傳 False，不能丟錯）（改壞會報錯） |
 | 浮動留言 | `livelingo/overlay.py` | `hotkeys.py`：短提示顯示在浮動留言上（note）（改壞不會報錯）<br>`service.py`：浮動留言（改壞會報錯）<br>`inplace.py`：蓋在畫面上的視窗用跟浮動留言一樣的（LayeredWindow，擷取拍不到）（改壞不會報錯）<br>`service.py`：current_entry/apply_entry：遊戲專屬版面存的浮動字幕位置（改壞不會報錯） |
 | 直播字幕（給 OBS 的網頁） | `livelingo/stream.py` | `service.py`：直播字幕：每則留言、翻到一半的譯文、刪掉、清空（on_message、on_partial、on_removed、clear）（改壞會報錯）<br>`service.py`：wall_on、url(wall=True)：副螢幕字幕牆用直播字幕頁（改壞不會報錯） |
 | 留言怎麼畫 | `livelingo/chatpaint.py` | `overlay.py`：留言怎麼畫；說話者的名字和顏色（speaker_name、speaker_color）（改壞會報錯）<br>`transcript.py`：說話的人的名字（NAMES、speaker_name）（改壞會報錯）<br>`history.py`：說話的人的名字（NAMES）（改壞會報錯）<br>`service.py`：外觀有哪些選項、設定畫面的預覽圖（改壞會報錯）<br>`inplace.py`：換行排字（_wrap）、字型、han_kind（改壞會報錯）<br>`sessionlog.py`：NAMES、speaker_name：誰說的（改壞會報錯） |
@@ -596,8 +604,8 @@
 | 字幕記錄 | `livelingo/transcript.py` | `history.py`：冒號的寫法（COLON）（改壞會報錯）<br>`service.py`：字幕記錄（改壞會報錯） |
 | 記住的聲音（voices.json） | `livelingo/voicebook.py` | `service.py`：有開「記住取過名字的人」：取過名字的人存檔、下次開先放回來（改壞會報錯） |
 | 對話歷史 | `livelingo/history.py` | `report.py`：不放對話內容：拿最近的句子去比對紀錄檔，含著整句的那一行不要（改壞不會報錯）<br>`service.py`：記下翻好的句子、搜尋、匯出、清除（改壞會報錯）<br>`app.js`：歷史的欄位（at、who、via、original、translated、place）（改壞不會報錯） |
-| 語言學習：挑生字、單字本、複習 | `livelingo/learn.py` | `service.py`：學習模式挑生字（Wordbook.fresh）、單字本的收、刪、複習（改壞會報錯） |
-| 對話摘要：切出一段段對話、存摘要、搜尋 | `livelingo/recap.py` | `service.py`：切出對話（sessions、worth、GAP）、存摘要、搜尋（改壞會報錯） |
+| 語言學習：挑生字、單字本、複習 | `livelingo/learn.py` | `service.py`：學習模式挑生字（Wordbook.fresh）、單字本的收、刪、複習（改壞會報錯）<br>`study.py`：quiz 讀單字本 listing() 的欄位（w、lang、meaning、example、example_tr）；anki_text 讀 words 和 sentences 的欄位（改壞不會報錯）<br>`service.py`：learn_level 給 fresh(level=)、seen_again、add(hanja=)、sentences、stats；wordbook 事件的 state 多了 sentences（改壞會報錯） |
+| 對話摘要：切出一段段對話、存摘要、搜尋 | `livelingo/recap.py` | `service.py`：切出對話（sessions、worth、GAP）、存摘要、搜尋（改壞會報錯）<br>`study.py`：practice_sessions 用 recap.sessions 分段（改壞會報錯） |
 | 框選翻譯：把辨識出的一列列字接成一段段 | `livelingo/snap.py` | `service.py`：框選翻譯把辨識出的字接成段（paragraphs）（改壞會報錯）<br>`inplace.py`：一段一段的方框（blocks）（改壞會報錯） |
 | 喊我名字提醒：名字和關鍵字的整理、比對 | `livelingo/mention.py` | `service.py`：名字、關鍵字的整理（clean_words）和比對（find）；訊息的 mention 欄位（改壞會報錯） |
 | 不翻的字和名字建議：整理、像不像遊戲 ID、出現三次就問；語音辨識的熱詞 | `livelingo/names.py` | `service.py`：keep_words 和 name_skip 的整理（clean_words）、NameWatch 名字建議、hotwords 給語音辨識（改壞會報錯）<br>`textfix.py`：NameWatch(find=abbreviations) 數縮寫；_COMMON 排除常見英文字（改壞會報錯） |
@@ -614,6 +622,7 @@
 | 語音指令：整句話就是指令才算，13 種介面語言的說法 | `livelingo/voicecmd.py` | `service.py`：_on_speech：麥克風整句 match(text, ui_lang) → _voice_command；state 的 voice_cmds 用 examples（改壞會報錯） |
 | 聽到自報名字：找出「我是 Mina」裡的名字 | `livelingo/introduce.py` | `service.py`：_listen_extras：name_in → voice_name 事件（要開分辨說話者），記住走 speaker_rename（改壞會報錯） |
 | 對方講太快：最近幾句沒把握或太快就提醒，附請對方慢一點的句子 | `livelingo/pace.py` | `service.py`：_listen_extras：PaceWatch.add → slow_tip 事件和浮動字幕提示 ask_in(語言)（改壞會報錯） |
+| 學習工具：用自己的對話出題、跟讀打分、Anki 匯出、為什麼這樣說、韓文漢字詞表、對話回放練習、每日提醒文字 | `livelingo/study.py` | `service.py`：study_quiz、shadow、explain、anki_export、practice_list/say、sentence_action、_hanja（/api/study、/api/practice）；_review_remind 用 remind_text（改壞會報錯） |
 | 這一場的紀錄：通話紀錄 Markdown／Word、.srt 字幕檔、精華時間點 | `livelingo/sessionlog.py` | `service.py`：session_export（/api/session）、mark_now（/api/marks、mark 快速鍵），存在 transcript_dir（改壞會報錯） |
 | 常用句庫：存句子和各語言的譯文（phrases.json） | `livelingo/phrases.py` | `service.py`：常用句庫（Phrasebook：add、remove、set_translation、missing、listing、state）（改壞會報錯） |
 | 原地覆蓋翻譯：把譯文畫在畫面上原文的位置 | `livelingo/inplace.py` | `service.py`：原地覆蓋翻譯（InPlace：set_on、update、reset、keep_only、clear_cache、close）（改壞會報錯）<br>`watcher.py`：每辨識一次畫面就交過去（on_frame）；接手的區域不再送去浮動留言（改壞不會報錯） |

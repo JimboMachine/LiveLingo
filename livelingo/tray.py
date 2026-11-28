@@ -115,6 +115,17 @@ class Tray:
         except Exception as ex:  # noqa: BLE001
             self.service.log(f"tray notification failed: {ex!r}")
 
+    def notify(self, text: str, title: str = "LiveLingo") -> bool:
+        """從系統匣跳一則提醒（每日複習提醒，2.19.0）。圖示沒開起來回傳 False。"""
+        if not self.running or self.icon is None:
+            return False
+        try:
+            self.icon.notify(text, title)
+            return True
+        except Exception as ex:  # noqa: BLE001
+            self.service.log(f"tray notification failed: {ex!r}")
+            return False
+
     def stop(self) -> None:
         if self.icon is not None and self.running:
             self.running = False

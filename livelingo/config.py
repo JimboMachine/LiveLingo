@@ -57,6 +57,11 @@ DEFAULTS = {
     "show_pronunciation": True,  # 韓文下面顯示唸法
     "copy_spoken": True,
     "learn_mode": False,         # 語言學習：字幕旁邊標出一兩個生字，可以收進單字本（learn.py）
+    "learn_level": "middle",     # 程度（2.19.0）：beginner 只標短的常用字、advanced 只標長的難字
+    "review_remind": True,       # 每天有該複習的字就在工具列跳一次提醒（2.19.0）
+    "review_reminded": "",       # 上次提醒的日期（不能在介面改）
+    "immerse": False,            # 沉浸字幕（2.19.0）：顯示原文加生字小註解，翻譯收起來點了才看
+    "hanja": True,               # 韓文漢字詞對照（2.19.0）：韓文字旁邊標漢字
     "inplace": False,            # 原地覆蓋翻譯：把譯文蓋在畫面上原文的位置（inplace.py）
     "pick_copy": False,          # 按「翻選取的字」時，LiveLingo 先替你按一下 Ctrl+C（預設關：玩遊戲時替人按鍵可能被防作弊程式當成外掛）
     "keep_words": [],            # 不翻的字（names.py）：gg、lol、ㅋㅋ、朋友的遊戲 ID…翻譯時照原樣留著；空的 = 沒有
@@ -168,7 +173,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "game_profile_auto", "story_book", "snap_album", "channel_colors", "player_notes", "combat_slow", "fullscreen_warn", "wall_monitor", "gamepad_on", "gamepad_keys", "overlay_hover_fade", "chat_send", "chat_send_open", "chat_send_enter", "camera_index", "denoise", "ear_split", "tone_icons", "voice_commands", "speech_autopick", "intro_suggest", "slow_tip", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "learn_level", "review_remind", "immerse", "hanja", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "game_profile_auto", "story_book", "snap_album", "channel_colors", "player_notes", "combat_slow", "fullscreen_warn", "wall_monitor", "gamepad_on", "gamepad_keys", "overlay_hover_fade", "chat_send", "chat_send_open", "chat_send_enter", "camera_index", "denoise", "ear_split", "tone_icons", "voice_commands", "speech_autopick", "intro_suggest", "slow_tip", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
