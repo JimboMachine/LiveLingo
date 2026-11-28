@@ -4,6 +4,9 @@
 
 檔案只往後面加：同一則訊息改過（重翻、改原文）就再加一行，讀的時候以最後一行為準；被拿掉的訊息加一行記號。
 開程式時把過期的、重複的行整理掉。
+
+加密（2.21.0）：開了的話每一行都用 Windows 資料保護（secure.py）加密，行首是 enc1:。沒加密的行照樣讀得到，開關隨時可以切。
+換了帳號或換了電腦打不開的行不會被丟掉也不會被改，原樣留在檔案裡（locked 算有幾行）；按「全部清除」才會刪。
 """
 
 import json
@@ -11,6 +14,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import secure
 from .chatpaint import NAMES
 from .transcript import COLON
 
@@ -46,9 +50,12 @@ def render(items: list[dict], ui_lang: str) -> str:
 
 
 class History:
-    def __init__(self, folder: Path, keep: bool = True, days: int = 30, now=time.time):
+    def __init__(self, folder: Path, keep: bool = True, days: int = 30, now=time.time, encrypt: bool = False):
         self.path = folder / FILE
         self.keep, self.days = bool(keep), int(days)
+        self.encrypt = bool(encrypt) and secure.available()
+        self._locked_lines: list[str] = []      # 這個帳號打不開的加密行：原樣留著
+        self._mixed = False                    # 檔案裡有跟目前設定不一樣的行（要不要加密）
         self._now = now
         self._lock = threading.RLock()
         self._items: dict[str, dict] = {}      # 鍵 → 內容，照第一次出現的順序
@@ -62,8 +69,18 @@ class History:
         lines = 0
         try:
             with open(self.path, encoding="utf-8") as f:
-                for line in f:
+                for raw in f:
+                    line = raw
+                    if not line.strip():
+                        continue
+                    sealed = secure.is_sealed(line)
+                    if sealed:
+                        line = secure.unseal(line)
+                        if line is None:
+                            self._locked_lines.append(raw.rstrip("\r\n"))
+                            continue
                     lines += 1
+                    self._mixed = self._mixed or sealed != self.encrypt
                     try:
                         row = json.loads(line)
                         key = str(row["k"])
@@ -82,7 +99,7 @@ class History:
             return
         before = len(self._items)
         self._trim()
-        if lines != len(self._items) or before != len(self._items):
+        if lines != len(self._items) or before != len(self._items) or self._mixed:
             self._rewrite()
 
     def _trim(self) -> None:
@@ -92,27 +109,44 @@ class History:
         if len(self._items) > MAX_ITEMS:
             self._items = dict(list(self._items.items())[-MAX_ITEMS:])
 
+    def _line(self, row: dict) -> str | None:
+        """一行要寫進檔案的文字（有開加密就加密）。加密失敗回傳 None：寧可先不寫，也不要把該加密的內容明文寫出去。"""
+        text = json.dumps(row, ensure_ascii=False)
+        if not self.encrypt:
+            return text
+        return secure.seal(text)
+
     def _rewrite(self) -> bool:
         try:
-            if not self._items:
+            if not self._items and not self._locked_lines:
                 self.path.unlink(missing_ok=True)
+                self._mixed = False
                 return True
+            lines = [self._line(row) for row in self._items.values()]
+            if any(x is None for x in lines):
+                self.error = "encrypt"
+                return False
             tmp = self.path.with_name(self.path.name + ".tmp")
             with open(tmp, "w", encoding="utf-8") as f:
-                for row in self._items.values():
-                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                for text in [*self._locked_lines, *lines]:
+                    f.write(text + "\n")
             tmp.replace(self.path)
             self.error = ""
+            self._mixed = False
             return True
         except OSError as ex:
             self.error = str(ex)
             return False
 
     def _append(self, row: dict) -> None:
+        text = self._line(row)
+        if text is None:
+            self.error = "encrypt"
+            return
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                f.write(text + "\n")
             self.error = ""
         except OSError as ex:
             self.error = str(ex)
@@ -146,6 +180,18 @@ class History:
         with self._lock:
             if self._items.pop(key, None) is not None:
                 self._append({"k": key, "x": 1})
+
+    def set_encrypt(self, on: bool) -> bool:
+        """開／關加密，馬上把整個檔案照新的設定重寫一次。不是 Windows 沒辦法開，回傳 False。"""
+        on = bool(on)
+        if on and not secure.available():
+            return False
+        with self._lock:
+            before, self.encrypt = self.encrypt, on
+            ok = self._rewrite() if (self._items or self._locked_lines) else True
+            if not ok:
+                self.encrypt = before
+            return ok
 
     def configure(self, keep: bool, days: int) -> None:
         """改了「要不要保存」「保留幾天」。縮短天數會馬上把過期的刪掉；關掉保存只是不再記新的，已經存的要按清除。"""
@@ -194,8 +240,8 @@ class History:
     def clear(self) -> int:
         """全部清除：記憶體裡的和檔案都刪掉。回傳刪了幾則。"""
         with self._lock:
-            n = len(self._items)
-            self._items = {}
+            n = len(self._items) + len(self._locked_lines)
+            self._items, self._locked_lines = {}, []
             try:
                 self.path.unlink(missing_ok=True)
                 self.path.with_name(self.path.name + ".tmp").unlink(missing_ok=True)
@@ -209,4 +255,5 @@ class History:
             size = self.path.stat().st_size
         except OSError:
             size = 0
-        return {"count": self.count, "bytes": size, "keep": self.keep, "days": self.days, "error": self.error}
+        return {"count": self.count, "bytes": size, "keep": self.keep, "days": self.days, "error": self.error,
+                "encrypted": self.encrypt, "locked": len(self._locked_lines)}

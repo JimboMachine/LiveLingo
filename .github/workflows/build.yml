@@ -3,10 +3,13 @@ name: Build
 # 每次推送都會：跑檢查、在 Windows 上打包成安裝檔、把安裝檔真的裝一次／更新一次／卸載一次。
 # 推到 main 而且版本號（livelingo/__init__.py）是新的，就自動發佈成 Release；
 # 使用者電腦上的 LiveLingo 下次開啟時會看到新版本並自動更新。
+# 推到 beta 分支：同樣打包，但發佈成「預先發行」（prerelease）：只有在設定裡選了「搶先版」的人會收到，選穩定版的人不會。
+# 之後同一個版本號進了 main，就把那個預先發行換成正式發行（重新用 main 的內容打包發佈）。
+# 每個 Release 另外附一個 LiveLingo-Portable.zip（免安裝版：解壓縮就能用，資料放在旁邊的 data 資料夾，不會自動更新）。
 
 on:
   push:
-    branches: [main]
+    branches: [main, beta]
   pull_request:
   workflow_dispatch:
 
@@ -71,6 +74,26 @@ jobs:
           cat selftest-packaged.json
           python -c "import json,sys; sys.exit(0 if json.load(open('selftest-packaged.json', encoding='utf-8'))['ok'] else 1)"
 
+      # 免安裝版：同一份打包好的資料夾 + 旁邊放一個 portable.txt，資料就改放在 data 資料夾（paths.portable）。
+      # 做完真的解壓縮一次，確認解出來的程式認得自己是免安裝版、資料放在旁邊。
+      - name: Build the portable zip
+        shell: pwsh
+        run: |
+          $stage = "dist\portable-stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item dist\LiveLingo "$stage\LiveLingo" -Recurse
+          Set-Content -Path "$stage\LiveLingo\portable.txt" -Value "LiveLingo portable: data is kept in the data folder next to this file."
+          Compress-Archive -Path "$stage\LiveLingo" -DestinationPath dist\LiveLingo-Portable.zip -CompressionLevel Optimal
+          Remove-Item $stage -Recurse -Force
+          $check = "$env:RUNNER_TEMP\portable-check"
+          Expand-Archive -Path dist\LiveLingo-Portable.zip -DestinationPath $check -Force
+          $run = Start-Process -FilePath "$check\LiveLingo\LiveLingo.exe" -ArgumentList "--data-dir", "`"$check\data-dir.txt`"" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { Write-Error "the unzipped portable program exited with code $($run.ExitCode)"; exit 1 }
+          $where = (Get-Content "$check\data-dir.txt" -Raw).Trim()
+          Write-Host "portable data folder: $where"
+          if ($where -ne "$check\LiveLingo\data") { Write-Error "the portable build keeps its data in $where instead of next to the program"; exit 1 }
+          Get-Item dist\LiveLingo-Portable.zip | Format-List Name, Length
+
       - name: Build the installer
         shell: pwsh
         run: |
@@ -108,18 +131,34 @@ jobs:
           path: dist/LiveLingo-Setup.exe
           retention-days: 14
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiveLingo-Portable-${{ steps.version.outputs.version }}
+          path: dist/LiveLingo-Portable.zip
+          retention-days: 14
+
       - name: Publish the release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="v${{ steps.version.outputs.version }}"
+          flags=""
+          if [ "$GITHUB_REF" = "refs/heads/beta" ]; then flags="--prerelease"; fi
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; nothing to publish."
-          else
-            # 發行說明和程式裡看到的「這一版改了什麼」是同一份（livelingo/data/changes.json）；一起發行，更新提示才讀得到
-            python -m livelingo.changes dist/release-notes.md
-            gh release create "$tag" dist/LiveLingo-Setup.exe livelingo/data/changes.json --target "$GITHUB_SHA" --title "LiveLingo $tag" \
-              --notes-file dist/release-notes.md
+            was_pre="$(gh release view "$tag" --json isPrerelease --jq .isPrerelease)"
+            if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$was_pre" = "true" ]; then
+              # 搶先版先發行過的版本進了 main：預先發行換成正式發行，內容用 main 這一份重新打包的
+              echo "Release $tag is a prerelease; replacing it with the official release built from main."
+              gh release delete "$tag" --cleanup-tag --yes
+            else
+              echo "Release $tag already exists; nothing to publish."
+              exit 0
+            fi
           fi
+          # 發行說明和程式裡看到的「這一版改了什麼」是同一份（livelingo/data/changes.json）；一起發行，更新提示才讀得到
+          python -m livelingo.changes dist/release-notes.md
+          gh release create "$tag" dist/LiveLingo-Setup.exe livelingo/data/changes.json --target "$GITHUB_SHA" --title "LiveLingo $tag" \
+            --notes-file dist/release-notes.md $flags
+          gh release upload "$tag" dist/LiveLingo-Portable.zip

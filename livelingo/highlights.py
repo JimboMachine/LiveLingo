@@ -7,6 +7,7 @@ from . import changes
 HIGHLIGHTS = {
     "2.19.0": ["learn"],
     "2.20.0": ["general", "history"],
+    "2.21.0": ["general", "history", "about"],
 }
 
 

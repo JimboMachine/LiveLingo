@@ -13,6 +13,8 @@ import threading
 import time
 from pathlib import Path
 
+from . import secure
+
 FILE = "wordbook.json"
 MAX_WORDS = 3000
 MAX_WORD = 40                       # 一個生字最長幾個字（選取一大段不算生字）
@@ -85,9 +87,11 @@ class Wordbook:
     """{"words": [{w, lang, meaning, example, example_tr, added, step, due, seen}], "known": {語言: [我說已經會的字]},
     "sentences": [{id, text, lang, tr, note, added}]（收藏的整句，2.19.0）, "log": {日期: [複習幾個, 記得幾個]}}"""
 
-    def __init__(self, folder: Path, now=time.time):
+    def __init__(self, folder: Path, now=time.time, encrypt: bool = False):
         self.path = folder / FILE
         self._now = now
+        self.encrypt = bool(encrypt) and secure.available()      # 整個檔案用 Windows 資料保護加密（2.21.0）
+        self.locked = False                                      # 檔案是加密的但這個帳號打不開：不讀、也不覆蓋
         self._lock = threading.RLock()
         self.words: list[dict] = []
         self.known: dict[str, list[str]] = {}
@@ -98,12 +102,21 @@ class Wordbook:
 
     def _load(self) -> None:
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
+            text = self.path.read_text(encoding="utf-8")
+            sealed = secure.is_sealed(text)
+            if sealed:
+                text = secure.unseal(text)
+                if text is None:
+                    self.locked, self.error = True, "locked"
+                    return
+            data = json.loads(text)
         except FileNotFoundError:
             return
         except (OSError, ValueError) as ex:
             self.error = str(ex)
             return
+        if sealed != self.encrypt:      # 檔案跟設定不一樣（剛開或剛關加密）：照設定重存一次
+            self._save()
         for row in data.get("words", []) if isinstance(data, dict) else []:
             try:
                 w, lang = _clean(row["w"]), family_of(row["lang"])
@@ -132,11 +145,19 @@ class Wordbook:
             self.log = {str(k): [int(v[0]), int(v[1])] for k, v in log.items() if isinstance(v, list) and len(v) == 2}
 
     def _save(self) -> bool:
+        if self.locked:      # 打不開的加密檔不能被空的蓋掉
+            return False
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_name(self.path.name + ".tmp")
-            tmp.write_text(json.dumps({"words": self.words, "known": self.known, "sentences": self.sentences, "log": self.log},
-                                      ensure_ascii=False, indent=1), encoding="utf-8")
+            text = json.dumps({"words": self.words, "known": self.known, "sentences": self.sentences, "log": self.log},
+                              ensure_ascii=False, indent=1)
+            if self.encrypt:
+                text = secure.seal(text)
+                if text is None:
+                    self.error = "encrypt"
+                    return False
+            tmp.write_text(text, encoding="utf-8")
             tmp.replace(self.path)
             self.error = ""
             return True
@@ -303,10 +324,23 @@ class Wordbook:
             rows = [r for r in rows if all(w in (r["w"] + "\n" + r["meaning"]).lower() for w in words)]
         return rows
 
+    def set_encrypt(self, on: bool) -> bool:
+        """開／關加密，馬上重存。不是 Windows 沒辦法開，或檔案打不開時回傳 False。"""
+        on = bool(on)
+        if (on and not secure.available()) or self.locked:
+            return False
+        with self._lock:
+            before, self.encrypt = self.encrypt, on
+            ok = self._save() if self.path.exists() else True
+            if not ok:
+                self.encrypt = before
+            return ok
+
     def clear(self) -> int:
         with self._lock:
             n = len(self.words)
             self.words, self.known, self.sentences, self.log = [], {}, [], {}
+            self.locked = False
             try:
                 self.path.unlink(missing_ok=True)
                 self.error = ""

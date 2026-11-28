@@ -7,12 +7,30 @@ from pathlib import Path
 APP_NAME = "LiveLingo"
 FROZEN = bool(getattr(sys, "frozen", False))
 IS_WIN = sys.platform == "win32"
+PORTABLE_MARKER = "portable.txt"      # 程式旁邊有這個檔案 = 免安裝版（2.21.0）：資料放在程式旁邊的 data 資料夾，整個資料夾可以搬到隨身碟
+
+
+def app_dir() -> Path:
+    """程式本身所在的資料夾（打包好的是 exe 旁邊，從原始碼跑的是專案資料夾）。"""
+    return Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+
+
+def portable(app=None) -> bool:
+    """是不是免安裝版：程式旁邊有 portable.txt。（app：指定要看哪個資料夾，測試用；沒指定時只有打包好的版本才算。）"""
+    folder = Path(app) if app else (app_dir() if FROZEN else None)
+    try:
+        return folder is not None and (folder / PORTABLE_MARKER).is_file()
+    except OSError:
+        return False
 
 
 def data_dir() -> Path:
-    """設定、詞彙表、模型、翻譯引擎、紀錄檔。卸載時會問要不要把設定、詞彙表、歷史留下來；模型和引擎一律刪掉。"""
+    """設定、詞彙表、模型、翻譯引擎、紀錄檔。卸載時會問要不要把設定、詞彙表、歷史留下來；模型和引擎一律刪掉。
+    免安裝版放在程式旁邊的 data 資料夾。"""
     if os.environ.get("LIVELINGO_DATA"):
         p = Path(os.environ["LIVELINGO_DATA"])
+    elif portable():
+        p = app_dir() / "data"
     elif IS_WIN:
         p = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / APP_NAME
     else:

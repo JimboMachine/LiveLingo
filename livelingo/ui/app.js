@@ -12,7 +12,7 @@
     record: { on: false, since: 0, count: 0, file: "", name: "", folder: "", saved: 0 },
     hotkeys: { available: false, states: {}, defaults: {} },
     history: { count: 0, bytes: 0 },
-    tips: [], profiles: [], words: {}, wordbook: { count: 0, due: 0 }, recaps: { count: 0, state: "off" }, filesubs: { busy: false, job: null, result: null },
+    tips: [], profiles: [], saver: { on: false, battery: null }, safeMode: false, secure: false, words: {}, wordbook: { count: 0, due: 0 }, recaps: { count: 0, state: "off" }, filesubs: { busy: false, job: null, result: null },
     ui: { langOpen: false, fixing: null, tab: "audio", wz: 0, devices: null, levels: null, ocr: null, tryId: null }
   };
 
@@ -366,6 +366,7 @@
     renderVoiceNameRow();
     renderSlowRow();
     renderPausedRow();
+    renderSafeRow();
     renderPrivate();
     const row = $("region-row");
     const live = regions().filter((x) => x.on);
@@ -1902,6 +1903,7 @@
         ${switchRow("history_keep", t("hist_keep"), t("hist_keep_desc"))}
         ${S.cfg.history_keep ? choiceRow("history_days", t("hist_days"), [["7", t("hist_d7")], ["30", t("hist_d30")], ["90", t("hist_d90")], ["0", t("hist_d0")]]) : ""}
       </section>
+      ${privacyHTML()}
       <section id="timeline-section"><div><h2>${esc(t("tl_title"))}</h2><div class="sub">${esc(t("tl_hint"))}</div></div><div id="timeline-list">${timelineHTML()}</div></section>
       ${storyHTML()}
       <section id="recap-section"><div><h2>${esc(t("recap_title"))}</h2><div class="sub">${esc(t("recap_hint"))}</div></div>
@@ -2250,7 +2252,7 @@
         <button data-act="set-undo">${esc(t("set_undo"))}</button><button class="ghost" data-act="set-forget">${esc(t("set_keep"))}</button></div>` : "";
     const ask = S.ui.resetAsk ? `<div class="note warn" id="set-ask">${ICON.info}<span>${esc(t("set_reset_ask"))}</span>
         <button class="danger" data-act="set-reset-yes">${esc(t("set_reset_yes"))}</button><button class="ghost" data-act="set-reset-no">${esc(t("cancel"))}</button></div>` : "";
-    return `${undo}${ask}<div class="btn-row" id="set-buttons">
+    return `${undo}${ask}<div class="dnote">${esc(t("sf_hint"))}</div><div class="btn-row" id="set-buttons">
         <button class="ghost" data-act="set-export">${esc(t("set_export"))}</button>
         <button class="ghost" data-act="set-import">${esc(t("set_import"))}</button>
         <input type="file" id="set-file" accept=".json,application/json" hidden>
@@ -2314,6 +2316,38 @@
       buttons: `<button class="primary" data-act="voice-resume">${esc(t("vp_resume"))}</button>` }, ICON.info) : "";
   }
 
+  // 安全模式啟動（2.21.0）：這次用預設設定開的，問要不要換回原本的設定
+  function renderSafeRow() {
+    const row = $("safe-row");
+    if (!row) return;
+    row.hidden = !S.safeMode;
+    row.innerHTML = S.safeMode ? noticeHTML({ level: "warn", text: t("sf_text"), detail: t("sf_desc"),
+      buttons: `<button class="primary" data-act="safe-undo">${esc(t("sf_undo"))}</button>
+        <button class="ghost" data-act="safe-keep">${esc(t("sf_keep"))}</button>` }, ICON.info) : "";
+  }
+  // 筆電省電模式（2.21.0）
+  function saverHTML() {
+    const sv = S.saver || {};
+    const state = sv.on ? "bs_state_on" : (sv.battery === true ? "bs_state_battery" : (sv.battery === false ? "bs_state_ac" : "bs_state_none"));
+    return `<section id="saver-section"><div><h2>${esc(t("bs_title"))}</h2><div class="sub">${esc(t("bs_hint"))}</div></div>
+      ${switchRow("battery_saver", t("bs_switch"), t("bs_desc"))}
+      <div class="dnote" id="saver-state">${esc(t(state))}</div></section>`;
+  }
+  // 敏感資料：遮蔽、加密（2.21.0）
+  function privacyHTML() {
+    const locked = ((S.history || {}).locked || 0) > 0 || !!S.wordLocked;
+    return `<section id="privacy-section"><div><h2>${esc(t("rx_title"))}</h2><div class="sub">${esc(t("rx_hint"))}</div></div>
+      ${switchRow("redact", t("rx_switch"), t("rx_desc"))}
+      ${S.secure ? switchRow("encrypt_data", t("ec_switch"), t("ec_desc")) : `<div class="dnote">${esc(t("ec_unavailable"))}</div>`}
+      ${locked ? `<div class="note warn">${ICON.info}<span>${esc(t("ec_locked"))}</span></div>` : ""}</section>`;
+  }
+  // 更新頻道、免安裝版（2.21.0）
+  function channelHTML() {
+    if (S.portable) return `<div class="fact">${ICON.info}<div><b>${esc(t("pt_title"))}</b><span>${esc(t("pt_about"))}</span></div></div>`;
+    return `${choiceRow("update_channel", t("ch_title"), [["stable", t("ch_stable")], ["beta", t("ch_beta")]])}
+      <div class="dnote">${esc(t(S.cfg.update_channel === "beta" ? "ch_beta_note" : "ch_desc"))}</div>`;
+  }
+
   function generalPage() {
     return `
       <section><div><h2>${esc(t("ui_title"))}</h2><div class="sub">${esc(t("ui_hint"))}</div></div>${uiLangsHTML()}</section>
@@ -2321,6 +2355,7 @@
       <section><div><h2>${esc(t("theme_title"))}</h2><div class="sub">${esc(t("theme_hint"))}</div></div>${themeHTML()}</section>
       <section id="recommend-section">${recommendHTML()}</section>
       <section id="profile-section"><div><h2>${esc(t("pf_title"))}</h2><div class="sub">${esc(t("pf_hint"))}</div></div><div id="profile-list">${profilesHTML()}</div></section>
+      ${saverHTML()}
       <section data-kw="kw_record"><div><h2>${esc(t("rec_title"))}</h2><div class="sub">${esc(t("rec_hint"))}</div></div>${recordHTML()}</section>
       ${sessionHTML()}
       <section data-kw="kw_window"><h2>${esc(t("window_title"))}</h2>
@@ -2384,6 +2419,7 @@
         ${fact("quality", t("about_engine_title"), t("about_engine"))}
         ${fact("info", t("about_update_title"), t(S.cfg.update_check ? "about_update" : "about_update_off"))}
         ${switchRow("update_check", t("update_check"), t("update_check_desc"))}
+        ${channelHTML()}
       </section>
       ${rollbackHTML()}
       ${aboutChangesHTML()}`;
@@ -3108,6 +3144,8 @@
       settingsApplied(r, "set_reset_done");
     },
     "set-undo": async () => settingsApplied(await post("/api/settings", { undo: true }), "set_undone"),
+    "safe-undo": async () => { const r = await post("/api/safe", { keep: false }); S.safeMode = false; renderSafeRow(); settingsApplied(r, "set_undone"); },
+    "safe-keep": async () => { const r = await post("/api/safe", { keep: true }); S.safeMode = false; S.settingsBackup = null; renderSafeRow(); if (r && r.ok) toast(t("sf_kept"), 6000); },
     "set-forget": async () => { const r = await post("/api/settings", { forget: true }); if (r && r.ok) S.settingsBackup = null; renderSettingsPage(); },
     "store-open": () => post("/api/storage", { open: true }),
     "store-choose": async () => storeAnswer(await post("/api/storage", { choose: true })),
@@ -3839,6 +3877,10 @@
     slow_tip: (d) => { S.ui.slowTip = d; renderSlowRow(); },
     voice_name: (d) => { S.ui.voiceNameAsk = d; renderVoiceNameRow(); },
     voice_paused: (d) => { S.voicePaused = !!d; renderPausedRow(); },
+    saver: (d) => {      // 筆電省電模式換了（2.21.0）：現在是省電中還是換回來了
+      S.saver = Object.assign({}, S.saver || {}, d);
+      if (S.view === "settings" && S.ui.tab === "general") { const el = $("saver-section"); if (el) el.outerHTML = saverHTML(); }
+    },
     album: (d) => { S.album = d.items || []; if (S.view === "settings" && S.ui.tab === "screen") { const el = $("album-section"); if (el) el.outerHTML = albumHTML(); } },
     corrections: (d) => { S.corrections = d; if (S.view === "settings" && S.ui.tab === "quality") { const el = $("wr-section"); if (el) el.outerHTML = correctionsHTML(); } },
     private: (d) => { S.private = !!d.on; renderPrivate(); },
@@ -3856,7 +3898,7 @@
     },
     phrases: (st) => { S.phrases = st; if (S.view === "settings" && S.ui.tab === "general" && !(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.phraseEdit)) { const sec = $("phrase-section"); if (sec) sec.innerHTML = `<div><h2>${esc(t("ph_title"))}</h2><div class="sub">${esc(t("ph_hint"))}</div></div>${phrasebookHTML()}`; } },
     profiles: (names) => { S.profiles = Array.isArray(names) ? names : []; paintProfiles(); },
-    wordbook: (st) => { S.wordbook = st; if (S.view === "settings" && S.ui.tab === "learn") { loadWords(); loadStudy(); } },
+    wordbook: (st) => { S.wordbook = st; if (st && "locked" in st) S.wordLocked = !!st.locked; if (S.view === "settings" && S.ui.tab === "learn") { loadWords(); loadStudy(); } },
     recaps: (st) => { S.recaps = st; if (S.view === "settings" && S.ui.tab === "history") { paintHistory(); if (st.state !== "thinking") loadRecaps(); } },
     stream: (st) => { S.stream = st; if (S.view === "settings" && S.ui.tab === "overlay") renderSettingsPage(); },
     game: (g) => { S.game = g; if (S.view === "settings" && (S.ui.tab === "vocab" || S.ui.tab === "screen")) renderSettingsPage(); },
@@ -3962,7 +4004,7 @@
       post("/api/seen", { update: true });
     }
     S.version = st.version; S.canWindow = st.can_window; S.overlay = st.overlay || S.overlay; S.record = st.record || S.record;
-    S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history; S.settingsBackup = st.settings_backup || null; S.tips = st.tips || []; S.profiles = st.profiles || [];
+    S.hotkeys = st.hotkeys || S.hotkeys; S.history = st.history || S.history; S.settingsBackup = st.settings_backup || null; S.tips = st.tips || []; S.profiles = st.profiles || []; S.saver = st.saver || S.saver; S.safeMode = !!st.safe_mode; S.secure = !!st.secure; S.portable = !!st.portable; S.wordLocked = !!(st.wordbook || {}).locked;
     const view = S.cfg.setup_done ? (st.view === "wizard" ? "main" : st.view) : "wizard";
     app.dataset.view = S.view = view;
     renderAll();

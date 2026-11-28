@@ -63,6 +63,11 @@ DEFAULTS = {
     "reduce_motion": False,      # 減少動畫（2.20.0）：關掉閃爍、淡入淡出（系統設定要求減少動畫時自動跟著）
     "tray_lang": True,           # 工具列圖示角落寫「韓→中」（2.20.0）
     "tips_seen": [],             # 看過「新」標記的設定頁（2.20.0，不能在介面改）
+    "battery_saver": False,      # 筆電省電模式（2.21.0）：靠電池時換成快速辨識、關即時字幕和降噪、讀螢幕間隔拉長；插上電換回來（power.py）
+    "saver_saved": {},           # 省電模式換掉之前的設定（插上電要換回去的值；不能在介面改）
+    "update_channel": "stable",  # 更新頻道（2.21.0）：stable 穩定版 / beta 搶先版
+    "redact": True,              # 敏感資料遮蔽（2.21.0）：密碼、信箱、卡號、金鑰不存進歷史、字幕記錄、單字本和摘要（redact.py）
+    "encrypt_data": False,       # 歷史和單字本用 Windows 資料保護加密（2.21.0，只有 Windows；secure.py）
     "learn_level": "middle",     # 程度（2.19.0）：beginner 只標短的常用字、advanced 只標長的難字
     "review_remind": True,       # 每天有該複習的字就在工具列跳一次提醒（2.19.0）
     "review_reminded": "",       # 上次提醒的日期（不能在介面改）
@@ -179,7 +184,7 @@ ACCENTS = ("mint", "blue", "violet", "rose", "cyan")
 EDITABLE = {"ui_lang", "theme", "accent", "my_lang", "their_lang", "their_auto", "auto_langs", "transcript_original", "close_to_tray", "tone", "tone_keep", "quality", "game_terms", "term_packs", "game_auto", "back_translate", "use_context",
             "remember_translations", "use_shared", "remember_works", "use_shown_translation",
             "voice_sensitivity", "end_silence", "speech_mode", "speech_device", "listen_apps", "regions", "overlay_form", "overlay_monitor", "drop_echo", "live_captions", "tell_speakers", "remember_speakers", "ptt", "ptt_key", "speaker_device", "speaker_name",
-            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "learn_level", "ui_scale", "mini", "colorblind", "reduce_motion", "tray_lang", "review_remind", "immerse", "hanja", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "game_profile_auto", "story_book", "snap_album", "channel_colors", "player_notes", "combat_slow", "fullscreen_warn", "wall_monitor", "gamepad_on", "gamepad_keys", "overlay_hover_fade", "chat_send", "chat_send_open", "chat_send_enter", "camera_index", "denoise", "ear_split", "tone_icons", "voice_commands", "speech_autopick", "intro_suggest", "slow_tip", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
+            "mic_device", "mic_name", "also_english", "on_top", "show_pronunciation", "copy_spoken", "speak_out", "speak_device", "speak_name", "learn_mode", "learn_level", "ui_scale", "mini", "colorblind", "reduce_motion", "tray_lang", "battery_saver", "update_channel", "redact", "encrypt_data", "review_remind", "immerse", "hanja", "recap_auto", "pick_copy", "keep_words", "name_suggest", "name_skip", "game_start", "speak_heard", "speak_heard_screen", "speak_heard_device", "speak_heard_name", "join_split", "ocr_fix", "drop_fillers", "unsure_recheck", "unsure_view", "abbr_suggest", "abbr_skip", "cantonese", "slang_notes", "game_profile_auto", "story_book", "snap_album", "channel_colors", "player_notes", "combat_slow", "fullscreen_warn", "wall_monitor", "gamepad_on", "gamepad_keys", "overlay_hover_fade", "chat_send", "chat_send_open", "chat_send_enter", "camera_index", "denoise", "ear_split", "tone_icons", "voice_commands", "speech_autopick", "intro_suggest", "slow_tip", "inplace", "alert_words", "alert_sound", "update_check", "setup_done", "hotkeys", "history_keep", "history_days", "usage_keep", "engine_rest", "share_visible", "stream", "stream_original", "stream_mine",
             "overlay", "overlay_font", "overlay_seconds", "overlay_backdrop", "overlay_original", "overlay_mine",
             "overlay_family", "overlay_bold", "overlay_color", "overlay_outline", "overlay_names", "overlay_name_colors",
             "overlay_opacity", "overlay_align", "overlay_grow", "overlay_lines"}
